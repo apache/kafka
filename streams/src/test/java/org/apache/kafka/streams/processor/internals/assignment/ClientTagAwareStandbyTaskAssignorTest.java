@@ -20,12 +20,14 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -105,6 +107,10 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
+
+        Stream.of(UUID_1, UUID_4, UUID_7).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 0));
+        Stream.of(UUID_2, UUID_3, UUID_5, UUID_6, UUID_8, UUID_9).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 2));
+        assertAllStandbyTasksAreAssigned(clientStates, 12);
 
         assertTrue(
             standbyClientsHonorRackAwareness(
@@ -187,6 +193,10 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
 
+        Stream.of(UUID_1, UUID_2, UUID_3).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 0));
+        Stream.of(UUID_4, UUID_5, UUID_6, UUID_7, UUID_8, UUID_9).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 2));
+        assertAllStandbyTasksAreAssigned(clientStates, 12);
+
         assertTrue(
             standbyClientsHonorRackAwareness(
                 TASK_0_0,
@@ -262,11 +272,33 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
+        // We need to distribute 2 standby tasks (+1 active task).
+        // Since we have only two unique `cluster` tag values,
+        // we can only achieve "ideal" distribution on the 1st standby task assignment.
+        // We can't consider the `cluster` tag for the 2nd standby task assignment because the 1st standby
+        // task would already be assigned on different clusters compared to the active one, which means
+        // we have already used all the available cluster tag values. Taking the `cluster` tag into consideration
+        // for the  2nd standby task assignment would affectively mean excluding all the clients.
+        // Instead, for the 2nd standby task, we can only achieve partial rack awareness based on the `zone` tag.
+        // As we don't consider the `cluster` tag for the 2nd standby task assignment, partial rack awareness
+        // can be satisfied by placing the 2nd standby client on a different `zone` tag compared to active and corresponding standby tasks.
+        // The `zone` on either `cluster` tags are valid candidates for the partial rack awareness, as our goal is to distribute clients on the different `zone` tags.
+
+        Stream.of(UUID_2, UUID_5).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 1));
+        // There's no strong guarantee where 2nd standby task will end up.
+        Stream.of(UUID_1, UUID_3, UUID_4, UUID_6).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 0, 1));
+        assertAllStandbyTasksAreAssigned(clientStates, 4);
+
         assertTrue(
             standbyClientsHonorRackAwareness(
                 TASK_0_0,
                 clientStates,
                 asList(
+                    // Since it's located on a different `cluster` and `zone` tag dimensions,
+                    // `UUID_5` is the "ideal" distribution for the 1st standby task assignment.
+                    // For the 2nd standby, either `UUID_3` or `UUID_6` are valid destinations as
+                    // we need to distribute the clients on different `zone`
+                    // tags without considering the `cluster` tag value.
                     mkSet(UUID_5, UUID_3),
                     mkSet(UUID_5, UUID_6)
                 )
@@ -277,6 +309,10 @@ public class ClientTagAwareStandbyTaskAssignorTest {
                 TASK_1_0,
                 clientStates,
                 asList(
+                    // The same comment as above applies here too.
+                    // `UUID_2` is the ideal distribution on different `cluster`
+                    // and `zone` tag dimensions. In contrast, `UUID_4` and `UUID_1`
+                    // satisfy only the partial rack awareness as they are located on a different `zone` tag dimension.
                     mkSet(UUID_2, UUID_4),
                     mkSet(UUID_2, UUID_1)
                 )
@@ -288,12 +324,10 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     public void shouldDistributeClientsOnDifferentZoneTagsEvenWhenClientsReachedCapacity() {
         final Map<UUID, ClientState> clientStates = mkMap(
             mkEntry(UUID_1, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
-            mkEntry(UUID_4, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0)),
-
             mkEntry(UUID_2, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1)),
-            mkEntry(UUID_5, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_1)),
-
             mkEntry(UUID_3, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_2)),
+            mkEntry(UUID_4, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0)),
+            mkEntry(UUID_5, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_1)),
             mkEntry(UUID_6, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_2))
         );
 
@@ -301,6 +335,9 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, ZONE_TAG, CLUSTER_TAG);
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
+
+        clientStates.keySet().forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 1));
+        assertAllStandbyTasksAreAssigned(clientStates, 6);
 
         assertTrue(
             standbyClientsHonorRackAwareness(
@@ -374,6 +411,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
+        assertAllStandbyTasksAreAssigned(clientStates, 1);
+
         assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
     }
 
@@ -389,6 +428,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
+        assertAllStandbyTasksAreAssigned(clientStates, 1);
         assertTrue(
             standbyClientsHonorRackAwareness(
                 TASK_0_0,
@@ -414,6 +454,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
+        assertAllStandbyTasksAreAssigned(clientStates, 4);
         assertEquals(1, clientStates.get(UUID_1).standbyTaskCount());
         assertEquals(1, clientStates.get(UUID_2).standbyTaskCount());
         assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
@@ -431,7 +472,24 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
+        assertAllStandbyTasksAreAssigned(clientStates, 0);
         assertEquals(0, clientStates.get(UUID_1).standbyTaskCount());
+    }
+
+    private static void assertAllStandbyTasksAreAssigned(final Map<UUID, ClientState> clientStates, final int expectedTotalNumberOfStandbyTasks) {
+        final int actualTotalNumberOfStandbyTasks = clientStates.values().stream().map(ClientState::standbyTaskCount).reduce(0, Integer::sum);
+        assertEquals(expectedTotalNumberOfStandbyTasks, actualTotalNumberOfStandbyTasks);
+    }
+
+    private static void assertStandbyTaskCountForClientEqualsTo(final Map<UUID, ClientState> clientStates,
+                                                                final UUID client,
+                                                                final int... expectedStandbyTaskCounts) {
+        final int standbyTaskCount = clientStates.get(client).standbyTaskCount();
+        final String msg = String.format("Client [%s] doesn't have expected number of standby tasks. " +
+                                         "Expected any of %s, actual [%s]",
+                                         client, Arrays.toString(expectedStandbyTaskCounts), standbyTaskCount);
+
+        assertTrue(msg, Arrays.stream(expectedStandbyTaskCounts).anyMatch(expectedStandbyTaskCount -> expectedStandbyTaskCount == standbyTaskCount));
     }
 
     private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,

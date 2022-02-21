@@ -258,7 +258,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             final String tagValue = usedClientTagEntry.getValue();
 
             // If we have used more clients than all the tag's unique values,
-            // we can't filter out clients located on that tag.
+            // we can't filter out clients located on that tag, because it'll exclude all the clients.
+            // Please check ClientTagAwareStandbyTaskAssignorTest#shouldDoThePartialRackAwareness test for more info.
             if (allTagValues.size() <= countOfUsedClients) {
                 continue;
             }
