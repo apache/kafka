@@ -1098,10 +1098,12 @@ public class StreamsPartitionAssignorTest {
     public void testAssignWithStandbyReplicasBalanceWithStatelessTasks() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor_with_state", new MockApiProcessorSupplier<>(), "source1");
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor_with_state");
 
-        final List<String> topics = asList("topic1");
+        builder.addSource(null, "source2", null, null, null, "topic2");
+        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source2");
+
+        final List<String> topics = asList("topic1", "topic2");
 
         createMockTaskManager(EMPTY_TASKS, EMPTY_TASKS);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(

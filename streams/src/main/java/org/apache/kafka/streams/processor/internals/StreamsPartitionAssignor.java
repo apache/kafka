@@ -1048,8 +1048,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * Generate an assignment that tries to preserve thread-level stickiness for stateful tasks without violating
      * balance. The tasks are balanced across threads. Stateful tasks without previous owners will be interleaved by
      * group id to spread subtopologies across threads and further balance the workload.
+     * Stateless tasks are simply spread across threads without taking into account previous ownership.
      * threadLoad is a map that keeps track of task load per thread across multiple calls so actives and standbys
-     * are evenly distributed
+     * tasks are evenly distributed
      */
     static Map<String, List<TaskId>> assignTasksToThreads(final Collection<TaskId> tasksToAssign,
                                                           final boolean isStateful,
@@ -1061,10 +1062,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             assignment.put(consumer, new ArrayList<>());
         }
 
-        int totalTasks = tasksToAssign.size();
-        for (final Integer threadTaskCount : threadLoad.values()) {
-            totalTasks += threadTaskCount;
-        }
+        final int totalTasks = threadLoad.values().stream().reduce(tasksToAssign.size(), Integer::sum);
 
         final int minTasksPerThread = (int) Math.floor(((double) totalTasks) / consumers.size());
         final PriorityQueue<TaskId> unassignedTasks = new PriorityQueue<>(tasksToAssign);
