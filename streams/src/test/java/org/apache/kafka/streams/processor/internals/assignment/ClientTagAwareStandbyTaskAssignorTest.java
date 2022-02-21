@@ -110,7 +110,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         Stream.of(UUID_1, UUID_4, UUID_7).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 0));
         Stream.of(UUID_2, UUID_3, UUID_5, UUID_6, UUID_8, UUID_9).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 2));
-        assertAllStandbyTasksAreAssigned(clientStates, 12);
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 12);
 
         assertTrue(
             standbyClientsHonorRackAwareness(
@@ -195,7 +195,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         Stream.of(UUID_1, UUID_2, UUID_3).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 0));
         Stream.of(UUID_4, UUID_5, UUID_6, UUID_7, UUID_8, UUID_9).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 2));
-        assertAllStandbyTasksAreAssigned(clientStates, 12);
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 12);
 
         assertTrue(
             standbyClientsHonorRackAwareness(
@@ -287,7 +287,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         Stream.of(UUID_2, UUID_5).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 1));
         // There's no strong guarantee where 2nd standby task will end up.
         Stream.of(UUID_1, UUID_3, UUID_4, UUID_6).forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 0, 1));
-        assertAllStandbyTasksAreAssigned(clientStates, 4);
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 4);
 
         assertTrue(
             standbyClientsHonorRackAwareness(
@@ -337,7 +337,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         clientStates.keySet().forEach(client -> assertStandbyTaskCountForClientEqualsTo(clientStates, client, 1));
-        assertAllStandbyTasksAreAssigned(clientStates, 6);
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 6);
 
         assertTrue(
             standbyClientsHonorRackAwareness(
@@ -411,8 +411,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
-        assertAllStandbyTasksAreAssigned(clientStates, 1);
-
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 1);
         assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
     }
 
@@ -428,7 +427,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
-        assertAllStandbyTasksAreAssigned(clientStates, 1);
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 1);
         assertTrue(
             standbyClientsHonorRackAwareness(
                 TASK_0_0,
@@ -454,7 +453,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
-        assertAllStandbyTasksAreAssigned(clientStates, 4);
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 4);
         assertEquals(1, clientStates.get(UUID_1).standbyTaskCount());
         assertEquals(1, clientStates.get(UUID_2).standbyTaskCount());
         assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
@@ -472,11 +471,11 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
-        assertAllStandbyTasksAreAssigned(clientStates, 0);
+        assertTotalNumberOfStandbyTasksEqualsTo(clientStates, 0);
         assertEquals(0, clientStates.get(UUID_1).standbyTaskCount());
     }
 
-    private static void assertAllStandbyTasksAreAssigned(final Map<UUID, ClientState> clientStates, final int expectedTotalNumberOfStandbyTasks) {
+    private static void assertTotalNumberOfStandbyTasksEqualsTo(final Map<UUID, ClientState> clientStates, final int expectedTotalNumberOfStandbyTasks) {
         final int actualTotalNumberOfStandbyTasks = clientStates.values().stream().map(ClientState::standbyTaskCount).reduce(0, Integer::sum);
         assertEquals(expectedTotalNumberOfStandbyTasks, actualTotalNumberOfStandbyTasks);
     }
