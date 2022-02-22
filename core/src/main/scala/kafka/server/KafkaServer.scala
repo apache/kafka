@@ -256,9 +256,15 @@ class KafkaServer(
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        _logManager = LogManager(config, initialOfflineDirs,
-          new ZkConfigRepository(new AdminZkClient(zkClient)),
-          kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
+        _logManager = LogManager(
+          config,
+          initialOfflineDirs,
+          configRepository,
+          kafkaScheduler,
+          time,
+          brokerTopicStats,
+          logDirFailureChannel,
+          config.usesTopicId)
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 

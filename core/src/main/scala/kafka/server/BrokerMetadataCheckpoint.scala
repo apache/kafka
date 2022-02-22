@@ -86,6 +86,13 @@ class RawMetaProperties(val props: Properties = new Properties()) {
     }
   }
 
+  override def equals(that: Any): Boolean = that match {
+    case other: RawMetaProperties => props.equals(other.props)
+    case _ => false
+  }
+
+  override def hashCode(): Int = props.hashCode
+
   override def toString: String = {
     "{" + props.keySet().asScala.toList.asInstanceOf[List[String]].sorted.map {
       key => key + "=" + props.get(key)

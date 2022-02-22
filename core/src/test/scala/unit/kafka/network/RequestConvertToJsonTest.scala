@@ -29,9 +29,9 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName, Network
 import org.apache.kafka.common.protocol.{ApiKeys, MessageUtil}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.easymock.EasyMock.createNiceMock
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -89,7 +89,7 @@ class RequestConvertToJsonTest {
 
     val actualNode = RequestConvertToJson.requestHeaderNode(header)
 
-    assertEquals(expectedNode, actualNode);
+    assertEquals(expectedNode, actualNode)
   }
 
   @Test
@@ -168,9 +168,9 @@ class RequestConvertToJsonTest {
     new network.RequestChannel.Request(processor = 1,
       requestContext,
       startTimeNanos = 0,
-      createNiceMock(classOf[MemoryPool]),
+      mock(classOf[MemoryPool]),
       buffer,
-      createNiceMock(classOf[RequestChannel.Metrics])
+      mock(classOf[RequestChannel.Metrics])
     )
   }
 

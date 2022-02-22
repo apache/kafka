@@ -304,12 +304,12 @@ public class MetricsTest {
         assertNotNull(
                 metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
 
-        // After another 1 second sleep, the metric should be purged
-        time.sleep(1000);
+        // After another 1001 ms sleep, the metric should be purged
+        time.sleep(1001);
         purger.run();
-        assertNull(metrics.getSensor("test.s1"), "Sensor test.s2 should have been purged");
+        assertNull(metrics.getSensor("test.s2"), "Sensor test.s2 should have been purged");
         assertNull(
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s2.count should have been purged");
+                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count should have been purged");
 
         // After purging, it should be possible to recreate a metric
         s1 = metrics.sensor("test.s1", null, 1);

@@ -477,9 +477,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithClusterAuthorizationException(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            ConnectException e = assertThrows(ConnectException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            ConnectException e = assertThrows(ConnectException.class, () -> admin.endOffsets(tps));
             assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
         }
     }
@@ -496,9 +494,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -514,9 +510,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            TimeoutException e = assertThrows(TimeoutException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            TimeoutException e = assertThrows(TimeoutException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -532,9 +526,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithUnknownError(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            ConnectException e = assertThrows(ConnectException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            ConnectException e = assertThrows(ConnectException.class, () -> admin.endOffsets(tps));
             assertTrue(e.getMessage().contains("Error while getting end offsets for topic"));
         }
     }
@@ -601,9 +593,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithClusterAuthorizationException(tp1, null));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            ConnectException e = assertThrows(ConnectException.class, () -> {
-                admin.endOffsets(tps);
-            });
+            ConnectException e = assertThrows(ConnectException.class, () -> admin.endOffsets(tps));
             assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
         }
     }

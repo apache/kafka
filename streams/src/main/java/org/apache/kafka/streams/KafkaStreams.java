@@ -163,7 +163,7 @@ public class KafkaStreams implements AutoCloseable {
     // usage only and should not be exposed to users at all.
     private final Time time;
     private final Logger log;
-    private final String clientId;
+    protected final String clientId;
     private final Metrics metrics;
     protected final StreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
@@ -903,6 +903,7 @@ public class KafkaStreams implements AutoCloseable {
         }
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
+        topologyMetadata.setLog(logContext);
 
         // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;

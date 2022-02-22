@@ -93,17 +93,17 @@ public class MirrorMakerConfig extends AbstractConfig {
         Map<String, String> originalStrings = originalsStrings();
         boolean globalHeartbeatsEnabled = MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
         if (originalStrings.containsKey(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
-            globalHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+            globalHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
         }
 
         for (String source : clusters) {
             for (String target : clusters) {
                 if (!source.equals(target)) {
                     String clusterPairConfigPrefix = source + "->" + target + ".";
-                    boolean clusterPairEnabled = Boolean.valueOf(originalStrings.getOrDefault(clusterPairConfigPrefix + "enabled", "false"));
+                    boolean clusterPairEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + "enabled"));
                     boolean clusterPairHeartbeatsEnabled = globalHeartbeatsEnabled;
                     if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
-                        clusterPairHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+                        clusterPairHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
                     }
 
                     // By default, all source->target Herder combinations are created even if `x->y.enabled=false`

@@ -64,7 +64,11 @@ import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -711,6 +715,7 @@ public class StreamThreadTest {
         EasyMock.replay(consumer, consumerGroupMetadata);
 
         final AtomicBoolean committed = new AtomicBoolean(false);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         final TaskManager taskManager = new TaskManager(
             null,
             null,
@@ -719,8 +724,7 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null,
-            null,
+            topologyMetadata,
             null,
             null
         ) {
@@ -732,7 +736,6 @@ public class StreamThreadTest {
                 return 1;
             }
         };
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
 
@@ -793,7 +796,6 @@ public class StreamThreadTest {
             activeTaskCreator,
             standbyTaskCreator,
             topologyMetadata,
-            null,
             null,
             null
         ) {
@@ -1715,20 +1717,19 @@ public class StreamThreadTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
-        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor =
-            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
+        final ProcessorSupplier<Object, Object, Void, Void> punctuateProcessor =
+            () -> new ContextualProcessor<Object, Object, Void, Void>() {
                 @Override
-                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+                public void init(final ProcessorContext<Void, Void> context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
                     context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
                 }
 
                 @Override
-                public void process(final Object key, final Object value) {}
+                public void process(final Record<Object, Object> record) {}
             };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
@@ -1786,7 +1787,6 @@ public class StreamThreadTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     public void shouldPunctuateWithTimestampPreservedInProcessorContext() {
         final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
             () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
@@ -1806,13 +1806,8 @@ public class StreamThreadTest {
             };
 
         final List<Long> peekedContextTime = new ArrayList<>();
-        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> peekProcessor =
-            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
-                @Override
-                public void process(final Object key, final Object value) {
-                    peekedContextTime.add(context.timestamp());
-                }
-            };
+        final ProcessorSupplier<Object, Object, Void, Void> peekProcessor =
+            () -> (Processor<Object, Object, Void, Void>) record -> peekedContextTime.add(record.timestamp());
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .transform(punctuateProcessor)

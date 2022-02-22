@@ -20,8 +20,12 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.UnknownTopologyException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
@@ -55,7 +59,7 @@ import org.slf4j.LoggerFactory;
 import static java.util.Collections.emptySet;
 
 public class TopologyMetadata {
-    private final Logger log = LoggerFactory.getLogger(TopologyMetadata.class);
+    private Logger log;
 
     // the "__" (double underscore) string is not allowed for topology names, so it's safe to use to indicate
     // that it's not a named topology
@@ -63,6 +67,7 @@ public class TopologyMetadata {
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
 
     private final StreamsConfig config;
+    private final ProcessingMode processingMode;
     private final TopologyVersion version;
 
     private final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability
@@ -92,7 +97,9 @@ public class TopologyMetadata {
     public TopologyMetadata(final InternalTopologyBuilder builder,
                             final StreamsConfig config) {
         version = new TopologyVersion();
+        processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
+
         builders = new ConcurrentSkipListMap<>();
         if (builder.hasNamedTopology()) {
             builders.put(builder.topologyName(), builder);
@@ -103,13 +110,25 @@ public class TopologyMetadata {
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
                             final StreamsConfig config) {
-        version = new TopologyVersion();
+        this.version = new TopologyVersion();
+        this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
+        this.log = LoggerFactory.getLogger(getClass());
+
 
         this.builders = builders;
         if (builders.isEmpty()) {
-            log.debug("Starting up empty KafkaStreams app with no topology");
+            log.info("Created an empty KafkaStreams app with no topology");
         }
+    }
+
+    // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
+    public void setLog(final LogContext logContext) {
+        log = logContext.logger(getClass());
+    }
+    
+    public ProcessingMode processingMode() {
+        return processingMode;
     }
 
     public long topologyVersion() {
@@ -181,7 +200,7 @@ public class TopologyMetadata {
                         log.debug("Detected that the topology is currently empty, waiting for something to process");
                         version.topologyCV.await();
                     } catch (final InterruptedException e) {
-                        log.debug("StreamThread was interrupted while waiting on empty topology", e);
+                        log.error("StreamThread was interrupted while waiting on empty topology", e);
                     }
                 }
             } finally {
@@ -193,40 +212,45 @@ public class TopologyMetadata {
     /**
      * Adds the topology and registers a future that listens for all threads on the older version to see the update
      */
-    public KafkaFuture<Void> registerAndBuildNewTopology(final InternalTopologyBuilder newTopologyBuilder) {
-        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+    public void registerAndBuildNewTopology(final KafkaFutureImpl<Void> future, final InternalTopologyBuilder newTopologyBuilder) {
         try {
             lock();
+            buildAndVerifyTopology(newTopologyBuilder);
+            log.info("New NamedTopology passed validation and will be added {}, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
-            buildAndVerifyTopology(newTopologyBuilder);
             wakeupThreads();
+            log.info("Added NamedTopology {} and updated topology version to {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+        } catch (final Throwable throwable) {
+            log.error("Failed to add NamedTopology {}, please retry the operation.", newTopologyBuilder.topologyName());
+            future.completeExceptionally(throwable);
         } finally {
             unlock();
         }
-        log.info("Added NamedTopology {} and updated topology version to {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
-        return future;
     }
 
     /**
      * Removes the topology and registers a future that listens for all threads on the older version to see the update
      */
-    public KafkaFuture<Void> unregisterTopology(final String topologyName) {
-        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+    public KafkaFuture<Void> unregisterTopology(final KafkaFutureImpl<Void> removeTopologyFuture,
+                                                final String topologyName) {
         try {
             lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
+            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), removeTopologyFuture));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);
+            log.info("Finished removing NamedTopology {}, topology version was updated to {}", topologyName, version.topologyVersion.get());
+        } catch (final Throwable throwable) {
+            log.error("Failed to remove NamedTopology {}, please retry.", topologyName);
+            removeTopologyFuture.completeExceptionally(throwable);
         } finally {
             unlock();
         }
-        log.info("Finished removing NamedTopology {}, topology version was updated to {}", topologyName, version.topologyVersion.get());
-        return future;
+        return removeTopologyFuture;
     }
 
     public TaskConfig getTaskConfigFor(final TaskId taskId) {
@@ -242,17 +266,22 @@ public class TopologyMetadata {
         builder.rewriteTopology(config);
         builder.buildTopology();
 
+        final Set<String> allInputTopicsCopy = new HashSet<>(allInputTopics);
+
         // As we go, check each topology for overlap in the set of input topics/patterns
-        final int numInputTopics = allInputTopics.size();
+        final int numInputTopics = allInputTopicsCopy.size();
         final List<String> inputTopics = builder.fullSourceTopicNames();
         final Collection<String> inputPatterns = builder.allSourcePatternStrings();
 
-        final int numNewInputTopics = inputTopics.size() + inputPatterns.size();
-        allInputTopics.addAll(inputTopics);
-        allInputTopics.addAll(inputPatterns);
-        if (allInputTopics.size() != numInputTopics + numNewInputTopics) {
-            inputTopics.retainAll(allInputTopics);
-            inputPatterns.retainAll(allInputTopics);
+        final Set<String> newInputTopics = new HashSet<>(inputTopics);
+        newInputTopics.addAll(inputPatterns);
+
+        final int numNewInputTopics = newInputTopics.size();
+        allInputTopicsCopy.addAll(newInputTopics);
+
+        if (allInputTopicsCopy.size() != numInputTopics + numNewInputTopics) {
+            inputTopics.retainAll(allInputTopicsCopy);
+            inputPatterns.retainAll(allInputTopicsCopy);
             log.error("Tried to add the NamedTopology {} but it had overlap with other input topics {} or patterns {}",
                       builder.topologyName(), inputTopics, inputPatterns);
             throw new TopologyException("Named Topologies may not subscribe to the same input topics or patterns");
@@ -262,13 +291,14 @@ public class TopologyMetadata {
         if (globalTopology != null) {
             if (builder.topologyName() != null) {
                 throw new IllegalStateException("Global state stores are not supported with Named Topologies");
-            } else if (this.globalTopology == null) {
-                this.globalTopology = globalTopology;
+            } else if (this.globalTopology != null) {
+                throw new TopologyException("Topology builder had global state, but global topology has already been set");
             } else {
-                throw new IllegalStateException("Topology builder had global state, but global topology has already been set");
+                this.globalTopology = globalTopology;
+                globalStateStores.putAll(builder.globalStateStores());
             }
         }
-        globalStateStores.putAll(builder.globalStateStores());
+        allInputTopics.addAll(newInputTopics);
     }
 
     public int getNumStreamThreads(final StreamsConfig config) {
@@ -306,7 +336,7 @@ public class TopologyMetadata {
         return !builders.containsKey(UNNAMED_TOPOLOGY);
     }
 
-    Set<String> namedTopologiesView() {
+    public Set<String> namedTopologiesView() {
         return hasNamedTopologies() ? Collections.unmodifiableSet(builders.keySet()) : emptySet();
     }
 
@@ -402,11 +432,13 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the subtopology built for this task, or null if the corresponding NamedTopology does not (yet) exist
+     * @return the {@link ProcessorTopology subtopology} built for this task, guaranteed to be non-null
+     *
+     * @throws UnknownTopologyException  if the task is from a named topology that this client isn't aware of
      */
     public ProcessorTopology buildSubtopology(final TaskId task) {
         final InternalTopologyBuilder builder = lookupBuilderForTask(task);
-        return builder == null ? null : builder.buildSubtopology(task.subtopology());
+        return builder.buildSubtopology(task.subtopology());
     }
 
     public ProcessorTopology globalTaskTopology() {
@@ -497,9 +529,22 @@ public class TopologyMetadata {
         return copartitionGroups;
     }
 
+    /**
+     * @return the {@link InternalTopologyBuilder} for this task's topology, guaranteed to be non-null
+     *
+     * @throws UnknownTopologyException  if the task is from a named topology that this client isn't aware of
+     */
     private InternalTopologyBuilder lookupBuilderForTask(final TaskId task) {
-        return task.topologyName() == null ? builders.get(UNNAMED_TOPOLOGY) : builders.get(task.topologyName());
+        final InternalTopologyBuilder builder = task.topologyName() == null ?
+            builders.get(UNNAMED_TOPOLOGY) :
+            builders.get(task.topologyName());
+        if (builder == null) {
+            throw new UnknownTopologyException("Unable to locate topology builder", task.topologyName());
+        } else {
+            return builder;
+        }
     }
+
 
     /**
      * @return the InternalTopologyBuilder for the NamedTopology with the given {@code topologyName}

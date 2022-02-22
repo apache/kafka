@@ -64,7 +64,6 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({KafkaOffsetBackingStore.class, ConnectUtils.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
-@SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "connect-offsets";
     private static final short TOPIC_PARTITIONS = 2;
@@ -392,7 +391,7 @@ public class KafkaOffsetBackingStoreTest {
                 .andReturn(storeLog);
     }
 
-    private void expectStart(final List<ConsumerRecord<byte[], byte[]>> preexistingRecords) throws Exception {
+    private void expectStart(final List<ConsumerRecord<byte[], byte[]>> preexistingRecords) {
         storeLog.start();
         PowerMock.expectLastCall().andAnswer(() -> {
             for (ConsumerRecord<byte[], byte[]> rec : preexistingRecords)
