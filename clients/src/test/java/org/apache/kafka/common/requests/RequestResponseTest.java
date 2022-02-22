@@ -1103,7 +1103,7 @@ public class RequestResponseTest {
             case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse();
             case END_QUORUM_EPOCH: return createEndQuorumEpochResponse();
             case DESCRIBE_QUORUM: return createDescribeQuorumResponse();
-            case ALTER_PARTITION: return createAlterPartitionResponse();
+            case ALTER_PARTITION: return createAlterPartitionResponse(version);
             case UPDATE_FEATURES: return createUpdateFeaturesResponse();
             case ENVELOPE: return createEnvelopeResponse();
             case FETCH_SNAPSHOT: return createFetchSnapshotResponse();
@@ -1306,31 +1306,45 @@ public class RequestResponseTest {
     }
 
     private AlterPartitionRequest createAlterPartitionRequest(short version) {
+        AlterPartitionRequestData.PartitionData partitionData = new AlterPartitionRequestData.PartitionData()
+            .setPartitionIndex(1)
+            .setPartitionEpoch(2)
+            .setLeaderEpoch(3)
+            .setNewIsr(asList(1, 2));
+
+        if (version >= 1) {
+            // Use the none default value; 1 - RECOVERING
+            partitionData.setLeaderRecoveryState((byte) 1);
+        }
+
         AlterPartitionRequestData data = new AlterPartitionRequestData()
-                .setBrokerEpoch(123L)
-                .setBrokerId(1)
-                .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
-                        .setName("topic1")
-                        .setPartitions(singletonList(new AlterPartitionRequestData.PartitionData()
-                                .setPartitionIndex(1)
-                                .setPartitionEpoch(2)
-                                .setLeaderEpoch(3)
-                                .setNewIsr(asList(1, 2))))));
+            .setBrokerEpoch(123L)
+            .setBrokerId(1)
+            .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
+                .setName("topic1")
+                .setPartitions(singletonList(partitionData))));
         return new AlterPartitionRequest.Builder(data).build(version);
     }
 
-    private AlterPartitionResponse createAlterPartitionResponse() {
+    private AlterPartitionResponse createAlterPartitionResponse(int version) {
+        AlterPartitionResponseData.PartitionData partitionData = new AlterPartitionResponseData.PartitionData()
+            .setPartitionEpoch(1)
+            .setIsr(asList(0, 1, 2))
+            .setErrorCode(Errors.NONE.code())
+            .setLeaderEpoch(2)
+            .setLeaderId(3);
+
+        if (version >= 1) {
+            // Use the none default value; 1 - RECOVERING
+            partitionData.setLeaderRecoveryState((byte) 1);
+        }
+
         AlterPartitionResponseData data = new AlterPartitionResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setThrottleTimeMs(123)
                 .setTopics(singletonList(new AlterPartitionResponseData.TopicData()
                         .setName("topic1")
-                        .setPartitions(singletonList(new AlterPartitionResponseData.PartitionData()
-                                .setPartitionEpoch(1)
-                                .setIsr(asList(0, 1, 2))
-                                .setErrorCode(Errors.NONE.code())
-                                .setLeaderEpoch(2)
-                                .setLeaderId(3)))));
+                        .setPartitions(singletonList(partitionData))));
         return new AlterPartitionResponse(data);
     }
 
