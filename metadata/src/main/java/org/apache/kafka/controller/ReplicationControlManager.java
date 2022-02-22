@@ -673,97 +673,32 @@ public class ReplicationControlManager {
                 log.info("Rejecting alterPartition request for unknown topic ID {}.", topicId);
                 continue;
             }
+
             TopicControlInfo topic = topics.get(topicId);
             for (AlterPartitionRequestData.PartitionData partitionData : topicData.partitions()) {
                 int partitionId = partitionData.partitionIndex();
                 PartitionRegistration partition = topic.parts.get(partitionId);
-                if (partition == null) {
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()));
-                    log.info("Rejecting alterPartition request for unknown partition {}-{}.",
-                        topic.name, partitionId);
-                    continue;
-                }
-                if (partitionData.leaderEpoch() != partition.leaderEpoch) {
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(FENCED_LEADER_EPOCH.code()));
-                    log.debug("Rejecting alterPartition request from node {} for {}-{} because " +
-                        "the current leader epoch is {}, not {}.", request.brokerId(), topic.name,
-                        partitionId, partition.leaderEpoch, partitionData.leaderEpoch());
-                    continue;
-                }
-                if (request.brokerId() != partition.leader) {
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(INVALID_REQUEST.code()));
-                    log.info("Rejecting alterPartition request from node {} for {}-{} because " +
-                        "the current leader is {}.", request.brokerId(), topic.name,
-                        partitionId, partition.leader);
-                    continue;
-                }
-                if (partitionData.partitionEpoch() != partition.partitionEpoch) {
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(INVALID_UPDATE_VERSION.code()));
-                    log.info("Rejecting alterPartition request from node {} for {}-{} because " +
-                        "the current partition epoch is {}, not {}.", request.brokerId(),
-                        topic.name, partitionId, partition.partitionEpoch,
-                        partitionData.partitionEpoch());
-                    continue;
-                }
-                int[] newIsr = Replicas.toArray(partitionData.newIsr());
-                if (!Replicas.validateIsr(partition.replicas, newIsr)) {
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(INVALID_REQUEST.code()));
-                    log.error("Rejecting alterPartition request from node {} for {}-{} because " +
-                        "it specified an invalid ISR {}.", request.brokerId(),
-                        topic.name, partitionId, partitionData.newIsr());
-                    continue;
-                }
-                if (!Replicas.contains(newIsr, partition.leader)) {
-                    // An alterPartition request can't ask for the current leader to be removed.
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(INVALID_REQUEST.code()));
-                    log.error("Rejecting alterPartition request from node {} for {}-{} because " +
-                            "it specified an invalid ISR {} that doesn't include itself.",
-                            request.brokerId(), topic.name, partitionId, partitionData.newIsr());
-                    continue;
-                }
-                LeaderRecoveryState leaderRecoveryState = LeaderRecoveryState.of(partitionData.leaderRecoveryState());
-                if (leaderRecoveryState == LeaderRecoveryState.RECOVERING && newIsr.length > 1) {
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(INVALID_REQUEST.code()));
-                    log.info("Rejecting alterPartition request from node {} for {}-{} because " +
-                            "the ISR {} had more than one replica while the leader was still " +
-                            "recovering from an unlcean leader election {}.",
-                            request.brokerId(), topic.name, partitionId, partitionData.newIsr(),
-                            leaderRecoveryState);
-                    continue;
-                }
-                if (partition.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
-                    leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
 
-                    responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
-                        setPartitionIndex(partitionId).
-                        setErrorCode(INVALID_REQUEST.code()));
-                    log.info("Rejecting alterPartition request from node {} for {}-{} because " +
-                            "the leader recovery state cannot change from RECOVERED to RECOVERING.",
-                            request.brokerId(), topic.name, partitionId);
+                Errors validationError = validateAlterPartitionData(request.brokerId(), topic, partitionId, partition, partitionData);
+                if (validationError != Errors.NONE) {
+                    responseTopicData.partitions().add(
+                        new AlterPartitionResponseData.PartitionData()
+                            .setPartitionIndex(partitionId)
+                            .setErrorCode(validationError.code())
+                    );
+
                     continue;
                 }
 
-                PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
+                PartitionChangeBuilder builder = new PartitionChangeBuilder(
+                    partition,
                     topic.id,
                     partitionId,
                     r -> clusterControl.unfenced(r),
                     () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name()));
                 builder.setTargetIsr(partitionData.newIsr());
-                builder.setTargetLeaderRecoveryState(leaderRecoveryState);
+                builder.setTargetLeaderRecoveryState(
+                    LeaderRecoveryState.of(partitionData.leaderRecoveryState()));
                 Optional<ApiMessageAndVersion> record = builder.build();
                 Errors result = Errors.NONE;
                 if (record.isPresent()) {
@@ -802,6 +737,7 @@ public class ReplicationControlManager {
                             topic.name, partitionId);
                     }
                 }
+
                 responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(partitionId).
                     setErrorCode(result.code()).
@@ -812,7 +748,93 @@ public class ReplicationControlManager {
                     setPartitionEpoch(partition.partitionEpoch));
             }
         }
+
         return ControllerResult.of(records, response);
+    }
+
+    /**
+     * Validate the partition information included in the alter partition request.
+     *
+     * @param brokerId id of the broker requesting the alter partition
+     * @param topic current topic information store by the replication manager
+     * @param partitionId partition id being altered
+     * @param partition current partition registration for the partition being altered
+     * @param partitionData partition data from the alter partition request
+     *
+     * @return Errors.NONE for valid alter partition data; otherwise the validation error
+     */
+    private Errors validateAlterPartitionData(
+        int brokerId,
+        TopicControlInfo topic,
+        int partitionId,
+        PartitionRegistration partition,
+        AlterPartitionRequestData.PartitionData partitionData
+    ) {
+        if (partition == null) {
+            log.info("Rejecting alterPartition request for unknown partition {}-{}.",
+                    topic.name, partitionId);
+
+            return UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        if (partitionData.leaderEpoch() != partition.leaderEpoch) {
+            log.debug("Rejecting alterPartition request from node {} for {}-{} because " +
+                    "the current leader epoch is {}, not {}.", brokerId, topic.name,
+                    partitionId, partition.leaderEpoch, partitionData.leaderEpoch());
+
+            return FENCED_LEADER_EPOCH;
+        }
+        if (brokerId != partition.leader) {
+            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+                    "the current leader is {}.", brokerId, topic.name,
+                    partitionId, partition.leader);
+
+            return INVALID_REQUEST;
+        }
+        if (partitionData.partitionEpoch() != partition.partitionEpoch) {
+            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+                    "the current partition epoch is {}, not {}.", brokerId,
+                    topic.name, partitionId, partition.partitionEpoch,
+                    partitionData.partitionEpoch());
+
+            return INVALID_UPDATE_VERSION;
+        }
+        int[] newIsr = Replicas.toArray(partitionData.newIsr());
+        if (!Replicas.validateIsr(partition.replicas, newIsr)) {
+            log.error("Rejecting alterPartition request from node {} for {}-{} because " +
+                    "it specified an invalid ISR {}.", brokerId,
+                    topic.name, partitionId, partitionData.newIsr());
+
+            return INVALID_REQUEST;
+        }
+        if (!Replicas.contains(newIsr, partition.leader)) {
+            // The ISR must always include the current leader.
+            log.error("Rejecting alterPartition request from node {} for {}-{} because " +
+                    "it specified an invalid ISR {} that doesn't include itself.",
+                    brokerId, topic.name, partitionId, partitionData.newIsr());
+
+            return INVALID_REQUEST;
+        }
+        LeaderRecoveryState leaderRecoveryState = LeaderRecoveryState.of(partitionData.leaderRecoveryState());
+        if (leaderRecoveryState == LeaderRecoveryState.RECOVERING && newIsr.length > 1) {
+            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+                    "the ISR {} had more than one replica while the leader was still " +
+                    "recovering from an unlcean leader election {}.",
+                    brokerId, topic.name, partitionId, partitionData.newIsr(),
+                    leaderRecoveryState);
+
+            return INVALID_REQUEST;
+        }
+        if (partition.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
+                leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
+
+            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+                    "the leader recovery state cannot change from RECOVERED to RECOVERING.",
+                    brokerId, topic.name, partitionId);
+
+            return INVALID_REQUEST;
+        }
+
+        return Errors.NONE;
     }
 
     /**
