@@ -61,7 +61,7 @@ public class PredicateDoc {
         out.println("<div id=\"" + docInfo.predicateName + "\">");
 
         out.print("<h5>");
-        out.print(docInfo.predicateName);
+        out.print("<a href=\"#" + docInfo.predicateName + "\">" + docInfo.predicateName + "</a>");
         out.println("</h5>");
 
         out.println(docInfo.overview);
