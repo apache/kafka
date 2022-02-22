@@ -102,8 +102,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                             UNIX_PRECISION_NANOS, UNIX_PRECISION_MICROS,
                             UNIX_PRECISION_MILLIS, UNIX_PRECISION_SECONDS),
                     ConfigDef.Importance.LOW,
-                    "The desired Unix precision for the timestamp. Used to generate the output when type=unix " +
-                            "or used to parse the input if the input is a Long." +
+                    "The desired Unix precision for the timestamp: seconds, milliseconds, microseconds, or nanoseconds. " +
+                            "Used to generate the output when type=unix or used to parse the input if the input is a Long." +
                             "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.");
 
     private interface TimestampTranslator {
