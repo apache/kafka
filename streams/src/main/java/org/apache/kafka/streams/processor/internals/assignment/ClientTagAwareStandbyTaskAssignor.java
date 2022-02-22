@@ -195,17 +195,18 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
         final Map<TagEntry, Set<UUID>> tagEntryToUsedClients = new HashMap<>();
 
-        fillClientsOnAlreadyUsedTagEntries(
-            activeTaskClient,
-            countOfUsedClients,
-            rackAwareAssignmentTags,
-            clientStates,
-            tagEntryToClients,
-            tagKeyToValues,
-            tagEntryToUsedClients
-        );
+        UUID lastUsedclient = activeTaskClient;
+        do {
+            fillClientsOnAlreadyUsedTagEntries(
+                lastUsedclient,
+                countOfUsedClients,
+                rackAwareAssignmentTags,
+                clientStates,
+                tagEntryToClients,
+                tagKeyToValues,
+                tagEntryToUsedClients
+            );
 
-        while (numRemainingStandbys > 0) {
             final UUID clientOnUnusedTagDimensions = standbyTaskClientsByTaskLoad.poll(
                 activeTaskId, uuid -> !isClientUsedOnAnyOfTheTagEntries(uuid, tagEntryToUsedClients)
             );
@@ -219,20 +220,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             countOfUsedClients++;
             numRemainingStandbys--;
 
-            if (numRemainingStandbys == 0) {
-                break;
-            }
-
-            fillClientsOnAlreadyUsedTagEntries(
-                clientOnUnusedTagDimensions,
-                countOfUsedClients,
-                rackAwareAssignmentTags,
-                clientStates,
-                tagEntryToClients,
-                tagKeyToValues,
-                tagEntryToUsedClients
-            );
-        }
+            lastUsedclient = clientOnUnusedTagDimensions;
+        } while (numRemainingStandbys > 0);
 
         return numRemainingStandbys;
     }
