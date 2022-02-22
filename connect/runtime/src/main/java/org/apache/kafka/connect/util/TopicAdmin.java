@@ -716,7 +716,7 @@ public class TopicAdmin implements AutoCloseable {
                     maxRetries,
                     retryBackoffMs);
         } catch (Exception e) {
-            throw new ConnectException("Failed to read offsets for topic partitions " + partitions + " after " + maxRetries + " attempts", e);
+            throw new ConnectException("Failed to read offsets for topic partitions.", e);
         }
     }
 

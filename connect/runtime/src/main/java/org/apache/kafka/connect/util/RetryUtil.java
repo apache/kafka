@@ -47,6 +47,6 @@ public class RetryUtil {
             Utils.sleep(retryBackoffMs);
         }
 
-        throw new ConnectException(lastError);
+        throw new ConnectException("Fail to retry the operation after " + maxRetries + " attempts.  Reason: " + lastError, lastError);
     }
 }

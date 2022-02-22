@@ -474,15 +474,13 @@ public class TopicAdminTest {
         Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
 
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(500), cluster)) {
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
             Map<TopicPartition, Long> offsetMap = new HashMap<>();
             offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE));
             Map<String, Object> adminConfig = new HashMap<>();
-            adminConfig.put(AdminClientConfig.RETRIES_CONFIG, "2");
-            adminConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000L");
-            adminConfig.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1000L");
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
             TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
 
             assertThrows(ConnectException.class, () -> {
@@ -499,7 +497,7 @@ public class TopicAdminTest {
         Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
 
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(500), cluster)) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
             Map<TopicPartition, Long> offsetMap = new HashMap<>();
             offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -507,7 +505,9 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResult(tp1, offset));
 
-            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<String, Object> adminConfig = new HashMap<>();
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
+            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
             Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps);
             assertNotNull(endoffsets);
             assertTrue(endoffsets.containsKey(tp1));

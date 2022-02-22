@@ -65,7 +65,7 @@ public class RetryUtilTest {
         } catch (Exception e) {
             fail("Only expecting ConnectException");
         }
-        Mockito.verify(mockCallable, Mockito.times(1)).call();
+        Mockito.verify(mockCallable, Mockito.times(10)).call();
     }
 
     @Test
@@ -81,23 +81,6 @@ public class RetryUtilTest {
             fail("Not expecting an exception: ", e.getCause());
         }
         Mockito.verify(mockCallable, Mockito.times(4)).call();
-    }
-
-    @Test
-    public void RetriesEventuallyFail() throws Exception {
-        Mockito.when(mockCallable.call())
-                .thenThrow(new TimeoutException("timeout"));
-        try {
-            for (int i = 0; i < 10; i++) {
-                RetryUtil.retry(mockCallable, 10, 100);
-            }
-            fail("Not expecting an exception: ");
-        } catch (ConnectException e) {
-           // good
-        } catch (Exception e) {
-            fail("Expecting ConnectException");
-        }
-        Mockito.verify(mockCallable, Mockito.times(10)).call();
     }
 
     @Test
