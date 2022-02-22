@@ -207,6 +207,8 @@ public class ProducerConfig extends AbstractConfig {
     private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking."
                                                                             + " Note that if this config is set to be greater than 1 and <code>enable.idempotence</code> is set to false, there is a risk of"
                                                                             + " message re-ordering after a failed send due to retries (i.e., if retries are enabled).";
+    // max.in.flight.requests.per.connection should be less than or equal to 5 when idempotence producer enabled to ensure message ordering
+    private static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE = 5;
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
@@ -269,8 +271,8 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
-                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5 "
-                                                        + "(with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
+                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE
+                                                        + " (with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
                                                         + ACKS_CONFIG + "</code> must be 'all'. If these values are not explicitly set by the user, suitable values will be chosen. If incompatible "
                                                         + "values are set, a <code>ConfigException</code> will be thrown.";
 
@@ -438,9 +440,8 @@ public class ProducerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
-        maybeOverrideEnableIdempotence(refinedConfigs);
+        postProcessAndValidateIdempotenceConfigs(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);
-        maybeOverrideAcksAndRetries(refinedConfigs);
         return refinedConfigs;
     }
 
@@ -456,33 +457,30 @@ public class ProducerConfig extends AbstractConfig {
         configs.put(CLIENT_ID_CONFIG, refinedClientId);
     }
 
-    private void maybeOverrideEnableIdempotence(final Map<String, Object> configs) {
-        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
-
-        if (userConfiguredTransactions && !userConfiguredIdempotence) {
-            configs.put(ENABLE_IDEMPOTENCE_CONFIG, true);
-        }
-    }
-
-    private void maybeOverrideAcksAndRetries(final Map<String, Object> configs) {
+    private void postProcessAndValidateIdempotenceConfigs(final Map<String, Object> configs) {
+        final Map<String, Object> originalConfigs = this.originals();
         final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
         configs.put(ACKS_CONFIG, acksStr);
-        // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` might need to be overridden.
+
+        // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` need validation
         if (idempotenceEnabled()) {
-            boolean userConfiguredRetries = this.originals().containsKey(RETRIES_CONFIG);
-            if (this.getInt(RETRIES_CONFIG) == 0) {
+            boolean userConfiguredRetries = originalConfigs.containsKey(RETRIES_CONFIG);
+            if (userConfiguredRetries && this.getInt(RETRIES_CONFIG) == 0) {
                 throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
             }
-            configs.put(RETRIES_CONFIG, userConfiguredRetries ? this.getInt(RETRIES_CONFIG) : Integer.MAX_VALUE);
 
-            boolean userConfiguredAcks = this.originals().containsKey(ACKS_CONFIG);
+            boolean userConfiguredAcks = originalConfigs.containsKey(ACKS_CONFIG);
             final short acks = Short.valueOf(acksStr);
             if (userConfiguredAcks && acks != (short) -1) {
                 throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
                         "producer. Otherwise we cannot guarantee idempotence.");
             }
-            configs.put(ACKS_CONFIG, "-1");
+
+            boolean userConfiguredInflightRequests = originalConfigs.containsKey(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+            if (userConfiguredInflightRequests && MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < this.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+                throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
+                        " to use the idempotent producer.");
+            }
         }
     }
 
@@ -514,13 +512,12 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     boolean idempotenceEnabled() {
-        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
         boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
-        boolean idempotenceEnabled = userConfiguredIdempotence && this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
-
-        if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
+        boolean idempotenceEnabled = this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
+        if (!idempotenceEnabled && userConfiguredTransactions)
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
-        return userConfiguredTransactions || idempotenceEnabled;
+
+        return idempotenceEnabled;
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {

@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -405,14 +406,16 @@ public class StoreQueryIntegrationTest {
         final Properties streamsConfiguration2 = streamsConfiguration();
         streamsConfiguration2.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
 
+        final String topologyA = "topology-A";
+
         final KafkaStreamsNamedTopologyWrapper kafkaStreams1 = createNamedTopologyKafkaStreams(streamsConfiguration1);
         final KafkaStreamsNamedTopologyWrapper kafkaStreams2 = createNamedTopologyKafkaStreams(streamsConfiguration2);
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
-        final NamedTopologyBuilder builder1A = kafkaStreams1.newNamedTopologyBuilder("topology-A", streamsConfiguration1);
+        final NamedTopologyBuilder builder1A = kafkaStreams1.newNamedTopologyBuilder(topologyA, streamsConfiguration1);
         getStreamsBuilderWithTopology(builder1A, semaphore);
 
-        final NamedTopologyBuilder builder2A = kafkaStreams2.newNamedTopologyBuilder("topology-A", streamsConfiguration2);
+        final NamedTopologyBuilder builder2A = kafkaStreams2.newNamedTopologyBuilder(topologyA, streamsConfiguration2);
         getStreamsBuilderWithTopology(builder2A, semaphore);
 
         kafkaStreams1.start(builder1A.build());
@@ -426,7 +429,7 @@ public class StoreQueryIntegrationTest {
 
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
-        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new IntegerSerializer());
+        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new IntegerSerializer(), topologyA);
 
         //key belongs to this partition
         final int keyPartition = keyQueryMetadata.partition();
@@ -436,8 +439,8 @@ public class StoreQueryIntegrationTest {
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
 
         // Assert that both active and standby are able to query for a key
-        final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> param = StoreQueryParameters
-            .fromNameAndType(TABLE_NAME, queryableStoreType)
+        final NamedTopologyStoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> param = NamedTopologyStoreQueryParameters
+            .fromNamedTopologyAndStoreNameAndType(topologyA, TABLE_NAME, queryableStoreType)
             .enableStaleStores()
             .withPartition(keyPartition);
         TestUtils.waitForCondition(() -> {
@@ -449,8 +452,8 @@ public class StoreQueryIntegrationTest {
             return store2.get(key) != null;
         }, "store2 cannot find results for key");
 
-        final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> otherParam = StoreQueryParameters
-            .fromNameAndType(TABLE_NAME, queryableStoreType)
+        final NamedTopologyStoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> otherParam = NamedTopologyStoreQueryParameters
+            .fromNamedTopologyAndStoreNameAndType(topologyA, TABLE_NAME, queryableStoreType)
             .enableStaleStores()
             .withPartition(keyDontBelongPartition);
         final ReadOnlyKeyValueStore<Integer, Integer> store3 = getStore(kafkaStreams1, otherParam);

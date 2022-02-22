@@ -290,7 +290,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
-  def createPartitions(timeout: Int,
+  def createPartitions(timeoutMs: Int,
                        newPartitions: Seq[CreatePartitionsTopic],
                        validateOnly: Boolean,
                        controllerMutationQuota: ControllerMutationQuota,
@@ -367,7 +367,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
-    if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
+    if (timeoutMs <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createPartitionMetadata =>
         // ignore topics that already have errors
         if (createPartitionMetadata.error.isSuccess && !validateOnly) {
@@ -379,7 +379,7 @@ class ZkAdminManager(val config: KafkaConfig,
       callback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
-      val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this, callback)
+      val delayedCreate = new DelayedCreatePartitions(timeoutMs, metadata, this, callback)
       val delayedCreateKeys = newPartitions.map(createPartitionTopic => TopicKey(createPartitionTopic.name))
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)

@@ -408,7 +408,7 @@ class LogManagerTest {
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
 
-      log.flush()
+      log.flush(false)
     }
 
     logManager.checkpointLogRecoveryOffsets()
@@ -484,7 +484,7 @@ class LogManagerTest {
     allLogs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes), leaderEpoch = 0)
-      log.flush()
+      log.flush(false)
     }
 
     logManager.checkpointRecoveryOffsetsInDir(logDir)

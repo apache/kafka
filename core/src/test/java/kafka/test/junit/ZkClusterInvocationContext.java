@@ -41,6 +41,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -203,6 +204,12 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public ListenerName clientListener() {
             return clusterReference.get().listenerName();
+        }
+
+
+        @Override
+        public Optional<ListenerName> controlPlaneListenerName() {
+            return OptionConverters.toJava(clusterReference.get().servers().head().config().controlPlaneListenerName());
         }
 
         @Override

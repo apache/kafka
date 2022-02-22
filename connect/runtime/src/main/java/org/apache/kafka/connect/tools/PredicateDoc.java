@@ -52,8 +52,8 @@ public class PredicateDoc {
                     throw new RuntimeException("Predicate class " + p.pluginClass().getName() + " lacks either a `public static final String OVERVIEW_DOC` or `public static final ConfigDef CONFIG_DEF`");
                 }
             })
+            .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
             .collect(Collectors.toList());
-        collect.sort(Comparator.comparing(docInfo -> docInfo.predicateName));
         PREDICATES = collect;
     }
 

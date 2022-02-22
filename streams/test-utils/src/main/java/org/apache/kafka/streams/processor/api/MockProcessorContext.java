@@ -28,6 +28,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -485,7 +486,15 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
             }
 
             @Override
-            public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+            public void register(final StateStore store,
+                                 final StateRestoreCallback stateRestoreCallback) {
+                register(store, stateRestoreCallback, () -> { });
+            }
+
+            @Override
+            public void register(final StateStore store,
+                                 final StateRestoreCallback stateRestoreCallback,
+                                 final CommitCallback checkpoint) {
                 stateStores.put(store.name(), store);
             }
 

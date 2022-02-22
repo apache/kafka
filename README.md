@@ -46,7 +46,7 @@ Follow instructions in https://kafka.apache.org/quickstart
 
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
-    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
+    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
@@ -230,13 +230,15 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 
 * `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
-* `maxParallelForks`: limits the maximum number of processes for each task.
+* `maxParallelForks`: maximum number of test processes to start in parallel. Defaults to the number of processors available to the JVM.
+* `maxScalacThreads`: maximum number of worker threads for the scalac backend. Defaults to the lowest of `8` and the number of processors
+available to the JVM. The value must be between 1 and 16 (inclusive). 
 * `ignoreFailures`: ignore test failures from junit
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
-* `maxTestRetries`: the maximum number of retries for a failing test case.
+* `maxTestRetries`: maximum number of retries for a failing test case.
 * `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
 * `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
 coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead

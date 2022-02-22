@@ -38,7 +38,7 @@ public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
     private static final boolean ALLOWED_TO_REGISTER = true;
     private static final boolean NOT_ALLOWED_TO_REGISTER = false;
 
-    private ResourceConfig resourceConfig;
+    private final ResourceConfig resourceConfig;
 
     public ConnectRestConfigurable(ResourceConfig resourceConfig) {
         Objects.requireNonNull(resourceConfig, "ResourceConfig can't be null");

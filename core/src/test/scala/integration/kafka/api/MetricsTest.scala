@@ -82,7 +82,10 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     // Produce and consume some records
     val numRecords = 10
     val recordSize = 100000
-    val producer = createProducer()
+    val prop = new Properties()
+    // idempotence producer doesn't support old version of messages
+    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    val producer = createProducer(configOverrides = prop)
     sendRecords(producer, numRecords, recordSize, tp)
 
     val consumer = createConsumer()

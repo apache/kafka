@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.integration;
 
+import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -28,7 +29,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -65,12 +65,10 @@ import java.util.function.Supplier;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class RangeQueryIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
     private static final Properties STREAMS_CONFIG = new Properties();
     private static final String APP_ID = "range-query-integration-test";
     private static final Long COMMIT_INTERVAL = 100L;
@@ -78,14 +76,14 @@ public class RangeQueryIntegrationTest {
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 
-    private enum StoreType { InMemory, RocksDB, Timed };
-    private StoreType storeType;
-    private boolean enableLogging;
-    private boolean enableCaching;
-    private boolean forward;
-    private KafkaStreams kafkaStreams;
+    private enum StoreType { InMemory, RocksDB, Timed }
 
-    private LinkedList<KeyValue<String, String>> records;
+    private final StoreType storeType;
+    private final boolean enableLogging;
+    private final boolean enableCaching;
+    private final boolean forward;
+    private final LinkedList<KeyValue<String, String>> records;
+
     private String low;
     private String high;
     private String middle;
@@ -176,13 +174,11 @@ public class RangeQueryIntegrationTest {
     @Test
     public void testStoreConfig() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
-        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, TABLE_NAME, enableLogging, enableCaching);
-        final KTable<String, String> table = builder.table(inputStream, stateStoreConfig);
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, enableLogging, enableCaching);
+        builder.table(inputStream, stateStoreConfig);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
-            final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams);
-
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
 
             writeInputData();
 
@@ -221,32 +217,29 @@ public class RangeQueryIntegrationTest {
     }
 
     private List<KeyValue<String, String>> filterList(final KeyValueIterator<String, String> iterator, final String from, final String to) {
-        final Predicate<KeyValue<String, String>> pred = new Predicate<KeyValue<String, String>>() {
-            @Override
-            public boolean test(final KeyValue<String, String> elem) {
-                if (from != null && elem.key.compareTo(from) < 0) {
-                    return false;
-                }
-                if (to != null && elem.key.compareTo(to) > 0) {
-                    return false;
-                }
-                return elem != null;
+        final Predicate<KeyValue<String, String>> predicate = elem -> {
+            if (from != null && elem.key.compareTo(from) < 0) {
+                return false;
             }
+            if (to != null && elem.key.compareTo(to) > 0) {
+                return false;
+            }
+            return elem != null;
         };
 
-        return Utils.toList(iterator, pred);
+        return Utils.toList(iterator, predicate);
     }
 
     private void testRange(final String name, final ReadOnlyKeyValueStore<String, String> store, final String from, final String to, final boolean forward) {
         try (final KeyValueIterator<String, String> resultIterator = forward ? store.range(from, to) : store.reverseRange(from, to);
-             final KeyValueIterator<String, String> expectedIterator = forward ? store.all() : store.reverseAll();) {
+             final KeyValueIterator<String, String> expectedIterator = forward ? store.all() : store.reverseAll()) {
             final List<KeyValue<String, String>> result = Utils.toList(resultIterator);
             final List<KeyValue<String, String>> expected = filterList(expectedIterator, from, to);
-            assertThat(result, is(expected));
+            assertThat(name, result, is(expected));
         }
     }
 
-    private Materialized<String, String, KeyValueStore<Bytes, byte[]>> getStoreConfig(final StoreType type, final String name, final boolean cachingEnabled, final boolean loggingEnabled) {
+    private Materialized<String, String, KeyValueStore<Bytes, byte[]>> getStoreConfig(final StoreType type, final boolean cachingEnabled, final boolean loggingEnabled) {
         final Supplier<KeyValueBytesStoreSupplier> createStore = () -> {
             if (type == StoreType.InMemory) {
                 return Stores.inMemoryKeyValueStore(TABLE_NAME);
@@ -270,7 +263,7 @@ public class RangeQueryIntegrationTest {
             stateStoreConfig.withCachingDisabled();
         }
         if (loggingEnabled) {
-            stateStoreConfig.withLoggingEnabled(new HashMap<String, String>());
+            stateStoreConfig.withLoggingEnabled(new HashMap<>());
         } else {
             stateStoreConfig.withLoggingDisabled();
         }

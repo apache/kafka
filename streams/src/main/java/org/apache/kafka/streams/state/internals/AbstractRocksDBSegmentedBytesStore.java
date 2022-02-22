@@ -38,6 +38,7 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -59,7 +60,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
     private Position position;
-
+    protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
@@ -70,7 +71,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         this.metricScope = metricScope;
         this.keySchema = keySchema;
         this.segments = segments;
-        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -264,8 +264,16 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         segments.openExisting(this.context, observedStreamTime);
 
+        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
+        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+
         // register and possibly restore the state from the logs
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreAllInternal);
+        stateStoreContext.register(
+            root,
+            (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
+            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+        );
 
         open = true;
 
@@ -277,8 +285,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        init(StoreToProcessorContextAdapter.adapt(context), root);
         this.stateStoreContext = context;
+        init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override
@@ -336,8 +344,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
-                position = ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                        record, consistencyEnabled, position);
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                    record,
+                    consistencyEnabled,
+                    position
+                );
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);
@@ -349,7 +360,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return writeBatchMap;
     }
 
-    Position getPosition() {
+    @Override
+    public Position getPosition() {
         return position;
     }
 }

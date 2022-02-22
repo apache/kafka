@@ -1668,7 +1668,7 @@ public class WorkerSinkTaskTest {
     }
 
     @Test
-    public void testTopicsRegex() throws Exception {
+    public void testTopicsRegex() {
         Map<String, String> props = new HashMap<>(TASK_PROPS);
         props.remove("topics");
         props.put("topics.regex", "te.*");
@@ -1842,7 +1842,7 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    private void expectInitializeTask() throws Exception {
+    private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 

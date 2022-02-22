@@ -27,6 +27,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
+import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.mutable
 
@@ -98,7 +100,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               txnCoordinator: TransactionCoordinator,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
                               featureCache: FinalizedFeatureCache,
-                              dynamicConfigHandlers: Map[String, ConfigHandler]) extends MetadataPublisher with Logging {
+                              dynamicConfigHandlers: Map[String, ConfigHandler],
+                              private val _authorizer: Option[Authorizer]) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -208,6 +211,33 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
         clientQuotaMetadataManager.update(clientQuotasDelta)
       }
+
+      // Apply changes to ACLs. This needs to be handled carefully because while we are
+      // applying these changes, the Authorizer is continuing to return authorization
+      // results in other threads. We never want to expose an invalid state. For example,
+      // if the user created a DENY ALL acl and then created an ALLOW ACL for topic foo,
+      // we want to apply those changes in that order, not the reverse order! Otherwise
+      // there could be a window during which incorrect authorization results are returned.
+      Option(delta.aclsDelta()).foreach( aclsDelta =>
+        _authorizer match {
+          case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta()) {
+            // If the delta resulted from a snapshot load, we want to apply the new changes
+            // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
+            // first snapshot load, it will also complete the futures returned by
+           // Authorizer#start (which we wait for before processing RPCs).
+            authorizer.loadSnapshot(newImage.acls().acls())
+          } else {
+            // Because the changes map is a LinkedHashMap, the deltas will be returned in
+            // the order they were performed.
+            aclsDelta.changes().entrySet().forEach(e =>
+              if (e.getValue().isPresent()) {
+                authorizer.addAcl(e.getKey(), e.getValue().get())
+              } else {
+                authorizer.removeAcl(e.getKey())
+              })
+          }
+          case _ => // No ClusterMetadataAuthorizer is configured. There is nothing to do.
+        })
 
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)

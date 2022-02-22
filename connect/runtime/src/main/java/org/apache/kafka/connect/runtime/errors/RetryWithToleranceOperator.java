@@ -111,6 +111,23 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         return errantRecordFuture;
     }
 
+    public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
+                                                   SourceRecord sourceRecord,
+                                                   Throwable error) {
+
+        markAsFailed();
+        context.sourceRecord(sourceRecord);
+        context.currentContext(stage, executingClass);
+        context.error(error);
+        errorHandlingMetrics.recordFailure();
+        Future<Void> errantRecordFuture = context.report();
+        if (!withinToleranceLimits()) {
+            errorHandlingMetrics.recordError();
+            throw new ConnectException("Tolerance exceeded in Source Worker error handler", error);
+        }
+        return errantRecordFuture;
+    }
+
     /**
      * Execute the recoverable operation. If the operation is already in a failed state, then simply return
      * with the existing failure.
@@ -227,6 +244,13 @@ public class RetryWithToleranceOperator implements AutoCloseable {
             default:
                 throw new ConfigException("Unknown tolerance type: {}", errorToleranceType);
         }
+    }
+
+    // For source connectors that want to skip kafka producer errors.
+    // They cannot use withinToleranceLimits() as no failure may have actually occurred prior to the producer failing
+    // to write to kafka.
+    public ToleranceType getErrorToleranceType() {
+        return errorToleranceType;
     }
 
     // Visible for testing

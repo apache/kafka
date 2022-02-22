@@ -24,6 +24,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -76,6 +77,8 @@ public class ProcessorStateManager implements StateManager {
         // could be used for both active restoration and standby
         private final StateRestoreCallback restoreCallback;
 
+        private final CommitCallback commitCallback;
+
         // record converters used for restoration and standby
         private final RecordConverter recordConverter;
 
@@ -95,8 +98,10 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
-        private StateStoreMetadata(final StateStore stateStore) {
+        private StateStoreMetadata(final StateStore stateStore,
+                                   final CommitCallback commitCallback) {
             this.stateStore = stateStore;
+            this.commitCallback = commitCallback;
             this.restoreCallback = null;
             this.recordConverter = null;
             this.changelogPartition = null;
@@ -107,6 +112,7 @@ public class ProcessorStateManager implements StateManager {
         private StateStoreMetadata(final StateStore stateStore,
                                    final TopicPartition changelogPartition,
                                    final StateRestoreCallback restoreCallback,
+                                   final CommitCallback commitCallback,
                                    final RecordConverter recordConverter) {
             if (restoreCallback == null) {
                 throw new IllegalStateException("Log enabled store should always provide a restore callback upon registration");
@@ -115,6 +121,7 @@ public class ProcessorStateManager implements StateManager {
             this.stateStore = stateStore;
             this.changelogPartition = changelogPartition;
             this.restoreCallback = restoreCallback;
+            this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
         }
@@ -307,7 +314,9 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback,
+                              final CommitCallback commitCallback) {
         final String storeName = store.name();
 
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
@@ -333,8 +342,9 @@ public class ProcessorStateManager implements StateManager {
                 store,
                 getStorePartition(storeName),
                 stateRestoreCallback,
+                commitCallback,
                 converterForStore(store)) :
-            new StateStoreMetadata(store);
+            new StateStoreMetadata(store, commitCallback);
 
         // register the store first, so that if later an exception is thrown then eventually while we call `close`
         // on the state manager this state store would be closed as well
@@ -598,6 +608,18 @@ public class ProcessorStateManager implements StateManager {
         // checkpoint those stores that are only logged and persistent to the checkpoint file
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (storeMetadata.commitCallback != null && !storeMetadata.corrupted) {
+                try {
+                    storeMetadata.commitCallback.onCommit();
+                } catch (final IOException e) {
+                    throw new ProcessorStateException(
+                            format("%sException caught while trying to checkpoint store, " +
+                                    "changelog partition %s", logPrefix, storeMetadata.changelogPartition),
+                            e
+                    );
+                }
+            }
+
             // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
