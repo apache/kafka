@@ -82,8 +82,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     private static final String UNIX_PRECISION_MICROS = "microseconds";
     private static final String UNIX_PRECISION_NANOS = "nanoseconds";
     private static final String UNIX_PRECISION_SECONDS = "seconds";
-    private static final Set<String> VALID_UNIX_PRECISIONS = new HashSet<>(
-            Arrays.asList(UNIX_PRECISION_MILLIS, UNIX_PRECISION_MICROS, UNIX_PRECISION_NANOS, UNIX_PRECISION_SECONDS));
 
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
