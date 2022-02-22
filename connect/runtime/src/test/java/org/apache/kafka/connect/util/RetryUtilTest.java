@@ -108,14 +108,14 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException("timeout"))
                 .thenThrow(new TimeoutException("timeout"))
                 .thenThrow(new TimeoutException("timeout"))
-                .thenThrow(new NullPointerException("Non Retriable"));
+                .thenThrow(new NullPointerException("Non retriable"));
         try {
             for (int i = 0; i < 10; i++) {
                 RetryUtil.retry(mockCallable, 10, 100);
             }
             fail("Not expecting an exception: ");
         } catch (ConnectException e) {
-            fail("Should Fail with NPE");
+            fail("Should fail with NPE");
         } catch (NullPointerException e) {
             // good
         }

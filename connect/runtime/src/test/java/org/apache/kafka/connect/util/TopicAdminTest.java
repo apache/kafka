@@ -471,7 +471,7 @@ public class TopicAdminTest {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
-        Long offset = 1000L; // response should use error
+        Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(500), cluster)) {
@@ -496,7 +496,7 @@ public class TopicAdminTest {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
-        Long offset = 1000L; // response should use error
+        Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(500), cluster)) {
@@ -743,13 +743,6 @@ public class TopicAdminTest {
     private ListOffsetsResponse listOffsetsResultWithClusterAuthorizationException(TopicPartition tp1, Long offset1) {
         return listOffsetsResult(
                 new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"),
-                Collections.singletonMap(tp1, offset1)
-        );
-    }
-
-    private ListOffsetsResponse listOffsetsResultWithUnknownTopicOrPartitionException(TopicPartition tp1, Long offset1) {
-        return listOffsetsResult(
-                new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "unknown topics"),
                 Collections.singletonMap(tp1, offset1)
         );
     }

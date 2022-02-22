@@ -649,7 +649,7 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     /**
-     * Fetch the most recent offset for each of the supplied {@link TopicPartition} objects.:667
+     * Fetch the most recent offset for each of the supplied {@link TopicPartition} objects.
      *
      * @param partitions the topic partitions
      * @return the map of offset for each topic partition, or an empty map if the supplied partitions
@@ -687,7 +687,6 @@ public class TopicAdmin implements AutoCloseable {
                     throw new UnsupportedVersionException(msg, e);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
-
                     throw new TimeoutException(msg, e);
                 } else if (cause instanceof LeaderNotAvailableException) {
                     String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers());
