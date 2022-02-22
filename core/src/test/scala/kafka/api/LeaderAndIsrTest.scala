@@ -27,7 +27,6 @@ final class LeaderAndIsrTest {
     val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
     val recoveringLeaderAndIsr = leaderAndIsr.newRecoveringLeaderAndIsr(3, List(3))
 
-
     assertEquals(3, recoveringLeaderAndIsr.leader)
     assertEquals(List(3), recoveringLeaderAndIsr.isr)
     assertEquals(LeaderRecoveryState.RECOVERING, recoveringLeaderAndIsr.leaderRecoveryState)

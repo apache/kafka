@@ -64,7 +64,7 @@ case class LeaderAndIsr(leader: Int,
       false
     } else {
       leader == other.leader && leaderEpoch == other.leaderEpoch && isr.equals(other.isr) &&
-      leaderRecoveryState == other.leaderRecoveryState
+        leaderRecoveryState == other.leaderRecoveryState
     }
   }
 
