@@ -92,7 +92,9 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
                     "The field containing the timestamp, or empty if the entire value is a timestamp")
-            .define(TARGET_TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
+            .define(TARGET_TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+                    ConfigDef.ValidString.in(TYPE_STRING, TYPE_UNIX, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP),
+                    ConfigDef.Importance.HIGH,
                     "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
             .define(FORMAT_CONFIG, ConfigDef.Type.STRING, FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM,
                     "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
@@ -293,10 +295,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         final String unixPrecision = simpleConfig.getString(UNIX_PRECISION_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
 
-        if (!VALID_TYPES.contains(type)) {
-            throw new ConfigException("Unknown timestamp type in TimestampConverter: " + type + ". Valid values are "
-                    + Utils.join(VALID_TYPES, ", ") + ".");
-        }
         if (type.equals(TYPE_STRING) && Utils.isBlank(formatPattern)) {
             throw new ConfigException("TimestampConverter requires format option to be specified when using string timestamps");
         }
