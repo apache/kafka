@@ -222,20 +222,22 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                         + " retention=[" + retentionPeriod + "]");
             }
 
-            if (materialized.storeType().equals(Materialized.StoreType.IN_MEMORY)) {
-                supplier = Stores.inMemoryWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
-                    false
-                );
-            } else {
-                supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
-                    false
-                );
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemoryWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.size()),
+                        false
+                    );
+                    break;
+                default:
+                    supplier = Stores.persistentTimestampedWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.size()),
+                        false
+                    );
             }
         }
 

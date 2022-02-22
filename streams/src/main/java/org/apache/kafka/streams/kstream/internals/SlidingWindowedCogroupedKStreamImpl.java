@@ -114,20 +114,22 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
                     + "]");
             }
 
-            if (materialized.storeType().equals(Materialized.StoreType.IN_MEMORY)) {
-                supplier = Stores.inMemoryWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.timeDifferenceMs()),
-                    false
-                );
-            } else {
-                supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.timeDifferenceMs()),
-                    false
-                );
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemoryWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.timeDifferenceMs()),
+                        false
+                    );
+                    break;
+                default:
+                    supplier = Stores.persistentTimestampedWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.timeDifferenceMs()),
+                        false
+                    );
             }
         }
 

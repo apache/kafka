@@ -122,16 +122,18 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                     + " retention=[" + retentionPeriod + "]");
             }
 
-            if (materialized.storeType().equals(Materialized.StoreType.IN_MEMORY)) {
-                supplier = Stores.inMemorySessionStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod)
-                );
-            } else {
-                supplier = Stores.persistentSessionStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod)
-                );
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemorySessionStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod)
+                    );
+                    break;
+                default:
+                    supplier = Stores.persistentSessionStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod)
+                    );
             }
         }
 
