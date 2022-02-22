@@ -69,6 +69,7 @@ public class TopologyMetadata {
     private final StreamsConfig config;
     private final ProcessingMode processingMode;
     private final TopologyVersion version;
+    private final TaskExecutionMetadata taskExecutionMetadata;
 
     private final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability
 
@@ -96,8 +97,8 @@ public class TopologyMetadata {
 
     public TopologyMetadata(final InternalTopologyBuilder builder,
                             final StreamsConfig config) {
-        version = new TopologyVersion();
-        processingMode = StreamsConfigUtils.processingMode(config);
+        this.version = new TopologyVersion();
+        this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
 
         builders = new ConcurrentSkipListMap<>();
@@ -106,6 +107,7 @@ public class TopologyMetadata {
         } else {
             builders.put(UNNAMED_TOPOLOGY, builder);
         }
+        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet());
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
@@ -115,16 +117,17 @@ public class TopologyMetadata {
         this.config = config;
         this.log = LoggerFactory.getLogger(getClass());
 
-
         this.builders = builders;
         if (builders.isEmpty()) {
             log.info("Created an empty KafkaStreams app with no topology");
         }
+        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet());
     }
 
     // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
     public void setLog(final LogContext logContext) {
         log = logContext.logger(getClass());
+        taskExecutionMetadata.setLog(logContext);
     }
     
     public ProcessingMode processingMode() {
@@ -158,6 +161,10 @@ public class TopologyMetadata {
     public void unregisterThread(final String threadName) {
         threadVersions.remove(threadName);
         maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(threadName);
+    }
+
+    public TaskExecutionMetadata taskExecutionMetadata() {
+        return taskExecutionMetadata;
     }
 
     public void maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(final String threadName) {
@@ -217,6 +224,7 @@ public class TopologyMetadata {
             lock();
             buildAndVerifyTopology(newTopologyBuilder);
             log.info("New NamedTopology passed validation and will be added {}, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+            taskExecutionMetadata.registerTopology(newTopologyBuilder.topologyName());
             version.topologyVersion.incrementAndGet();
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
@@ -238,6 +246,7 @@ public class TopologyMetadata {
         try {
             lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
+            taskExecutionMetadata.unregisterTopology(topologyName);
             version.topologyVersion.incrementAndGet();
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), removeTopologyFuture));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);

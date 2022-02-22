@@ -51,12 +51,15 @@ public class TaskExecutor {
     private final boolean hasNamedTopologies;
     private final ProcessingMode processingMode;
     private final Tasks tasks;
+    private final TaskExecutionMetadata taskExecutionMetadata;
 
     public TaskExecutor(final Tasks tasks,
+                        final TaskExecutionMetadata taskExecutionMetadata,
                         final ProcessingMode processingMode,
                         final boolean hasNamedTopologies,
                         final LogContext logContext) {
         this.tasks = tasks;
+        this.taskExecutionMetadata = taskExecutionMetadata;
         this.processingMode = processingMode;
         this.hasNamedTopologies = hasNamedTopologies;
         this.log = logContext.logger(getClass());
@@ -69,15 +72,25 @@ public class TaskExecutor {
     int process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
         Task lastProcessed = null;
-        try {
-            for (final Task task : tasks.activeTasks()) {
-                lastProcessed = task;
-                totalProcessed += processTask(task, maxNumRecords, time);
+
+        for (final Map.Entry<String, Set<Task>> topologyEntry : tasks.activeTasksByTopology().entrySet()) {
+            final String topologyName = topologyEntry.getKey();
+            final Set<Task> topologyActiveTasks = topologyEntry.getValue();
+            if (taskExecutionMetadata.canProcessTopology(topologyName)) {
+                for (final Task task : topologyActiveTasks) {
+                    try {
+                        if (taskExecutionMetadata.canProcessTask(task)) {
+                            lastProcessed = task;
+                            totalProcessed += processTask(task, maxNumRecords, time);
+                        }
+                    } catch (final Throwable t) {
+                        taskExecutionMetadata.registerTaskError(task, t);
+                        tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
+                        commitSuccessfullyProcessedTasks();
+                        throw t;
+                    }
+                }
             }
-        } catch (final Exception e) {
-            tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
-            commitSuccessfullyProcessedTasks();
-            throw e;
         }
 
         return totalProcessed;
@@ -98,6 +111,7 @@ public class TaskExecutor {
                 tasks.addToSuccessfullyProcessed(task);
             }
         } catch (final TimeoutException timeoutException) {
+            // TODO consolidate TimeoutException retries with general error handling
             task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
             log.debug(
                 String.format(
@@ -132,7 +146,7 @@ public class TaskExecutor {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<Task> tasksToCommit,
-                                                            final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
+                                                    final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
         int committed = 0;
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
