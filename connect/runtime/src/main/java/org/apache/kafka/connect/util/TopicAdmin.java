@@ -42,7 +42,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -124,6 +123,9 @@ public class TopicAdmin implements AutoCloseable {
 
     public static final int NO_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
+
+    private static final String DEFAULT_ADMIN_CLIENT_RETRIES = "10";
+    private static final String DEFAULT_ADMIN_CLIENT_BACKOFF_MS = "100";
 
     private static final String CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_CONFIG;
     private static final String CLEANUP_POLICY_COMPACT = TopicConfig.CLEANUP_POLICY_COMPACT;
@@ -706,35 +708,17 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     protected Map<TopicPartition, Long> retryEndOffsets(Set<TopicPartition> partitions) {
-        int maxRetries = Integer.parseInt(adminConfig.getOrDefault(AdminClientConfig.RETRIES_CONFIG, 10).toString());
-        long retryBackoffMs = Long.parseLong(adminConfig.getOrDefault(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, 100L).toString());
+        int maxRetries = Integer.parseInt(adminConfig.getOrDefault(AdminClientConfig.RETRIES_CONFIG, DEFAULT_ADMIN_CLIENT_RETRIES).toString());
+        long retryBackoffMs = Long.parseLong(adminConfig.getOrDefault(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, DEFAULT_ADMIN_CLIENT_BACKOFF_MS).toString());
 
-        Throwable lastError = null;
-        int retries = 0;
-
-        while (retries++ < maxRetries) {
-            try {
-                return endOffsets(partitions);
-            } catch (TimeoutException e) {
-                log.warn("Timeout while reading end offsets for topic partitions. Retrying automatically up to {} more times. " +
-                        "This may occur when brokers are unavailable or unreachable. Reason: {}", maxRetries - retries, e.getMessage());
-                lastError = e;
-            } catch (org.apache.kafka.common.errors.RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
-                log.warn("Retriable error while reading end offsets for topic partitions. Retrying automatically up to {} more times. " +
-                        "Reason: {}", maxRetries - retries, e.getMessage());
-                lastError = e;
-            } catch (WakeupException e) {
-                // ignore
-                lastError = e;
-            } catch (Exception e) {
-                // throw if exception is not retriable
-                log.warn("Non-retriable exception caught while reading end offsets for topic partitions. Reason: {}", e.getMessage());
-                throw e;
-            }
-            log.info("Backing off {} ms, before retry", retryBackoffMs);
-            Utils.sleep(retryBackoffMs);
+        try {
+            return RetryUtil.retry(
+                    () -> endOffsets(partitions),
+                    maxRetries,
+                    retryBackoffMs);
+        } catch (Exception e) {
+            throw new ConnectException("Failed to read offsets for topic partitions " + partitions + " after " + maxRetries + " attempts", e);
         }
-        throw new ConnectException("Failed to read offsets for topic partitions " + partitions + " after " + maxRetries + " attempts", lastError);
     }
 
     @Override

@@ -321,6 +321,8 @@ public class KafkaBasedLog<K, V> {
 
     private void readToLogEnd(boolean shouldRetry) {
         Set<TopicPartition> assignment = consumer.assignment();
+        // readEndOffsets makes listOffsets call to adminClient, if shouldRetry is set to True, the adminClinet
+        // will retry on RetriableExceptions
         Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment, shouldRetry);
         log.trace("Reading to end of log offsets {}", endOffsets);
 
