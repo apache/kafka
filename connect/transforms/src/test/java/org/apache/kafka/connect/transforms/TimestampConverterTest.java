@@ -39,6 +39,7 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireStruc
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class TimestampConverterTest {
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
@@ -102,6 +103,22 @@ public class TimestampConverterTest {
     public void testConfigInvalidTargetType() {
         assertThrows(ConfigException.class,
             () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid")));
+    }
+
+    @Test
+    public void testConfigInvalidUnixPrecision() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "invalid");
+        assertThrows(ConfigException.class, () -> xformValue.configure(config));
+    }
+
+    @Test
+    public void testConfigValidUnixPrecision() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "seconds");
+        assertDoesNotThrow(() -> xformValue.configure(config));
     }
 
     @Test
