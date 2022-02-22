@@ -265,18 +265,19 @@ class DefaultAlterIsrManager(
             val apiError = Errors.forCode(partition.errorCode())
             debug(s"Controller successfully handled AlterIsr request for $tp: $partition")
             if (apiError == Errors.NONE) {
-              try {
-                partitionResponses(tp) = Right(
-                  LeaderAndIsr(
-                    partition.leaderId,
-                    partition.leaderEpoch,
-                    partition.isr.asScala.toList.map(_.toInt),
-                    LeaderRecoveryState.of(partition.leaderRecoveryState),
-                    partition.partitionEpoch
+              LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
+                case Some(leaderRecoveryState) =>
+                  partitionResponses(tp) = Right(
+                    LeaderAndIsr(
+                      partition.leaderId,
+                      partition.leaderEpoch,
+                      partition.isr.asScala.toList.map(_.toInt),
+                      leaderRecoveryState,
+                      partition.partitionEpoch
+                    )
                   )
-                )
-              } catch {
-                case e: IllegalArgumentException =>
+
+                case None =>
                   error(s"Controller returned an invalid leader recovery state (${partition.leaderRecoveryState}) for $tp: $partition")
                   partitionResponses(tp) = Left(Errors.UNKNOWN_SERVER_ERROR)
               }

@@ -17,9 +17,6 @@
 
 package org.apache.kafka.metadata;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 public enum LeaderRecoveryState {
@@ -41,27 +38,20 @@ public enum LeaderRecoveryState {
      */
     private static final byte NO_CHANGE = (byte) -1;
 
-    private static final Map<Byte, LeaderRecoveryState> VALUE_TO_ENUM;
-
-    static {
-        Map<Byte, LeaderRecoveryState> map = new HashMap<>();
-        for (LeaderRecoveryState recovery : LeaderRecoveryState.values()) {
-            if (recovery.value() == NO_CHANGE) {
-                throw new ExceptionInInitializerError(
-                    String.format("Value %s for leader recovery state %s cannot be %s", recovery.value(), recovery, NO_CHANGE));
-            }
-            if (map.put(recovery.value(), recovery) != null) {
-                throw new ExceptionInInitializerError(
-                    String.format("Value %s for election state %s has already been used", recovery.value(), recovery));
-            }
-        }
-        VALUE_TO_ENUM = Collections.unmodifiableMap(map);
+    public static LeaderRecoveryState of(byte value) {
+        return optionalOf(value)
+            .orElseThrow(() -> new IllegalArgumentException(String.format("Value %s is not a valid leader recovery state", value)));
     }
 
-    public static LeaderRecoveryState of(byte value) {
-        return Optional
-            .ofNullable(VALUE_TO_ENUM.get(value))
-            .orElseThrow(() -> new IllegalArgumentException(String.format("Value %s is not a valid leader recovery state", value)));
+    public static Optional<LeaderRecoveryState> optionalOf(byte value) {
+        if (value == RECOVERED.value()) {
+            return Optional.of(RECOVERED);
+        }
+        if (value == RECOVERING.value()) {
+            return Optional.of(RECOVERING);
+        }
+
+        return Optional.empty();
     }
 
     private final byte value;
