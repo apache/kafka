@@ -207,7 +207,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
         while (numRemainingStandbys > 0) {
             final UUID clientOnUnusedTagDimensions = standbyTaskClientsByTaskLoad.poll(
-                activeTaskId, uuid -> !isClientInAnyOfTheUsedClients(uuid, tagEntryToUsedClients)
+                activeTaskId, uuid -> !isClientUsedOnAnyOfTheTagEntries(uuid, tagEntryToUsedClients)
             );
 
             if (clientOnUnusedTagDimensions == null) {
@@ -237,8 +237,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         return numRemainingStandbys;
     }
 
-    private static boolean isClientInAnyOfTheUsedClients(final UUID client,
-                                                         final Map<TagEntry, Set<UUID>> tagEntryToUsedClients) {
+    private static boolean isClientUsedOnAnyOfTheTagEntries(final UUID client,
+                                                            final Map<TagEntry, Set<UUID>> tagEntryToUsedClients) {
         return tagEntryToUsedClients.values().stream().anyMatch(usedClients -> usedClients.contains(client));
     }
 
