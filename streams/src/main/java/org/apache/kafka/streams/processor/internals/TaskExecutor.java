@@ -38,7 +38,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 
@@ -89,7 +88,7 @@ public class TaskExecutor {
                 task.clearTaskTimeout();
                 processed++;
             }
-            if (processingMode == AT_LEAST_ONCE) {
+            if (processingMode != EXACTLY_ONCE_V2) {
                 tasks.addToSuccessfullyProcessed(task);
             }
         } catch (final TimeoutException timeoutException) {
@@ -245,9 +244,10 @@ public class TaskExecutor {
     }
 
     private void commitSuccessfullyProcessedTasks() {
-        if (processingMode == AT_LEAST_ONCE && !tasks.successfullyProcessed().isEmpty()) {
-            log.error("Streams encountered an error when processing tasks." +
-                " Will commit all previously successfully processed tasks");
+        if (!tasks.successfullyProcessed().isEmpty()) {
+            log.info("Streams encountered an error when processing tasks." +
+                " Will commit all previously successfully processed tasks {}",
+                tasks.successfullyProcessed().toString());
             commitTasksAndMaybeUpdateCommittableOffsets(tasks.successfullyProcessed(), new HashMap<>());
         }
         tasks.clearSuccessfullyProcessed();

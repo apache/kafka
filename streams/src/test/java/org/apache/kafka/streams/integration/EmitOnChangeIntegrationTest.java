@@ -45,11 +45,14 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category(IntegrationTest.class)
 public class EmitOnChangeIntegrationTest {
@@ -83,7 +86,6 @@ public class EmitOnChangeIntegrationTest {
         inputTopic2 = "input2" + testId;
         outputTopic = "output" + testId;
         outputTopic2 = "output2" + testId;
-
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, outputTopic, inputTopic2, outputTopic2);
     }
 
@@ -115,7 +117,6 @@ public class EmitOnChangeIntegrationTest {
                 }
             })
             .to(outputTopic);
-
         builder.stream(inputTopic2).to(outputTopic2);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
@@ -192,15 +193,15 @@ public class EmitOnChangeIntegrationTest {
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
-
-        builder.stream(inputTopic2).to(outputTopic2);
-        builder.table(inputTopic, Materialized.as("test-store"))
-            .toStream()
-            .map((key, value) -> {
+        final AtomicInteger noOutputExpected = new AtomicInteger(0);
+        final AtomicInteger twoOutputExpected = new AtomicInteger(0);
+        builder.stream(inputTopic2).peek((k, v) -> twoOutputExpected.incrementAndGet()).to(outputTopic2);
+        builder.stream(inputTopic)
+            .peek((k, v) -> {
                 throw new RuntimeException("Kaboom");
             })
+            .peek((k, v) -> noOutputExpected.incrementAndGet())
             .to(outputTopic);
-
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
@@ -240,6 +241,8 @@ public class EmitOnChangeIntegrationTest {
                     new KeyValue<>(1, "B")
                 )
             );
+            assertThat(noOutputExpected.get(), equalTo(0));
+            assertThat(twoOutputExpected.get(), equalTo(2));
         }
     }
 }
