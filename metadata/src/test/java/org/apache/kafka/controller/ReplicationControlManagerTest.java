@@ -111,7 +111,6 @@ import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
 import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
-import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -162,6 +161,7 @@ public class ReplicationControlManagerTest {
                 new LogContext(),
                 (short) 3,
                 1,
+                Integer.MAX_VALUE,
                 configurationControl,
                 clusterControl,
                 metrics,
@@ -1553,6 +1553,83 @@ public class ReplicationControlManagerTest {
             setPartitionId(0).
             setTopicId(fooId).
             setLeader(1), (short) 0)), election2Result.records());
+    }
+
+    @Test
+    public void testBalancePartitionLeaders() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(2, 3, 4);
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
+
+        assertTrue(replication.arePartitionLeadersImbalanced());
+        assertEquals(2, ctx.metrics.preferredReplicaImbalanceCount());
+
+        ctx.unfenceBrokers(1);
+
+        ControllerResult<AlterIsrResponseData> alterIsrResult = replication.alterIsr(
+            new AlterIsrRequestData().setBrokerId(2).setBrokerEpoch(102).
+                setTopics(asList(new AlterIsrRequestData.TopicData().setName("foo").
+                    setPartitions(asList(new AlterIsrRequestData.PartitionData().
+                        setPartitionIndex(0).setCurrentIsrVersion(0).
+                        setLeaderEpoch(0).setNewIsr(asList(1, 2, 3)))))));
+        assertEquals(new AlterIsrResponseData().setTopics(asList(
+            new AlterIsrResponseData.TopicData().setName("foo").setPartitions(asList(
+                new AlterIsrResponseData.PartitionData().
+                    setPartitionIndex(0).
+                    setLeaderId(2).
+                    setLeaderEpoch(0).
+                    setIsr(asList(1, 2, 3)).
+                    setCurrentIsrVersion(1).
+                    setErrorCode(NONE.code()))))),
+            alterIsrResult.response());
+        ctx.replay(alterIsrResult.records());
+
+        ControllerResult<Boolean> balanceResult = replication.maybeBalancePartitionLeaders();
+        ctx.replay(balanceResult.records());
+
+        PartitionChangeRecord expectedChangeRecord = new PartitionChangeRecord()
+            .setPartitionId(0)
+            .setTopicId(fooId)
+            .setLeader(1);
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
+        assertTrue(replication.arePartitionLeadersImbalanced());
+        assertEquals(1, ctx.metrics.preferredReplicaImbalanceCount());
+        assertFalse(balanceResult.response());
+
+        ctx.unfenceBrokers(0);
+
+        alterIsrResult = replication.alterIsr(
+            new AlterIsrRequestData().setBrokerId(2).setBrokerEpoch(102).
+                setTopics(asList(new AlterIsrRequestData.TopicData().setName("foo").
+                    setPartitions(asList(new AlterIsrRequestData.PartitionData().
+                        setPartitionIndex(2).setCurrentIsrVersion(0).
+                        setLeaderEpoch(0).setNewIsr(asList(0, 2, 1)))))));
+        assertEquals(new AlterIsrResponseData().setTopics(asList(
+            new AlterIsrResponseData.TopicData().setName("foo").setPartitions(asList(
+                new AlterIsrResponseData.PartitionData().
+                    setPartitionIndex(2).
+                    setLeaderId(2).
+                    setLeaderEpoch(0).
+                    setIsr(asList(0, 2, 1)).
+                    setCurrentIsrVersion(1).
+                    setErrorCode(NONE.code()))))),
+            alterIsrResult.response());
+        ctx.replay(alterIsrResult.records());
+
+        balanceResult = replication.maybeBalancePartitionLeaders();
+        ctx.replay(balanceResult.records());
+
+        expectedChangeRecord = new PartitionChangeRecord()
+            .setPartitionId(2)
+            .setTopicId(fooId)
+            .setLeader(0);
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
+        assertFalse(replication.arePartitionLeadersImbalanced());
+        assertEquals(0, ctx.metrics.preferredReplicaImbalanceCount());
+        assertFalse(balanceResult.response());
     }
 
     private void assertElectLeadersResponse(

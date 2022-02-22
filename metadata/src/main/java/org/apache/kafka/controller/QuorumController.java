@@ -147,6 +147,7 @@ public final class QuorumController implements Controller {
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
+        private long leaderImbalanceCheckIntervalNs = -1;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
@@ -209,6 +210,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setLeaderImbalanceCheckIntervalNs(long value) {
+            this.leaderImbalanceCheckIntervalNs = value;
+            return this;
+        }
+
         public Builder setSessionTimeoutNs(long sessionTimeoutNs) {
             this.sessionTimeoutNs = sessionTimeoutNs;
             return this;
@@ -260,8 +266,8 @@ public final class QuorumController implements Controller {
                 return new QuorumController(logContext, nodeId, clusterId, queue, time,
                     configSchema, raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
-                    sessionTimeoutNs, controllerMetrics, createTopicPolicy,
-                    alterConfigPolicy, configurationValidator, authorizer);
+                    leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
+                    createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -643,18 +649,18 @@ public final class QuorumController implements Controller {
                 OptionalLong maybeOffset = purgatory.highestPendingOffset();
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
-                    // uncommitted state.  We can return immediately.
+                    // uncommitted state.  We can complete immediately.
                     resultAndOffset = ControllerResultAndOffset.of(-1, result);
                     log.debug("Completing read-only operation {} immediately because " +
                         "the purgatory is empty.", this);
                     complete(null);
-                    return;
+                } else {
+                    // If there are operations in the purgatory, we want to wait for the latest
+                    // one to complete before returning our result to the user.
+                    resultAndOffset = ControllerResultAndOffset.of(maybeOffset.getAsLong(), result);
+                    log.debug("Read-only operation {} will be completed when the log " +
+                        "reaches offset {}", this, resultAndOffset.offset());
                 }
-                // If there are operations in the purgatory, we want to wait for the latest
-                // one to complete before returning our result to the user.
-                resultAndOffset = ControllerResultAndOffset.of(maybeOffset.getAsLong(), result);
-                log.debug("Read-only operation {} will be completed when the log " +
-                    "reaches offset {}", this, resultAndOffset.offset());
             } else {
                 // If the operation returned a batch of records, those records need to be
                 // written before we can return our result to the user.  Here, we hand off
@@ -673,10 +679,19 @@ public final class QuorumController implements Controller {
                     replay(message.message(), Optional.empty(), offset);
                 }
                 snapshotRegistry.getOrCreateSnapshot(offset);
+
                 log.debug("Read-write operation {} will be completed when the log " +
                     "reaches offset {}.", this, resultAndOffset.offset());
             }
-            purgatory.add(resultAndOffset.offset(), this);
+
+            // After every controller write event, schedule a leader rebalance if there are any topic partition
+            // with leader that is not the preferred leader.
+            maybeScheduleNextBalancePartitionLeaders();
+
+            // Remember the latest offset and future if it is not already completed
+            if (!future.isDone()) {
+                purgatory.add(resultAndOffset.offset(), this);
+            }
         }
 
         @Override
@@ -743,7 +758,6 @@ public final class QuorumController implements Controller {
                             // otherwise, we should delete up to the current committed offset.
                             snapshotRegistry.deleteSnapshotsUpTo(
                                 snapshotGeneratorManager.snapshotLastOffsetFromLog().orElse(offset));
-
                         } else {
                             // If the controller is a standby, replay the records that were
                             // created by the active controller.
@@ -861,6 +875,10 @@ public final class QuorumController implements Controller {
                     // required because the active controller assumes that there is always an in-memory snapshot at the
                     // last committed offset.
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
+
+                    // When becoming the active controller, schedule a leader rebalance if there are any topic partition
+                    // with leader that is not the preferred leader.
+                    maybeScheduleNextBalancePartitionLeaders();
                 });
             } else if (curClaimEpoch != -1) {
                 appendRaftEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
@@ -951,6 +969,48 @@ public final class QuorumController implements Controller {
 
     private void cancelMaybeFenceReplicas() {
         queue.cancelDeferred(MAYBE_FENCE_REPLICAS);
+    }
+
+    private static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
+
+    private void maybeScheduleNextBalancePartitionLeaders() {
+        final String maybeBalancePartitionLeaders = "maybeBalancePartitionLeaders";
+
+        if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
+            leaderImbalanceCheckIntervalNs >= 0 &&
+            replicationControl.arePartitionLeadersImbalanced()) {
+
+            log.debug(
+                "Scheduling deferred event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
+                maybeBalancePartitionLeaders,
+                imbalancedScheduled,
+                leaderImbalanceCheckIntervalNs,
+                replicationControl.arePartitionLeadersImbalanced()
+            );
+            long delayNs = time.nanoseconds();
+            if (imbalancedScheduled == ImbalanceSchedule.DEFERRED) {
+                delayNs += leaderImbalanceCheckIntervalNs;
+            }
+            scheduleDeferredWriteEvent(maybeBalancePartitionLeaders, delayNs, () -> {
+                ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
+
+                // rechedule the operation after the leaderImbalanceCheckIntervalNs interval.
+                // Mark the imbalance event as completed and reschedule if necessary
+                if (result.response()) {
+                    imbalancedScheduled = ImbalanceSchedule.IMMIDIATELY;
+                } else {
+                    imbalancedScheduled = ImbalanceSchedule.DEFERRED;
+                }
+
+                // Note that rescheduling this event here is not required because maybeBalancePartitionLeaders
+                // is a ControllerWriteEvent. ControllerWriteEvent always calls this method after the records
+                // generated by a ControllerWriteEvent have been applied.
+
+                return result;
+            });
+
+            imbalancedScheduled = ImbalanceSchedule.SCHEDULED;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -1197,6 +1257,25 @@ public final class QuorumController implements Controller {
      */
     private long newBytesSinceLastSnapshot = 0;
 
+    /**
+     * How long to delay partition leader balancing operations.
+     */
+    private final long leaderImbalanceCheckIntervalNs;
+
+    private static enum ImbalanceSchedule {
+        // Leader balancing has been scheduled
+        SCHEDULED,
+        // Leader balancing should be scheduled in the future
+        DEFERRED,
+        // Leader balancing should be scheduled immediately
+        IMMIDIATELY
+    }
+
+    /**
+     * Tracks the scheduling state for partition leader balancing operations.
+     */
+    private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
+
     private QuorumController(LogContext logContext,
                              int nodeId,
                              String clusterId,
@@ -1209,6 +1288,7 @@ public final class QuorumController implements Controller {
                              int defaultNumPartitions,
                              ReplicaPlacer replicaPlacer,
                              long snapshotMaxNewRecordBytes,
+                             long leaderImbalanceCheckIntervalNs,
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics,
                              Optional<CreateTopicPolicy> createTopicPolicy,
@@ -1233,8 +1313,9 @@ public final class QuorumController implements Controller {
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
+        this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
-            logContext, defaultReplicationFactor, defaultNumPartitions,
+            logContext, defaultReplicationFactor, defaultNumPartitions, MAX_ELECTIONS_PER_IMBALANCE,
             configurationControl, clusterControl, controllerMetrics, createTopicPolicy);
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));

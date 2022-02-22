@@ -158,20 +158,30 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val controllerBuilder = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
-        setTime(time).
-        setThreadNamePrefix(threadNamePrefixAsString).
-        setConfigSchema(configSchema).
-        setRaftClient(raftManager.client).
-        setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
-        setDefaultNumPartitions(config.numPartitions.intValue()).
-        setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
-          TimeUnit.MILLISECONDS)).
-        setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
-        setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
-        setCreateTopicPolicy(createTopicPolicy.asJava).
-        setAlterConfigPolicy(alterConfigPolicy.asJava).
-        setConfigurationValidator(new ControllerConfigurationValidator())
+      val controllerBuilder = {
+        val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
+          TimeUnit.NANOSECONDS.convert(config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS)
+        } else {
+          // A negative value disables auto leader rebalance in the quorum controller
+          -1L
+        }
+
+        new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
+          setTime(time).
+          setThreadNamePrefix(threadNamePrefixAsString).
+          setConfigSchema(configSchema).
+          setRaftClient(raftManager.client).
+          setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
+          setDefaultNumPartitions(config.numPartitions.intValue()).
+          setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
+            TimeUnit.MILLISECONDS)).
+          setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
+          setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
+          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+          setCreateTopicPolicy(createTopicPolicy.asJava).
+          setAlterConfigPolicy(alterConfigPolicy.asJava).
+          setConfigurationValidator(new ControllerConfigurationValidator())
+      }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
         case _ => // nothing to do

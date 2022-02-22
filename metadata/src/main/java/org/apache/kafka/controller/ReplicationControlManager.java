@@ -71,7 +71,6 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -80,6 +79,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineHashSet;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.slf4j.Logger;
 
@@ -87,16 +87,18 @@ import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Optional;
-import java.util.function.Function;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -162,14 +164,14 @@ public class ReplicationControlManager {
     private final int defaultNumPartitions;
 
     /**
+     * Maximum number of leader elections to perform during one partion leader balancing operation.
+     */
+    private final int maxElectionsPerImbalance;
+
+    /**
      * A count of the total number of partitions in the cluster.
      */
     private final TimelineInteger globalPartitionCount;
-
-    /**
-     * A count of the number of partitions that do not have their first replica as a leader.
-     */
-    private final TimelineInteger preferredReplicaImbalanceCount;
 
     /**
      * A reference to the controller's configuration control manager.
@@ -211,10 +213,16 @@ public class ReplicationControlManager {
      */
     private final TimelineHashMap<Uuid, int[]> reassigningTopics;
 
+    /**
+     * The set of topic partitions for which the leader is not the preferred leader.
+     */
+    private final TimelineHashSet<TopicIdPartition> imbalancedPartitions;
+
     ReplicationControlManager(SnapshotRegistry snapshotRegistry,
                               LogContext logContext,
                               short defaultReplicationFactor,
                               int defaultNumPartitions,
+                              int maxElectionsPerImbalance,
                               ConfigurationControlManager configurationControl,
                               ClusterControlManager clusterControl,
                               ControllerMetrics controllerMetrics,
@@ -223,16 +231,17 @@ public class ReplicationControlManager {
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
+        this.maxElectionsPerImbalance = maxElectionsPerImbalance;
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.createTopicPolicy = createTopicPolicy;
         this.clusterControl = clusterControl;
         this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
-        this.preferredReplicaImbalanceCount = new TimelineInteger(snapshotRegistry);
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
         this.reassigningTopics = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.imbalancedPartitions = new TimelineHashSet<>(snapshotRegistry, 0);
     }
 
     public void replay(TopicRecord record) {
@@ -270,11 +279,15 @@ public class ReplicationControlManager {
             updateReassigningTopicsIfNeeded(record.topicId(), record.partitionId(),
                     prevPartInfo.isReassigning(), newPartInfo.isReassigning());
         }
-        if (newPartInfo.leader != newPartInfo.preferredReplica()) {
-            preferredReplicaImbalanceCount.increment();
+
+        if (newPartInfo.hasPreferredLeader()) {
+            imbalancedPartitions.remove(new TopicIdPartition(record.topicId(), record.partitionId()));
+        } else {
+            imbalancedPartitions.add(new TopicIdPartition(record.topicId(), record.partitionId()));
         }
+
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount.get());
+        controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedPartitions.size());
     }
 
     private void updateReassigningTopicsIfNeeded(Uuid topicId, int partitionId,
@@ -316,11 +329,16 @@ public class ReplicationControlManager {
         String topicPart = topicInfo.name + "-" + record.partitionId() + " with topic ID " +
             record.topicId();
         newPartitionInfo.maybeLogPartitionChange(log, topicPart, prevPartitionInfo);
-        if (!newPartitionInfo.hasPreferredLeader() && prevPartitionInfo.hasPreferredLeader()) {
-            preferredReplicaImbalanceCount.increment();
+
+        if (newPartitionInfo.hasPreferredLeader()) {
+            imbalancedPartitions.remove(new TopicIdPartition(record.topicId(), record.partitionId()));
+        } else {
+            imbalancedPartitions.add(new TopicIdPartition(record.topicId(), record.partitionId()));
         }
+
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount.get());
+        controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedPartitions.size());
+
         if (record.removingReplicas() != null || record.addingReplicas() != null) {
             log.info("Replayed partition assignment change {} for topic {}", record, topicInfo.name);
         } else if (log.isTraceEnabled()) {
@@ -341,14 +359,17 @@ public class ReplicationControlManager {
         // Delete the configurations associated with this topic.
         configurationControl.deleteTopicConfigs(topic.name);
 
-        // Remove the entries for this topic in brokersToIsrs.
-        for (PartitionRegistration partition : topic.parts.values()) {
+        for (Map.Entry<Integer, PartitionRegistration> entry : topic.parts.entrySet()) {
+            int partitionId = entry.getKey();
+            PartitionRegistration partition = entry.getValue();
+
+            // Remove the entries for this topic in brokersToIsrs.
             for (int i = 0; i < partition.isr.length; i++) {
                 brokersToIsrs.removeTopicEntryForBroker(topic.id, partition.isr[i]);
             }
-            if (partition.leader != partition.preferredReplica()) {
-                preferredReplicaImbalanceCount.decrement();
-            }
+
+            imbalancedPartitions.remove(new TopicIdPartition(record.topicId(), partitionId));
+
             globalPartitionCount.decrement();
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
@@ -356,7 +377,7 @@ public class ReplicationControlManager {
         controllerMetrics.setGlobalTopicsCount(topics.size());
         controllerMetrics.setGlobalPartitionCount(globalPartitionCount.get());
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount.get());
+        controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedPartitions.size());
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 
@@ -660,6 +681,11 @@ public class ReplicationControlManager {
     // VisibleForTesting
     BrokersToIsrs brokersToIsrs() {
         return brokersToIsrs;
+    }
+
+    // VisibleForTesting
+    Set<TopicIdPartition> imbalancedPartitions() {
+        return new HashSet<>(imbalancedPartitions);
     }
 
     ControllerResult<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {
@@ -1014,6 +1040,55 @@ public class ReplicationControlManager {
             heartbeatManager.fence(brokerId);
         });
         return ControllerResult.of(records, null);
+    }
+
+    boolean arePartitionLeadersImbalanced() {
+        return !imbalancedPartitions.isEmpty();
+    }
+
+    /**
+     * Attempt to elect a preferred leader for all topic partitions that a leader that is not the preferred replica.
+     *
+     * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
+     * The quorum controlller should reschedule this operation immediately if it is true.
+     *
+     * @return All of the election records and if there may be more available preferred replicas to elect as leader
+     */
+    ControllerResult<Boolean> maybeBalancePartitionLeaders() {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+
+        boolean rescheduleImmidiately = false;
+        for (TopicIdPartition topicPartition : imbalancedPartitions) {
+            if (records.size() >= maxElectionsPerImbalance) {
+                rescheduleImmidiately = true;
+                break;
+            }
+
+            TopicControlInfo topic = topics.get(topicPartition.topicId());
+            if (topic == null) {
+                log.error("Skipping unknown imbalanced topic {}", topicPartition);
+                continue;
+            }
+
+            PartitionRegistration partition = topic.parts.get(topicPartition.partitionId());
+            if (partition == null) {
+                log.error("Skipping unknown imbalanced partition {}", topicPartition);
+                continue;
+            }
+
+            // Attempt to perform a preferred leader election
+            PartitionChangeBuilder builder = new PartitionChangeBuilder(
+                partition,
+                topicPartition.topicId(),
+                topicPartition.partitionId(),
+                r -> clusterControl.unfenced(r),
+                () -> false
+            );
+            builder.setAlwaysElectPreferredIfPossible(true);
+            builder.build().ifPresent(records::add);
+        }
+
+        return ControllerResult.of(records, rescheduleImmidiately);
     }
 
     // Visible for testing
