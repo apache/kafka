@@ -76,7 +76,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     private static final String TYPE_DATE = "Date";
     private static final String TYPE_TIME = "Time";
     private static final String TYPE_TIMESTAMP = "Timestamp";
-    private static final Set<String> VALID_TYPES = new HashSet<>(Arrays.asList(TYPE_STRING, TYPE_UNIX, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP));
 
     private static final String UNIX_PRECISION_MILLIS = "milliseconds";
     private static final String UNIX_PRECISION_MICROS = "microseconds";
