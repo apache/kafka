@@ -30,12 +30,23 @@ import org.mockito.Mockito.when
 final class TopicPartitionStateZNodeTest {
 
   @Test
-  def testEncodeDecode(): Unit = {
-    val zkVersion = 1
+  def testEncodeDecodeRecovering(): Unit = {
+    val zkVersion = 5
     val stat = mock(classOf[Stat])
     when(stat.getVersion).thenReturn(zkVersion)
 
     val expected = LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 6, List(1), LeaderRecoveryState.RECOVERING, zkVersion), 10)
+
+    assertEquals(Some(expected), decode(encode(expected), stat))
+  }
+
+  @Test
+  def testEncodeDecodeRecovered(): Unit = {
+    val zkVersion = 5
+    val stat = mock(classOf[Stat])
+    when(stat.getVersion).thenReturn(zkVersion)
+
+    val expected = LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 6, List(1), LeaderRecoveryState.RECOVERED, zkVersion), 10)
 
     assertEquals(Some(expected), decode(encode(expected), stat))
   }

@@ -38,6 +38,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
