@@ -193,20 +193,21 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         int countOfUsedClients = 1;
         int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
 
-        final Set<UUID> clientsOnAlreadyUsedTagDimensions = new HashSet<>(
-            findClientsOnUsedClientTagDimensions(
-                activeTaskClient,
-                countOfUsedClients,
-                rackAwareAssignmentTags,
-                clientStates,
-                tagEntryToClients,
-                tagKeyToValues
-            )
+        final Map<TagEntry, Set<UUID>> tagEntryToUsedClients = new HashMap<>();
+
+        fillClientsOnAlreadyUsedTagEntries(
+            activeTaskClient,
+            countOfUsedClients,
+            rackAwareAssignmentTags,
+            clientStates,
+            tagEntryToClients,
+            tagKeyToValues,
+            tagEntryToUsedClients
         );
 
         while (numRemainingStandbys > 0) {
             final UUID clientOnUnusedTagDimensions = standbyTaskClientsByTaskLoad.poll(
-                activeTaskId, uuid -> !clientsOnAlreadyUsedTagDimensions.contains(uuid)
+                activeTaskId, uuid -> !isClientInAnyOfTheUsedClients(uuid, tagEntryToUsedClients)
             );
 
             if (clientOnUnusedTagDimensions == null) {
@@ -216,32 +217,38 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             clientStates.get(clientOnUnusedTagDimensions).assignStandby(activeTaskId);
 
             countOfUsedClients++;
-
-            clientsOnAlreadyUsedTagDimensions.addAll(
-                findClientsOnUsedClientTagDimensions(
-                    clientOnUnusedTagDimensions,
-                    countOfUsedClients,
-                    rackAwareAssignmentTags,
-                    clientStates,
-                    tagEntryToClients,
-                    tagKeyToValues
-                )
-            );
-
             numRemainingStandbys--;
+
+            if (numRemainingStandbys == 0) {
+                break;
+            }
+
+            fillClientsOnAlreadyUsedTagEntries(
+                clientOnUnusedTagDimensions,
+                countOfUsedClients,
+                rackAwareAssignmentTags,
+                clientStates,
+                tagEntryToClients,
+                tagKeyToValues,
+                tagEntryToUsedClients
+            );
         }
 
         return numRemainingStandbys;
     }
 
-    private static Set<UUID> findClientsOnUsedClientTagDimensions(final UUID usedClient,
-                                                                  final int countOfUsedClients,
-                                                                  final Set<String> rackAwareAssignmentTags,
-                                                                  final Map<UUID, ClientState> clientStates,
-                                                                  final Map<TagEntry, Set<UUID>> tagEntryToClients,
-                                                                  final Map<String, Set<String>> tagKeyToValues) {
-        final Set<UUID> filteredClients = new HashSet<>();
+    private static boolean isClientInAnyOfTheUsedClients(final UUID client,
+                                                         final Map<TagEntry, Set<UUID>> tagEntryToUsedClients) {
+        return tagEntryToUsedClients.values().stream().anyMatch(usedClients -> usedClients.contains(client));
+    }
 
+    private static void fillClientsOnAlreadyUsedTagEntries(final UUID usedClient,
+                                                           final int countOfUsedClients,
+                                                           final Set<String> rackAwareAssignmentTags,
+                                                           final Map<UUID, ClientState> clientStates,
+                                                           final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                                           final Map<String, Set<String>> tagKeyToValues,
+                                                           final Map<TagEntry, Set<UUID>> tagEntryToUsedClients) {
         final Map<String, String> usedClientTags = clientStates.get(usedClient).clientTags();
 
         for (final Entry<String, String> usedClientTagEntry : usedClientTags.entrySet()) {
@@ -255,20 +262,20 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             }
 
             final Set<String> allTagValues = tagKeyToValues.get(tagKey);
-            final String tagValue = usedClientTagEntry.getValue();
 
             // If we have used more clients than all the tag's unique values,
             // we can't filter out clients located on that tag, because it'll exclude all the clients.
+            // Instead, we need to discard all the clients that were marked as "used" on that tag key values.
             // Please check ClientTagAwareStandbyTaskAssignorTest#shouldDoThePartialRackAwareness test for more info.
             if (allTagValues.size() <= countOfUsedClients) {
-                continue;
+                allTagValues.forEach(tagValue -> tagEntryToUsedClients.remove(new TagEntry(tagKey, tagValue)));
+            } else {
+                final String tagValue = usedClientTagEntry.getValue();
+                final TagEntry tagEntry = new TagEntry(tagKey, tagValue);
+                final Set<UUID> clientsOnUsedTagValue = tagEntryToClients.get(tagEntry);
+                tagEntryToUsedClients.put(tagEntry, clientsOnUsedTagValue);
             }
-
-            final Set<UUID> clientsOnUsedTagValue = tagEntryToClients.get(new TagEntry(tagKey, tagValue));
-            filteredClients.addAll(clientsOnUsedTagValue);
         }
-
-        return filteredClients;
     }
 
     private static final class TagEntry {
