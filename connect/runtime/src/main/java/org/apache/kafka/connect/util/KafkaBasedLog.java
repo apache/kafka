@@ -359,7 +359,6 @@ public class KafkaBasedLog<K, V> {
         if (admin != null) {
             // Use the admin client to immediately find the end offsets for the assigned topic partitions.
             // Unlike using the consumer
-            System.out.println("getting end offset : " + shouldRetry);
             try {
                 if (shouldRetry) {
                     return admin.retryEndOffsets(assignment);

@@ -647,7 +647,7 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     /**
-     * Fetch the most recent offset for each of the supplied {@link TopicPartition} objects.
+     * Fetch the most recent offset for each of the supplied {@link TopicPartition} objects.:667
      *
      * @param partitions the topic partitions
      * @return the map of offset for each topic partition, or an empty map if the supplied partitions
@@ -664,20 +664,17 @@ public class TopicAdmin implements AutoCloseable {
         if (partitions == null || partitions.isEmpty()) {
             return Collections.emptyMap();
         }
-
         Map<TopicPartition, OffsetSpec> offsetSpecMap = partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
         ListOffsetsResult resultFuture = admin.listOffsets(offsetSpecMap);
         // Get the individual result for each topic partition so we have better error messages
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition partition : partitions) {
-
             try {
                 ListOffsetsResultInfo info = resultFuture.partitionResult(partition).get();
                 result.put(partition, info.offset());
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
                 String topic = partition.topic();
-
                 if (cause instanceof AuthorizationException) {
                     String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
                     throw new ConnectException(msg, e);
