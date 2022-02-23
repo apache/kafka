@@ -30,6 +30,8 @@ import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThr
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -192,19 +194,22 @@ public class EmitOnChangeIntegrationTest {
             )
         );
 
-        final StreamsBuilder builder = new StreamsBuilder();
-        final AtomicInteger noOutputExpected = new AtomicInteger(0);
-        final AtomicInteger twoOutputExpected = new AtomicInteger(0);
-        builder.stream(inputTopic2).peek((k, v) -> twoOutputExpected.incrementAndGet()).to(outputTopic2);
-        builder.stream(inputTopic)
+        try (final KafkaStreamsNamedTopologyWrapper kafkaStreams = new KafkaStreamsNamedTopologyWrapper(properties)) {
+            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
+            
+            final NamedTopologyBuilder builder = kafkaStreams.newNamedTopologyBuilder("topology_A");
+            final AtomicInteger noOutputExpected = new AtomicInteger(0);
+            final AtomicInteger twoOutputExpected = new AtomicInteger(0);
+            builder.stream(inputTopic2).peek((k, v) -> twoOutputExpected.incrementAndGet()).to(outputTopic2);
+            builder.stream(inputTopic)
             .peek((k, v) -> {
                 throw new RuntimeException("Kaboom");
             })
             .peek((k, v) -> noOutputExpected.incrementAndGet())
             .to(outputTopic);
 
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
+            kafkaStreams.addNamedTopology(builder.build());            
+            
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,
