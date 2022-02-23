@@ -50,9 +50,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
 
     private final String name;
-    private final AbstractSegments<S> segments;
+    protected final AbstractSegments<S> segments;
     private final String metricScope;
-    private final KeySchema keySchema;
+    protected final KeySchema keySchema;
 
     private ProcessorContext context;
     private StateStoreContext stateStoreContext;
@@ -135,8 +135,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, forward);
 
-        final Bytes binaryFrom = keyFrom == null ? null : keySchema.lowerRange(keyFrom, from);
-        final Bytes binaryTo = keyTo == null ? null : keySchema.upperRange(keyTo, to);
+        final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
+        final Bytes binaryTo = keySchema.upperRange(keyTo, to);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
@@ -262,7 +262,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 metrics
         );
 
-        segments.openExisting(this.context, observedStreamTime);
+        openSegments(this.context);
 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -281,6 +281,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+    }
+
+    public void openSegments(final ProcessorContext context) {
+        segments.openExisting(context, observedStreamTime);
     }
 
     @Override
