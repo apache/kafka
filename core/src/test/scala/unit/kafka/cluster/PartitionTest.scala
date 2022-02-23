@@ -1079,7 +1079,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testInvalidAlterPartitionAreNotRetried(): Unit = {
+  def testInvalidAlterPartitionRequestsAreNotRetried(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
@@ -1115,7 +1115,8 @@ class PartitionTest extends AbstractPartitionTest {
     // Check that the isr didn't change and alter update is scheduled
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
-    assertEquals(alterIsrManager.isrUpdates.size, 1)
+    assertEquals(1, alterIsrManager.isrUpdates.size)
+    assertEquals(Set(brokerId, remoteBrokerId), alterIsrManager.isrUpdates.head.leaderAndIsr.isr.toSet)
 
     // Simulate invalid request failure
     alterIsrManager.failIsrUpdate(Errors.INVALID_REQUEST)
@@ -1123,11 +1124,11 @@ class PartitionTest extends AbstractPartitionTest {
     // Still no ISR change and no retry
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
-    assertEquals(alterIsrManager.isrUpdates.size, 0)
+    assertEquals(0, alterIsrManager.isrUpdates.size)
 
-    assertEquals(isrChangeListener.expands.get, 0)
-    assertEquals(isrChangeListener.shrinks.get, 0)
-    assertEquals(isrChangeListener.failures.get, 1)
+    assertEquals(0, isrChangeListener.expands.get)
+    assertEquals(0, isrChangeListener.shrinks.get)
+    assertEquals(1, isrChangeListener.failures.get)
   }
 
   @Test
@@ -2067,7 +2068,60 @@ class PartitionTest extends AbstractPartitionTest {
     verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
   }
 
-  // TODO: Add a test that shows that the follower rejects reads until a recovered leader and isr
+  @Test
+  def testReadFromFollowerWhileRecoveringLeader(): Unit = {
+    val controllerEpoch = 3
+    val leaderEpoch = 5
+    val leaderId = brokerId + 1
+    val topicId = Uuid.randomUuid()
+    val replicas = List[Integer](brokerId, leaderId).asJava
+    val leaderRecoveringState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leaderId)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(replicas)
+      .setZkVersion(1)
+      .setReplicas(replicas)
+      .setIsNew(false)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value)
+
+    partition.makeFollower(leaderRecoveringState, offsetCheckpoints, Some(topicId))
+
+    assertThrows(
+      classOf[NotLeaderOrFollowerException],
+      () => partition.readRecords(
+        lastFetchedEpoch = Optional.empty(),
+        fetchOffset = 0,
+        currentLeaderEpoch = Optional.of(leaderEpoch),
+        maxBytes = Int.MaxValue,
+        fetchIsolation = FetchHighWatermark,
+        fetchOnlyFromLeader = false,
+        minOneMessage = false
+      )
+    )
+
+    val leaderRecoveredState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leaderId)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(replicas)
+      .setZkVersion(2)
+      .setReplicas(replicas)
+      .setIsNew(false)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value)
+
+    partition.makeFollower(leaderRecoveredState, offsetCheckpoints, Some(topicId))
+
+    val _ = partition.readRecords(
+      lastFetchedEpoch = Optional.empty(),
+      fetchOffset = 0,
+      currentLeaderEpoch = Optional.of(leaderEpoch),
+      maxBytes = Int.MaxValue,
+      fetchIsolation = FetchHighWatermark,
+      fetchOnlyFromLeader = false,
+      minOneMessage = false
+    )
+  }
 
   private def makeLeader(
     topicId: Option[Uuid],
