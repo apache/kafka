@@ -220,9 +220,15 @@ object TestUtils extends Logging {
     }
   }
 
+  def plaintextBootstrapServers[B <: KafkaBroker](
+    brokers: Seq[B]
+  ): String = {
+    bootstrapServers(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+  }
+
   def bootstrapServers[B <: KafkaBroker](
     brokers: Seq[B],
-    listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    listenerName: ListenerName
   ): String = {
     brokers.map { s =>
       val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
@@ -365,7 +371,7 @@ object TestUtils extends Logging {
  def createAdminClient[B <: KafkaBroker](
     brokers: Seq[B],
     listenerName: ListenerName,
-    adminConfig: Properties
+    adminConfig: Properties = new Properties
   ): Admin = {
     val adminClientProperties = new Properties()
     adminClientProperties.putAll(adminConfig)
@@ -373,21 +379,6 @@ object TestUtils extends Logging {
       adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers, listenerName))
     }
     Admin.create(adminClientProperties)
-  }
-
-  def withAdmin[B <: KafkaBroker, T](
-    brokers: Seq[B],
-    listenerName: ListenerName,
-    adminConfig: Properties = new Properties
-  )(
-    fn: Admin => T
-  ): T = {
-    val admin = createAdminClient(brokers, listenerName, adminConfig)
-    try {
-      fn(admin)
-    } finally {
-      admin.close()
-    }
   }
 
   def createTopicWithAdmin[B <: KafkaBroker](
@@ -475,12 +466,9 @@ object TestUtils extends Logging {
     try {
       admin.deleteTopics(Collections.singletonList(topic)).all().get()
     } catch {
-      case e: ExecutionException => if (e.getCause != null &&
-          e.getCause.isInstanceOf[UnknownTopicOrPartitionException]) {
+      case e: ExecutionException if e.getCause != null &&
+        e.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
         // ignore
-      } else {
-        throw e
-      }
     }
     waitForAllPartitionsMetadata(brokers, topic, 0)
   }
@@ -1335,7 +1323,7 @@ object TestUtils extends Logging {
       brokers: Seq[B],
       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
       acks: Int = -1): Unit = {
-    val producer = createProducer(TestUtils.bootstrapServers(brokers), acks = acks)
+    val producer = createProducer(plaintextBootstrapServers(brokers), acks = acks)
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
@@ -1368,7 +1356,7 @@ object TestUtils extends Logging {
       timestamp: java.lang.Long = null,
       deliveryTimeoutMs: Int = 30 * 1000,
       requestTimeoutMs: Int = 20 * 1000): Unit = {
-    val producer = createProducer(TestUtils.bootstrapServers(brokers),
+    val producer = createProducer(plaintextBootstrapServers(brokers),
       deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
     try {
       producer.send(new ProducerRecord(topic, null, timestamp, topic.getBytes, message.getBytes)).get
@@ -1621,7 +1609,7 @@ object TestUtils extends Logging {
       securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
       trustStoreFile: Option[File] = None,
       waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createConsumer(TestUtils.bootstrapServers(brokers, ListenerName.forSecurityProtocol(securityProtocol)),
+    val consumer = createConsumer(bootstrapServers(brokers, ListenerName.forSecurityProtocol(securityProtocol)),
       groupId = groupId,
       securityProtocol = securityProtocol,
       trustStoreFile = trustStoreFile)
@@ -1681,7 +1669,7 @@ object TestUtils extends Logging {
       requestTimeoutMs: Int = 30000,
       maxInFlight: Int = 5): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
@@ -1701,7 +1689,7 @@ object TestUtils extends Logging {
       brokers: Seq[B]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     try {
       for (i <- 0 until numRecords) {

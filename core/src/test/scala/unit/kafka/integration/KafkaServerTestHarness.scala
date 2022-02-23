@@ -31,6 +31,7 @@ import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import java.util.Properties
 
+import kafka.utils.TestUtils.{createAdminClient, resource}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.ScramCredential
@@ -149,7 +150,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     adminClientConfig: Properties = new Properties
   ): Unit = {
     if (isKRaftTest()) {
-      TestUtils.withAdmin(brokers, listenerName, adminClientConfig) { admin =>
+      resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
         TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
       }
     } else {
@@ -170,7 +171,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName
   ): scala.collection.immutable.Map[Int, Int] = {
     if (isKRaftTest()) {
-      TestUtils.withAdmin(brokers, listenerName) { admin =>
+      resource(createAdminClient(brokers, listenerName)) { admin =>
         TestUtils.createTopicWithAdmin(
           admin = admin,
           topic = topic,
@@ -203,7 +204,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName
   ): scala.collection.immutable.Map[Int, Int] =
     if (isKRaftTest()) {
-      TestUtils.withAdmin(brokers, listenerName) { admin =>
+      resource(createAdminClient(brokers, listenerName)) { admin =>
         TestUtils.createTopicWithAdmin(
           admin = admin,
           topic = topic,
@@ -225,7 +226,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName
   ): Unit = {
     if (isKRaftTest()) {
-      TestUtils.withAdmin(brokers, listenerName) { admin =>
+
+      resource(createAdminClient(brokers, listenerName)) { admin =>
         TestUtils.deleteTopicWithAdmin(
           admin = admin,
           topic = topic,

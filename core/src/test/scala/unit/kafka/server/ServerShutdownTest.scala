@@ -86,14 +86,14 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdown(quorum: String): Unit = {
 
-    def createProducer(broker: KafkaBroker): KafkaProducer[Integer, String] =
+    def createProducer(): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
         bootstrapServers(),
         keySerializer = new IntegerSerializer,
         valueSerializer = new StringSerializer
       )
 
-    def createConsumer(broker: KafkaBroker): KafkaConsumer[Integer, String] =
+    def createConsumer(): KafkaConsumer[Integer, String] =
       TestUtils.createConsumer(
         bootstrapServers(),
         securityProtocol = SecurityProtocol.PLAINTEXT,
@@ -101,7 +101,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         valueDeserializer = new StringDeserializer
       )
 
-    var producer = createProducer(broker)
+    var producer = createProducer()
 
     // create topic
     createTopic(topic)
@@ -124,8 +124,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     // wait for the broker to receive the update metadata request after startup
     TestUtils.waitForPartitionMetadata(Seq(broker), topic, 0)
 
-    producer = createProducer(broker)
-    val consumer = createConsumer(broker)
+    producer = createProducer()
+    val consumer = createConsumer()
     consumer.subscribe(Seq(topic).asJava)
 
     val consumerRecords = TestUtils.consumeRecords(consumer, sent1.size)
