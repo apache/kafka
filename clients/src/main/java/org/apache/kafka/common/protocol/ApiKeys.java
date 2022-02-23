@@ -110,14 +110,6 @@ public enum ApiKeys {
     LIST_TRANSACTIONS(ApiMessageType.LIST_TRANSACTIONS),
     ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true);
 
-    /**
-     * ALTER_ISR was the old name for ALTER_PARTITION.
-     *
-     * @deprecated since 3.2.0. Use {@link #ALTER_PARTITION} instead
-     */
-    @Deprecated
-    public static final ApiKeys ALTER_ISR = ALTER_PARTITION;
-
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
 
