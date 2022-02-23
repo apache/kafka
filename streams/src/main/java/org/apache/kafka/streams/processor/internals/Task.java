@@ -246,11 +246,4 @@ public interface Task {
      * @return This returns the time the task started idling. If it is not idling it returns empty.
      */
     Optional<Long> timeCurrentIdlingStarted();
-
-    /**
-     * Gets the exception that caused the failure of the task.
-     *
-     * @return exception that caused the failure of the task
-     */
-    Optional<RuntimeException> getException();
 }
