@@ -42,7 +42,7 @@ import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
- * Handles updating the ISR by sending AlterIsr requests to the controller (as of 2.7) or by updating ZK directly
+ * Handles updating the ISR by sending AlterPartition requests to the controller (as of 2.7) or by updating ZK directly
  * (prior to 2.7). Updating the ISR is an asynchronous operation, so partitions will learn about the result of their
  * request through a callback.
  *
@@ -69,7 +69,7 @@ case class AlterIsrItem(topicPartition: TopicPartition,
 object AlterIsrManager {
 
   /**
-   * Factory to AlterIsr based implementation, used when IBP >= 2.7-IV2
+   * Factory to AlterPartition based implementation, used when IBP >= 2.7-IV2
    */
   def apply(
     config: KafkaConfig,
@@ -87,7 +87,7 @@ object AlterIsrManager {
       time = time,
       metrics = metrics,
       config = config,
-      channelName = "alterIsr",
+      channelName = "alterPartition",
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )
@@ -166,21 +166,21 @@ class DefaultAlterIsrManager(
 
   private[server] def clearInFlightRequest(): Unit = {
     if (!inflightRequest.compareAndSet(true, false)) {
-      warn("Attempting to clear AlterIsr in-flight flag when no apparent request is in-flight")
+      warn("Attempting to clear AlterPartition in-flight flag when no apparent request is in-flight")
     }
   }
 
   private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
     val message = buildRequest(inflightAlterIsrItems)
-    debug(s"Sending AlterIsr to controller $message")
+    debug(s"Sending AlterPartition to controller $message")
 
-    // We will not timeout AlterISR request, instead letting it retry indefinitely
+    // We will not timeout AlterPartition request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
     // which causes the response for those partitions to be ignored.
     controllerChannelManager.sendRequest(new AlterPartitionRequest.Builder(message),
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
-          debug(s"Received AlterIsr response $response")
+          debug(s"Received AlterPartition response $response")
           val error = try {
             if (response.authenticationException != null) {
               // For now we treat authentication errors as retriable. We use the
@@ -206,12 +206,12 @@ class DefaultAlterIsrManager(
                 maybePropagateIsrChanges()
               case _ =>
                 // If we received a top-level error from the controller, retry the request in the near future
-                scheduler.schedule("send-alter-isr", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
+                scheduler.schedule("send-alter-partition", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
             }
         }
 
         override def onTimeout(): Unit = {
-          throw new IllegalStateException("Encountered unexpected timeout when sending AlterIsr to the controller")
+          throw new IllegalStateException("Encountered unexpected timeout when sending AlterPartition to the controller")
         }
       })
   }
@@ -232,7 +232,6 @@ class DefaultAlterIsrManager(
           .setPartitionIndex(item.topicPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
           .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-          .setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
           .setPartitionEpoch(item.leaderAndIsr.zkVersion)
 
         if (ibpVersion >= KAFKA_3_2_IV0) {
@@ -245,17 +244,19 @@ class DefaultAlterIsrManager(
     message
   }
 
-  def handleAlterPartitionResponse(alterIsrResponse: AlterPartitionResponse,
-                             sentBrokerEpoch: Long,
-                             inflightAlterIsrItems: Seq[AlterIsrItem]): Errors = {
-    val data: AlterPartitionResponseData = alterIsrResponse.data
+  def handleAlterPartitionResponse(
+    alterPartitionResp: AlterPartitionResponse,
+    sentBrokerEpoch: Long,
+    inflightAlterIsrItems: Seq[AlterIsrItem]
+  ): Errors = {
+    val data: AlterPartitionResponseData = alterPartitionResp.data
 
     Errors.forCode(data.errorCode) match {
       case Errors.STALE_BROKER_EPOCH =>
         warn(s"Broker had a stale broker epoch ($sentBrokerEpoch), retrying.")
       case Errors.CLUSTER_AUTHORIZATION_FAILED =>
-        error(s"Broker is not authorized to send AlterIsr to controller",
-          Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterIsr to controller"))
+        error(s"Broker is not authorized to send AlterPartition to controller",
+          Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"))
       case Errors.NONE =>
         // Collect partition-level responses to pass to the callbacks
         val partitionResponses: mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] =
@@ -264,7 +265,7 @@ class DefaultAlterIsrManager(
           topic.partitions().forEach { partition =>
             val tp = new TopicPartition(topic.name, partition.partitionIndex)
             val apiError = Errors.forCode(partition.errorCode())
-            debug(s"Controller successfully handled AlterIsr request for $tp: $partition")
+            debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
             if (apiError == Errors.NONE) {
               LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
                 case Some(leaderRecoveryState) =>
@@ -310,7 +311,7 @@ class DefaultAlterIsrManager(
         }
 
       case e: Errors =>
-        warn(s"Controller returned an unexpected top-level error when handling AlterIsr request: $e")
+        warn(s"Controller returned an unexpected top-level error when handling AlterPartition request: $e")
     }
 
     Errors.forCode(data.errorCode)

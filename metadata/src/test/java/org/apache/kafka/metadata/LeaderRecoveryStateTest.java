@@ -54,7 +54,7 @@ final public class LeaderRecoveryStateTest {
     }
 
     @Test
-    void testLeaderRecoveryStateVale() {
+    void testLeaderRecoveryStateValue() {
         assertEquals(0, LeaderRecoveryState.RECOVERED.value());
         assertEquals(1, LeaderRecoveryState.RECOVERING.value());
     }

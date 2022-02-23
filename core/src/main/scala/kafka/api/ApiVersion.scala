@@ -107,7 +107,7 @@ object ApiVersion {
     KAFKA_2_7_IV0,
     // Bup Fetch protocol for Raft protocol (KIP-595)
     KAFKA_2_7_IV1,
-    // Introduced AlterIsr (KIP-497)
+    // Introduced AlterPartition (KIP-497)
     KAFKA_2_7_IV2,
     // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
     KAFKA_2_8_IV0,
