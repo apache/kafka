@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.internals;
 
+import java.util.Collection;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
@@ -84,6 +85,10 @@ public class PartitionStates<S> {
 
     public boolean contains(TopicPartition topicPartition) {
         return map.containsKey(topicPartition);
+    }
+
+    public boolean containsAll(Collection<TopicPartition> topicPartitions) {
+        return map.keySet().containsAll(topicPartitions);
     }
 
     public Iterator<S> stateIterator() {

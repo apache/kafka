@@ -718,6 +718,10 @@ public class SubscriptionState {
         return assignment.contains(tp);
     }
 
+    public synchronized boolean areAllAssigned(Collection<TopicPartition> tps) {
+        return assignment.containsAll(tps);
+    }
+
     public synchronized boolean isPaused(TopicPartition tp) {
         TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
         return assignedOrNull != null && assignedOrNull.isPaused();
