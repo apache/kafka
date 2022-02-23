@@ -26,8 +26,7 @@ import java.util.function.Function;
 import static java.util.stream.Collectors.toMap;
 
 final class StandbyTaskAssignmentUtils {
-    private StandbyTaskAssignmentUtils() {
-    }
+    private StandbyTaskAssignmentUtils() {}
 
     static ConstrainedPrioritySet createLeastLoadedPrioritySetConstrainedByAssignedTask(final Map<UUID, ClientState> clients) {
         return new ConstrainedPrioritySet((client, t) -> !clients.get(client).hasAssignedTask(t),
