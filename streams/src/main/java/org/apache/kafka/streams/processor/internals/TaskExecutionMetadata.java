@@ -88,7 +88,7 @@ public class TaskExecutionMetadata {
             throw new IllegalStateException("Tried to unregister a topology with execution metadata but "
                 + topologyName + " was not currently registered");
         }
-        topologyNameToMetadata.put(topologyName, new NamedTopologyMetadata(topologyName));
+        topologyNameToMetadata.remove(topologyName);
         log.debug("Unregistered topology {} with execution metadata", topologyName);
     }
 
