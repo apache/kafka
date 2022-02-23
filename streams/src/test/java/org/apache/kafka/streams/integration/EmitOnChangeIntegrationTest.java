@@ -202,11 +202,11 @@ public class EmitOnChangeIntegrationTest {
             final AtomicInteger twoOutputExpected = new AtomicInteger(0);
             builder.stream(inputTopic2).peek((k, v) -> twoOutputExpected.incrementAndGet()).to(outputTopic2);
             builder.stream(inputTopic)
-            .peek((k, v) -> {
-                throw new RuntimeException("Kaboom");
-            })
-            .peek((k, v) -> noOutputExpected.incrementAndGet())
-            .to(outputTopic);
+                .peek((k, v) -> {
+                    throw new RuntimeException("Kaboom");
+                })
+                .peek((k, v) -> noOutputExpected.incrementAndGet())
+                .to(outputTopic);
 
             kafkaStreams.addNamedTopology(builder.build());            
             
