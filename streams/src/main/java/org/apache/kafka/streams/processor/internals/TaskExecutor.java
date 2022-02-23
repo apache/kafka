@@ -48,12 +48,17 @@ public class TaskExecutor {
 
     private final Logger log;
 
+    private final boolean hasNamedTopologies;
     private final ProcessingMode processingMode;
     private final Tasks tasks;
 
-    public TaskExecutor(final Tasks tasks, final ProcessingMode processingMode, final LogContext logContext) {
+    public TaskExecutor(final Tasks tasks,
+                        final ProcessingMode processingMode,
+                        final boolean hasNamedTopologies,
+                        final LogContext logContext) {
         this.tasks = tasks;
         this.processingMode = processingMode;
+        this.hasNamedTopologies = hasNamedTopologies;
         this.log = logContext.logger(getClass());
     }
 
@@ -88,7 +93,8 @@ public class TaskExecutor {
                 task.clearTaskTimeout();
                 processed++;
             }
-            if (processingMode != EXACTLY_ONCE_V2) {
+            // TODO: enable regardless of whether using named topologies
+            if (hasNamedTopologies && processingMode != EXACTLY_ONCE_V2) {
                 tasks.addToSuccessfullyProcessed(task);
             }
         } catch (final TimeoutException timeoutException) {
