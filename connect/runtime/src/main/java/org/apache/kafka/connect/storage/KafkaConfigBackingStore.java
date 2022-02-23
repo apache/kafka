@@ -681,11 +681,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         return;
                     }
 
-                    Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(taskId.connector());
-                    if (deferred == null) {
-                        deferred = new HashMap<>();
-                        deferredTaskUpdates.put(taskId.connector(), deferred);
-                    }
+                    Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.computeIfAbsent(taskId.connector(), k -> new HashMap<>());
                     log.debug("Storing new config for task {}; this will wait for a commit message before the new config will take effect.", taskId);
                     deferred.put(taskId, (Map<String, String>) newTaskConfig);
                 }

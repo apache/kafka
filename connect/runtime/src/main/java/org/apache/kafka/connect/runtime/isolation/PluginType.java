@@ -38,7 +38,7 @@ public enum PluginType {
     CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY(ConnectorClientConfigOverridePolicy.class),
     UNKNOWN(Object.class);
 
-    private Class<?> klass;
+    private final Class<?> klass;
 
     PluginType(Class<?> klass) {
         this.klass = klass;

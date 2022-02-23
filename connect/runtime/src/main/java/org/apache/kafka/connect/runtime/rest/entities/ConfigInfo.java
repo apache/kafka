@@ -23,8 +23,8 @@ import java.util.Objects;
 
 public class ConfigInfo {
 
-    private ConfigKeyInfo configKey;
-    private ConfigValueInfo configValue;
+    private final ConfigKeyInfo configKey;
+    private final ConfigValueInfo configValue;
 
     @JsonCreator
     public ConfigInfo(

@@ -423,7 +423,7 @@ public class AbstractHerderTest {
     }
 
     @Test()
-    public void testConfigValidationMissingName() throws Throwable {
+    public void testConfigValidationMissingName() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
 
@@ -496,9 +496,8 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test()
-    public void testConfigValidationTransformsExtendResults() throws Throwable {
+    public void testConfigValidationTransformsExtendResults() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
@@ -632,7 +631,7 @@ public class AbstractHerderTest {
     }
 
     @Test()
-    public void testConfigValidationPrincipalOnlyOverride() throws Throwable {
+    public void testConfigValidationPrincipalOnlyOverride() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, new PrincipalConnectorClientConfigOverridePolicy());
         replayAll();
 
@@ -672,7 +671,7 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testConfigValidationAllOverride() throws Throwable {
+    public void testConfigValidationAllOverride() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, new AllConnectorClientConfigOverridePolicy());
         replayAll();
 

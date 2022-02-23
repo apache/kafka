@@ -167,7 +167,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // and the from other nodes are safe to process
     private boolean rebalanceResolved;
     private ExtendedAssignment runningAssignment = ExtendedAssignment.empty();
-    private Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
+    private final Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
     // visible for testing
     ExtendedAssignment assignment;
     private boolean canReadConfigs;

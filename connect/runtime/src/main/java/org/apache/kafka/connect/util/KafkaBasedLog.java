@@ -77,7 +77,7 @@ public class KafkaBasedLog<K, V> {
     private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(30);
     private static final long MAX_SLEEP_MS = TimeUnit.SECONDS.toMillis(1);
 
-    private Time time;
+    private final Time time;
     private final String topic;
     private int partitionCount;
     private final Map<String, Object> producerConfigs;
@@ -90,8 +90,8 @@ public class KafkaBasedLog<K, V> {
 
     private Thread thread;
     private boolean stopRequested;
-    private Queue<Callback<Void>> readLogEndOffsetCallbacks;
-    private java.util.function.Consumer<TopicAdmin> initializer;
+    private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
+    private final java.util.function.Consumer<TopicAdmin> initializer;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until

@@ -125,7 +125,6 @@ public class Worker {
         this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy);
     }
 
-    @SuppressWarnings("deprecation")
     Worker(
             String workerId,
             Time time,

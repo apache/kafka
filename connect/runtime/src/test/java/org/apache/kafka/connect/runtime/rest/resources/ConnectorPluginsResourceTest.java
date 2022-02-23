@@ -163,12 +163,10 @@ public class ConnectorPluginsResourceTest {
 
         try {
             for (Class<? extends Connector> klass : abstractConnectorClasses) {
-                @SuppressWarnings("unchecked")
                 MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc(klass, "0.0.0");
                 CONNECTOR_PLUGINS.add(pluginDesc);
             }
             for (Class<? extends Connector> klass : connectorClasses) {
-                @SuppressWarnings("unchecked")
                 MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc(klass);
                 CONNECTOR_PLUGINS.add(pluginDesc);
             }
@@ -401,8 +399,7 @@ public class ConnectorPluginsResourceTest {
         );
     }
 
-    protected static ConnectorPluginInfo newInfo(Class<? extends Connector> klass, String version)
-            throws Exception {
+    protected static ConnectorPluginInfo newInfo(Class<? extends Connector> klass, String version) {
         return new ConnectorPluginInfo(new MockConnectorPluginDesc(klass, version));
     }
 
