@@ -148,7 +148,7 @@
               files="(JsonConverter|Values|ConnectHeaders).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(KafkaConfigBackingStore|Values).java"/>
+              files="(KafkaConfigBackingStore|Values|ConnectMetricsRegistry).java"/>
 
     <suppress checks="NPathComplexity"
               files="(DistributedHerder|RestClient|RestServer|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask|TopicAdmin).java"/>
