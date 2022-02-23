@@ -116,7 +116,7 @@ public class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.tasks = new Tasks(logContext, topologyMetadata,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
-        this.taskExecutor = new TaskExecutor(tasks, processingMode, logContext);
+        this.taskExecutor = new TaskExecutor(tasks, processingMode, topologyMetadata.hasNamedTopologies(), logContext);
     }
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
