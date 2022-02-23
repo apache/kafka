@@ -26,12 +26,18 @@ import java.util.function.Function;
 import static java.util.stream.Collectors.toMap;
 
 final class StandbyTaskAssignmentUtils {
-    private StandbyTaskAssignmentUtils() {}
+    private StandbyTaskAssignmentUtils() {
+    }
 
-    static int pollClientAndMaybeAssignRemainingStandbyTasks(final Map<UUID, ClientState> clients,
-                                                             final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                             final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                             final TaskId activeTaskId) {
+    static ConstrainedPrioritySet createLeastLoadedPrioritySetConstrainedByAssignedTask(final Map<UUID, ClientState> clients) {
+        return new ConstrainedPrioritySet((client, t) -> !clients.get(client).hasAssignedTask(t),
+                                          client -> clients.get(client).assignedTaskLoad());
+    }
+
+    static int pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(final Map<UUID, ClientState> clients,
+                                                                      final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                                      final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                                      final TaskId activeTaskId) {
         int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
         while (numRemainingStandbys > 0) {
             final UUID client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
@@ -41,6 +47,7 @@ final class StandbyTaskAssignmentUtils {
             clients.get(client).assignStandby(activeTaskId);
             numRemainingStandbys--;
             standbyTaskClientsByTaskLoad.offer(client);
+            tasksToRemainingStandbys.put(activeTaskId, numRemainingStandbys);
         }
 
         return numRemainingStandbys;

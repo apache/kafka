@@ -18,10 +18,12 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor.TagEntry;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +44,10 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor.assignStandbyTasksToClientsWithDifferentTags;
+import static org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor.fillClientsTagStatistics;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.createLeastLoadedPrioritySetConstrainedByAssignedTask;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -73,6 +79,99 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     @Before
     public void setup() {
         standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor();
+    }
+
+    @Test
+    public void shouldRemoveClientToRemainingStandbysAndNotPopulatePendingStandbyTasksToClientIdWhenAllStandbyTasksWereAssigned() {
+        final Set<String> rackAwareAssignmentTags = mkSet(ZONE_TAG, CLUSTER_TAG);
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1)),
+            mkEntry(UUID_3, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2))
+        );
+
+        final ConstrainedPrioritySet constrainedPrioritySet = createLeastLoadedPrioritySetConstrainedByAssignedTask(clientStates);
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
+        final Map<TaskId, UUID> taskToClientId = mkMap(mkEntry(TASK_0_0, UUID_1),
+                                                       mkEntry(TASK_0_1, UUID_2),
+                                                       mkEntry(TASK_0_2, UUID_3));
+
+        final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
+        final Map<TagEntry, Set<UUID>> tagEntryToClients = new HashMap<>();
+
+        fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
+
+        final Map<TaskId, UUID> pendingStandbyTasksToClientId = new HashMap<>();
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(2, allActiveTasks);
+
+        for (final TaskId activeTaskId : allActiveTasks) {
+            assignStandbyTasksToClientsWithDifferentTags(
+                constrainedPrioritySet,
+                activeTaskId,
+                taskToClientId.get(activeTaskId),
+                rackAwareAssignmentTags,
+                clientStates,
+                tasksToRemainingStandbys,
+                tagKeyToValues,
+                tagEntryToClients,
+                pendingStandbyTasksToClientId
+            );
+        }
+
+        assertTrue(tasksToRemainingStandbys.isEmpty());
+        assertTrue(pendingStandbyTasksToClientId.isEmpty());
+    }
+
+    @Test
+    public void shouldUpdateClientToRemainingStandbysAndPendingStandbyTasksToClientIdWhenNotAllStandbyTasksWereAssigned() {
+        final Set<String> rackAwareAssignmentTags = mkSet(ZONE_TAG, CLUSTER_TAG);
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1)),
+            mkEntry(UUID_3, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2))
+        );
+
+        final ConstrainedPrioritySet constrainedPrioritySet = createLeastLoadedPrioritySetConstrainedByAssignedTask(clientStates);
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
+        final Map<TaskId, UUID> taskToClientId = mkMap(mkEntry(TASK_0_0, UUID_1),
+                                                       mkEntry(TASK_0_1, UUID_2),
+                                                       mkEntry(TASK_0_2, UUID_3));
+
+        final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
+        final Map<TagEntry, Set<UUID>> tagEntryToClients = new HashMap<>();
+
+        fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
+
+        final Map<TaskId, UUID> pendingStandbyTasksToClientId = new HashMap<>();
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(3, allActiveTasks);
+
+        for (final TaskId activeTaskId : allActiveTasks) {
+            assignStandbyTasksToClientsWithDifferentTags(
+                constrainedPrioritySet,
+                activeTaskId,
+                taskToClientId.get(activeTaskId),
+                rackAwareAssignmentTags,
+                clientStates,
+                tasksToRemainingStandbys,
+                tagKeyToValues,
+                tagEntryToClients,
+                pendingStandbyTasksToClientId
+            );
+        }
+
+        allActiveTasks.forEach(
+            activeTaskId -> assertEquals(String.format("Active task with id [%s] didn't match expected number " +
+                                                       "of remaining standbys value.", activeTaskId),
+                                         1,
+                                         tasksToRemainingStandbys.get(activeTaskId).longValue())
+        );
+
+        allActiveTasks.forEach(
+            activeTaskId -> assertEquals(String.format("Active task with id [%s] didn't match expected " +
+                                                       "client ID value.", activeTaskId),
+                                         taskToClientId.get(activeTaskId),
+                                         pendingStandbyTasksToClientId.get(activeTaskId))
+        );
     }
 
     @Test

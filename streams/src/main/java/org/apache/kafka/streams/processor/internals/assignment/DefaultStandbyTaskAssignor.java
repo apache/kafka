@@ -25,7 +25,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
-import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.createLeastLoadedPrioritySetConstrainedByAssignedTask;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks;
 
 /**
  * Default standby task assignor that distributes standby tasks to the least loaded clients.
@@ -44,18 +45,15 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas,
                                                                                               statefulTaskIds);
 
-        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
-            (client, task) -> !clients.get(client).hasAssignedTask(task),
-            client -> clients.get(client).assignedTaskLoad()
-        );
+        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = createLeastLoadedPrioritySetConstrainedByAssignedTask(clients);
 
         standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
 
         for (final TaskId task : statefulTaskIds) {
-            final int numRemainingStandbys = pollClientAndMaybeAssignRemainingStandbyTasks(clients,
-                                                                                           tasksToRemainingStandbys,
-                                                                                           standbyTaskClientsByTaskLoad,
-                                                                                           task);
+            final int numRemainingStandbys = pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(clients,
+                                                                                                    tasksToRemainingStandbys,
+                                                                                                    standbyTaskClientsByTaskLoad,
+                                                                                                    task);
 
             if (numRemainingStandbys > 0) {
                 log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
