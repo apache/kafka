@@ -292,7 +292,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             // We can't consider the `cluster` tag for the 2nd standby task assignment because the 1st standby
             // task would already be assigned on different cluster compared to the active one, which means
             // we have already used all the available cluster tag values. Taking the `cluster` tag into consideration
-            // for the  2nd standby task assignment would affectively mean excluding all the clients.
+            // for the 2nd standby task assignment would affectively mean excluding all the clients.
             // Instead, for the 2nd standby task, we can only achieve partial rack awareness based on the `zone` tag.
             // As we don't consider the `cluster` tag for the 2nd standby task assignment, partial rack awareness
             // can be satisfied by placing the 2nd standby client on a different `zone` tag compared to active and corresponding standby tasks.
