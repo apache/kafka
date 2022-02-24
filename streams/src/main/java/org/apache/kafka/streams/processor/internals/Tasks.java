@@ -35,8 +35,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.processor.internals.TopologyMetadata.getTopologyNameOrElseUnnamed;
-
 class Tasks {
     private final Logger log;
     private final TopologyMetadata topologyMetadata;
@@ -270,15 +268,6 @@ class Tasks {
     // TODO: change return type to `StreamTask`
     Collection<Task> activeTasks() {
         return readOnlyActiveTasks;
-    }
-
-    Map<String, Set<Task>> activeTasksByTopology() {
-        final Map<String, Set<Task>> activeTasksByTopology = new HashMap<>();
-        for (final Map.Entry<TaskId, Task> taskEntry : readOnlyActiveTasksPerId.entrySet()) {
-            final String topologyName = getTopologyNameOrElseUnnamed(taskEntry.getKey().topologyName());
-            activeTasksByTopology.computeIfAbsent(topologyName, k -> new HashSet<>()).add(taskEntry.getValue());
-        }
-        return activeTasksByTopology;
     }
 
     Collection<Task> allTasks() {
