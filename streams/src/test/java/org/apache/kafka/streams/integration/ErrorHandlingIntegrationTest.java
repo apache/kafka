@@ -102,72 +102,7 @@ public class ErrorHandlingIntegrationTest {
             )
         );
     }
-/*
-    @Test
-    public void shouldSkipTaskIteration() throws Exception {
-        final AtomicInteger numErrors = new AtomicInteger(0);
-        final AtomicInteger task1Processed = new AtomicInteger(0);
-        final AtomicInteger task2Processed = new AtomicInteger(0);
 
-        try (final KafkaStreamsNamedTopologyWrapper kafkaStreams = new KafkaStreamsNamedTopologyWrapper(properties)) {
-            kafkaStreams.setUncaughtExceptionHandler(exception -> {
-                numErrors.incrementAndGet();
-                return StreamThreadExceptionResponse.REPLACE_THREAD;
-            });
-
-            final NamedTopologyBuilder builder = kafkaStreams.newNamedTopologyBuilder("topology_A");
-
-            builder.stream(inputTopic2).peek((k, v) -> task2Processed.incrementAndGet()).to(outputTopic2);
-            builder.stream(inputTopic)
-                .peek((k, v) -> {
-                    throw new RuntimeException("Kaboom");
-                })
-                .peek((k, v) -> task1Processed.incrementAndGet())
-                .to(outputTopic);
-
-            kafkaStreams.addNamedTopology(builder.build());
-
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic,
-                Arrays.asList(
-                    new KeyValue<>(1, "A")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                0L);
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic2,
-                Arrays.asList(
-                    new KeyValue<>(1, "A"),
-                    new KeyValue<>(1, "B")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                0L);
-            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerDeserializer.class,
-                    StringDeserializer.class
-                ),
-                outputTopic2,
-                Arrays.asList(
-                    new KeyValue<>(1, "A"),
-                    new KeyValue<>(1, "B")
-                )
-            );
-            assertThat(task1Processed.get(), equalTo(0));
-            assertThat(task2Processed.get(), equalTo(2));
-        }
-    }
-*/
     @Test
     public void shouldBackOffTaskAndEmitDataWithinSameTopology() throws Exception {
         final AtomicInteger noOutputExpected = new AtomicInteger(0);
