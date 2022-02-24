@@ -253,4 +253,105 @@ public class PartitionChangeBuilderTest {
                 setTargetAdding(replicas.adding()).
                 build());
     }
+
+    @Test
+    public void testChangeInLeadershipDoesNotChangeRecoveryState() {
+        final byte noChange = (byte) -1;
+        int leaderId = 1;
+        LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
+        PartitionRegistration registration = new PartitionRegistration(
+            new int[] {leaderId, leaderId + 1, leaderId + 2},
+            new int[] {leaderId},
+            Replicas.NONE,
+            Replicas.NONE,
+            leaderId,
+            recoveryState,
+            100,
+            200
+        );
+
+        // Change the partition so that there is no leader
+        PartitionChangeBuilder offlineBuilder = new PartitionChangeBuilder(
+            registration,
+            FOO_ID,
+            0,
+            brokerId -> false,
+            () -> false
+        );
+        // Set the target ISR to empty to indicate that the last leader is offline
+        offlineBuilder.setTargetIsr(Collections.emptyList());
+
+        // The partition should stay as recovering
+        PartitionChangeRecord changeRecord = (PartitionChangeRecord) offlineBuilder
+            .build()
+            .get()
+            .message();
+        assertEquals(noChange, changeRecord.leaderRecoveryState());
+        assertEquals(NO_LEADER, changeRecord.leader());
+
+        registration = registration.merge(changeRecord);
+
+        assertEquals(NO_LEADER, registration.leader);
+        assertEquals(leaderId, registration.isr[0]);
+        assertEquals(recoveryState, registration.leaderRecoveryState);
+
+        // Bring the leader back online
+        PartitionChangeBuilder onlineBuilder = new PartitionChangeBuilder(
+            registration,
+            FOO_ID,
+            0,
+            brokerId -> true,
+            () -> false
+        );
+
+        // The only broker in the ISR is elected leader and stays in the recovering
+        changeRecord = (PartitionChangeRecord) onlineBuilder.build().get().message();
+        assertEquals(noChange, changeRecord.leaderRecoveryState());
+
+        registration = registration.merge(changeRecord);
+
+        assertEquals(leaderId, registration.leader);
+        assertEquals(leaderId, registration.isr[0]);
+        assertEquals(recoveryState, registration.leaderRecoveryState);
+    }
+
+    @Test
+    void testUncleanSetsLeaderRecoveringState() {
+        int leaderId = 1;
+        PartitionRegistration registration = new PartitionRegistration(
+            new int[] {leaderId, leaderId + 1, leaderId + 2},
+            new int[] {leaderId + 1, leaderId + 2},
+            Replicas.NONE,
+            Replicas.NONE,
+            NO_LEADER,
+            LeaderRecoveryState.RECOVERED,
+            100,
+            200
+        );
+
+        // Change the partition using unclean leader election
+        PartitionChangeBuilder onlineBuilder = new PartitionChangeBuilder(
+            registration,
+            FOO_ID,
+            0,
+            brokerId -> brokerId == leaderId,
+            () -> true
+        );
+
+        // The partition should stay as recovering
+        PartitionChangeRecord changeRecord = (PartitionChangeRecord) onlineBuilder
+            .build()
+            .get()
+            .message();
+        assertEquals(LeaderRecoveryState.RECOVERING.value(), changeRecord.leaderRecoveryState());
+        assertEquals(leaderId, changeRecord.leader());
+        assertEquals(1, changeRecord.isr().size());
+        assertEquals(leaderId, changeRecord.isr().get(0));
+
+        registration = registration.merge(changeRecord);
+
+        assertEquals(leaderId, registration.leader);
+        assertEquals(leaderId, registration.isr[0]);
+        assertEquals(LeaderRecoveryState.RECOVERING, registration.leaderRecoveryState);
+    }
 }

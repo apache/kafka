@@ -112,9 +112,6 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    // TODO: We need to make sure that the LeaderRecoveryState is not lost when the partition transitions from
-    // leader to no leader and back to leader. I think this code is correct because these are change record but
-    // it would be good to have a test that confirms this.
     boolean shouldTryElection() {
         // If the new isr doesn't have the current leader, we need to try to elect a new
         // one. Note: this also handles the case where the current leader is NO_LEADER,
