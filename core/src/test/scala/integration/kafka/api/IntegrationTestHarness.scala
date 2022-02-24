@@ -111,25 +111,21 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
     super.setUp(testInfo)
 
-    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerConfig.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1")
     producerConfig.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
     producerConfig.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
 
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     consumerConfig.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
 
-    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
     if (createOffsetsTopic) {
-      if (isKRaftTest()) {
-        TestUtils.createOffsetsTopicWithAdmin(brokers, adminClientConfig)
-      } else {
-        TestUtils.createOffsetsTopic(zkClient, servers)
-      }
+      super.createOffsetsTopic(listenerName, adminClientConfig)
     }
   }
 
@@ -162,13 +158,16 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
-  def createAdminClient(configOverrides: Properties = new Properties): Admin = {
+  def createAdminClient(
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
     val props = new Properties
     props ++= adminClientConfig
     props ++= configOverrides
-    val adminClient = Admin.create(props)
-    adminClients += adminClient
-    adminClient
+    val admin = TestUtils.createAdminClient(brokers, listenerName, props)
+    adminClients += admin
+    admin
   }
 
   @AfterEach

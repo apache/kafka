@@ -54,7 +54,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   private def basicArgs: Array[String] = {
     Array("--reset-offsets",
-      "--bootstrap-server", brokerList,
+      "--bootstrap-server", bootstrapServers(),
       "--timeout", test.TestUtils.DEFAULT_MAX_WAIT_MS.toString)
   }
 
@@ -425,7 +425,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetWithUnrecognizedNewConsumerOption(): Unit = {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }

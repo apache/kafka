@@ -33,8 +33,6 @@ import kafka.utils.TestUtils._
 import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
 import org.junit.jupiter.api.Assertions._
@@ -270,7 +268,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   }
 
   private def consumeAllMessages(topic: String, numMessages: Int): Seq[String] = {
-    val brokerList = TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    val brokerList = TestUtils.plaintextBootstrapServers(servers)
     // Don't rely on coordinator as it may be down when this method is called
     val consumer = TestUtils.createConsumer(brokerList,
       groupId = "group" + random.nextLong(),
@@ -351,7 +349,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   private def createAdminClient(): Admin = {
     val config = new Properties
-    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
+    val bootstrapServers = TestUtils.plaintextBootstrapServers(servers)
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
     Admin.create(config)

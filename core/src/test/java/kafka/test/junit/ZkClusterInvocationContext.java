@@ -254,7 +254,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            return clusterReference.get().createAdminClient(configOverrides);
+            return clusterReference.get().createAdminClient(clientListener(), configOverrides);
         }
 
         @Override

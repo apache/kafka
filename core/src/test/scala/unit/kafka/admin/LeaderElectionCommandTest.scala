@@ -30,7 +30,6 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
-import org.apache.kafka.common.network.ListenerName
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Tag}
@@ -258,7 +257,7 @@ object LeaderElectionCommandTest {
   }
 
   def bootstrapServers(servers: Seq[KafkaServer]): String = {
-    TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
+    TestUtils.plaintextBootstrapServers(servers)
   }
 
   def tempTopicPartitionFile(partitions: Set[TopicPartition]): Path = {
