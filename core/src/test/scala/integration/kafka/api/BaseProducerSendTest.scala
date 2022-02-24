@@ -59,8 +59,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    consumer = TestUtils.createConsumer(bootstrapServers(
-      listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)),
+    consumer = TestUtils.createConsumer(
+      bootstrapServers(listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)),
       securityProtocol = SecurityProtocol.PLAINTEXT
     )
   }

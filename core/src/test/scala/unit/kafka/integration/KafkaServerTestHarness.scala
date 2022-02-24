@@ -226,7 +226,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName
   ): Unit = {
     if (isKRaftTest()) {
-
       resource(createAdminClient(brokers, listenerName)) { admin =>
         TestUtils.deleteTopicWithAdmin(
           admin = admin,
