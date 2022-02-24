@@ -26,6 +26,7 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
+import static org.apache.kafka.connect.mirror.MirrorClientConfig.REPLICATION_POLICY_TOPICS_MAP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -209,10 +210,30 @@ public class MirrorClientTest {
             .topicSource("backup.heartbeats"));
     }
 
+    @Test
+    public void testRenameTopicReplication() {
+        MirrorClient client = new FakeMirrorClient(
+                renameTopicReplicationPolicy("heartbeats,source_heartbeats;"), Collections.emptyList());
+        // Case when mapping is not contain topic it should behave as DefaultReplicationPolicy
+        assertEquals("primary.topic1", client.replicationPolicy()
+                .formatRemoteTopic("primary", "topic1"));
+        assertEquals("primary", client.replicationPolicy()
+                .topicSource("topic1"));
+        // Heartbeats are handled as a special case as it is mentioned in the maping
+        assertEquals("backup.source_heartbeats", client.replicationPolicy()
+                .formatRemoteTopic("backup", "heartbeats"));
+    }
+
     private ReplicationPolicy identityReplicationPolicy(String source) {
         IdentityReplicationPolicy policy = new IdentityReplicationPolicy();
         policy.configure(Collections.singletonMap(
             IdentityReplicationPolicy.SOURCE_CLUSTER_ALIAS_CONFIG, source));
+        return policy;
+    }
+
+    private ReplicationPolicy renameTopicReplicationPolicy(String map) {
+        RenameTopicReplicationPolicy policy = new RenameTopicReplicationPolicy();
+        policy.configure(Collections.singletonMap(REPLICATION_POLICY_TOPICS_MAP, map));
         return policy;
     }
 }
