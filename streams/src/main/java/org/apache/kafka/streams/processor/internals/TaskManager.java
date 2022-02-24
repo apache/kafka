@@ -1062,8 +1062,6 @@ public class TaskManager {
                 throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
             }
 
-            log.info("SOPHIE: adding records to task {}: {}", activeTask.id(), records.records(partition));
-
             activeTask.addRecords(partition, records.records(partition));
         }
     }
