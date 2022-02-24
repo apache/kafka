@@ -276,8 +276,11 @@ public class ProducerConfig extends AbstractConfig {
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
                                                         + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE
                                                         + " (with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
-                                                        + ACKS_CONFIG + "</code> must be 'all'. If incompatible values are set, a <code>ConfigException</code> will be thrown. "
-                                                        + "The default value is `true`. But if incompatible values are set and this config is not set explicitly, idempotent producer will be disabled automatically.";
+                                                        + ACKS_CONFIG + "</code> must be 'all'. "
+                                                        + "<p>"
+                                                        + "Idempotence is enabled by default if no conflicting configurations are set. "
+                                                        + "If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled. "
+                                                        + "If idempotence is explicitly enabled and conflicting configurations are set, a <code>ConfigException</code> is thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
@@ -470,35 +473,32 @@ public class ProducerConfig extends AbstractConfig {
 
         // For idempotence producers, values for `retries` and `acks` and `max.in.flight.requests.per.connection` need validation
         if (idempotenceEnabled) {
-            boolean userConfiguredRetries = originalConfigs.containsKey(RETRIES_CONFIG);
-            int retries = this.getInt(RETRIES_CONFIG);
-            if (userConfiguredRetries && retries == 0) {
+            final int retries = this.getInt(RETRIES_CONFIG);
+            if (retries == 0) {
                 if (userConfiguredIdempotence) {
                     throw new ConfigException("Must set " + RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
                 }
-                log.info("`enable.idempotence` will be disabled because {} is set to 0.", RETRIES_CONFIG, retries);
+                log.info("Idempotence will be disabled because {} is set to 0.", RETRIES_CONFIG, retries);
                 shouldDisableIdempotence = true;
             }
 
-            boolean userConfiguredAcks = originalConfigs.containsKey(ACKS_CONFIG);
             final short acks = Short.valueOf(acksStr);
-            if (userConfiguredAcks && acks != (short) -1) {
+            if (acks != (short) -1) {
                 if (userConfiguredIdempotence) {
                     throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
                         "producer. Otherwise we cannot guarantee idempotence.");
                 }
-                log.info("`enable.idempotence` will be disabled because {} is set to {}, not set to 'all'.", ACKS_CONFIG, acks);
+                log.info("Idempotence will be disabled because {} is set to {}, not set to 'all'.", ACKS_CONFIG, acks);
                 shouldDisableIdempotence = true;
             }
 
-            boolean userConfiguredInflightRequests = originalConfigs.containsKey(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-            int inFlightConnection = this.getInt(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-            if (userConfiguredInflightRequests && MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < inFlightConnection) {
+            final int inFlightConnection = this.getInt(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+            if (MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < inFlightConnection) {
                 if (userConfiguredIdempotence) {
                     throw new ConfigException("Must set " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
                         " to use the idempotent producer.");
                 }
-                log.warn("`enable.idempotence` will be disabled because {} is set to {}, which is greater than 5. " +
+                log.warn("Idempotence will be disabled because {} is set to {}, which is greater than 5. " +
                     "Please note that in v4.0.0 and onward, this will become an error.", MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
                 shouldDisableIdempotence = true;
             }
