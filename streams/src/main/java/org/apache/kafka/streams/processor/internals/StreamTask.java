@@ -708,6 +708,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final TopicPartition partition = recordInfo.partition();
 
             if (!(record instanceof CorruptedRecord)) {
+                log.info("SOPHIE: actually processing task {}", id());
                 doProcess(wallClockTime);
             }
 

@@ -127,7 +127,6 @@ public class TopologyMetadata {
     // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
     public void setLog(final LogContext logContext) {
         log = logContext.logger(getClass());
-        taskExecutionMetadata.setLog(logContext);
     }
     
     public ProcessingMode processingMode() {
@@ -224,7 +223,6 @@ public class TopologyMetadata {
             lock();
             buildAndVerifyTopology(newTopologyBuilder);
             log.info("New NamedTopology passed validation and will be added {}, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
-            taskExecutionMetadata.registerTopology(newTopologyBuilder.topologyName());
             version.topologyVersion.incrementAndGet();
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
@@ -246,7 +244,6 @@ public class TopologyMetadata {
         try {
             lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
-            taskExecutionMetadata.unregisterTopology(topologyName);
             version.topologyVersion.incrementAndGet();
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), removeTopologyFuture));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);

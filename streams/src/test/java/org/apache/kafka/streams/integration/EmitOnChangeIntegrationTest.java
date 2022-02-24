@@ -30,8 +30,6 @@ import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThr
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -47,14 +45,11 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category(IntegrationTest.class)
 public class EmitOnChangeIntegrationTest {
@@ -103,7 +98,7 @@ public class EmitOnChangeIntegrationTest {
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000)
+                mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 45000)
             )
         );
 
@@ -175,79 +170,6 @@ public class EmitOnChangeIntegrationTest {
                     new KeyValue<>(1, "B")
                 )
             );
-        }
-    }
-
-    @Test
-    public void shouldEmitRecordsAfterFailures() throws Exception {
-        final Properties properties  = mkObjectProperties(
-            mkMap(
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
-                mkEntry(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0),
-                mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L),
-                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class),
-                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000)
-            )
-        );
-
-        try (final KafkaStreamsNamedTopologyWrapper kafkaStreams = new KafkaStreamsNamedTopologyWrapper(properties)) {
-            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
-            
-            final NamedTopologyBuilder builder = kafkaStreams.newNamedTopologyBuilder("topology_A");
-            final AtomicInteger noOutputExpected = new AtomicInteger(0);
-            final AtomicInteger twoOutputExpected = new AtomicInteger(0);
-            builder.stream(inputTopic2).peek((k, v) -> twoOutputExpected.incrementAndGet()).to(outputTopic2);
-            builder.stream(inputTopic)
-                .peek((k, v) -> {
-                    throw new RuntimeException("Kaboom");
-                })
-                .peek((k, v) -> noOutputExpected.incrementAndGet())
-                .to(outputTopic);
-
-            kafkaStreams.addNamedTopology(builder.build());            
-            
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic,
-                Arrays.asList(
-                    new KeyValue<>(1, "A")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                0L);
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic2,
-                Arrays.asList(
-                    new KeyValue<>(1, "A"),
-                    new KeyValue<>(1, "B")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                0L);
-            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerDeserializer.class,
-                    StringDeserializer.class
-                ),
-                outputTopic2,
-                Arrays.asList(
-                    new KeyValue<>(1, "A"),
-                    new KeyValue<>(1, "B")
-                )
-            );
-            assertThat(noOutputExpected.get(), equalTo(0));
-            assertThat(twoOutputExpected.get(), equalTo(2));
         }
     }
 }
