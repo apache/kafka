@@ -678,7 +678,7 @@ public class ReplicationControlManager {
                         setPartitionIndex(partitionData.partitionIndex()).
                         setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()));
                 }
-                log.info("Rejecting alterPartition request for unknown topic ID {}.", topicId);
+                log.info("Rejecting AlterPartition request for unknown topic ID {}.", topicId);
                 continue;
             }
 
@@ -719,14 +719,14 @@ public class ReplicationControlManager {
                     }
                     if (change.leader() != request.brokerId() &&
                             change.leader() != NO_LEADER_CHANGE) {
-                        // Normally, an alterPartition request, which is made by the partition
+                        // Normally, an AlterPartition request, which is made by the partition
                         // leader itself, is not allowed to modify the partition leader.
                         // However, if there is an ongoing partition reassignment and the
                         // ISR change completes it, then the leader may change as part of
                         // the changes made during reassignment cleanup.
                         //
                         // In this case, we report back FENCED_LEADER_EPOCH to the leader
-                        // which made the alterPartition request. This lets it know that it must
+                        // which made the AlterPartition request. This lets it know that it must
                         // fetch new metadata before trying again. This return code is
                         // unusual because we both return an error and generate a new
                         // metadata record. We usually only do one or the other.
@@ -779,27 +779,27 @@ public class ReplicationControlManager {
         AlterPartitionRequestData.PartitionData partitionData
     ) {
         if (partition == null) {
-            log.info("Rejecting alterPartition request for unknown partition {}-{}.",
+            log.info("Rejecting AlterPartition request for unknown partition {}-{}.",
                     topic.name, partitionId);
 
             return UNKNOWN_TOPIC_OR_PARTITION;
         }
         if (partitionData.leaderEpoch() != partition.leaderEpoch) {
-            log.debug("Rejecting alterPartition request from node {} for {}-{} because " +
+            log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current leader epoch is {}, not {}.", brokerId, topic.name,
                     partitionId, partition.leaderEpoch, partitionData.leaderEpoch());
 
             return FENCED_LEADER_EPOCH;
         }
         if (brokerId != partition.leader) {
-            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current leader is {}.", brokerId, topic.name,
                     partitionId, partition.leader);
 
             return INVALID_REQUEST;
         }
         if (partitionData.partitionEpoch() != partition.partitionEpoch) {
-            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current partition epoch is {}, not {}.", brokerId,
                     topic.name, partitionId, partition.partitionEpoch,
                     partitionData.partitionEpoch());
@@ -808,7 +808,7 @@ public class ReplicationControlManager {
         }
         int[] newIsr = Replicas.toArray(partitionData.newIsr());
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
-            log.error("Rejecting alterPartition request from node {} for {}-{} because " +
+            log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR {}.", brokerId,
                     topic.name, partitionId, partitionData.newIsr());
 
@@ -816,7 +816,7 @@ public class ReplicationControlManager {
         }
         if (!Replicas.contains(newIsr, partition.leader)) {
             // The ISR must always include the current leader.
-            log.error("Rejecting alterPartition request from node {} for {}-{} because " +
+            log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR {} that doesn't include itself.",
                     brokerId, topic.name, partitionId, partitionData.newIsr());
 
@@ -824,7 +824,7 @@ public class ReplicationControlManager {
         }
         LeaderRecoveryState leaderRecoveryState = LeaderRecoveryState.of(partitionData.leaderRecoveryState());
         if (leaderRecoveryState == LeaderRecoveryState.RECOVERING && newIsr.length > 1) {
-            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the ISR {} had more than one replica while the leader was still " +
                     "recovering from an unlcean leader election {}.",
                     brokerId, topic.name, partitionId, partitionData.newIsr(),
@@ -835,7 +835,7 @@ public class ReplicationControlManager {
         if (partition.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
                 leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
 
-            log.info("Rejecting alterPartition request from node {} for {}-{} because " +
+            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the leader recovery state cannot change from RECOVERED to RECOVERING.",
                     brokerId, topic.name, partitionId);
 
