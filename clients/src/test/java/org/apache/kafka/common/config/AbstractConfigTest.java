@@ -236,6 +236,16 @@ public class AbstractConfigTest {
             ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked as used");
     }
 
+    @Test
+    public void testUnknownConfigs() {
+        Properties props = new Properties();
+        props.put(TestConfig.UNKNOWN_TEST_CONFIG, "my_value");
+        TestConfig config = new TestConfig(props);
+
+        assertTrue(config.unknown().contains(TestConfig.UNKNOWN_TEST_CONFIG),
+                TestConfig.UNKNOWN_TEST_CONFIG + " should be marked unknown");
+    }
+
     private void testValidInputs(String configValue) {
         Properties props = new Properties();
         props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
@@ -583,6 +593,7 @@ public class AbstractConfigTest {
 
         private static final ConfigDef CONFIG;
 
+        public static final String UNKNOWN_TEST_CONFIG = "unknown.test.config";
         public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
         private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters.";
 

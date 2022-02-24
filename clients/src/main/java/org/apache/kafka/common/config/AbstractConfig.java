@@ -226,6 +226,12 @@ public class AbstractConfig {
         return keys;
     }
 
+    public Set<String> unknown() {
+        Set<String> keys = new HashSet<>(originals.keySet());
+        keys.removeAll(values.keySet());
+        return keys;
+    }
+
     public Map<String, Object> originals() {
         Map<String, Object> copy = new RecordingMap<>();
         copy.putAll(originals);
@@ -377,10 +383,21 @@ public class AbstractConfig {
     }
 
     /**
-     * Log warnings for any unused configurations
+     * Log infos for any unused configurations
      */
     public void logUnused() {
-        for (String key : unused())
+        Set<String> unusedKeys = unused();
+        //Printing unusedKeys to users should remove unknownKeys
+        unusedKeys.removeAll(unknown());
+        for (String key : unusedKeys)
+            log.info("The configuration '{}' was supplied but isn't a used config since the corresponding feature is not enabled.", key);
+    }
+
+    /**
+     * Log warnings for any unknown configurations
+     */
+    public void logUnknown() {
+        for (String key : unknown())
             log.warn("The configuration '{}' was supplied but isn't a known config.", key);
     }
 

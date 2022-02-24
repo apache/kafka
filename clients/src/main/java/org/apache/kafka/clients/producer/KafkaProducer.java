@@ -430,6 +430,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             config.logUnused();
+            config.logUnknown();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka producer started");
         } catch (Throwable t) {
