@@ -2858,9 +2858,11 @@ public class KafkaConsumerTest {
         ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(props, new StringDeserializer(), new StringDeserializer()));
 
         assertTrue(config.unknown().contains(unknownTestConfig));
+        assertEquals(1, config.unknown().size());
 
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
             assertTrue(config.unknown().contains(unknownTestConfig));
+            assertEquals(1, config.unknown().size());
         }
     }
 

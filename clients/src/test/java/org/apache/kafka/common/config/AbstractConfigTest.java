@@ -244,6 +244,7 @@ public class AbstractConfigTest {
 
         assertTrue(config.unknown().contains(TestConfig.UNKNOWN_TEST_CONFIG),
                 TestConfig.UNKNOWN_TEST_CONFIG + " should be marked unknown");
+        assertEquals(1, config.unknown().size());
     }
 
     private void testValidInputs(String configValue) {

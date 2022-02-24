@@ -1862,10 +1862,12 @@ public class KafkaProducerTest {
                 new StringSerializer(), new StringSerializer()));
 
         assertTrue(config.unknown().contains(unknownTestConfig));
+        assertEquals(1, config.unknown().size());
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
                 null, null, null, Time.SYSTEM)) {
             assertTrue(config.unknown().contains(unknownTestConfig));
+            assertEquals(1, config.unknown().size());
         }
     }
 

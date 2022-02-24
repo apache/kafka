@@ -382,10 +382,15 @@ public class AbstractConfig {
         log.info(b.toString());
     }
 
+    public void logUnusedAndUnknown() {
+        logUnused();
+        logUnknown();
+    }
+
     /**
-     * Log infos for any unused configurations
+     * Log infos for any unused configurations to user, exclude unknown configurations
      */
-    public void logUnused() {
+    private void logUnused() {
         Set<String> unusedKeys = unused();
         //Printing unusedKeys to users should remove unknownKeys
         unusedKeys.removeAll(unknown());
@@ -396,7 +401,7 @@ public class AbstractConfig {
     /**
      * Log warnings for any unknown configurations
      */
-    public void logUnknown() {
+    private void logUnknown() {
         for (String key : unknown())
             log.warn("The configuration '{}' was supplied but isn't a known config.", key);
     }
