@@ -79,8 +79,10 @@ public class AbstractConfigTest {
         TestConfig config = new TestConfig(props);
         Map<String, Object> originalsWithPrefix = config.originalsWithPrefix("foo.");
 
-        assertTrue(config.unused().contains("foo.bar"));
+        assertTrue(config.unknown().contains("foo.bar"));
+        assertFalse(config.unused().contains("foo.bar"));
         originalsWithPrefix.get("bar");
+        assertTrue(config.unknown().contains("foo.bar"));
         assertFalse(config.unused().contains("foo.bar"));
 
         Map<String, Object> expected = new HashMap<>();
@@ -102,21 +104,21 @@ public class AbstractConfigTest {
         Map<String, Object> valuesWithPrefixOverride = config.valuesWithPrefixOverride(prefix);
 
         // prefix overrides global
-        assertTrue(config.unused().contains("prefix.sasl.mechanism"));
+        assertTrue(config.unknown().contains("prefix.sasl.mechanism"));
         assertTrue(config.unused().contains("sasl.mechanism"));
         assertEquals("GSSAPI", valuesWithPrefixOverride.get("sasl.mechanism"));
         assertFalse(config.unused().contains("sasl.mechanism"));
         assertFalse(config.unused().contains("prefix.sasl.mechanism"));
 
         // prefix overrides default
-        assertTrue(config.unused().contains("prefix.sasl.kerberos.kinit.cmd"));
+        assertTrue(config.unknown().contains("prefix.sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
         assertEquals("/usr/bin/kinit2", valuesWithPrefixOverride.get("sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("prefix.sasl.kerberos.kinit.cmd"));
 
         // prefix override with no default
-        assertTrue(config.unused().contains("prefix.ssl.truststore.location"));
+        assertTrue(config.unknown().contains("prefix.ssl.truststore.location"));
         assertFalse(config.unused().contains("ssl.truststore.location"));
         assertEquals("my location", valuesWithPrefixOverride.get("ssl.truststore.location"));
         assertFalse(config.unused().contains("ssl.truststore.location"));
@@ -162,8 +164,9 @@ public class AbstractConfigTest {
         Map<String, Object> valuesWithPrefixOverride = config.valuesWithPrefixOverride(prefix);
 
         // prefix with mechanism overrides global
-        assertTrue(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
-        assertTrue(config.unused().contains("test-mechanism.sasl.jaas.config"));
+        assertTrue(config.unknown().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
+        assertFalse(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
+        assertFalse(config.unused().contains("test-mechanism.sasl.jaas.config"));
         assertEquals(saslJaasConfig1, valuesWithPrefixOverride.get("test-mechanism.sasl.jaas.config"));
         assertEquals(saslJaasConfig3, valuesWithPrefixOverride.get("sasl.jaas.config"));
         assertFalse(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
@@ -172,7 +175,8 @@ public class AbstractConfigTest {
 
         // prefix with mechanism overrides default
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
-        assertTrue(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd"));
+        assertTrue(config.unknown().contains("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("gssapi.sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
         assertEquals("/usr/bin/kinit2", valuesWithPrefixOverride.get("gssapi.sasl.kerberos.kinit.cmd"));
@@ -180,7 +184,8 @@ public class AbstractConfigTest {
 
         // prefix override for mechanism with no default
         assertFalse(config.unused().contains("sasl.kerberos.service.name"));
-        assertTrue(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
+        assertFalse(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
+        assertTrue(config.unknown().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
         assertFalse(config.unused().contains("gssapi.sasl.kerberos.service.name"));
         assertFalse(config.unused().contains("sasl.kerberos.service.name"));
         assertEquals("testkafka", valuesWithPrefixOverride.get("gssapi.sasl.kerberos.service.name"));
@@ -228,8 +233,8 @@ public class AbstractConfigTest {
         props.put(ConfiguredFakeMetricsReporter.EXTRA_CONFIG, "my_value");
         TestConfig config = new TestConfig(props);
 
-        assertTrue(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
-            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called");
+        assertTrue(config.unknown().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
+            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unknown before getConfiguredInstances is called");
 
         config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         assertFalse(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
@@ -245,6 +250,23 @@ public class AbstractConfigTest {
         assertTrue(config.unknown().contains(TestConfig.UNKNOWN_TEST_CONFIG),
                 TestConfig.UNKNOWN_TEST_CONFIG + " should be marked unknown");
         assertEquals(1, config.unknown().size());
+    }
+
+    @Test
+    public void testUnusedAndUnknownConfigs() {
+        Properties props = new Properties();
+        String configValue = "org.apache.kafka.common.config.AbstractConfigTest$ConfiguredFakeMetricsReporter";
+        props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
+        props.put(TestConfig.UNKNOWN_TEST_CONFIG, "my_value");
+        TestConfig config = new TestConfig(props);
+
+        assertTrue(config.unused().contains(TestConfig.METRIC_REPORTER_CLASSES_CONFIG));
+        assertTrue(config.unknown().contains(TestConfig.UNKNOWN_TEST_CONFIG),
+                TestConfig.UNKNOWN_TEST_CONFIG + " should be marked unknown");
+        assertEquals(1, config.unknown().size());
+
+        config.get(TestConfig.METRIC_REPORTER_CLASSES_CONFIG);
+        assertFalse(config.unused().contains(TestConfig.METRIC_REPORTER_CLASSES_CONFIG));
     }
 
     private void testValidInputs(String configValue) {

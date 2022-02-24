@@ -1872,6 +1872,27 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testUnusedAndUnknownConfigs() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLS");
+        props.put(unknownTestConfig, "my_value");
+        ProducerConfig config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(props,
+                new StringSerializer(), new StringSerializer()));
+
+        assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
+        assertTrue(config.unknown().contains(unknownTestConfig));
+        assertEquals(1, config.unknown().size());
+
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
+                null, null, null, Time.SYSTEM)) {
+            assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
+            assertTrue(config.unknown().contains(unknownTestConfig));
+            assertEquals(1, config.unknown().size());
+        }
+    }
+
+    @Test
     public void testNullTopicName() {
         // send a record with null topic should fail
         assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 1,
