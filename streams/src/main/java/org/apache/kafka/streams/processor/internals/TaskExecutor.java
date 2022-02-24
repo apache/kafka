@@ -73,24 +73,18 @@ public class TaskExecutor {
         int totalProcessed = 0;
         Task lastProcessed = null;
 
-        for (final Map.Entry<String, Set<Task>> topologyEntry : tasks.activeTasksByTopology().entrySet()) {
-            final String topologyName = topologyEntry.getKey();
-            final Set<Task> topologyActiveTasks = topologyEntry.getValue();
-            if (taskExecutionMetadata.canProcessTopology(topologyName)) {
-                for (final Task task : topologyActiveTasks) {
-                    final long now = time.milliseconds();
-                    try {
-                        if (taskExecutionMetadata.canProcessTask(task, now)) {
-                            lastProcessed = task;
-                            totalProcessed += processTask(task, maxNumRecords, now, time);
-                        }
-                    } catch (final Throwable t) {
-                        taskExecutionMetadata.registerTaskError(task, t, now);
-                        tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
-                        commitSuccessfullyProcessedTasks();
-                        throw t;
-                    }
+        for (final Task task : tasks.activeTasks()) {
+            final long now = time.milliseconds();
+            try {
+                if (taskExecutionMetadata.canProcessTask(task, now)) {
+                    lastProcessed = task;
+                    totalProcessed += processTask(task, maxNumRecords, now, time);
                 }
+            } catch (final Throwable t) {
+                taskExecutionMetadata.registerTaskError(task, t, now);
+                tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
+                commitSuccessfullyProcessedTasks();
+                throw t;
             }
         }
 

@@ -39,15 +39,6 @@ public class TaskExecutionMetadata {
         this.hasNamedTopologies = !(allTopologyNames.size() == 1 && allTopologyNames.contains(UNNAMED_TOPOLOGY));
     }
 
-    public boolean canProcessTopology(final String topologyName) {
-        if (!hasNamedTopologies) {
-            return true;
-        } else {
-            final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
-            return metadata == null || metadata.canProcess();
-        }
-    }
-
     public boolean canProcessTask(final Task task, final long now) {
         final String topologyName = task.id().topologyName();
         if (!hasNamedTopologies) {
@@ -55,7 +46,7 @@ public class TaskExecutionMetadata {
             return true;
         } else {
             final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
-            return metadata == null || metadata.canProcessTask(task, now);
+            return metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
         }
     }
 
