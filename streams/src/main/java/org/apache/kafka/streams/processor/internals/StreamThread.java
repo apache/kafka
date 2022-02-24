@@ -932,7 +932,8 @@ public class StreamThread extends Thread {
                 .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
         }
 
-        log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+        log.debug("Main Consumer poll completed in {} ms and fetched {} records from partitions {}",
+            pollLatency, numRecords, records.partitions());
 
         pollSensor.record(pollLatency, now);
 
