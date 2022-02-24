@@ -860,6 +860,10 @@ public class NetworkClient implements KafkaClient {
                 return vanillaLeastLoadedNode(now, nodes);
             case AT_LEAST_THREE:
                 return atLeastThreeLeastLoadedNode(now, nodes);
+            case RANDOM:
+                return randomLeastLoadedNode(now, nodes);
+            case RANDOM_BETWEEN_5_TO_15:
+                return haskinsLeastLoadedNode(now, nodes);
             default:
                 throw new IllegalStateException("unhandled selection algorithm " + algo);
         }
@@ -994,6 +998,85 @@ public class NetworkClient implements KafkaClient {
 
         int chosen = randOffset.nextInt(pool.size());
         CandidateNode[] finalists = pool.toArray(new CandidateNode[0]);
+        Node chosenNode = finalists[chosen].node;
+        log.trace("Least loaded node selected {} out of a pool of {}", chosenNode.idString(), pool.size());
+        return chosenNode;
+    }
+
+    private Node randomLeastLoadedNode(long now, List<Node> nodes) {
+        int offset = this.randOffset.nextInt(nodes.size());
+        for (int i = 0; i < nodes.size(); i++) {
+            int idx = (offset + i) % nodes.size();
+            Node node = nodes.get(idx);
+            if (canSendRequest(node.idString(), now)) {
+                log.trace("Found random least loaded node {} connected with spare capacity", node);
+                return node;
+            } else if (connectionStates.isPreparingConnection(node.idString())) {
+                log.trace("Found random least loaded connecting node {}", node);
+                return node;
+            } else if (canConnect(node, now)) {
+                log.trace("Found random least loaded connecting node {} with no active connection", node);
+                return node;
+            } else {
+                log.trace("Removing node {} from least loaded node selection since it is neither ready " +
+                    "for sending or connecting", node);
+            }
+        }
+        log.trace("Least loaded node random selection failed to find an available node");
+        return null;
+    }
+
+    private Node haskinsLeastLoadedNode(long now, List<Node> nodes) {
+
+        PriorityQueue<CandidateNode> pool = new PriorityQueue<>(16);
+
+        //scan over nodes starting at a random location to compensate for our early loop
+        //termination clause
+        int offset = this.randOffset.nextInt(nodes.size());
+        for (int i = 0; i < nodes.size(); i++) {
+            int idx = (offset + i) % nodes.size();
+            Node node = nodes.get(idx);
+            String id = node.idString();
+            if (canSendRequest(node.idString(), now)) {
+                int currInflight = this.inFlightRequests.count(node.idString());
+                pool.add(new CandidateNode(node, NodeState.HAS_CAPACITY, currInflight));
+            } else if (connectionStates.isPreparingConnection(node.idString())) {
+                pool.add(new CandidateNode(node, NodeState.CONNECTING, 0));
+            } else if (canConnect(node, now)) {
+                pool.add(new CandidateNode(node, NodeState.CONNECTABLE, 0));
+            } else {
+                log.trace("Removing node {} from least loaded node selection since it is neither ready " +
+                    "for sending or connecting", node);
+                continue;
+            }
+
+            if (pool.size() >= 15) {
+                if (pool.size() > 15) {
+                    pool.poll(); //remove "worst" node leaving 15
+                }
+                CandidateNode worstCandidate = pool.peek();
+                if (NodeState.HAS_CAPACITY.equals(worstCandidate.state) && worstCandidate.weight == 0) {
+                    //early loop termination - we have 15 candidates with live sockets and 0 in-flight
+                    break;
+                }
+            }
+        }
+
+        if (pool.isEmpty()) {
+            log.trace("Least loaded node selection failed to find an available node (empty pool)");
+            return null;
+        }
+
+        CandidateNode[] finalists = pool.toArray(new CandidateNode[0]);
+        int numCandidates = finalists.length;
+        int chosen;
+        if (numCandidates >= 7) {
+            //ignore the top 5
+            chosen = 5 + randOffset.nextInt(numCandidates - 5);
+        } else {
+            //dont have enough candidates to ignore anything
+            chosen = randOffset.nextInt(numCandidates);
+        }
         Node chosenNode = finalists[chosen].node;
         log.trace("Least loaded node selected {} out of a pool of {}", chosenNode.idString(), pool.size());
         return chosenNode;
@@ -1381,6 +1464,7 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
             } else {
+                log.trace("Updating cached metadata from source {} with {} brokers", destination, response.brokersById().size());
                 this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
             }
 
