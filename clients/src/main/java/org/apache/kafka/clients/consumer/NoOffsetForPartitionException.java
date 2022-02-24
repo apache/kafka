@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
@@ -32,15 +35,24 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
     private static final long serialVersionUID = 1L;
 
     private final Set<TopicPartition> partitions;
+    private final Map<TopicPartition, SubscriptionState.FetchState> partitionFetchStates;
 
     public NoOffsetForPartitionException(TopicPartition partition) {
         super("Undefined offset with no reset policy for partition: " + partition);
         this.partitions = Collections.singleton(partition);
+        this.partitionFetchStates = Collections.emptyMap();
     }
 
     public NoOffsetForPartitionException(Collection<TopicPartition> partitions) {
         super("Undefined offset with no reset policy for partitions: " + partitions);
         this.partitions = Collections.unmodifiableSet(new HashSet<>(partitions));
+        this.partitionFetchStates = Collections.emptyMap();
+    }
+
+    public NoOffsetForPartitionException(Map<TopicPartition, SubscriptionState.FetchState> partitionFetchStates) {
+        super("Undefined offset with no reset policy for partitionss with states: " + partitionFetchStates);
+        this.partitionFetchStates = Collections.unmodifiableMap(new HashMap<>(partitionFetchStates));
+        this.partitions = Collections.emptySet();
     }
 
     /**
@@ -51,4 +63,11 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
         return partitions;
     }
 
+    /**
+     * returns a map of all partitions for which no offset are defined, and their respective fetch states
+     * @return all partitions with no offset and their respective fetch states
+     */
+    public Map<TopicPartition, SubscriptionState.FetchState> partitionFetchStates() {
+        return partitionFetchStates;
+    }
 }
