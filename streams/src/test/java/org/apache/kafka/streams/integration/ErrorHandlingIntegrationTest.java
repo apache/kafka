@@ -97,9 +97,7 @@ public class ErrorHandlingIntegrationTest {
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000),
-                mkEntry(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 10000)
-            )
+                mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000))
         );
     }
 
