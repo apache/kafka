@@ -112,6 +112,9 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate dlqProduceRequests;
     public final MetricNameTemplate dlqProduceFailures;
     public final MetricNameTemplate lastErrorTimestamp;
+    public final MetricNameTemplate transactionSizeMin;
+    public final MetricNameTemplate transactionSizeMax;
+    public final MetricNameTemplate transactionSizeAvg;
 
     public Map<MetricNameTemplate, TaskStatus.State> connectorStatusMetrics;
 
@@ -206,6 +209,16 @@ public class ConnectMetricsRegistry {
                                                     "The average number of records that have been produced by this task but not yet " +
                                                     "completely written to Kafka.",
                                                     sourceTaskTags);
+
+        transactionSizeMin = createTemplate("transaction-size-min", SOURCE_TASK_GROUP_NAME,
+                                            "The number of records in the smallest transaction the task has committed so far. ",
+                                            sourceTaskTags);
+        transactionSizeMax = createTemplate("transaction-size-max", SOURCE_TASK_GROUP_NAME,
+                                            "The number of records in the largest transaction the task has committed so far.",
+                                            sourceTaskTags);
+        transactionSizeAvg = createTemplate("transaction-size-avg", SOURCE_TASK_GROUP_NAME,
+                                            "The average number of records in the transactions the task has committed so far.",
+                                            sourceTaskTags);
 
         /***** Sink worker task level *****/
         Set<String> sinkTaskTags = new LinkedHashSet<>(tags);
