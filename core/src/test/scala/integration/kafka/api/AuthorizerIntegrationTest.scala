@@ -68,6 +68,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import java.util.Collections.singletonList
 
+import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
+
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -2353,6 +2355,51 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeTopicAclWithOperationAll(quorum: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    removeAllClientAcls()
+
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WildcardHost, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
+
+    val metadataRequestTopic = new MetadataRequestTopic()
+      .setName(topic)
+
+    val metadataRequest = new MetadataRequest.Builder(new MetadataRequestData()
+      .setTopics(Collections.singletonList(metadataRequestTopic))
+      .setAllowAutoTopicCreation(false)
+    ).build()
+
+    val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
+    val topicResponseOpt = metadataResponse.topicMetadata().asScala.find(_.topic == topic)
+    assertTrue(topicResponseOpt.isDefined)
+
+    val topicResponse = topicResponseOpt.get
+    assertEquals(Errors.NONE, topicResponse.error)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeTopicConfigsAclWithOperationAll(quorum: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    removeAllClientAcls()
+
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WildcardHost, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
+
+    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+      .setResources(Collections.singletonList(new DescribeConfigsRequestData.DescribeConfigsResource()
+        .setResourceType(ConfigResource.Type.TOPIC.id)
+        .setResourceName(tp.topic)))
+    ).build()
+
+    val describeConfigsResponse = connectAndReceive[DescribeConfigsResponse](describeConfigsRequest)
+    val topicConfigResponse = describeConfigsResponse.data.results.get(0)
+    assertEquals(Errors.NONE, Errors.forCode(topicConfigResponse.errorCode))
+  }
+
   private def testMetadataClusterClusterAuthorizedOperations(
     version: Short,
     expectedClusterAuthorizedOperations: Int
@@ -2528,6 +2575,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     topic: String,
     numPartitions: Int = 1
   ): Unit =  {
+    // Note the principal builder implementation maps all connections on the
+    // inter-broker listener to the broker principal.
     createTopic(
       topic,
       numPartitions = numPartitions,
