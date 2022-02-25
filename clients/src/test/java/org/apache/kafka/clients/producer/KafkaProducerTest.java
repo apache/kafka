@@ -1862,8 +1862,6 @@ public class KafkaProducerTest {
                 new StringSerializer(), new StringSerializer()));
 
         assertTrue(config.unknown().contains(unknownTestConfig));
-        assertEquals(1, config.unknown().size());
-        assertEquals(3, config.unused().size());
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
                 null, null, null, Time.SYSTEM)) {
@@ -1884,8 +1882,6 @@ public class KafkaProducerTest {
 
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertTrue(config.unknown().contains(unknownTestConfig));
-        assertEquals(1, config.unknown().size());
-        assertEquals(4, config.unused().size());
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
                 null, null, null, Time.SYSTEM)) {

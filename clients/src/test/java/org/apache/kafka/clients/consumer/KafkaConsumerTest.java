@@ -2858,8 +2858,6 @@ public class KafkaConsumerTest {
         ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(props, new StringDeserializer(), new StringDeserializer()));
 
         assertTrue(config.unknown().contains(unknownTestConfig));
-        assertEquals(1, config.unknown().size());
-        assertEquals(3, config.unused().size());
 
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
             assertTrue(config.unknown().contains(unknownTestConfig));
@@ -2878,8 +2876,6 @@ public class KafkaConsumerTest {
 
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertTrue(config.unknown().contains(unknownTestConfig));
-        assertEquals(1, config.unknown().size());
-        assertEquals(4, config.unused().size());
 
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
