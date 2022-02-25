@@ -47,7 +47,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
     // Kill controller and restart until broker with latest ibp become controller
     ensureControllerIn(Seq(1, 2))
-    createTopic(topic, Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1)))
+    createTopicWithAssignment(topic, Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1)))
 
     val resp1 = sendMetadataRequest(new MetadataRequest(requestData(topic, Uuid.ZERO_UUID), 12.toShort), controllerSocketServer)
     val topicId = resp1.topicMetadata.iterator().next().topicId()

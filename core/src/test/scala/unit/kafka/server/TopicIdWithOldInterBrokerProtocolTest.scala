@@ -51,7 +51,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
   def testMetadataTopicIdsWithOldIBP(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
-    createTopic(topic1, replicaAssignment)
+    createTopicWithAssignment(topic1, replicaAssignment)
 
     val resp = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic1).asJava, true, 10, 10).build(), Some(notControllerSocketServer))
     assertEquals(1, resp.topicMetadata.size)
@@ -73,7 +73,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
-    val leadersMap = createTopic(topic1, replicaAssignment)
+    val leadersMap = createTopicWithAssignment(topic1, replicaAssignment)
     val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, ApiKeys.FETCH.latestVersion())
     val resp = sendFetchRequest(leadersMap(0), req)
 
@@ -94,7 +94,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
-    val leadersMap = createTopic(topic1, replicaAssignment)
+    val leadersMap = createTopicWithAssignment(topic1, replicaAssignment)
     val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, 12)
     val resp = sendFetchRequest(leadersMap(0), req)
 

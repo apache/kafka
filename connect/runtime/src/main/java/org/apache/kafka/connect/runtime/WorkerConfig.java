@@ -374,7 +374,7 @@ public class WorkerConfig extends AbstractConfig {
             // validate format
             String[] configTokens = config.trim().split("\\s+", 2);
             if (configTokens.length != 2) {
-                throw new ConfigException(String.format("Invalid format of header config '%s\'. "
+                throw new ConfigException(String.format("Invalid format of header config '%s'. "
                         + "Expected: '[ation] [header name]:[header value]'", config));
             }
 
@@ -404,7 +404,7 @@ public class WorkerConfig extends AbstractConfig {
 
     // Visible for testing
     static void validateHeaderConfigAction(String action) {
-        if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
+        if (HEADER_ACTIONS.stream().noneMatch(action::equalsIgnoreCase)) {
             throw new ConfigException(String.format("Invalid header config action: '%s'. "
                     + "Expected one of %s", action, HEADER_ACTIONS));
         }

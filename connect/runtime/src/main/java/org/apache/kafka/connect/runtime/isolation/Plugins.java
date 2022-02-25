@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
-import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -162,10 +161,6 @@ public class Plugins {
 
     public Set<PluginDesc<Predicate<?>>> predicates() {
         return delegatingLoader.predicates();
-    }
-
-    public Set<PluginDesc<ConfigProvider>> configProviders() {
-        return delegatingLoader.configProviders();
     }
 
     public Connector newConnector(String connectorClassOrAlias) {
@@ -463,12 +458,6 @@ public class Plugins {
             compareAndSwapLoaders(savedLoader);
         }
         return plugin;
-    }
-
-    public <R extends ConnectRecord<R>> Transformation<R> newTranformations(
-            String transformationClassOrAlias
-    ) {
-        return null;
     }
 
 }

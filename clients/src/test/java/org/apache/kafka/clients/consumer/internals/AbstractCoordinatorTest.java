@@ -1621,9 +1621,10 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                            String protocol,
-                                                            List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata) {
+        protected Map<String, ByteBuffer> onLeaderElected(String leaderId,
+                                                          String protocol,
+                                                          List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
+                                                          boolean skipAssignment) {
             Map<String, ByteBuffer> assignment = new HashMap<>();
             for (JoinGroupResponseData.JoinGroupResponseMember member : allMemberMetadata) {
                 assignment.put(member.memberId(), EMPTY_DATA);

@@ -491,7 +491,7 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void expectInitializeTask() throws Exception {
+    private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(singletonList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 

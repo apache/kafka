@@ -954,7 +954,7 @@ public final class Utils {
      * @throws IOException if flushing the directory fails.
      */
     public static void flushDir(Path path) throws IOException {
-        if (path != null && !OperatingSystem.IS_WINDOWS) {
+        if (path != null && !OperatingSystem.IS_WINDOWS && !OperatingSystem.IS_ZOS) {
             try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }
@@ -1413,6 +1413,23 @@ public final class Utils {
         Map<K, V> res = new HashMap<>(keys.size());
         keys.forEach(key -> res.put(key, valueSupplier.get()));
         return res;
+    }
+
+    /**
+     * Get an array containing all of the {@link Object#toString names} of a given enumerable type.
+     * @param enumClass the enum class; may not be null
+     * @return an array with the names of every value for the enum class; never null, but may be empty
+     * if there are no values defined for the enum
+     */
+    public static String[] enumOptions(Class<? extends Enum<?>> enumClass) {
+        Objects.requireNonNull(enumClass);
+        if (!enumClass.isEnum()) {
+            throw new IllegalArgumentException("Class " + enumClass + " is not an enumerable type");
+        }
+
+        return Stream.of(enumClass.getEnumConstants())
+                .map(Object::toString)
+                .toArray(String[]::new);
     }
 
 }

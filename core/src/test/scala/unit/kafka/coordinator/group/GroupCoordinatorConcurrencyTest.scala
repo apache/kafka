@@ -207,9 +207,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: JoinGroupCallback): Unit = {
-      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false, "clientId", "clientHost",
-       DefaultRebalanceTimeout, DefaultSessionTimeout,
-       protocolType, protocols, responseCallback)
+      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false,
+        supportSkippingAssignment = false, "clientId", "clientHost", DefaultRebalanceTimeout,
+        DefaultSessionTimeout, protocolType, protocols, responseCallback)
       replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {

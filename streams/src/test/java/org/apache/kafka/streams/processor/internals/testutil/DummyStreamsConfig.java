@@ -17,21 +17,27 @@
 package org.apache.kafka.streams.processor.internals.testutil;
 
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 
 import java.util.Properties;
 
 public class DummyStreamsConfig extends StreamsConfig {
 
-    private final static Properties PROPS = dummyProps();
 
     public DummyStreamsConfig() {
-        super(PROPS);
+        super(dummyProps(ProcessingMode.AT_LEAST_ONCE));
     }
 
-    private static Properties dummyProps() {
+    public DummyStreamsConfig(final ProcessingMode processingMode) {
+        super(dummyProps(processingMode));
+    }
+
+    private static Properties dummyProps(final ProcessingMode processingMode) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-application");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfigUtils.processingModeString(processingMode));
         return props;
     }
 }

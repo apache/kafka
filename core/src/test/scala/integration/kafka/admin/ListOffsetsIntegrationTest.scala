@@ -41,7 +41,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     createTopic(topicName, 1, 1.toShort)
     produceMessages()
     adminClient = Admin.create(Map[String, Object](
-      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> brokerList
+      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()
     ).asJava)
   }
 

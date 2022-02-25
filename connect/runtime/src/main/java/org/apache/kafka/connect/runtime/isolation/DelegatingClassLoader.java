@@ -183,9 +183,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
-        String fullName = aliases.containsKey(connectorClassOrAlias)
-                          ? aliases.get(connectorClassOrAlias)
-                          : connectorClassOrAlias;
+        String fullName = aliases.getOrDefault(connectorClassOrAlias, connectorClassOrAlias);
         ClassLoader classLoader = pluginClassLoader(fullName);
         if (classLoader == null) classLoader = this;
         log.debug(
@@ -429,7 +427,7 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        String fullName = aliases.containsKey(name) ? aliases.get(name) : name;
+        String fullName = aliases.getOrDefault(name, name);
         PluginClassLoader pluginLoader = pluginClassLoader(fullName);
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);

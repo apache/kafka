@@ -278,7 +278,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -300,7 +300,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         //Equally distributing tasks across member
         leaderAssignment = deserializeAssignment(result, leaderId);
@@ -337,7 +337,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -366,7 +366,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -386,7 +386,7 @@ public class WorkerCoordinatorIncrementalTest {
         time.sleep(rebalanceDelay);
 
         // A third rebalance before the delay expires won't change the assignments
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -405,7 +405,7 @@ public class WorkerCoordinatorIncrementalTest {
         time.sleep(rebalanceDelay + 1);
 
         // A rebalance after the delay expires re-assigns the lost tasks
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -435,7 +435,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -463,7 +463,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -485,7 +485,7 @@ public class WorkerCoordinatorIncrementalTest {
         // A third rebalance before the delay expires won't change the assignments even if the
         // member returns in the meantime
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -510,7 +510,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         time.sleep(rebalanceDelay + 1);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         // A rebalance after the delay expires re-assigns the lost tasks to the returning member
         leaderAssignment = deserializeAssignment(result, leaderId);

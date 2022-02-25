@@ -101,7 +101,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
 
-    private ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -515,7 +515,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 }
 
             }
-            return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
+            return mergeConfigInfos(connType, configInfos, consumerConfigInfos, adminConfigInfos);
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
