@@ -708,7 +708,6 @@ public class ReplicationControlManager {
                 builder.setTargetLeaderRecoveryState(
                     LeaderRecoveryState.of(partitionData.leaderRecoveryState()));
                 Optional<ApiMessageAndVersion> record = builder.build();
-                Errors result = Errors.NONE;
                 if (record.isPresent()) {
                     records.add(record.get());
                     PartitionChangeRecord change = (PartitionChangeRecord) record.get().message();
@@ -748,7 +747,7 @@ public class ReplicationControlManager {
 
                 responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(partitionId).
-                    setErrorCode(result.code()).
+                    setErrorCode(Errors.NONE.code()).
                     setLeaderId(partition.leader).
                     setIsr(Replicas.toList(partition.isr)).
                     setLeaderRecoveryState(partition.leaderRecoveryState.value()).
