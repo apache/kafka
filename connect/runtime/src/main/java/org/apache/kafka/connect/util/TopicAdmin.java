@@ -707,6 +707,7 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     protected Map<TopicPartition, Long> retryEndOffsets(Set<TopicPartition> partitions) {
+        // maxRetries will be 0 or higher, enforced by the admin client when it is instantiated and configured
         int maxRetries = Integer.parseInt(adminConfig.getOrDefault(AdminClientConfig.RETRIES_CONFIG, DEFAULT_ADMIN_CLIENT_RETRIES).toString());
         long retryBackoffMs = Long.parseLong(adminConfig.getOrDefault(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, DEFAULT_ADMIN_CLIENT_BACKOFF_MS).toString());
 

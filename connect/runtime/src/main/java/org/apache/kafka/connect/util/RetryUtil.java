@@ -29,25 +29,29 @@ public class RetryUtil {
     private static final Logger log = LoggerFactory.getLogger(RetryUtil.class);
 
     /**
-     * The method executes the callable, and performs retries if
-     * {@link org.apache.kafka.connect.errors.RetriableException} is being thrown.  If other types of exceptions is
-     * caught, then the same exception will be rethrown.  If all retries are exhausted, then the last
-     * exception is wrapped into a {@link org.apache.kafka.connect.errors.ConnectException} and rethrown.
+     * The method executes the callable at least once, optionally retrying the callable if
+     * {@link org.apache.kafka.connect.errors.RetriableException} is being thrown.  If all retries are exhausted,
+     * then the last exception is wrapped with a {@link org.apache.kafka.connect.errors.ConnectException} and thrown.
      *
-     * The callable task will be executed at least once.  If <code>maxRetries</code> is set to 0, the task will be
+     * <p>If <code>maxRetries</code> is set to 0, the task will be
      * executed exactly once.  If <code>maxRetries</code> is set to <code>n</code>, the callable will be executed at
      * most <code>n + 1</code> times.
      *
-     * If <code>retryBackoffMs</code> is set to 0, no wait will happen in between the retries.
+     * <p>If <code>retryBackoffMs</code> is set to 0, no wait will happen in between the retries.
      *
-     * @param callable The task to execute.
-     * @param maxRetries Maximum number of retries.
-     * @param retryBackoffMs Delay time to retry the callable task upon receiving a
-     * {@link org.apache.kafka.connect.errors.RetriableException}.
+     * @param callable the function to execute.
+     * @param maxRetries maximum number of retries; must be 0 or more
+     * @param retryBackoffMs the number of milliseconds to delay upon receiving a
+     * {@link org.apache.kafka.connect.errors.RetriableException} before retrying again; must be 0 or more
      *
      * @throws ConnectException If the task exhausted all the retries.
      */
     public static <T> T retry(Callable<T> callable, long maxRetries, long retryBackoffMs) throws Exception {
+        if (maxRetries <= 0) {
+            // no retry
+            return callable.call();
+        }
+
         Throwable lastError = null;
         int attempt = 0;
         final long maxAttempts = maxRetries + 1;
@@ -56,17 +60,17 @@ public class RetryUtil {
                 return callable.call();
             } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
                 log.warn("RetriableException caught on attempt {}, retrying automatically up to {} more times. " +
-                        "Reason: {}", attempt, maxRetries - attempt, e.getMessage());
+                        "Reason: {}", attempt, maxRetries - attempt, e.getMessage(), e);
                 lastError = e;
             } catch (WakeupException e) {
                 lastError = e;
-            } catch (Exception e) {
-                log.warn("Non-retriable exception caught. Re-throwing. Reason: {}, {}", e.getClass(), e.getMessage());
-                throw e;
             }
-            Utils.sleep(retryBackoffMs);
+
+            if (attempt < maxAttempts) {
+                Utils.sleep(retryBackoffMs);
+            }
         }
 
-        throw new ConnectException("Fail to retry the task after " + maxRetries + " attempts.  Reason: " + lastError, lastError);
+        throw new ConnectException("Fail to retry the task after " + maxAttempts + " attempts.  Reason: " + lastError.getMessage(), lastError);
     }
 }

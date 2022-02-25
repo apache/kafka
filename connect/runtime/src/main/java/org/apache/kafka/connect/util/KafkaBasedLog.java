@@ -325,11 +325,11 @@ public class KafkaBasedLog<K, V> {
      * flag enables retry, upon catching such exception, if it is set to <code>True</code>.
      *
      * @param shouldRetry Boolean flag to enable retry for the admin client <code>listOffsets</code> call.
+     * @see TopicAdmin#retryEndOffsets
      */
 
     private void readToLogEnd(boolean shouldRetry) {
         Set<TopicPartition> assignment = consumer.assignment();
-        // it will subsequently invoke the listOffsets call here
         Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment, shouldRetry);
         log.trace("Reading to end of log offsets {}", endOffsets);
 
