@@ -28,15 +28,35 @@ import java.util.concurrent.Callable;
 public class RetryUtil {
     private static final Logger log = LoggerFactory.getLogger(RetryUtil.class);
 
+    /**
+     * The method executes the callable, and performs retries if
+     * {@link org.apache.kafka.connect.errors.RetriableException} is being thrown.  If other types of exceptions is
+     * caught, then the same exception will be rethrown.  If all retries are exhausted, then the last
+     * exception is wrapped into a {@link org.apache.kafka.connect.errors.ConnectException} and rethrown.
+     *
+     * The callable task will be executed at least once.  If <code>maxRetries</code> is set to 0, the task will be
+     * executed exactly once.  If <code>maxRetries</code> is set to <code>n</code>, the callable will be executed at
+     * most <code>n + 1</code> times.
+     *
+     * If <code>retryBackoffMs</code> is set to 0, no wait will happen in between the retries.
+     *
+     * @param callable The task to execute.
+     * @param maxRetries Maximum number of retries.
+     * @param retryBackoffMs Delay time to retry the callable task upon receiving a
+     * {@link org.apache.kafka.connect.errors.RetriableException}.
+     *
+     * @throws ConnectException If the task exhausted all the retries.
+     */
     public static <T> T retry(Callable<T> callable, long maxRetries, long retryBackoffMs) throws Exception {
         Throwable lastError = null;
-        int retries = 0;
-        while (retries++ < maxRetries) {
+        int attempt = 0;
+        long maxAttempts = maxRetries + 1;
+        while (attempt++ < maxAttempts) {
             try {
                 return callable.call();
             } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
                 log.warn("RetriableException caught, retrying automatically up to {} more times. " +
-                        "Reason: {}", maxRetries - retries, e.getMessage());
+                        "Reason: {}", maxRetries - attempt, e.getMessage());
                 lastError = e;
             } catch (WakeupException e) {
                 lastError = e;
@@ -47,6 +67,6 @@ public class RetryUtil {
             Utils.sleep(retryBackoffMs);
         }
 
-        throw new ConnectException("Fail to retry the operation after " + maxRetries + " attempts.  Reason: " + lastError, lastError);
+        throw new ConnectException("Fail to retry the task after " + maxRetries + " attempts.  Reason: " + lastError, lastError);
     }
 }
