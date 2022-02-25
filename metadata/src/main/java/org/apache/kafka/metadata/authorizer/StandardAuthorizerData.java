@@ -343,13 +343,13 @@ public class StandardAuthorizerData {
      * The set of operations which imply DESCRIBE permission, when used in an ALLOW acl.
      */
     private static final Set<AclOperation> IMPLIES_DESCRIBE = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE, READ, WRITE, DELETE, ALTER, ALL));
+        EnumSet.of(DESCRIBE, READ, WRITE, DELETE, ALTER));
 
     /**
      * The set of operations which imply DESCRIBE_CONFIGS permission, when used in an ALLOW acl.
      */
     private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE_CONFIGS, ALTER_CONFIGS, ALL));
+        EnumSet.of(DESCRIBE_CONFIGS, ALTER_CONFIGS));
 
     /**
      * Determine what the result of applying an ACL to the given action and request
@@ -383,23 +383,26 @@ public class StandardAuthorizerData {
         //
         // But this rule only applies to ALLOW ACLs. So for example, a DENY ACL for READ
         // on a resource does not DENY describe for that resource.
-        if (acl.permissionType().equals(ALLOW)) {
-            switch (action.operation()) {
-                case DESCRIBE:
-                    if (!IMPLIES_DESCRIBE.contains(acl.operation())) return null;
-                    break;
-                case DESCRIBE_CONFIGS:
-                    if (!IMPLIES_DESCRIBE_CONFIGS.contains(acl.operation())) return null;
-                    break;
-                default:
-                    if (acl.operation() != ALL && action.operation() != acl.operation()) {
-                        return null;
-                    }
-                    break;
+        if (acl.operation() != ALL) {
+            if (acl.permissionType().equals(ALLOW)) {
+                switch (action.operation()) {
+                    case DESCRIBE:
+                        if (!IMPLIES_DESCRIBE.contains(acl.operation())) return null;
+                        break;
+                    case DESCRIBE_CONFIGS:
+                        if (!IMPLIES_DESCRIBE_CONFIGS.contains(acl.operation())) return null;
+                        break;
+                    default:
+                        if (action.operation() != acl.operation()) {
+                            return null;
+                        }
+                        break;
+                }
+            } else if (action.operation() != acl.operation()) {
+                return null;
             }
-        } else if (acl.operation() != ALL && action.operation() != acl.operation()) {
-            return null;
         }
+
         return acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED;
     }
 

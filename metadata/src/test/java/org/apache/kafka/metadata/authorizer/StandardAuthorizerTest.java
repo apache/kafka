@@ -285,7 +285,7 @@ public class StandardAuthorizerTest {
                 newAction(DESCRIBE_CONFIGS, TOPIC, "bar"),
                 newAction(DESCRIBE, TOPIC, "baz"))));
 
-        assertEquals(Arrays.asList(ALLOWED, DENIED, DENIED), authorizer.authorize(
+        assertEquals(Arrays.asList(ALLOWED, DENIED, ALLOWED), authorizer.authorize(
             newRequestContext("bob"),
             Arrays.asList(
                 newAction(WRITE, TOPIC, "foo"),
