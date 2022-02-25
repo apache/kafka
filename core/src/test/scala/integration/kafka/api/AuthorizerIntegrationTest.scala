@@ -13,6 +13,7 @@
 package kafka.api
 
 import java.lang.{Byte => JByte}
+import java.net.InetAddress
 import java.time.Duration
 import java.util
 import java.util.concurrent.ExecutionException
@@ -67,6 +68,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import java.util.Collections.singletonList
+
+import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
 
 import scala.annotation.nowarn
 import scala.collection.mutable
@@ -2401,6 +2404,34 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
       testDescribeClusterClusterAuthorizedOperations(version.toShort, expectedClusterAuthorizedOperations)
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testHostAddressBasedAcls(quorum: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    removeAllClientAcls()
+
+    val acls = Set(
+      new AccessControlEntry(clientPrincipalString, InetAddress.getLocalHost.getHostAddress, DESCRIBE, ALLOW)
+    )
+
+    addAndVerifyAcls(acls, topicResource)
+
+    val metadataRequestTopic = new MetadataRequestTopic()
+      .setName(topic)
+
+    val metadataRequest = new MetadataRequest.Builder(new MetadataRequestData()
+      .setTopics(Collections.singletonList(metadataRequestTopic))
+      .setAllowAutoTopicCreation(false)
+    ).build()
+
+    val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
+    val topicResponseOpt = metadataResponse.topicMetadata().asScala.find(_.topic == topic)
+    assertTrue(topicResponseOpt.isDefined)
+
+    val topicResponse = topicResponseOpt.get
+    assertEquals(Errors.NONE, topicResponse.error)
   }
 
   private def testDescribeClusterClusterAuthorizedOperations(
