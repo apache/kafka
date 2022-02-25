@@ -26,6 +26,8 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -254,8 +256,9 @@ public class PartitionChangeBuilderTest {
                 build());
     }
 
-    @Test
-    public void testChangeInLeadershipDoesNotChangeRecoveryState() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported) {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
@@ -277,7 +280,7 @@ public class PartitionChangeBuilderTest {
             0,
             brokerId -> false,
             () -> false,
-            true
+            isLeaderRecoverySupported
         );
         // Set the target ISR to empty to indicate that the last leader is offline
         offlineBuilder.setTargetIsr(Collections.emptyList());
@@ -303,7 +306,7 @@ public class PartitionChangeBuilderTest {
             0,
             brokerId -> true,
             () -> false,
-            true
+            isLeaderRecoverySupported
         );
 
         // The only broker in the ISR is elected leader and stays in the recovering
@@ -317,8 +320,10 @@ public class PartitionChangeBuilderTest {
         assertEquals(recoveryState, registration.leaderRecoveryState);
     }
 
-    @Test
-    void testUncleanSetsLeaderRecoveringState() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported) {
+        final byte noChange = (byte) -1;
         int leaderId = 1;
         PartitionRegistration registration = new PartitionRegistration(
             new int[] {leaderId, leaderId + 1, leaderId + 2},
@@ -338,7 +343,7 @@ public class PartitionChangeBuilderTest {
             0,
             brokerId -> brokerId == leaderId,
             () -> true,
-            true
+            isLeaderRecoverySupported
         );
 
         // The partition should stay as recovering
@@ -346,15 +351,26 @@ public class PartitionChangeBuilderTest {
             .build()
             .get()
             .message();
-        assertEquals(LeaderRecoveryState.RECOVERING.value(), changeRecord.leaderRecoveryState());
+
+        byte expectedRecoveryChange = noChange;
+        if (isLeaderRecoverySupported) {
+            expectedRecoveryChange = LeaderRecoveryState.RECOVERING.value();
+        }
+
+        assertEquals(expectedRecoveryChange, changeRecord.leaderRecoveryState());
         assertEquals(leaderId, changeRecord.leader());
         assertEquals(1, changeRecord.isr().size());
         assertEquals(leaderId, changeRecord.isr().get(0));
 
         registration = registration.merge(changeRecord);
 
+        LeaderRecoveryState expectedRecovery = LeaderRecoveryState.RECOVERED;
+        if (isLeaderRecoverySupported) {
+            expectedRecovery = LeaderRecoveryState.RECOVERING;
+        }
+
         assertEquals(leaderId, registration.leader);
         assertEquals(leaderId, registration.isr[0]);
-        assertEquals(LeaderRecoveryState.RECOVERING, registration.leaderRecoveryState);
+        assertEquals(expectedRecovery, registration.leaderRecoveryState);
     }
 }
