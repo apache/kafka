@@ -320,11 +320,11 @@ public class KafkaBasedLog<K, V> {
     }
 
     /**
-     * This method finds the end offsets using the <code>listOffsets</code> method of the admin client.
-     * As the <code>listOffsets</code> method might throw a {@link RetriableException}, the <code>shouldRetry</code>
-     * flag enables retry, upon catching such exception, if it is set to <code>True</code>.
+     * This method finds the end offsets using the {@code listOffsets()} method of the admin client.
+     * As the {@code listOffsets()} method might throw a {@link RetriableException}, the {@code shouldRetry}
+     * flag enables retry, upon catching such exception, if it is set to {@code True}.
      *
-     * @param shouldRetry Boolean flag to enable retry for the admin client <code>listOffsets</code> call.
+     * @param shouldRetry Boolean flag to enable retry for the admin client {@code listOffsets()} call.
      * @see TopicAdmin#retryEndOffsets
      */
 

@@ -24,7 +24,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.powermock.modules.junit4.PowerMockRunner;
 
@@ -33,7 +32,6 @@ import java.util.concurrent.Callable;
 @RunWith(PowerMockRunner.class)
 public class RetryUtilTest {
 
-    @Mock
     private Callable<String> mockCallable;
 
     @SuppressWarnings("unchecked")
