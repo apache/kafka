@@ -217,8 +217,6 @@ public class MirrorClientTest {
         // Case when mapping is not contain topic it should behave as DefaultReplicationPolicy
         assertEquals("primary.topic1", client.replicationPolicy()
                 .formatRemoteTopic("primary", "topic1"));
-        assertEquals("primary", client.replicationPolicy()
-                .topicSource("topic1"));
         // Heartbeats are handled as a special case as it is mentioned in the maping
         assertEquals("backup.source_heartbeats", client.replicationPolicy()
                 .formatRemoteTopic("backup", "heartbeats"));
