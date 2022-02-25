@@ -105,7 +105,7 @@ class KafkaController(val config: KafkaConfig,
     new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
   val partitionStateMachine: PartitionStateMachine = new ZkPartitionStateMachine(config, stateChangeLogger, controllerContext, zkClient,
     new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
-  val topicDeletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
+  private val topicDeletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
     partitionStateMachine, new ControllerDeletionClient(this, zkClient))
 
   private val controllerChangeHandler = new ControllerChangeHandler(eventManager)
@@ -216,6 +216,10 @@ class KafkaController(val config: KafkaConfig,
     if (isActive) {
       eventManager.put(TopicUncleanLeaderElectionEnable(topic))
     }
+  }
+
+  def isTopicQueuedForDeletion(topic: String): Boolean = {
+    topicDeletionManager.isTopicQueuedUpForDeletion(topic)
   }
 
   private def state: ControllerState = eventManager.state
@@ -2403,8 +2407,8 @@ class KafkaController(val config: KafkaConfig,
         case Left(error) => callback.apply(new AllocateProducerIdsResponseData().setErrorCode(error.code))
         case Right(pidBlock) => callback.apply(
           new AllocateProducerIdsResponseData()
-            .setProducerIdStart(pidBlock.producerIdStart())
-            .setProducerIdLen(pidBlock.producerIdLen()))
+            .setProducerIdStart(pidBlock.firstProducerId())
+            .setProducerIdLen(pidBlock.size()))
       }
     }
     eventManager.put(AllocateProducerIds(allocateProducerIdsRequest.brokerId,

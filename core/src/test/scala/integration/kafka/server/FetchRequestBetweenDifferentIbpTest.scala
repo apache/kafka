@@ -61,7 +61,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
     ensureControllerWithIBP(version)
     assertEquals(controllerBroker, controllerSocketServer.config.brokerId)
-    val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
+    val partitionLeaders = createTopicWithAssignment(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
 
     assertEquals(1, partitionLeaders(0))
@@ -73,7 +73,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     producer.send(record2)
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
-    val count = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
+    val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count)
   }
 
@@ -97,7 +97,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Ensure controller version = version1
     ensureControllerWithIBP(version1)
     assertEquals(broker1, controllerSocketServer.config.brokerId)
-    val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
+    val partitionLeaders = createTopicWithAssignment(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
     assertEquals(1, partitionLeaders(0))
     assertEquals(0, partitionLeaders(1))
@@ -109,14 +109,14 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
 
-    val count = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
+    val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count)
 
     // Make controller version2
     ensureControllerWithIBP(version2)
     assertEquals(broker2, controllerSocketServer.config.brokerId)
     // Create a new topic
-    createTopic(topic2,  Map(0 -> Seq(1, 0, 2)))
+    createTopicWithAssignment(topic2,  Map(0 -> Seq(1, 0, 2)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic2, 1)
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
 
@@ -128,7 +128,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Assign this new topic in addition to the old topics.
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic2, 0)))
 
-    val count2 = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
+    val count2 = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count2)
   }
 

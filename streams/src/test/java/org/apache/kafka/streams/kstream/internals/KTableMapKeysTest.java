@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -39,7 +39,6 @@ import static org.junit.Assert.assertEquals;
 public class KTableMapKeysTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testMapKeysConvertingToStream() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -60,7 +59,7 @@ public class KTableMapKeysTest {
         final int[] originalKeys = new int[] {1, 2, 3};
         final String[] values = new String[] {"V_ONE", "V_TWO", "V_THREE"};
 
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         convertedStream.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

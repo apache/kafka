@@ -772,9 +772,9 @@ object ProducerIdBlockZNode {
 
   def generateProducerIdBlockJson(producerIdBlock: ProducerIdsBlock): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> CurrentVersion,
-      "broker" -> producerIdBlock.brokerId,
-      "block_start" -> producerIdBlock.producerIdStart.toString,
-      "block_end" -> producerIdBlock.producerIdEnd.toString).asJava
+      "broker" -> producerIdBlock.assignedBrokerId,
+      "block_start" -> producerIdBlock.firstProducerId.toString,
+      "block_end" -> producerIdBlock.lastProducerId.toString).asJava
     )
   }
 

@@ -236,8 +236,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
     val topic2 = "topic2"
-    createTopic(topic1, replicaAssignment)
-    createTopic(topic2, replicaAssignment)
+    createTopicWithAssignment(topic1, replicaAssignment)
+    createTopicWithAssignment(topic2, replicaAssignment)
 
     // if version < 9, return ZERO_UUID in MetadataResponse
     val resp1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 0, 9).build(), Some(anySocketServer))
@@ -264,7 +264,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testPreferredReplica(quorum: String): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
-    createTopic("t1", replicaAssignment)
+    createTopicWithAssignment("t1", replicaAssignment)
     // Test metadata on two different brokers to ensure that metadata propagation works correctly
     val responses = Seq(0, 1).map(index =>
       sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(),

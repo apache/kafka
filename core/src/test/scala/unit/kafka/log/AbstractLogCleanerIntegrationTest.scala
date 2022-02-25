@@ -101,13 +101,15 @@ abstract class AbstractLogCleanerIntegrationTest {
         deleteDelay = deleteDelay,
         segmentSize = segmentSize,
         maxCompactionLagMs = maxCompactionLagMs))
-      val log = UnifiedLog(dir,
-        logConfig,
+      val log = UnifiedLog(
+        dir = dir,
+        config = logConfig,
         logStartOffset = 0L,
         recoveryPoint = 0L,
         scheduler = time.scheduler,
         time = time,
         brokerTopicStats = new BrokerTopicStats,
+        maxTransactionTimeoutMs = 5 * 60 * 1000,
         maxProducerIdExpirationMs = 60 * 60 * 1000,
         producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
         logDirFailureChannel = new LogDirFailureChannel(10),

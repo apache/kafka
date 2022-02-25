@@ -320,7 +320,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
         Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
         Map<String, String> sourceToRemoteTopics = knownSourceTopics.stream()
-                .collect(Collectors.toMap(Function.identity(), sourceTopic -> formatRemoteTopic(sourceTopic)));
+                .collect(Collectors.toMap(Function.identity(), this::formatRemoteTopic));
 
         // compute existing and new source topics
         Map<Boolean, Set<String>> partitionedSourceTopics = knownSourceTopics.stream()

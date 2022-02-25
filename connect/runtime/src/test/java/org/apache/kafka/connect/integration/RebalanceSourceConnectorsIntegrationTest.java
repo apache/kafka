@@ -357,10 +357,10 @@ public class RebalanceSourceConnectorsIntegrationTest {
             assertNotEquals("Found no tasks running!", maxTasks, 0);
             assertEquals("Connector assignments are not unique: " + connectors,
                     connectors.values().size(),
-                    connectors.values().stream().distinct().collect(Collectors.toList()).size());
+                    connectors.values().stream().distinct().count());
             assertEquals("Task assignments are not unique: " + tasks,
                     tasks.values().size(),
-                    tasks.values().stream().distinct().collect(Collectors.toList()).size());
+                    tasks.values().stream().distinct().count());
             assertTrue("Connectors are imbalanced: " + formatAssignment(connectors), maxConnectors - minConnectors < 2);
             assertTrue("Tasks are imbalanced: " + formatAssignment(tasks), maxTasks - minTasks < 2);
             return true;

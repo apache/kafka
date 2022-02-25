@@ -30,7 +30,9 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
@@ -107,7 +109,6 @@ public class GlobalThreadShutDownOrderTest {
     @Rule
     public TestName testName = new TestName();
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
@@ -196,8 +197,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private class GlobalStoreProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, Long> {
+    private class GlobalStoreProcessor implements Processor<String, Long, Void, Void> {
 
         private KeyValueStore<String, Long> store;
         private final String storeName;
@@ -207,14 +207,12 @@ public class GlobalThreadShutDownOrderTest {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            store = (KeyValueStore<String, Long>) context.getStateStore(storeName);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(storeName);
         }
 
         @Override
-        public void process(final String key, final Long value) {
+        public void process(final Record<String, Long> record) {
             firstRecordProcessed = true;
         }
 

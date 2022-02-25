@@ -101,6 +101,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -133,6 +135,10 @@ public class IQv2StoreIntegrationTest {
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final Position POSITION_0 =
+        Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 1L)))));
+    private static final Position POSITION_BOTH =
+        Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 1L), mkEntry(1, 1L)))));
 
     public static class UnknownQuery implements Query<Void> { }
 
@@ -1065,9 +1071,9 @@ public class IQv2StoreIntegrationTest {
         final V result1 = queryResult.getResult();
         final Integer integer = valueExtactor.apply(result1);
         assertThat(integer, is(expectedValue));
-
         assertThat(queryResult.getExecutionInfo(), is(empty()));
-    }
+        assertThat(queryResult.getPosition(), is(POSITION_0));
+    }   
 
     public <V> void shouldHandleRangeQuery(
         final Optional<Integer> lower,
@@ -1123,6 +1129,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 
@@ -1177,6 +1184,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 
@@ -1226,6 +1234,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 
@@ -1272,6 +1281,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 

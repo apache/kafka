@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -44,10 +45,12 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.filterMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 class ActiveTaskCreator {
     private final TopologyMetadata topologyMetadata;
@@ -63,7 +66,7 @@ class ActiveTaskCreator {
     private final Sensor createTaskSensor;
     private final StreamsProducer threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;
-    private final StreamThread.ProcessingMode processingMode;
+    private final ProcessingMode processingMode;
 
     // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
     // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
@@ -93,7 +96,7 @@ class ActiveTaskCreator {
         this.log = log;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        processingMode = StreamThread.processingMode(applicationConfig);
+        processingMode = processingMode(applicationConfig);
 
         if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
@@ -160,17 +163,18 @@ class ActiveTaskCreator {
 
             final LogContext logContext = getLogContext(taskId);
 
-            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
-            if (topology == null) {
-                // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 newUnknownTasks.put(taskId, partitions);
                 continue;
             }
 
+            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
+
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 Task.TaskType.ACTIVE,
-                StreamThread.eosEnabled(applicationConfig),
+                eosEnabled(applicationConfig),
                 logContext,
                 stateDirectory,
                 storeChangelogReader,
@@ -236,7 +240,7 @@ class ActiveTaskCreator {
                                         final ProcessorStateManager stateManager,
                                         final InternalProcessorContext context) {
         final StreamsProducer streamsProducer;
-        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+        if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA) {
             log.info("Creating producer client for task {}", taskId);
             streamsProducer = new StreamsProducer(
                 applicationConfig,

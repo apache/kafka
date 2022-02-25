@@ -101,7 +101,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
 
-    private ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -442,6 +442,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                     enrichedConfigDef,
                     connectorProps
             );
+            connectorProps.entrySet().stream()
+                .filter(e -> e.getValue() == null)
+                .map(Map.Entry::getKey)
+                .forEach(prop ->
+                    validatedConnectorConfig.computeIfAbsent(prop, ConfigValue::new)
+                        .addErrorMessage("Null value can not be supplied as the configuration value.")
+            );
             List<ConfigValue> configValues = new ArrayList<>(validatedConnectorConfig.values());
             Map<String, ConfigKey> configKeys = new LinkedHashMap<>(enrichedConfigDef.configKeys());
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
@@ -508,7 +515,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 }
 
             }
-            return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
+            return mergeConfigInfos(connType, configInfos, consumerConfigInfos, adminConfigInfos);
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }

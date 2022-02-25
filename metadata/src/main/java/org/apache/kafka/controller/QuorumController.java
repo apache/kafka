@@ -19,10 +19,13 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -42,6 +45,7 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -51,6 +55,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
@@ -63,6 +68,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
+import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
+import org.apache.kafka.server.authorizer.AclCreateResult;
+import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -144,6 +152,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
+        private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -225,6 +234,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setAuthorizer(ClusterMetadataAuthorizer authorizer) {
+            this.authorizer = Optional.of(authorizer);
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -247,7 +261,7 @@ public final class QuorumController implements Controller {
                     configDefs, raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
                     sessionTimeoutNs, controllerMetrics, createTopicPolicy,
-                    alterConfigPolicy, configurationValidator);
+                    alterConfigPolicy, configurationValidator, authorizer);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -267,11 +281,16 @@ public final class QuorumController implements Controller {
                 case BROKER_LOGGER:
                     break;
                 case BROKER:
+                    // Cluster configs are always allowed.
+                    if (configResource.name().isEmpty()) break;
+
+                    // Otherwise, check that the broker ID is valid.
                     int brokerId;
                     try {
                         brokerId = Integer.parseInt(configResource.name());
                     } catch (NumberFormatException e) {
-                        brokerId = -1;
+                        throw new InvalidRequestException("Invalid broker name " +
+                            configResource.name());
                     }
                     if (!clusterControl.brokerRegistrations().containsKey(brokerId)) {
                         throw new BrokerIdNotRegisteredException("No broker with id " +
@@ -426,7 +445,8 @@ public final class QuorumController implements Controller {
                         new Section("replication", replicationControl.iterator(committedOffset)),
                         new Section("configuration", configurationControl.iterator(committedOffset)),
                         new Section("clientQuotas", clientQuotaControlManager.iterator(committedOffset)),
-                        new Section("producerIds", producerIdControlManager.iterator(committedOffset))
+                        new Section("producerIds", producerIdControlManager.iterator(committedOffset)),
+                        new Section("acls", aclControlManager.iterator(committedOffset))
                     )
                 );
                 reschedule(0);
@@ -809,6 +829,7 @@ public final class QuorumController implements Controller {
                     lastCommittedEpoch = reader.lastContainedLogEpoch();
                     lastCommittedTimestamp = reader.lastContainedLogTimestamp();
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
+                    authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
                 } finally {
                     reader.close();
                 }
@@ -873,7 +894,9 @@ public final class QuorumController implements Controller {
         purgatory.failAll(newNotControllerException());
 
         if (snapshotRegistry.hasSnapshot(lastCommittedOffset)) {
+            newBytesSinceLastSnapshot = 0;
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+            authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
         } else {
             resetState();
             raftClient.unregister(metaLogListener);
@@ -971,6 +994,12 @@ public final class QuorumController implements Controller {
                 case PRODUCER_IDS_RECORD:
                     producerIdControlManager.replay((ProducerIdsRecord) message);
                     break;
+                case ACCESS_CONTROL_ENTRY_RECORD:
+                    aclControlManager.replay((AccessControlEntryRecord) message, snapshotId);
+                    break;
+                case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
+                    aclControlManager.replay((RemoveAccessControlEntryRecord) message, snapshotId);
+                    break;
                 default:
                     throw new RuntimeException("Unhandled record type " + type);
             }
@@ -1006,6 +1035,9 @@ public final class QuorumController implements Controller {
         }
     }
 
+    /**
+     * Clear all data structures and reset all KRaft state.
+     */
     private void resetState() {
         snapshotGeneratorManager.cancel();
         snapshotRegistry.reset();
@@ -1099,6 +1131,18 @@ public final class QuorumController implements Controller {
     private final ReplicationControlManager replicationControl;
 
     /**
+     * The ClusterMetadataAuthorizer, if one is configured. Note that this will still be
+     * Optional.empty() if an Authorizer is configured that doesn't use __cluster_metadata.
+     */
+    private final Optional<ClusterMetadataAuthorizer> authorizer;
+
+    /**
+     * Manages the standard ACLs in the cluster.
+     * This must be accessed only by the event queue thread.
+     */
+    private final AclControlManager aclControlManager;
+
+    /**
      * Manages generating controller snapshots.
      */
     private final SnapshotGeneratorManager snapshotGeneratorManager = new SnapshotGeneratorManager();
@@ -1169,7 +1213,8 @@ public final class QuorumController implements Controller {
                              ControllerMetrics controllerMetrics,
                              Optional<CreateTopicPolicy> createTopicPolicy,
                              Optional<AlterConfigPolicy> alterConfigPolicy,
-                             ConfigurationValidator configurationValidator) {
+                             ConfigurationValidator configurationValidator,
+                             Optional<ClusterMetadataAuthorizer> authorizer) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1191,6 +1236,9 @@ public final class QuorumController implements Controller {
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl, controllerMetrics, createTopicPolicy);
+        this.authorizer = authorizer;
+        authorizer.ifPresent(a -> a.setAclMutator(this));
+        this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
         this.raftClient = raftClient;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
@@ -1233,6 +1281,12 @@ public final class QuorumController implements Controller {
         if (names.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendReadEvent("findTopicIds", deadlineNs,
             () -> replicationControl.findTopicIds(lastCommittedOffset, names));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Uuid>> findAllTopicIds(long deadlineNs) {
+        return appendReadEvent("findAllTopicIds", deadlineNs,
+            () -> replicationControl.findAllTopicIds(lastCommittedOffset));
     }
 
     @Override
@@ -1397,8 +1451,8 @@ public final class QuorumController implements Controller {
         return appendWriteEvent("allocateProducerIds",
             () -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
             .thenApply(result -> new AllocateProducerIdsResponseData()
-                    .setProducerIdStart(result.producerIdStart())
-                    .setProducerIdLen(result.producerIdLen()));
+                    .setProducerIdStart(result.firstProducerId())
+                    .setProducerIdLen(result.size()));
     }
 
     @Override
@@ -1425,6 +1479,16 @@ public final class QuorumController implements Controller {
             future.complete(snapshotGeneratorManager.generator.lastContainedLogOffset());
         });
         return future;
+    }
+
+    @Override
+    public CompletableFuture<List<AclCreateResult>> createAcls(List<AclBinding> aclBindings) {
+        return appendWriteEvent("createAcls", () -> aclControlManager.createAcls(aclBindings));
+    }
+
+    @Override
+    public CompletableFuture<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> filters) {
+        return appendWriteEvent("deleteAcls", () -> aclControlManager.deleteAcls(filters));
     }
 
     @Override

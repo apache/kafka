@@ -30,7 +30,7 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -604,7 +604,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
     producer.initTransactions()
-    assertThrows(classOf[KafkaException], () => producer.initTransactions())
+    assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
   @Test
@@ -752,7 +752,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   private def createReadCommittedConsumer(group: String = "group",
                                           maxPollRecords: Int = 500,
                                           props: Properties = new Properties) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
       groupId = group,
       enableAutoCommit = false,
       readCommitted = true,
@@ -762,7 +762,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   private def createReadUncommittedConsumer(group: String) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
       groupId = group,
       enableAutoCommit = false)
     nonTransactionalConsumers += consumer
