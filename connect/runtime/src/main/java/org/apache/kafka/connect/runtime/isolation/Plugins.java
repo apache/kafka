@@ -174,7 +174,7 @@ public class Plugins {
     }
 
     public Object newPlugin(String classOrAlias) throws ClassNotFoundException {
-        Class<? extends Object> klass = pluginClass(delegatingLoader, classOrAlias, Object.class);
+        Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class);
         return newPlugin(klass);
     }
 

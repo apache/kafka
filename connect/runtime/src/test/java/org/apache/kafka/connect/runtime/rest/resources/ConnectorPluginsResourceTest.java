@@ -399,13 +399,15 @@ public class ConnectorPluginsResourceTest {
     }
 
     @Test
-    public void testConnectorPluginsIncludesTypeAndVersionInformation() throws Exception {
+    public void testConnectorPluginsIncludesClassTypeAndVersionInformation() throws Exception {
         ConnectorPluginInfo sinkInfo = newInfo(SampleSinkConnector.class);
         ConnectorPluginInfo sourceInfo = newInfo(SampleSourceConnector.class);
         assertEquals(PluginType.SINK.toString(), sinkInfo.type());
         assertEquals(PluginType.SOURCE.toString(), sourceInfo.type());
         assertEquals(SampleSinkConnector.VERSION, sinkInfo.version());
         assertEquals(SampleSourceConnector.VERSION, sourceInfo.version());
+        assertEquals(SampleSinkConnector.class.getName(), sinkInfo.className());
+        assertEquals(SampleSourceConnector.class.getName(), sourceInfo.className());
 
         final ObjectMapper objectMapper = new ObjectMapper();
         String serializedSink = objectMapper.writeValueAsString(ConnectorType.SINK);

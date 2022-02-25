@@ -89,11 +89,12 @@ public class ConnectorPluginInfo {
     }
 
     public static final class NoVersionFilter {
-        @Override
+        // This method is used by Jackson to filter the version field for plugins that don't have a version
         public boolean equals(Object obj) {
             return DelegatingClassLoader.UNDEFINED_VERSION.equals(obj);
         }
 
+        // Dummy hashCode method to not fail compilation because of equals() method
         @Override
         public int hashCode() {
             return super.hashCode();
