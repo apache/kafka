@@ -20,7 +20,7 @@ package kafka.server
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.requests.AbstractResponse
 
 sealed trait MetadataSupport {
@@ -76,8 +76,6 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager],
                      metadataCache: ZkMetadataCache) extends MetadataSupport {
-  val adminZkClient = new AdminZkClient(zkClient)
-
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
 

@@ -540,7 +540,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private void readConnectorStatus(String key, byte[] value) {
         String connector = parseConnectorStatusKey(key);
-        if (connector == null || connector.isEmpty()) {
+        if (connector.isEmpty()) {
             log.warn("Discarding record with invalid connector status key {}", key);
             return;
         }

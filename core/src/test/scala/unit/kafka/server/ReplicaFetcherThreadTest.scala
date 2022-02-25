@@ -35,10 +35,11 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.SystemTime
-import org.easymock.EasyMock._
-import org.easymock.{Capture, CaptureType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
+import org.mockito.Mockito.{mock, never, times, verify, when}
 
 import java.nio.charset.StandardCharsets
 import java.util
@@ -96,8 +97,7 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
-    replay(replicaManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     val thread = new ReplicaFetcherThread(
       name = "bob",
       fetcherId = 0,
@@ -119,34 +119,30 @@ class ReplicaFetcherThreadTest {
     val config = kafkaConfigNoTruncateOnFetch
 
     //Setup all dependencies
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
 
     //Stubs
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.logEndOffset).andReturn(0).anyTimes()
-    expect(log.highWatermark).andReturn(0).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(leaderEpoch)).once()
-    expect(log.latestEpoch).andReturn(Some(leaderEpoch)).once()
-    expect(log.latestEpoch).andReturn(None).once()  // t2p1 doesnt support epochs
-    expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
-      Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.logEndOffset).thenReturn(0)
+    when(log.highWatermark).thenReturn(0)
+    when(log.latestEpoch)
+      .thenReturn(Some(leaderEpoch))
+      .thenReturn(Some(leaderEpoch))
+      .thenReturn(None)  // t2p1 doesn't support epochs
+    when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
+      Some(OffsetAndEpoch(0, leaderEpoch)))
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-
-    //Expectations
-    expect(partition.truncateTo(anyLong(), anyBoolean())).times(3)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsets = Map(
@@ -187,7 +183,7 @@ class ReplicaFetcherThreadTest {
     assertPartitionStates(thread, shouldBeReadyForFetch = true, shouldBeTruncatingLog = false, shouldBeDelayed = false)
 
     //Assert that truncate to is called exactly once (despite two loops)
-    verify(logManager)
+    verify(partition, times(3)).truncateTo(anyLong(), anyBoolean())
   }
 
   /**
@@ -217,12 +213,11 @@ class ReplicaFetcherThreadTest {
   def shouldHandleExceptionFromBlockingSend(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
-    val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
 
-    expect(mockBlockingSend.sendRequest(anyObject())).andThrow(new NullPointerException).once()
+    when(mockBlockingSend.sendRequest(any())).thenThrow(new NullPointerException)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
-    replay(mockBlockingSend, replicaManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
     val thread = new ReplicaFetcherThread(
       name = "bob",
@@ -250,7 +245,7 @@ class ReplicaFetcherThreadTest {
     )
 
     assertEquals(expected, result, "results from leader epoch request should have undefined offset")
-    verify(mockBlockingSend)
+    verify(mockBlockingSend).sendRequest(any())
   }
 
   @Test
@@ -269,30 +264,25 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(props)
 
     //Setup all dependencies
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
 
     //Stubs
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(0).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
-    expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
-      Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(0)
+    when(log.latestEpoch).thenReturn(Some(leaderEpoch))
+    when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
+      Some(OffsetAndEpoch(0, leaderEpoch)))
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-
-    //Expectations
-    expect(partition.truncateTo(anyLong(), anyBoolean())).times(2)
-
-    replay(replicaManager, logManager, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsets = Map(
@@ -319,45 +309,39 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(epochFetchCount, mockNetwork.epochFetchCount)
     assertEquals(3, mockNetwork.fetchCount)
-
-    //Assert that truncate to is called exactly once (despite two loops)
-    verify(logManager)
   }
 
   @Test
   def shouldTruncateToOffsetSpecifiedInEpochOffsetResponse(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
     val config = kafkaConfigNoTruncateOnFetch
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
     val initialLEO = 200
 
     //Stubs
-    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(initialLEO - 1).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
-    expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
-      Some(OffsetAndEpoch(initialLEO, leaderEpoch))).anyTimes()
-    expect(log.logEndOffset).andReturn(initialLEO).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(initialLEO - 1)
+    when(log.latestEpoch).thenReturn(Some(leaderEpoch))
+    when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
+      Some(OffsetAndEpoch(initialLEO, leaderEpoch)))
+    when(log.logEndOffset).thenReturn(initialLEO)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = Map(
@@ -374,45 +358,43 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertTrue(truncateToCapture.getValues.asScala.contains(156),
-               "Expected " + t1p0 + " to truncate to offset 156 (truncation offsets: " + truncateToCapture.getValues + ")")
-    assertTrue(truncateToCapture.getValues.asScala.contains(172),
-               "Expected " + t2p1 + " to truncate to offset 172 (truncation offsets: " + truncateToCapture.getValues + ")")
+    verify(partition, times(2)).truncateTo(truncateToCapture.capture(), anyBoolean())
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(156),
+               "Expected " + t1p0 + " to truncate to offset 156 (truncation offsets: " + truncateToCapture.getAllValues + ")")
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(172),
+               "Expected " + t2p1 + " to truncate to offset 172 (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
   @Test
   def shouldTruncateToOffsetSpecifiedInEpochOffsetResponseIfFollowerHasNoMoreEpochs(): Unit = {
     // Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
     val config = kafkaConfigNoTruncateOnFetch
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val leaderEpochAtFollower = 5
     val leaderEpochAtLeader = 4
     val initialLEO = 200
 
     //Stubs
-    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(initialLEO - 3).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(leaderEpochAtFollower)).anyTimes()
-    expect(log.endOffsetForEpoch(leaderEpochAtLeader)).andReturn(None).anyTimes()
-    expect(log.logEndOffset).andReturn(initialLEO).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(initialLEO - 3)
+    when(log.latestEpoch).thenReturn(Some(leaderEpochAtFollower))
+    when(log.endOffsetForEpoch(leaderEpochAtLeader)).thenReturn(None)
+    when(log.logEndOffset).thenReturn(initialLEO)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = Map(
@@ -429,48 +411,46 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertTrue(truncateToCapture.getValues.asScala.contains(156),
-               "Expected " + t1p0 + " to truncate to offset 156 (truncation offsets: " + truncateToCapture.getValues + ")")
-    assertTrue(truncateToCapture.getValues.asScala.contains(initialLEO),
+    verify(partition, times(2)).truncateTo(truncateToCapture.capture(), anyBoolean())
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(156),
+               "Expected " + t1p0 + " to truncate to offset 156 (truncation offsets: " + truncateToCapture.getAllValues + ")")
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(initialLEO),
                "Expected " + t2p1 + " to truncate to offset " + initialLEO +
-               " (truncation offsets: " + truncateToCapture.getValues + ")")
+               " (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
   @Test
   def shouldFetchLeaderEpochSecondTimeIfLeaderRepliesWithEpochNotKnownToFollower(): Unit = {
     // Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     val config = kafkaConfigNoTruncateOnFetch
 
     // Setup all dependencies
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val initialLEO = 200
 
     // Stubs
-    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(initialLEO - 2).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(5)).anyTimes()
-    expect(log.endOffsetForEpoch(4)).andReturn(
-      Some(OffsetAndEpoch(120, 3))).anyTimes()
-    expect(log.endOffsetForEpoch(3)).andReturn(
-      Some(OffsetAndEpoch(120, 3))).anyTimes()
-    expect(log.logEndOffset).andReturn(initialLEO).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(initialLEO - 2)
+    when(log.latestEpoch).thenReturn(Some(5))
+    when(log.endOffsetForEpoch(4)).thenReturn(
+      Some(OffsetAndEpoch(120, 3)))
+    when(log.endOffsetForEpoch(3)).thenReturn(
+      Some(OffsetAndEpoch(120, 3)))
+    when(log.logEndOffset).thenReturn(initialLEO)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     // Define the offsets for the OffsetsForLeaderEpochResponse
     val offsets = Map(
@@ -505,50 +485,47 @@ class ReplicaFetcherThreadTest {
     assertEquals(2, mockNetwork.epochFetchCount)
     assertEquals(2, mockNetwork.fetchCount)
 
-
+    verify(partition, times(4)).truncateTo(truncateToCapture.capture(), anyBoolean())
     //We should have truncated to the offsets in the second response
-    assertTrue(truncateToCapture.getValues.asScala.contains(102),
-               "Expected " + t1p1 + " to truncate to offset 102 (truncation offsets: " + truncateToCapture.getValues + ")")
-    assertTrue(truncateToCapture.getValues.asScala.contains(101),
-               "Expected " + t1p0 + " to truncate to offset 101 (truncation offsets: " + truncateToCapture.getValues + ")")
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(102),
+               "Expected " + t1p1 + " to truncate to offset 102 (truncation offsets: " + truncateToCapture.getAllValues + ")")
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(101),
+               "Expected " + t1p0 + " to truncate to offset 101 (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
   @Test
   def shouldTruncateIfLeaderRepliesWithDivergingEpochNotKnownToFollower(): Unit = {
 
     // Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     // Setup all dependencies
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createNiceMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val initialLEO = 200
     var latestLogEpoch: Option[Int] = Some(5)
 
     // Stubs
-    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(115).anyTimes()
-    expect(log.latestEpoch).andAnswer(() => latestLogEpoch).anyTimes()
-    expect(log.endOffsetForEpoch(4)).andReturn(Some(OffsetAndEpoch(149, 4))).anyTimes()
-    expect(log.endOffsetForEpoch(3)).andReturn(Some(OffsetAndEpoch(129, 2))).anyTimes()
-    expect(log.endOffsetForEpoch(2)).andReturn(Some(OffsetAndEpoch(119, 1))).anyTimes()
-    expect(log.logEndOffset).andReturn(initialLEO).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(115)
+    when(log.latestEpoch).thenAnswer(_ => latestLogEpoch)
+    when(log.endOffsetForEpoch(4)).thenReturn(Some(OffsetAndEpoch(149, 4)))
+    when(log.endOffsetForEpoch(3)).thenReturn(Some(OffsetAndEpoch(129, 2)))
+    when(log.endOffsetForEpoch(2)).thenReturn(Some(OffsetAndEpoch(119, 1)))
+    when(log.logEndOffset).thenReturn(initialLEO)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     // Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(Collections.emptyMap(), brokerEndPoint, new SystemTime())
@@ -583,10 +560,11 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(2, mockNetwork.fetchCount)
-    assertTrue(truncateToCapture.getValues.asScala.contains(140),
-      "Expected " + t1p0 + " to truncate to offset 140 (truncation offsets: " + truncateToCapture.getValues + ")")
-    assertTrue(truncateToCapture.getValues.asScala.contains(141),
-      "Expected " + t1p1 + " to truncate to offset 141 (truncation offsets: " + truncateToCapture.getValues + ")")
+    verify(partition, times(2)).truncateTo(truncateToCapture.capture(), anyBoolean())
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(140),
+      "Expected " + t1p0 + " to truncate to offset 140 (truncation offsets: " + truncateToCapture.getAllValues + ")")
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(141),
+      "Expected " + t1p1 + " to truncate to offset 141 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
 
     // Loop 3 should truncate because of diverging epoch. Offset truncation is not complete
@@ -599,8 +577,9 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(3, mockNetwork.fetchCount)
-    assertTrue(truncateToCapture.getValues.asScala.contains(129),
-      "Expected to truncate to offset 129 (truncation offsets: " + truncateToCapture.getValues + ")")
+    verify(partition, times(4)).truncateTo(truncateToCapture.capture(), anyBoolean())
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(129),
+      "Expected to truncate to offset 129 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
 
     // Loop 4 should truncate because of diverging epoch. Offset truncation is not complete
@@ -615,8 +594,9 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(4, mockNetwork.fetchCount)
-    assertTrue(truncateToCapture.getValues.asScala.contains(119),
-      "Expected to truncate to offset 119 (truncation offsets: " + truncateToCapture.getValues + ")")
+    verify(partition, times(6)).truncateTo(truncateToCapture.capture(), anyBoolean())
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(119),
+      "Expected to truncate to offset 119 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
   }
 
@@ -624,40 +604,37 @@ class ReplicaFetcherThreadTest {
   def shouldUseLeaderEndOffsetIfInterBrokerVersionBelow20(): Unit = {
 
     // Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
     val config = KafkaConfig.fromProps(props)
 
     // Setup all dependencies
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val initialLEO = 200
 
     // Stubs
-    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(initialLEO - 2).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(5)).anyTimes()
-    expect(log.endOffsetForEpoch(4)).andReturn(
-      Some(OffsetAndEpoch(120, 3))).anyTimes()
-    expect(log.endOffsetForEpoch(3)).andReturn(
-      Some(OffsetAndEpoch(120, 3))).anyTimes()
-    expect(log.logEndOffset).andReturn(initialLEO).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(initialLEO - 2)
+    when(log.latestEpoch).thenReturn(Some(5))
+    when(log.endOffsetForEpoch(4)).thenReturn(
+      Some(OffsetAndEpoch(120, 3)))
+    when(log.endOffsetForEpoch(3)).thenReturn(
+      Some(OffsetAndEpoch(120, 3)))
+    when(log.logEndOffset).thenReturn(initialLEO)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     // Define the offsets for the OffsetsForLeaderEpochResponse with undefined epoch to simulate
     // older protocol version
@@ -683,40 +660,39 @@ class ReplicaFetcherThreadTest {
     assertEquals(2, mockNetwork.fetchCount)
 
     //We should have truncated to the offsets in the first response
-    assertTrue(truncateToCapture.getValues.asScala.contains(155),
-               "Expected " + t1p0 + " to truncate to offset 155 (truncation offsets: " + truncateToCapture.getValues + ")")
-    assertTrue(truncateToCapture.getValues.asScala.contains(143),
-               "Expected " + t1p1 + " to truncate to offset 143 (truncation offsets: " + truncateToCapture.getValues + ")")
+    verify(partition, times(2)).truncateTo(truncateToCapture.capture(), anyBoolean())
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(155),
+               "Expected " + t1p0 + " to truncate to offset 155 (truncation offsets: " + truncateToCapture.getAllValues + ")")
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(143),
+               "Expected " + t1p1 + " to truncate to offset 143 (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
   @Test
   def shouldTruncateToInitialFetchOffsetIfLeaderReturnsUndefinedOffset(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
-    val truncated: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncated: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
     val config = kafkaConfigNoTruncateOnFetch
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val initialFetchOffset = 100
 
     //Stubs
-    expect(partition.truncateTo(capture(truncated), anyBoolean())).anyTimes()
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(initialFetchOffset).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(5)).times(2)
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(initialFetchOffset)
+    when(log.latestEpoch).thenReturn(Some(5))
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-    replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = Map(
@@ -731,6 +707,7 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to initial fetch offset
+    verify(partition).truncateTo(truncated.capture(), anyBoolean())
     assertEquals(initialFetchOffset, truncated.getValue)
   }
 
@@ -738,37 +715,35 @@ class ReplicaFetcherThreadTest {
   def shouldPollIndefinitelyIfLeaderReturnsAnyException(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
-    val truncated: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncated: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
     val config = kafkaConfigNoTruncateOnFetch
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
     val highWaterMark = 100
     val initialLeo = 300
 
     //Stubs
-    expect(log.highWatermark).andReturn(highWaterMark).anyTimes()
-    expect(partition.truncateTo(capture(truncated), anyBoolean())).anyTimes()
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
+    when(log.highWatermark).thenReturn(highWaterMark)
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.latestEpoch).thenReturn(Some(leaderEpoch))
     // this is for the last reply with EpochEndOffset(5, 156)
-    expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
-      Some(OffsetAndEpoch(initialLeo, leaderEpoch))).anyTimes()
-    expect(log.logEndOffset).andReturn(initialLeo).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
+      Some(OffsetAndEpoch(initialLeo, leaderEpoch)))
+    when(log.logEndOffset).thenReturn(initialLeo)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
-    replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = mutable.Map(
@@ -787,7 +762,7 @@ class ReplicaFetcherThreadTest {
     }
 
     //Then should loop continuously while there is no leader
-    assertEquals(0, truncated.getValues.size())
+    verify(partition, never()).truncateTo(anyLong(), anyBoolean())
 
     //New leader elected and replies
     offsetsReply.put(t1p0, newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 156))
@@ -795,6 +770,7 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //Now the final call should have actually done a truncation (to offset 156)
+    verify(partition).truncateTo(truncated.capture(), anyBoolean())
     assertEquals(156, truncated.getValue)
   }
 
@@ -803,28 +779,25 @@ class ReplicaFetcherThreadTest {
     val config = kafkaConfigNoTruncateOnFetch
 
     //Setup all stubs
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val leaderEpoch = 4
 
     //Stub return values
-    expect(partition.truncateTo(0L, false)).times(2)
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(0).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
-    expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
-      Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(0)
+    when(log.latestEpoch).thenReturn(Some(leaderEpoch))
+    when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
+      Some(OffsetAndEpoch(0, leaderEpoch)))
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
     stub(partition, replicaManager, log)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
@@ -849,36 +822,34 @@ class ReplicaFetcherThreadTest {
     //Then none should be TruncatingLog anymore
     assertEquals(Option(Fetching), thread.fetchState(t1p0).map(_.state))
     assertEquals(Option(Fetching), thread.fetchState(t1p1).map(_.state))
+    verify(partition, times(2)).truncateTo(0L, false)
   }
 
   @Test
   def shouldFilterPartitionsMadeLeaderDuringLeaderEpochRequest(): Unit ={
     val config = kafkaConfigNoTruncateOnFetch
-    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
     val initialLEO = 100
 
     //Setup all stubs
-    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val partition: Partition = createMock(classOf[Partition])
-    val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     //Stub return values
-    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).once
-    expect(partition.localLogOrException).andReturn(log).anyTimes()
-    expect(log.highWatermark).andReturn(initialLEO - 2).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(5)).anyTimes()
-    expect(log.endOffsetForEpoch(5)).andReturn(Some(OffsetAndEpoch(initialLEO, 5))).anyTimes()
-    expect(log.logEndOffset).andReturn(initialLEO).anyTimes()
-    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    when(partition.localLogOrException).thenReturn(log)
+    when(log.highWatermark).thenReturn(initialLEO - 2)
+    when(log.latestEpoch).thenReturn(Some(5))
+    when(log.endOffsetForEpoch(5)).thenReturn(Some(OffsetAndEpoch(initialLEO, 5)))
+    when(log.logEndOffset).thenReturn(initialLEO)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
     stub(partition, replicaManager, log)
-
-    replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
@@ -904,6 +875,7 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //Then we should not have truncated the partition that became leader. Exactly one partition should be truncated.
+    verify(partition).truncateTo(truncateToCapture.capture(), anyBoolean())
     assertEquals(49, truncateToCapture.getValue)
   }
 
@@ -911,13 +883,12 @@ class ReplicaFetcherThreadTest {
   def shouldCatchExceptionFromBlockingSendWhenShuttingDownReplicaFetcherThread(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
-    val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
 
-    expect(mockBlockingSend.initiateClose()).andThrow(new IllegalArgumentException()).once()
-    expect(mockBlockingSend.close()).andThrow(new IllegalStateException()).once()
+    when(mockBlockingSend.initiateClose()).thenThrow(new IllegalArgumentException())
+    when(mockBlockingSend.close()).thenThrow(new IllegalStateException())
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
-    replay(mockBlockingSend, replicaManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
     val thread = new ReplicaFetcherThread(
       name = "bob",
@@ -938,7 +909,8 @@ class ReplicaFetcherThreadTest {
     //   3) IllegalStateException thrown by BlockingSend.close() during `awaitShutdown` is not propagated
     thread.initiateShutdown()
     thread.awaitShutdown()
-    verify(mockBlockingSend)
+    verify(mockBlockingSend).initiateClose()
+    verify(mockBlockingSend).close()
   }
 
   @Test
@@ -960,15 +932,14 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
-    val replicaQuota: ReplicaQuota = createNiceMock(classOf[ReplicaQuota])
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
+    val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
 
-    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
-    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
-    expect(replicaQuota.isThrottled(anyObject(classOf[TopicPartition]))).andReturn(false).anyTimes()
-    expect(log.logStartOffset).andReturn(0).anyTimes()
-    replay(log, replicaQuota, replicaManager)
+    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
+    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
+    when(replicaQuota.isThrottled(any[TopicPartition])).thenReturn(false)
+    when(log.logStartOffset).thenReturn(0)
 
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions,
       replicaManager, new Metrics(), new SystemTime(), replicaQuota, Some(mockBlockingSend))
@@ -1047,22 +1018,21 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
 
-    val mockBlockingSend: BlockingSend = createNiceMock(classOf[BlockingSend])
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
 
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
 
-    val partition: Partition = createNiceMock(classOf[Partition])
-    expect(partition.localLogOrException).andReturn(log)
-    expect(partition.isReassigning).andReturn(isReassigning)
-    expect(partition.isAddingLocalReplica).andReturn(isReassigning)
+    val partition: Partition = mock(classOf[Partition])
+    when(partition.localLogOrException).thenReturn(log)
+    when(partition.isReassigning).thenReturn(isReassigning)
+    when(partition.isAddingLocalReplica).thenReturn(isReassigning)
 
-    val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
-    expect(replicaManager.getPartitionOrException(anyObject[TopicPartition])).andReturn(partition)
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
     val brokerTopicStats = new BrokerTopicStats
-    expect(replicaManager.brokerTopicStats).andReturn(brokerTopicStats).anyTimes()
+    when(replicaManager.brokerTopicStats).thenReturn(brokerTopicStats)
 
-    val replicaQuota: ReplicaQuota = createNiceMock(classOf[ReplicaQuota])
-    replay(mockBlockingSend, replicaManager, partition, log, replicaQuota)
+    val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
 
     val thread = new ReplicaFetcherThread(
       name = "bob",
@@ -1094,12 +1064,12 @@ class ReplicaFetcherThreadTest {
   }
 
   def stub(partition: Partition, replicaManager: ReplicaManager, log: UnifiedLog): Unit = {
-    expect(replicaManager.localLogOrException(t1p0)).andReturn(log).anyTimes()
-    expect(replicaManager.getPartitionOrException(t1p0)).andReturn(partition).anyTimes()
-    expect(replicaManager.localLogOrException(t1p1)).andReturn(log).anyTimes()
-    expect(replicaManager.getPartitionOrException(t1p1)).andReturn(partition).anyTimes()
-    expect(replicaManager.localLogOrException(t2p1)).andReturn(log).anyTimes()
-    expect(replicaManager.getPartitionOrException(t2p1)).andReturn(partition).anyTimes()
+    when(replicaManager.localLogOrException(t1p0)).thenReturn(log)
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+    when(replicaManager.localLogOrException(t1p1)).thenReturn(log)
+    when(replicaManager.getPartitionOrException(t1p1)).thenReturn(partition)
+    when(replicaManager.localLogOrException(t2p1)).thenReturn(log)
+    when(replicaManager.getPartitionOrException(t2p1)).thenReturn(partition)
   }
 
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {

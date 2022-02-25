@@ -24,11 +24,11 @@ public class UnknownTopologyException extends StreamsException {
     private static final long serialVersionUID = 1L;
 
     public UnknownTopologyException(final String message, final String namedTopology) {
-        super(message + "due to being unable to locate a Topology named " + namedTopology);
+        super(message + " due to being unable to locate a Topology named " + namedTopology);
     }
 
     public UnknownTopologyException(final String message, final Throwable throwable, final String namedTopology) {
-        super(message + "due to being unable to locate a Topology named " + namedTopology, throwable);
+        super(message + " due to being unable to locate a Topology named " + namedTopology, throwable);
     }
 
 }

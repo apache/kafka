@@ -62,7 +62,7 @@ class ProducerCompressionTest extends QuorumTestHarness {
   def testCompression(compression: String): Unit = {
 
     val producerProps = new Properties()
-    val bootstrapServers = TestUtils.getBrokerListStrFromServers(Seq(server))
+    val bootstrapServers = TestUtils.plaintextBootstrapServers(Seq(server))
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")

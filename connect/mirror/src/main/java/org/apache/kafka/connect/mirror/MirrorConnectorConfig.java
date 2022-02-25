@@ -372,11 +372,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return replicationPolicy().heartbeatsTopic();
     }
 
-    // e.g. source1.heartbeats
-    String targetHeartbeatsTopic() {
-        return replicationPolicy().formatRemoteTopic(sourceClusterAlias(), heartbeatsTopic());
-    }
-
     String checkpointsTopic() {
         return replicationPolicy().checkpointsTopic(sourceClusterAlias());
     }

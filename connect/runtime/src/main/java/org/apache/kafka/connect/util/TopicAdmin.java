@@ -605,7 +605,7 @@ public class TopicAdmin implements AutoCloseable {
             return Collections.emptyMap();
         }
         String bootstrapServers = bootstrapServers();
-        String topicNameList = topics.stream().collect(Collectors.joining(", "));
+        String topicNameList = String.join(", ", topics);
         Collection<ConfigResource> resources = topics.stream()
                                                      .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
                                                      .collect(Collectors.toList());

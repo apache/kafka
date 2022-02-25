@@ -76,10 +76,10 @@ public class ProducerIdControlManagerTest {
     public void testInitialResult() {
         ControllerResult<ProducerIdsBlock> result =
             producerIdControlManager.generateNextProducerId(1, 100);
-        assertEquals(0, result.response().producerIdStart());
-        assertEquals(1000, result.response().producerIdLen());
+        assertEquals(0, result.response().firstProducerId());
+        assertEquals(1000, result.response().size());
         ProducerIdsRecord record = (ProducerIdsRecord) result.records().get(0).message();
-        assertEquals(1000, record.producerIdsEnd());
+        assertEquals(1000, record.nextProducerId());
     }
 
     @Test
@@ -88,11 +88,11 @@ public class ProducerIdControlManagerTest {
             new ProducerIdsRecord()
                 .setBrokerId(1)
                 .setBrokerEpoch(100)
-                .setProducerIdsEnd(42));
+                .setNextProducerId(42));
 
         ProducerIdsBlock range =
             producerIdControlManager.generateNextProducerId(1, 100).response();
-        assertEquals(42, range.producerIdStart());
+        assertEquals(42, range.firstProducerId());
 
         // Can't go backwards in Producer IDs
         assertThrows(RuntimeException.class, () -> {
@@ -100,19 +100,19 @@ public class ProducerIdControlManagerTest {
                 new ProducerIdsRecord()
                     .setBrokerId(1)
                     .setBrokerEpoch(100)
-                    .setProducerIdsEnd(40));
+                    .setNextProducerId(40));
         }, "Producer ID range must only increase");
         range = producerIdControlManager.generateNextProducerId(1, 100).response();
-        assertEquals(42, range.producerIdStart());
+        assertEquals(42, range.firstProducerId());
 
         // Gaps in the ID range are okay.
         producerIdControlManager.replay(
             new ProducerIdsRecord()
                 .setBrokerId(1)
                 .setBrokerEpoch(100)
-                .setProducerIdsEnd(50));
+                .setNextProducerId(50));
         range = producerIdControlManager.generateNextProducerId(1, 100).response();
-        assertEquals(50, range.producerIdStart());
+        assertEquals(50, range.firstProducerId());
     }
 
     @Test
@@ -132,7 +132,7 @@ public class ProducerIdControlManagerTest {
             new ProducerIdsRecord()
                 .setBrokerId(1)
                 .setBrokerEpoch(100)
-                .setProducerIdsEnd(Long.MAX_VALUE - 1));
+                .setNextProducerId(Long.MAX_VALUE - 1));
 
         assertThrows(UnknownServerException.class, () ->
             producerIdControlManager.generateNextProducerId(1, 100));
@@ -149,7 +149,7 @@ public class ProducerIdControlManagerTest {
         assertTrue(snapshotIterator.hasNext());
         List<ApiMessageAndVersion> batch = snapshotIterator.next();
         assertEquals(1, batch.size(), "Producer IDs record batch should only contain a single record");
-        assertEquals(range.producerIdStart() + range.producerIdLen(), ((ProducerIdsRecord) batch.get(0).message()).producerIdsEnd());
+        assertEquals(range.firstProducerId() + range.size(), ((ProducerIdsRecord) batch.get(0).message()).nextProducerId());
         assertFalse(snapshotIterator.hasNext(), "Producer IDs iterator should only contain a single batch");
 
         ProducerIdControlManager newProducerIdManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
@@ -159,9 +159,9 @@ public class ProducerIdControlManagerTest {
         }
 
         // Verify that after reloading state from this "snapshot", we don't produce any overlapping IDs
-        long lastProducerID = range.producerIdStart() + range.producerIdLen() - 1;
+        long lastProducerID = range.firstProducerId() + range.size() - 1;
         range = generateProducerIds(producerIdControlManager, 1, 100);
-        assertTrue(range.producerIdStart() > lastProducerID);
+        assertTrue(range.firstProducerId() > lastProducerID);
     }
 
     static ProducerIdsBlock generateProducerIds(

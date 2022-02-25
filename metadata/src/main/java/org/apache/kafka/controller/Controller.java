@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.authorizer.AclMutator;
 
 import java.util.Collection;
 import java.util.List;
@@ -49,7 +50,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 
-public interface Controller extends AutoCloseable {
+public interface Controller extends AclMutator, AutoCloseable {
     /**
      * Change partition ISRs.
      *
@@ -89,6 +90,16 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(long deadlineNs,
                                                                      Collection<String> topicNames);
+
+    /**
+     * Find the ids for all topic names. Note that this function should only be used for
+     * integration tests.
+     *
+     * @param deadlineNs    The time by which this operation needs to be complete, before
+     *                      we will complete this operation with a timeout.
+     * @return              A future yielding a map from topic name to id.
+     */
+    CompletableFuture<Map<String, Uuid>> findAllTopicIds(long deadlineNs);
 
     /**
      * Find the names for topic ids.

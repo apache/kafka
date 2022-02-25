@@ -25,7 +25,6 @@ import kafka.utils.json.JsonObject
 import kafka.zk.{AdminZkClient, ConfigEntityChangeNotificationSequenceZNode, ConfigEntityChangeNotificationZNode, KafkaZkClient}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.Time
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -87,8 +86,6 @@ object ConfigEntityName {
 class ZkConfigManager(
   private val zkClient: KafkaZkClient,
   private val configHandlers: Map[String, ConfigHandler],
-  private val changeExpirationMs: Long = 15*60*1000,
-  private val time: Time = Time.SYSTEM
 ) extends Logging {
   val adminZkClient = new AdminZkClient(zkClient)
 

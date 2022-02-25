@@ -117,6 +117,7 @@ import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Rebala
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -290,7 +291,7 @@ public abstract class ConsumerCoordinatorTest {
         partitionAssignor.prepare(Collections.singletonMap(consumerId, singletonList(t1p)));
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, mockSubscriptionState)) {
-            coordinator.performAssignment("1", partitionAssignor.name(), metadata);
+            coordinator.onLeaderElected("1", partitionAssignor.name(), metadata, false);
 
             ArgumentCaptor<Collection<String>> topicsCaptor = ArgumentCaptor.forClass(Collection.class);
             // groupSubscribe should be only called 1 time, which is before assignment,
@@ -311,7 +312,7 @@ public abstract class ConsumerCoordinatorTest {
         partitionAssignor.prepare(Collections.singletonMap(consumerId, Arrays.asList(t1p, t2p)));
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, mockSubscriptionState)) {
-            coordinator.performAssignment("1", partitionAssignor.name(), metadata);
+            coordinator.onLeaderElected("1", partitionAssignor.name(), metadata, false);
 
             ArgumentCaptor<Collection<String>> topicsCaptor = ArgumentCaptor.forClass(Collection.class);
             // groupSubscribe should be called 2 times, once before assignment, once after assignment
@@ -386,13 +387,40 @@ public abstract class ConsumerCoordinatorTest {
             if (protocol == COOPERATIVE) {
                 // in cooperative protocol, we should throw exception when validating cooperative assignment
                 Exception e = assertThrows(IllegalStateException.class,
-                    () -> coordinator.performAssignment("1", partitionAssignor.name(), metadata));
+                    () -> coordinator.onLeaderElected("1", partitionAssignor.name(), metadata, false));
                 assertTrue(e.getMessage().contains("Assignor supporting the COOPERATIVE protocol violates its requirements"));
             } else {
                 // in eager protocol, we should not validate assignment
-                coordinator.performAssignment("1", partitionAssignor.name(), metadata);
+                coordinator.onLeaderElected("1", partitionAssignor.name(), metadata, false);
             }
         }
+    }
+
+    @Test
+    public void testOnLeaderElectedShouldSkipAssignment() {
+        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerPartitionAssignor assignor = Mockito.mock(ConsumerPartitionAssignor.class);
+        String assignorName = "mock-assignor";
+        Mockito.when(assignor.name()).thenReturn(assignorName);
+        Mockito.when(assignor.supportedProtocols()).thenReturn(Collections.singletonList(protocol));
+
+        Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
+
+        List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
+        for (Map.Entry<String, List<String>> subscriptionEntry : memberSubscriptions.entrySet()) {
+            ConsumerPartitionAssignor.Subscription subscription = new ConsumerPartitionAssignor.Subscription(subscriptionEntry.getValue());
+            ByteBuffer buf = ConsumerProtocol.serializeSubscription(subscription);
+            metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId(subscriptionEntry.getKey())
+                .setMetadata(buf.array()));
+        }
+
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), Collections.singletonList(assignor), false, mockSubscriptionState)) {
+            assertEquals(Collections.emptyMap(), coordinator.onLeaderElected("1", assignorName, metadata, true));
+            assertTrue(coordinator.isLeader());
+        }
+
+        Mockito.verify(assignor, Mockito.never()).assign(Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -418,7 +446,7 @@ public abstract class ConsumerCoordinatorTest {
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignorsWithCooperativeStickyAssignor, false, mockSubscriptionState)) {
             // should not validate assignment for built-in cooperative sticky assignor
-            coordinator.performAssignment("1", mockCooperativeStickyAssignor.name(), metadata);
+            coordinator.onLeaderElected("1", mockCooperativeStickyAssignor.name(), metadata, false);
         }
     }
 
@@ -1664,7 +1692,6 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testMetadataChangeTriggersRebalance() {
-
         // ensure metadata is up-to-date for leader
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
         client.updateMetadata(metadataResponse);
@@ -1685,6 +1712,67 @@ public abstract class ConsumerCoordinatorTest {
 
         // a new partition is added to the topic
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 2)), false, time.milliseconds());
+        coordinator.maybeUpdateSubscriptionMetadata();
+
+        // we should detect the change and ask for reassignment
+        assertTrue(coordinator.rejoinNeededOrPending());
+    }
+
+    @Test
+    public void testStaticLeaderRejoinsGroupAndCanTriggersRebalance() {
+        // ensure metadata is up-to-date for leader
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.updateMetadata(metadataResponse);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // the leader is responsible for picking up metadata changes and forcing a group rebalance.
+        // note that `MockPartitionAssignor.prepare` is not called therefore calling `MockPartitionAssignor.assign`
+        // will throw a IllegalStateException. this indirectly verifies that `assign` is correctly skipped.
+        Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+
+        assertFalse(coordinator.rejoinNeededOrPending());
+        assertEquals(singleton(topic1), coordinator.subscriptionState().metadataTopics());
+
+        // a new partition is added to the topic
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 2)), false, time.milliseconds());
+        coordinator.maybeUpdateSubscriptionMetadata();
+
+        // we should detect the change and ask for reassignment
+        assertTrue(coordinator.rejoinNeededOrPending());
+    }
+
+    @Test
+    public void testStaticLeaderRejoinsGroupAndCanDetectMetadataChangesForOtherMembers() {
+        // ensure metadata is up-to-date for leader
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.updateMetadata(metadataResponse);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // the leader is responsible for picking up metadata changes and forcing a group rebalance.
+        // note that `MockPartitionAssignor.prepare` is not called therefore calling `MockPartitionAssignor.assign`
+        // will throw a IllegalStateException. this indirectly verifies that `assign` is correctly skipped.
+        Map<String, List<String>> memberSubscriptions = mkMap(
+            mkEntry(consumerId, singletonList(topic1)),
+            mkEntry(consumerId2, singletonList(topic2))
+        );
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+
+        assertFalse(coordinator.rejoinNeededOrPending());
+        assertEquals(mkSet(topic1, topic2), coordinator.subscriptionState().metadataTopics());
+
+        // a new partition is added to the topic2 that only consumerId2 is subscribed to
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic2, 2)), false, time.milliseconds());
         coordinator.maybeUpdateSubscriptionMetadata();
 
         // we should detect the change and ask for reassignment
@@ -3489,10 +3577,22 @@ public abstract class ConsumerCoordinatorTest {
         return new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code()));
     }
 
-    private JoinGroupResponse joinGroupLeaderResponse(int generationId,
-                                                      String memberId,
-                                                      Map<String, List<String>> subscriptions,
-                                                      Errors error) {
+    private JoinGroupResponse joinGroupLeaderResponse(
+        int generationId,
+        String memberId,
+        Map<String, List<String>> subscriptions,
+        Errors error
+    ) {
+        return joinGroupLeaderResponse(generationId, memberId, subscriptions, false, error);
+    }
+
+    private JoinGroupResponse joinGroupLeaderResponse(
+        int generationId,
+        String memberId,
+        Map<String, List<String>> subscriptions,
+        boolean skipAssignment,
+        Errors error
+    ) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : subscriptions.entrySet()) {
             ConsumerPartitionAssignor.Subscription subscription = new ConsumerPartitionAssignor.Subscription(subscriptionEntry.getValue());
@@ -3508,6 +3608,7 @@ public abstract class ConsumerCoordinatorTest {
                         .setGenerationId(generationId)
                         .setProtocolName(partitionAssignor.name())
                         .setLeader(memberId)
+                        .setSkipAssignment(skipAssignment)
                         .setMemberId(memberId)
                         .setMembers(metadata)
         );

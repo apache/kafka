@@ -170,11 +170,11 @@ object TestUtils extends Logging {
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String]): KafkaServer = {
-    createServer(config, time, threadNamePrefix, enableForwarding = false, startup = true)
+    createServer(config, time, threadNamePrefix, startup = true)
   }
 
-  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], enableForwarding: Boolean, startup: Boolean): KafkaServer = {
-    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding)
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
+    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = false)
     if (startup) server.startup()
     server
   }
@@ -220,17 +220,16 @@ object TestUtils extends Logging {
     }
   }
 
-  def getBrokerListStrFromServers[B <: KafkaBroker](
-      brokers: Seq[B],
-      protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
-    brokers.map { s =>
-      val listener = s.config.effectiveAdvertisedListeners.find(_.securityProtocol == protocol).getOrElse(
-        sys.error(s"Could not find listener with security protocol $protocol"))
-      formatAddress(listener.host, boundPort(s, protocol))
-    }.mkString(",")
+  def plaintextBootstrapServers[B <: KafkaBroker](
+    brokers: Seq[B]
+  ): String = {
+    bootstrapServers(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
   }
 
-  def bootstrapServers[B <: KafkaBroker](brokers: Seq[B], listenerName: ListenerName): String = {
+  def bootstrapServers[B <: KafkaBroker](
+    brokers: Seq[B],
+    listenerName: ListenerName
+  ): String = {
     brokers.map { s =>
       val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
@@ -369,60 +368,60 @@ object TestUtils extends Logging {
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
   }
 
-  def createAdminClient[B <: KafkaBroker](
-      brokers: Seq[B],
-      adminConfig: Properties): Admin = {
-    val adminClientProperties = new Properties(adminConfig)
+ def createAdminClient[B <: KafkaBroker](
+    brokers: Seq[B],
+    listenerName: ListenerName,
+    adminConfig: Properties = new Properties
+  ): Admin = {
+    val adminClientProperties = new Properties()
+    adminClientProperties.putAll(adminConfig)
     if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
-      adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-        getBrokerListStrFromServers(brokers))
+      adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers, listenerName))
     }
     Admin.create(adminClientProperties)
   }
 
   def createTopicWithAdmin[B <: KafkaBroker](
-      topic: String,
-      brokers: Seq[B],
-      numPartitions: Int = 1,
-      replicationFactor: Int = 1,
-      replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-      topicConfig: Properties = new Properties,
-      adminConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
+    admin: Admin,
+    topic: String,
+    brokers: Seq[B],
+    numPartitions: Int = 1,
+    replicationFactor: Int = 1,
+    replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
+    topicConfig: Properties = new Properties,
+  ): scala.collection.immutable.Map[Int, Int] = {
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions
     } else {
       replicaAssignment.size
     }
-    val adminClient = createAdminClient(brokers, adminConfig)
+
+    val configsMap = new util.HashMap[String, String]()
+    topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
     try {
-      val configsMap = new util.HashMap[String, String]()
-      topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
-      try {
-        val result = if (replicaAssignment.isEmpty) {
-          adminClient.createTopics(Collections.singletonList(new NewTopic(
-            topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
-        } else {
-          val assignment = new util.HashMap[Integer, util.List[Integer]]()
-          replicaAssignment.forKeyValue { case (k, v) =>
-            val replicas = new util.ArrayList[Integer]
-            v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
-            assignment.put(k.asInstanceOf[Integer], replicas)
-          }
-          adminClient.createTopics(Collections.singletonList(new NewTopic(
-            topic, assignment).configs(configsMap)))
+      val result = if (replicaAssignment.isEmpty) {
+        admin.createTopics(Collections.singletonList(new NewTopic(
+          topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+      } else {
+        val assignment = new util.HashMap[Integer, util.List[Integer]]()
+        replicaAssignment.forKeyValue { case (k, v) =>
+          val replicas = new util.ArrayList[Integer]
+          v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
+          assignment.put(k.asInstanceOf[Integer], replicas)
         }
-        result.all().get()
-      } catch {
-        case e: ExecutionException => if (!(e.getCause != null &&
-            e.getCause.isInstanceOf[TopicExistsException] &&
-            topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic,
-              effectiveNumPartitions, replicationFactor))) {
-          throw e
-        }
+        admin.createTopics(Collections.singletonList(new NewTopic(
+          topic, assignment).configs(configsMap)))
       }
-    } finally {
-      adminClient.close()
+      result.all().get()
+    } catch {
+      case e: ExecutionException => if (!(e.getCause != null &&
+          e.getCause.isInstanceOf[TopicExistsException] &&
+          topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
+            effectiveNumPartitions, replicationFactor))) {
+        throw e
+      }
     }
+
     // wait until we've propagated all partitions metadata to all brokers
     val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions)
 
@@ -445,33 +444,31 @@ object TestUtils extends Logging {
   }
 
   def createOffsetsTopicWithAdmin[B <: KafkaBroker](
-      brokers: Seq[B],
-      adminConfig: Properties = new Properties) = {
+    admin: Admin,
+    brokers: Seq[B]
+  ): Map[Int, Int] = {
     val broker = brokers.head
-    createTopicWithAdmin(topic = Topic.GROUP_METADATA_TOPIC_NAME,
+    createTopicWithAdmin(
+      admin = admin,
+      topic = Topic.GROUP_METADATA_TOPIC_NAME,
       numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       brokers = brokers,
       topicConfig = broker.groupCoordinator.offsetsTopicConfigs,
-      adminConfig = adminConfig)
+    )
   }
 
   def deleteTopicWithAdmin[B <: KafkaBroker](
-      topic: String,
-      brokers: Seq[B],
-      adminConfig: Properties = new Properties): Unit = {
-    val adminClient = createAdminClient(brokers, adminConfig)
+    admin: Admin,
+    topic: String,
+    brokers: Seq[B],
+  ): Unit = {
     try {
-      adminClient.deleteTopics(Collections.singletonList(topic)).all().get()
+      admin.deleteTopics(Collections.singletonList(topic)).all().get()
     } catch {
-      case e: ExecutionException => if (e.getCause != null &&
-          e.getCause.isInstanceOf[UnknownTopicOrPartitionException]) {
+      case e: ExecutionException if e.getCause != null &&
+        e.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
         // ignore
-      } else {
-        throw e
-      }
-    } finally {
-      adminClient.close()
     }
     waitForAllPartitionsMetadata(brokers, topic, 0)
   }
@@ -1326,7 +1323,7 @@ object TestUtils extends Logging {
       brokers: Seq[B],
       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
       acks: Int = -1): Unit = {
-    val producer = createProducer(TestUtils.getBrokerListStrFromServers(brokers), acks = acks)
+    val producer = createProducer(plaintextBootstrapServers(brokers), acks = acks)
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
@@ -1359,7 +1356,7 @@ object TestUtils extends Logging {
       timestamp: java.lang.Long = null,
       deliveryTimeoutMs: Int = 30 * 1000,
       requestTimeoutMs: Int = 20 * 1000): Unit = {
-    val producer = createProducer(TestUtils.getBrokerListStrFromServers(brokers),
+    val producer = createProducer(plaintextBootstrapServers(brokers),
       deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
     try {
       producer.send(new ProducerRecord(topic, null, timestamp, topic.getBytes, message.getBytes)).get
@@ -1495,7 +1492,8 @@ object TestUtils extends Logging {
     val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
     waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}")
+        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
+        45000)
   }
 
   /**
@@ -1611,7 +1609,7 @@ object TestUtils extends Logging {
       securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
       trustStoreFile: Option[File] = None,
       waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createConsumer(TestUtils.getBrokerListStrFromServers(brokers, securityProtocol),
+    val consumer = createConsumer(bootstrapServers(brokers, ListenerName.forSecurityProtocol(securityProtocol)),
       groupId = groupId,
       securityProtocol = securityProtocol,
       trustStoreFile = trustStoreFile)
@@ -1671,7 +1669,7 @@ object TestUtils extends Logging {
       requestTimeoutMs: Int = 30000,
       maxInFlight: Int = 5): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(brokers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
@@ -1691,7 +1689,7 @@ object TestUtils extends Logging {
       brokers: Seq[B]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(brokers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     try {
       for (i <- 0 until numRecords) {
@@ -1759,24 +1757,6 @@ object TestUtils extends Logging {
     }
   }
 
-  def fetchEntityConfigWithAdmin[B <: KafkaBroker](
-        configResource: ConfigResource,
-        brokers: Seq[B],
-        adminConfig: Properties = new Properties): Properties = {
-    val properties = new Properties()
-    val adminClient = createAdminClient(brokers, adminConfig)
-    try {
-      val result = adminClient.describeConfigs(Collections.singletonList(configResource)).all().get()
-      val config = result.get(configResource)
-      if (config != null) {
-        config.entries().forEach(e => properties.setProperty(e.name(), e.value()))
-      }
-    } finally {
-      adminClient.close()
-    }
-    properties
-  }
-
   def incrementalAlterConfigs[B <: KafkaBroker](
       servers: Seq[B],
       adminClient: Admin,
@@ -1818,40 +1798,6 @@ object TestUtils extends Logging {
       val nodes = client.describeCluster().nodes().get()
       nodes.asScala.exists(_.id == brokerId)
     }, s"Timed out waiting for brokerId $brokerId to come online")
-  }
-
-  /**
-   * Get the replica assignment for some topics. Topics which don't exist will be ignored.
-   */
-  def getReplicaAssignmentForTopics[B <: KafkaBroker](
-      topicNames: Seq[String],
-      brokers: Seq[B],
-      adminConfig: Properties = new Properties): Map[TopicPartition, Seq[Int]] = {
-    val adminClient = createAdminClient(brokers, adminConfig)
-    val results = new mutable.HashMap[TopicPartition, Seq[Int]]
-    try {
-      adminClient.describeTopics(topicNames.toList.asJava).topicNameValues().forEach {
-        case (topicName, future) =>
-          try {
-            val description = future.get()
-            description.partitions().forEach {
-              case partition =>
-                val topicPartition = new TopicPartition(topicName, partition.partition())
-                results.put(topicPartition, partition.replicas().asScala.map(_.id))
-            }
-          } catch {
-            case e: ExecutionException => if (e.getCause != null &&
-              e.getCause.isInstanceOf[UnknownTopicOrPartitionException]) {
-              // ignore
-            } else {
-              throw e
-            }
-          }
-      }
-    } finally {
-      adminClient.close()
-    }
-    results
   }
 
   def waitForLeaderToBecome(
@@ -2106,32 +2052,65 @@ object TestUtils extends Logging {
       s"There still are ongoing reassignments", pause = pause)
   }
 
-  def addAndVerifyAcls(broker: KafkaBroker, acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    val authorizer = broker.dataPlaneRequestProcessor.authorizer.get
-    val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
-    authorizer.createAcls(null, aclBindings.toList.asJava).asScala
-      .map(_.toCompletableFuture.get)
-      .foreach { result =>
-        result.exception.ifPresent { e => throw e }
+  /**
+   * Find an Authorizer that we can call createAcls or deleteAcls on.
+   */
+  def pickAuthorizerForWrite[B <: KafkaBroker](
+    brokers: Seq[B],
+    controllers: Seq[ControllerServer],
+  ): JAuthorizer = {
+    if (controllers.isEmpty) {
+      brokers.head.authorizer.get
+    } else {
+      var result: JAuthorizer = null
+      TestUtils.retry(120000) {
+        val active = controllers.filter(_.controller.isActive).head
+        result = active.authorizer.get
       }
-    val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
-    waitAndVerifyAcls(
-      authorizer.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
-      authorizer, resource)
+      result
+    }
   }
 
-  def removeAndVerifyAcls(broker: KafkaBroker, acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    val authorizer = broker.dataPlaneRequestProcessor.authorizer.get
-    val aclBindingFilters = acls.map { acl => new AclBindingFilter(resource.toFilter, acl.toFilter) }
-    authorizer.deleteAcls(null, aclBindingFilters.toList.asJava).asScala
+  def addAndVerifyAcls[B <: KafkaBroker](
+    brokers: Seq[B],
+    acls: Set[AccessControlEntry],
+    resource: ResourcePattern,
+    controllers: Seq[ControllerServer] = Seq(),
+  ): Unit = {
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllers)
+    val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
+    authorizerForWrite.createAcls(null, aclBindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
         result.exception.ifPresent { e => throw e }
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
-    waitAndVerifyAcls(
-      authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
-      authorizer, resource)
+    (brokers.map(_.authorizer.get) ++ controllers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
+        authorizer, resource)
+    }
+  }
+
+  def removeAndVerifyAcls[B <: KafkaBroker](
+    brokers: Seq[B],
+    acls: Set[AccessControlEntry],
+    resource: ResourcePattern,
+    controllers: Seq[ControllerServer] = Seq(),
+  ): Unit = {
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllers)
+    val aclBindingFilters = acls.map { acl => new AclBindingFilter(resource.toFilter, acl.toFilter) }
+    authorizerForWrite.deleteAcls(null, aclBindingFilters.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result =>
+        result.exception.ifPresent { e => throw e }
+      }
+    val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
+    (brokers.map(_.authorizer.get) ++ controllers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
+        authorizer, resource)
+    }
   }
 
   def buildRequestWithEnvelope(request: AbstractRequest,

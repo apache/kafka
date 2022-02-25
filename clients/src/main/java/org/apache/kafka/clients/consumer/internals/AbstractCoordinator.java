@@ -100,7 +100,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * To leverage this protocol, an implementation must define the format of metadata provided by each
  * member for group registration in {@link #metadata()} and the format of the state assignment provided
- * by the leader in {@link #performAssignment(String, String, List)} and becomes available to members in
+ * by the leader in {@link #onLeaderElected(String, String, List, boolean)} and becomes available to members in
  * {@link #onJoinComplete(int, String, String, ByteBuffer)}.
  *
  * Note on locking: this class shares state between the caller and a background thread which is
@@ -194,16 +194,19 @@ public abstract class AbstractCoordinator implements Closeable {
     protected abstract boolean onJoinPrepare(int generation, String memberId);
 
     /**
-     * Perform assignment for the group. This is used by the leader to push state to all the members
-     * of the group (e.g. to push partition assignments in the case of the new consumer)
+     * Invoked when the leader is elected. This is used by the leader to perform the assignment
+     * if necessary and to push state to all the members of the group (e.g. to push partition
+     * assignments in the case of the new consumer)
      * @param leaderId The id of the leader (which is this member)
      * @param protocol The protocol selected by the coordinator
      * @param allMemberMetadata Metadata from all members of the group
+     * @param skipAssignment True if leader must skip running the assignor
      * @return A map from each member to their state assignment
      */
-    protected abstract Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                                 String protocol,
-                                                                 List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata);
+    protected abstract Map<String, ByteBuffer> onLeaderElected(String leaderId,
+                                                               String protocol,
+                                                               List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
+                                                               boolean skipAssignment);
 
     /**
      * Invoked when a group member has successfully joined a group. If this call fails with an exception,
@@ -530,7 +533,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Join the group and return the assignment for the next generation. This function handles both
-     * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, List)} if
+     * JoinGroup and SyncGroup, delegating to {@link #onLeaderElected(String, String, List, boolean)} if
      * elected leader by the coordinator.
      *
      * NOTE: This is visible only for testing
@@ -606,7 +609,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             log.info("Successfully joined group with generation {}", AbstractCoordinator.this.generation);
 
                             if (joinResponse.isLeader()) {
-                                onJoinLeader(joinResponse).chain(future);
+                                onLeaderElected(joinResponse).chain(future);
                             } else {
                                 onJoinFollower().chain(future);
                             }
@@ -699,11 +702,15 @@ public abstract class AbstractCoordinator implements Closeable {
         return sendSyncGroupRequest(requestBuilder);
     }
 
-    private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
+    private RequestFuture<ByteBuffer> onLeaderElected(JoinGroupResponse joinResponse) {
         try {
             // perform the leader synchronization and send back the assignment for the group
-            Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.data().leader(), joinResponse.data().protocolName(),
-                    joinResponse.data().members());
+            Map<String, ByteBuffer> groupAssignment = onLeaderElected(
+                joinResponse.data().leader(),
+                joinResponse.data().protocolName(),
+                joinResponse.data().members(),
+                joinResponse.data().skipAssignment()
+            );
 
             List<SyncGroupRequestData.SyncGroupRequestAssignment> groupAssignmentList = new ArrayList<>();
             for (Map.Entry<String, ByteBuffer> assignment : groupAssignment.entrySet()) {

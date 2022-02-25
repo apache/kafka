@@ -62,7 +62,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1")
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
@@ -75,7 +75,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "2000")
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
@@ -89,10 +89,9 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
   def testCommaSeparatedRegex(): Unit = {
     val topic = "new-topic"
     val msg = "a test message"
-    val brokerList = TestUtils.getBrokerListStrFromServers(servers)
 
     val producerProps = new Properties
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
     val producer = new MirrorMakerProducer(true, producerProps)
@@ -103,7 +102,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
 
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("another_topic,new.*,foo"))

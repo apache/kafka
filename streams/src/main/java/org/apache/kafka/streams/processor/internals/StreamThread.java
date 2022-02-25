@@ -67,6 +67,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
@@ -389,8 +390,7 @@ public class StreamThread extends Thread {
             standbyTaskCreator,
             topologyMetadata,
             adminClient,
-            stateDirectory,
-            processingMode(config)
+            stateDirectory
         );
         referenceContainer.taskManager = taskManager;
 
@@ -432,44 +432,6 @@ public class StreamThread extends Thread {
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
-    }
-
-    public enum ProcessingMode {
-        AT_LEAST_ONCE("AT_LEAST_ONCE"),
-
-        EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
-
-        EXACTLY_ONCE_V2("EXACTLY_ONCE_V2");
-
-        public final String name;
-
-        ProcessingMode(final String name) {
-            this.name = name;
-        }
-    }
-
-    // Note: the below two methods are static methods here instead of methods on StreamsConfig because it's a public API
-
-    @SuppressWarnings("deprecation")
-    public static ProcessingMode processingMode(final StreamsConfig config) {
-        if (StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
-        } else if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
-        } else {
-            return StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
-    }
-
-    public static boolean eosEnabled(final StreamsConfig config) {
-        return eosEnabled(processingMode(config));
-    }
-
-    public static boolean eosEnabled(final ProcessingMode processingMode) {
-        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
     public StreamThread(final Time time,
@@ -584,7 +546,8 @@ public class StreamThread extends Thread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            this.streamsUncaughtExceptionHandler.accept(e, false);
+            requestLeaveGroupDuringShutdown();
+            streamsUncaughtExceptionHandler.accept(e, false);
         } finally {
             completeShutdown(cleanRun);
         }
@@ -970,7 +933,8 @@ public class StreamThread extends Thread {
                 .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
         }
 
-        log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+        log.debug("Main Consumer poll completed in {} ms and fetched {} records from partitions {}",
+            pollLatency, numRecords, records.partitions());
 
         pollSensor.record(pollLatency, now);
 
@@ -1286,7 +1250,7 @@ public class StreamThread extends Thread {
     }
 
     public void requestLeaveGroupDuringShutdown() {
-        this.leaveGroupRequested.set(true);
+        leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {

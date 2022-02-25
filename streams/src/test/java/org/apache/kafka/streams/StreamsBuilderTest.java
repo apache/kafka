@@ -45,11 +45,10 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -77,7 +76,6 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class StreamsBuilderTest {
 
     private static final String STREAM_TOPIC = "stream-topic";
@@ -301,7 +299,7 @@ public class StreamsBuilderTest {
         final KStream<String, String> source = builder.stream("topic-source");
         source.to("topic-sink");
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
         source.process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -321,10 +319,10 @@ public class StreamsBuilderTest {
         final KStream<String, String> source = builder.stream("topic-source");
         final KStream<String, String> through = source.through("topic-sink");
 
-        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> sourceProcessorSupplier = new MockApiProcessorSupplier<>();
         source.process(sourceProcessorSupplier);
 
-        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> throughProcessorSupplier = new MockApiProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -342,10 +340,10 @@ public class StreamsBuilderTest {
         final KStream<String, String> source = builder.stream("topic-source");
         final KStream<String, String> through = source.repartition();
 
-        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> sourceProcessorSupplier = new MockApiProcessorSupplier<>();
         source.process(sourceProcessorSupplier);
 
-        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> throughProcessorSupplier = new MockApiProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -367,7 +365,7 @@ public class StreamsBuilderTest {
         final KStream<String, String> source2 = builder.stream(topic2);
         final KStream<String, String> merged = source1.merge(source2);
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
         merged.process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -707,6 +705,7 @@ public class StreamsBuilderTest {
                                 STREAM_OPERATION_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAddThirdStateStoreIfStreamStreamJoinFixIsDisabledViaOldApi() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
@@ -798,12 +797,16 @@ public class StreamsBuilderTest {
                                 STREAM_OPERATION_NAME + "-merge");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseSpecifiedNameForJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME).withName(STREAM_OPERATION_NAME));
+        streamOne.join(streamTwo,
+            (value1, value2) -> value1,
+            JoinWindows.of(Duration.ofHours(1)),
+            StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME).withName(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
@@ -821,12 +824,17 @@ public class StreamsBuilderTest {
                                 STREAM_OPERATION_NAME + "-merge");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseGeneratedNameForJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(STREAM_OPERATION_NAME));
+        streamOne.join(streamTwo,
+            (value1, value2) -> value1,
+            JoinWindows.of(Duration.ofHours(1)),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+                .withName(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
@@ -920,7 +928,7 @@ public class StreamsBuilderTest {
     @Test
     public void shouldUseSpecifiedNameForProcessOperation() {
         builder.stream(STREAM_TOPIC)
-                .process(new MockProcessorSupplier<>(), Named.as("test-processor"));
+                .process(new MockApiProcessorSupplier<>(), Named.as("test-processor"));
 
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
