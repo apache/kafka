@@ -61,7 +61,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
     private static PartitionChangeBuilder createFooBuilder(boolean allowUnclean) {
-        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, () -> allowUnclean);
+        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, () -> allowUnclean, true);
     }
 
     private final static PartitionRegistration BAR = new PartitionRegistration(
@@ -71,7 +71,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static PartitionChangeBuilder createBarBuilder(boolean allowUnclean) {
-        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, () -> allowUnclean);
+        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, () -> allowUnclean, true);
     }
 
     private static void assertBestLeaderEquals(PartitionChangeBuilder builder,
@@ -276,7 +276,8 @@ public class PartitionChangeBuilderTest {
             FOO_ID,
             0,
             brokerId -> false,
-            () -> false
+            () -> false,
+            true
         );
         // Set the target ISR to empty to indicate that the last leader is offline
         offlineBuilder.setTargetIsr(Collections.emptyList());
@@ -301,7 +302,8 @@ public class PartitionChangeBuilderTest {
             FOO_ID,
             0,
             brokerId -> true,
-            () -> false
+            () -> false,
+            true
         );
 
         // The only broker in the ISR is elected leader and stays in the recovering
@@ -335,7 +337,8 @@ public class PartitionChangeBuilderTest {
             FOO_ID,
             0,
             brokerId -> brokerId == leaderId,
-            () -> true
+            () -> true,
+            true
         );
 
         // The partition should stay as recovering

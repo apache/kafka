@@ -175,6 +175,7 @@ case class PendingExpandIsr(
     s"PendingExpandIsr(isr=$isr" +
     s", newInSyncReplicaId=$newInSyncReplicaId" +
     s", sentLeaderAndIsr=$sentLeaderAndIsr" +
+    s", leaderRecoveryState=$leaderRecoveryState" +
     ")"
   }
 }
@@ -191,6 +192,7 @@ case class PendingShrinkIsr(
     s"PendingShrinkIsr(isr=$isr" +
     s", outOfSyncReplicaIds=$outOfSyncReplicaIds" +
     s", sentLeaderAndIsr=$sentLeaderAndIsr" +
+    s", leaderRecoveryState=$leaderRecoveryState" +
     ")"
   }
 }
@@ -547,6 +549,12 @@ class Partition(val topicPartition: TopicPartition,
       val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
 
+      if (partitionState.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
+        stateChangeLogger.info(
+          s"The topic partition $topicPartition was marked as RECOVERING. Leader log recovery is not implemented. " +
+          "Marking the topic partition as RECOVERED."
+        )
+      }
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.map(_.toInt),
         isr = isr,

@@ -163,6 +163,11 @@ public class ReplicationControlManager {
     private final int defaultNumPartitions;
 
     /**
+     * If the cluster supports leader recovery state from KIP-704.
+     */
+    private final boolean isLeaderRecoverySupported;
+
+    /**
      * A count of the total number of partitions in the cluster.
      */
     private final TimelineInteger globalPartitionCount;
@@ -216,6 +221,7 @@ public class ReplicationControlManager {
                               LogContext logContext,
                               short defaultReplicationFactor,
                               int defaultNumPartitions,
+                              boolean isLeaderRecoverySupported,
                               ConfigurationControlManager configurationControl,
                               ClusterControlManager clusterControl,
                               ControllerMetrics controllerMetrics,
@@ -224,6 +230,7 @@ public class ReplicationControlManager {
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
+        this.isLeaderRecoverySupported = isLeaderRecoverySupported;
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.createTopicPolicy = createTopicPolicy;
@@ -703,7 +710,8 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     r -> clusterControl.unfenced(r),
-                    () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name()));
+                    () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name()),
+                    isLeaderRecoverySupported);
                 builder.setTargetIsr(partitionData.newIsr());
                 builder.setTargetLeaderRecoveryState(
                     LeaderRecoveryState.of(partitionData.leaderRecoveryState()));
@@ -745,9 +753,9 @@ public class ReplicationControlManager {
                     }
                 }
 
-                /* Setting the LeaderRecoveryState field is always safe because it will always be the same
-                 * as the value set in the request. For version 0, that is always the default RECOVERED
-                 * which is ignored when serializing to version 0. For any other version, the
+                /* Setting the LeaderRecoveryState field is always safe because it will always be the
+                 * same as the value set in the request. For version 0, that is always the default
+                 * RECOVERED which is ignored when serializing to version 0. For any other version, the
                  * LeaderRecoveryState field is supported.
                  */
                 responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
@@ -990,7 +998,8 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             r -> clusterControl.unfenced(r),
-            () -> electionType == ElectionType.UNCLEAN);
+            () -> electionType == ElectionType.UNCLEAN,
+            isLeaderRecoverySupported);
 
         builder.setAlwaysElectPreferredIfPossible(electionType == ElectionType.PREFERRED);
         Optional<ApiMessageAndVersion> record = builder.build();
@@ -1258,7 +1267,8 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
-                () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name));
+                () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name),
+                isLeaderRecoverySupported);
 
             // Note: if brokerToRemove was passed as NO_LEADER, this is a no-op (the new
             // target ISR will be the same as the old one).
@@ -1365,7 +1375,8 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             r -> clusterControl.unfenced(r),
-            () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topicName));
+            () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topicName),
+            isLeaderRecoverySupported);
         builder.setTargetIsr(revert.isr()).
             setTargetReplicas(revert.replicas()).
             setTargetRemoving(Collections.emptyList()).
@@ -1414,7 +1425,8 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             r -> clusterControl.unfenced(r),
-            () -> false);
+            () -> false,
+            isLeaderRecoverySupported);
         if (!reassignment.merged().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.merged());
         }

@@ -2824,7 +2824,7 @@ case object IsrChangeNotification extends ControllerEvent {
 }
 
 case class AlterPartitionReceived(
-  brokerId: Int, brokerEpoch: Long, partitionssToAlter: Map[TopicPartition, LeaderAndIsr], callback: AlterPartitionCallback
+  brokerId: Int, brokerEpoch: Long, partitionsToAlter: Map[TopicPartition, LeaderAndIsr], callback: AlterPartitionCallback
 ) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
   override def preempt(): Unit = {}

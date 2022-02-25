@@ -162,6 +162,7 @@ public class ReplicationControlManagerTest {
                 new LogContext(),
                 (short) 3,
                 1,
+                true,
                 configurationControl,
                 clusterControl,
                 metrics,

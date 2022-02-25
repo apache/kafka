@@ -57,6 +57,7 @@ public class PartitionChangeBuilder {
     private final int partitionId;
     private final Function<Integer, Boolean> isAcceptableLeader;
     private final Supplier<Boolean> uncleanElectionOk;
+    private final boolean isLeaderRecoverySupported;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
@@ -68,12 +69,14 @@ public class PartitionChangeBuilder {
                                   Uuid topicId,
                                   int partitionId,
                                   Function<Integer, Boolean> isAcceptableLeader,
-                                  Supplier<Boolean> uncleanElectionOk) {
+                                  Supplier<Boolean> uncleanElectionOk,
+                                  boolean isLeaderRecoverySupported) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.uncleanElectionOk = uncleanElectionOk;
+        this.isLeaderRecoverySupported = isLeaderRecoverySupported;
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
@@ -159,8 +162,11 @@ public class PartitionChangeBuilder {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
                 record.setIsr(Collections.singletonList(bestLeader.node));
-                // And mark the leader recovery state as RECOVERING
-                record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
+                if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING &&
+                    isLeaderRecoverySupported) {
+                    // And mark the leader recovery state as RECOVERING
+                    record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
+                }
             }
         } else {
             log.debug("Failed to find a new leader with current state: {}", this);

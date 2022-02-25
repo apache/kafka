@@ -484,7 +484,11 @@ class PartitionStateMachineTest {
       controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     }
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     val deletionClient = mock(classOf[DeletionClient])
     val topicDeletionManager = new TopicDeletionManager(config, controllerContext,
