@@ -505,7 +505,7 @@ public class StreamThreadTest {
             null
         );
 
-        mockConsumer.enforceRebalance();
+        mockConsumer.enforceRebalance("Testing scheduled rebalance.");
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
 
@@ -2356,7 +2356,7 @@ public class StreamThreadTest {
         expect(task2.id()).andReturn(taskId2).anyTimes();
         expect(taskManager.handleCorruption(corruptedTasks)).andReturn(true);
 
-        consumer.enforceRebalance();
+        consumer.enforceRebalance("Test corrupted task rebalance.");
         expectLastCall();
 
         EasyMock.replay(task1, task2, taskManager, consumer);
