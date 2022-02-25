@@ -75,8 +75,10 @@ public class FenceProducersHandlerTest {
         String transactionalId = "foo";
         FenceProducersHandler handler = new FenceProducersHandler(logContext);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
-        assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_NOT_FOUND);
+        assertFatalError(handler, transactionalId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.UNKNOWN_SERVER_ERROR);
+        assertFatalError(handler, transactionalId, Errors.PRODUCER_FENCED);
+        assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_NOT_FOUND);
         assertFatalError(handler, transactionalId, Errors.INVALID_PRODUCER_EPOCH);
         assertRetriableError(handler, transactionalId, Errors.COORDINATOR_LOAD_IN_PROGRESS);
         assertUnmappedKey(handler, transactionalId, Errors.NOT_COORDINATOR);

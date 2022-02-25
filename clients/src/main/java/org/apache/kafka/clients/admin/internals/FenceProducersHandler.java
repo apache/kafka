@@ -17,9 +17,8 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
-import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -76,6 +75,10 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
                     " when building `InitProducerId` request");
         }
         InitProducerIdRequestData data = new InitProducerIdRequestData()
+                // Because we never include a producer epoch or ID in this request, we expect that some errors
+                // (such as PRODUCER_FENCED) will never be returned in the corresponding broker response.
+                // If we ever modify this logic to include an epoch or producer ID, we will need to update the
+                // error handling logic for this handler to accommodate these new errors.
                 .setProducerEpoch(ProducerIdAndEpoch.NONE.epoch)
                 .setProducerId(ProducerIdAndEpoch.NONE.producerId)
                 .setTransactionalId(key.idValue)
@@ -108,20 +111,19 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
 
     private ApiResult<CoordinatorKey, ProducerIdAndEpoch> handleError(CoordinatorKey transactionalIdKey, Errors error) {
         switch (error) {
-            case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
             case CLUSTER_AUTHORIZATION_FAILED:
+                return ApiResult.failed(transactionalIdKey, new ClusterAuthorizationException(
+                        "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
+                                "failed due to cluster authorization failure"));
+
+            case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
                 return ApiResult.failed(transactionalIdKey, new TransactionalIdAuthorizationException(
                         "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
-                                "failed due to authorization failure"));
+                                "failed due to transactional ID authorization failure"));
 
-            case TRANSACTIONAL_ID_NOT_FOUND:
-                return ApiResult.failed(transactionalIdKey, new TransactionalIdNotFoundException(
-                        "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
-                                "failed because the ID could not be found"));
-
-            case INVALID_PRODUCER_EPOCH:
-                return ApiResult.failed(transactionalIdKey, new InvalidProducerEpochException(
-                        "InitProducerId request with " + transactionalIdKey.idValue + " failed due to an invalid producer epoch"));
+            // We intentionally omit cases for PRODUCER_FENCED, TRANSACTIONAL_ID_NOT_FOUND, and INVALID_PRODUCER_EPOCH
+            // since those errors should never happen when our InitProducerIdRequest doesn't include a producer epoch or ID
+            // and should therefore fall under the "unexpected error" catch-all case below
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
