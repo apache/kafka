@@ -24,7 +24,9 @@ import java.util.Map;
 
 import static org.apache.kafka.connect.mirror.MirrorClientConfig.REPLICATION_POLICY_TOPICS_MAP;
 
-/** Defines remote topics name based on configuration  "us-west.topic1". The separator is customizable and defaults to a period. */
+/**
+ * Defines remote topics name based on configuration  "us-west.topic1". The separator is customizable and defaults to a period.
+ */
 public class RenameTopicReplicationPolicy extends DefaultReplicationPolicy {
 
     private static final Logger log = LoggerFactory.getLogger(RenameTopicReplicationPolicy.class);
@@ -50,7 +52,7 @@ public class RenameTopicReplicationPolicy extends DefaultReplicationPolicy {
 
     @Override
     public String formatRemoteTopic(String sourceClusterAlias, String topic) {
-        String targetTopic = topicMap.containsKey(topic) ?  topicMap.get(topic) : topic;
+        String targetTopic = topicMap.containsKey(topic) ? topicMap.get(topic) : topic;
         return super.formatRemoteTopic(sourceClusterAlias, targetTopic);
     }
 
