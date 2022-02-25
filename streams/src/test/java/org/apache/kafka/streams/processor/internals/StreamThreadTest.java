@@ -505,7 +505,7 @@ public class StreamThreadTest {
             null
         );
 
-        mockConsumer.enforceRebalance("Testing scheduled rebalance.");
+        mockConsumer.enforceRebalance("Test scheduled rebalance.");
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
 
