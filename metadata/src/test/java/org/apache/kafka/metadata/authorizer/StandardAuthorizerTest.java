@@ -44,14 +44,14 @@ import java.util.concurrent.atomic.AtomicLong;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.acl.AclOperation.ALL;
+import static org.apache.kafka.common.acl.AclOperation.ALTER;
 import static org.apache.kafka.common.acl.AclOperation.ALTER_CONFIGS;
 import static org.apache.kafka.common.acl.AclOperation.CREATE;
+import static org.apache.kafka.common.acl.AclOperation.DELETE;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.acl.AclOperation.READ;
 import static org.apache.kafka.common.acl.AclOperation.WRITE;
-import static org.apache.kafka.common.acl.AclOperation.DELETE;
-import static org.apache.kafka.common.acl.AclOperation.ALTER;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.acl.AclPermissionType.DENY;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
@@ -261,6 +261,40 @@ public class StandardAuthorizerTest {
             authorizer.authorize(new MockAuthorizableRequestContext.Builder().
                     setPrincipal(new KafkaPrincipal(USER_TYPE, "fred")).build(),
                 singletonList(newAction(ALTER_CONFIGS, GROUP, "bar"))));
+    }
+
+    @Test
+    public void testDenyPrecedenceWithOperationAll() throws Exception {
+        StandardAuthorizer authorizer = new StandardAuthorizer();
+        authorizer.configure(Collections.emptyMap());
+        List<StandardAcl> acls = Arrays.asList(
+            new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", "*", ALL, DENY),
+            new StandardAcl(TOPIC, "foo", PREFIXED, "User:alice", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "foo", LITERAL, "User:*", "*", ALL, DENY),
+            new StandardAcl(TOPIC, "foo", PREFIXED, "User:*", "*", DESCRIBE, ALLOW)
+        );
+
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+        });
+
+        assertEquals(Arrays.asList(DENIED, DENIED, DENIED, ALLOWED), authorizer.authorize(
+            newRequestContext("alice"),
+            Arrays.asList(
+                newAction(WRITE, TOPIC, "foo"),
+                newAction(READ, TOPIC, "foo"),
+                newAction(DESCRIBE, TOPIC, "foo"),
+                newAction(READ, TOPIC, "foobar"))));
+
+        assertEquals(Arrays.asList(DENIED, DENIED, DENIED, ALLOWED, DENIED), authorizer.authorize(
+            newRequestContext("bob"),
+            Arrays.asList(
+                newAction(DESCRIBE, TOPIC, "foo"),
+                newAction(READ, TOPIC, "foo"),
+                newAction(WRITE, TOPIC, "foo"),
+                newAction(DESCRIBE, TOPIC, "foobaz"),
+                newAction(READ, TOPIC, "foobaz"))));
     }
 
     @Test
