@@ -139,8 +139,8 @@ public interface AdminApiHandler<K, V> {
     /**
      * An {@link AdminApiHandler} that will group multiple keys into a single request when possible.
      * Keys will be grouped together whenever they target the same broker. This type of handler
-     * should be used when when interacting with broker APIs that can act on multiple keys at once,
-     * such as describing or listing transactions.
+     * should be used when interacting with broker APIs that can act on multiple keys at once, such
+     * as describing or listing transactions.
      */
     abstract class Batched<K, V> implements AdminApiHandler<K, V> {
         abstract AbstractRequest.Builder<?> buildBatchedRequest(int brokerId, Set<K> keys);

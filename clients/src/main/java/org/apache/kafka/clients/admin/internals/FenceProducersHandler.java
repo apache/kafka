@@ -41,9 +41,9 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public FenceProducersHandler(
-            LogContext logContext
+        LogContext logContext
     ) {
-        this.log = logContext.logger(DescribeTransactionsHandler.class);
+        this.log = logContext.logger(FenceProducersHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(FindCoordinatorRequest.CoordinatorType.TRANSACTION, logContext);
     }
 
@@ -111,8 +111,8 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
             case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
             case CLUSTER_AUTHORIZATION_FAILED:
                 return ApiResult.failed(transactionalIdKey, new TransactionalIdAuthorizationException(
-                    "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
-                        "failed due to authorization failure"));
+                        "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
+                                "failed due to authorization failure"));
 
             case TRANSACTIONAL_ID_NOT_FOUND:
                 return ApiResult.failed(transactionalIdKey, new TransactionalIdNotFoundException(
@@ -121,7 +121,7 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
 
             case INVALID_PRODUCER_EPOCH:
                 return ApiResult.failed(transactionalIdKey, new InvalidProducerEpochException(
-                    "InitProducerId request with " + transactionalIdKey.idValue + " failed due an invalid producer epoch"));
+                        "InitProducerId request with " + transactionalIdKey.idValue + " failed due to an invalid producer epoch"));
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
