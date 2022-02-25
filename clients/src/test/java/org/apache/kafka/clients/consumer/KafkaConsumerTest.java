@@ -2859,10 +2859,12 @@ public class KafkaConsumerTest {
 
         assertTrue(config.unknown().contains(unknownTestConfig));
         assertEquals(1, config.unknown().size());
+        assertEquals(3, config.unused().size());
 
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
             assertTrue(config.unknown().contains(unknownTestConfig));
             assertEquals(1, config.unknown().size());
+            assertEquals(0, config.unused().size());
         }
     }
 
@@ -2877,11 +2879,13 @@ public class KafkaConsumerTest {
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertTrue(config.unknown().contains(unknownTestConfig));
         assertEquals(1, config.unknown().size());
+        assertEquals(4, config.unused().size());
 
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
             assertTrue(config.unknown().contains(unknownTestConfig));
             assertEquals(1, config.unknown().size());
+            assertEquals(1, config.unused().size());
         }
     }
 

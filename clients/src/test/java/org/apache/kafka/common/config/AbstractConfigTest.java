@@ -165,8 +165,7 @@ public class AbstractConfigTest {
 
         // prefix with mechanism overrides global
         assertTrue(config.unknown().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
-        assertFalse(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
-        assertFalse(config.unused().contains("test-mechanism.sasl.jaas.config"));
+        assertTrue(config.unknown().contains("test-mechanism.sasl.jaas.config"));
         assertEquals(saslJaasConfig1, valuesWithPrefixOverride.get("test-mechanism.sasl.jaas.config"));
         assertEquals(saslJaasConfig3, valuesWithPrefixOverride.get("sasl.jaas.config"));
         assertFalse(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
@@ -175,7 +174,6 @@ public class AbstractConfigTest {
 
         // prefix with mechanism overrides default
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
-        assertFalse(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd"));
         assertTrue(config.unknown().contains("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("gssapi.sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
@@ -184,7 +182,6 @@ public class AbstractConfigTest {
 
         // prefix override for mechanism with no default
         assertFalse(config.unused().contains("sasl.kerberos.service.name"));
-        assertFalse(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
         assertTrue(config.unknown().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
         assertFalse(config.unused().contains("gssapi.sasl.kerberos.service.name"));
         assertFalse(config.unused().contains("sasl.kerberos.service.name"));

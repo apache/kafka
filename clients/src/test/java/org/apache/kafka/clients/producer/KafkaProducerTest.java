@@ -1863,11 +1863,13 @@ public class KafkaProducerTest {
 
         assertTrue(config.unknown().contains(unknownTestConfig));
         assertEquals(1, config.unknown().size());
+        assertEquals(3, config.unused().size());
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
                 null, null, null, Time.SYSTEM)) {
             assertTrue(config.unknown().contains(unknownTestConfig));
             assertEquals(1, config.unknown().size());
+            assertEquals(0, config.unused().size());
         }
     }
 
@@ -1883,12 +1885,14 @@ public class KafkaProducerTest {
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertTrue(config.unknown().contains(unknownTestConfig));
         assertEquals(1, config.unknown().size());
+        assertEquals(4, config.unused().size());
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
                 null, null, null, Time.SYSTEM)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
             assertTrue(config.unknown().contains(unknownTestConfig));
             assertEquals(1, config.unknown().size());
+            assertEquals(1, config.unused().size());
         }
     }
 
