@@ -42,7 +42,11 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -752,26 +756,29 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public List<ConfigKeyInfo> connectorPluginConfig(PluginType pluginType, String pluginName) {
+    public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
         List<ConfigKeyInfo> results = new ArrayList<>();
         ConfigDef configDefs;
         try {
+            Plugins p = plugins();
+            Object plugin = p.newPlugin(pluginName);
+            PluginType pluginType = PluginType.from(plugin.getClass());
             switch (pluginType) {
                 case SINK:
                 case SOURCE:
-                    configDefs = plugins().newConnector(pluginName).config();
+                    configDefs = ((Connector) plugin).config();
                     break;
                 case CONVERTER:
-                    configDefs = plugins().newConverter(pluginName).config();
+                    configDefs = ((Converter) plugin).config();
                     break;
                 case HEADER_CONVERTER:
-                    configDefs = plugins().newHeaderConverter(pluginName).config();
+                    configDefs = ((HeaderConverter) plugin).config();
                     break;
                 case TRANSFORMATION:
-                    configDefs = plugins().newTransformation(pluginName).config();
+                    configDefs = ((Transformation<?>) plugin).config();
                     break;
                 case PREDICATE:
-                    configDefs = plugins().newPredicate(pluginName).config();
+                    configDefs = ((Predicate<?>) plugin).config();
                     break;
                 default:
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");

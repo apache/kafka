@@ -41,8 +41,8 @@ public class ConnectorPluginInfo {
         this.version = version;
     }
 
-    public ConnectorPluginInfo(PluginDesc<?> plugin, PluginType type) {
-        this(plugin.className(), type, plugin.version());
+    public ConnectorPluginInfo(PluginDesc<?> plugin) {
+        this(plugin.className(), plugin.type(), plugin.version());
     }
 
     @JsonProperty("class")

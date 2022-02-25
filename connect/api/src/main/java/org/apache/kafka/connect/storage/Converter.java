@@ -89,7 +89,7 @@ public interface Converter {
     }
 
     /**
-     * Configuration specification for this set of converters.
+     * Configuration specification for this converter.
      * @return the configuration specification; may not be null
      */
     default ConfigDef config() {

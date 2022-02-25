@@ -21,6 +21,8 @@ import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -50,6 +52,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceLoader;
@@ -80,7 +83,8 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final ConcurrentMap<String, String> aliases;
-    private final SortedSet<PluginDesc<Connector>> connectors;
+    private final SortedSet<PluginDesc<SinkConnector>> sinkConnectors;
+    private final SortedSet<PluginDesc<SourceConnector>> sourceConnectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation<?>>> transformations;
@@ -109,7 +113,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.pluginPaths = pluginPaths;
         this.pluginLoaders = new ConcurrentHashMap<>();
         this.aliases = new ConcurrentHashMap<>();
-        this.connectors = new TreeSet<>();
+        this.sinkConnectors = new TreeSet<>();
+        this.sourceConnectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
         this.transformations = new TreeSet<>();
@@ -127,8 +132,19 @@ public class DelegatingClassLoader extends URLClassLoader {
         this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
     }
 
-    public Set<PluginDesc<Connector>> connectors() {
+    public Set<PluginDesc<? extends Connector>> connectors() {
+        Set<PluginDesc<? extends Connector>> connectors = new HashSet<>();
+        connectors.addAll(sinkConnectors);
+        connectors.addAll(sourceConnectors);
         return connectors;
+    }
+
+    public Set<PluginDesc<SinkConnector>> sinkConnectors() {
+        return sinkConnectors;
+    }
+
+    public Set<PluginDesc<SourceConnector>> sourceConnectors() {
+        return sourceConnectors;
     }
 
     public Set<PluginDesc<Converter>> converters() {
@@ -285,8 +301,10 @@ public class DelegatingClassLoader extends URLClassLoader {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
         if (!plugins.isEmpty()) {
-            addPlugins(plugins.connectors(), loader);
-            connectors.addAll(plugins.connectors());
+            addPlugins(plugins.sinkConnectors(), loader);
+            sinkConnectors.addAll(plugins.sinkConnectors());
+            addPlugins(plugins.sourceConnectors(), loader);
+            sourceConnectors.addAll(plugins.sourceConnectors());
             addPlugins(plugins.converters(), loader);
             converters.addAll(plugins.converters());
             addPlugins(plugins.headerConverters(), loader);
@@ -348,7 +366,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         Reflections reflections = new InternalReflections(builder);
 
         return new PluginScanResult(
-                getPluginDesc(reflections, Connector.class, loader),
+                getPluginDesc(reflections, SinkConnector.class, loader),
+                getPluginDesc(reflections, SourceConnector.class, loader),
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
                 getTransformationPluginDesc(loader, reflections),
@@ -438,7 +457,8 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     private void addAllAliases() {
-        addAliases(connectors);
+        addAliases(sinkConnectors);
+        addAliases(sourceConnectors);
         addAliases(converters);
         addAliases(headerConverters);
         addAliases(transformations);

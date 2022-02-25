@@ -21,11 +21,12 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
-import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
@@ -148,8 +149,12 @@ public class Plugins {
         return delegatingLoader;
     }
 
-    public Set<PluginDesc<Connector>> connectors() {
-        return delegatingLoader.connectors();
+    public Set<PluginDesc<SinkConnector>> sinkConnectors() {
+        return delegatingLoader.sinkConnectors();
+    }
+
+    public Set<PluginDesc<SourceConnector>> sourceConnectors() {
+        return delegatingLoader.sourceConnectors();
     }
 
     public Set<PluginDesc<Converter>> converters() {
@@ -168,46 +173,13 @@ public class Plugins {
         return delegatingLoader.predicates();
     }
 
+    public Object newPlugin(String classOrAlias) throws ClassNotFoundException {
+        Class<? extends Object> klass = pluginClass(delegatingLoader, classOrAlias, Object.class);
+        return newPlugin(klass);
+    }
+
     public Connector newConnector(String connectorClassOrAlias) {
         Class<? extends Connector> klass = connectorClass(connectorClassOrAlias);
-        return newPlugin(klass);
-    }
-
-    public Converter newConverter(String className) throws ClassNotFoundException {
-        Class<? extends Converter> klass = pluginClass(
-                delegatingLoader,
-                className,
-                Converter.class
-        );
-        return newPlugin(klass);
-    }
-
-    public HeaderConverter newHeaderConverter(String className) throws ClassNotFoundException {
-        Class<? extends HeaderConverter> klass = pluginClass(
-                delegatingLoader,
-                className,
-                HeaderConverter.class
-        );
-        return newPlugin(klass);
-    }
-
-    @SuppressWarnings("rawtypes")
-    public Predicate newPredicate(String className) throws ClassNotFoundException {
-        Class<? extends Predicate> klass = pluginClass(
-                delegatingLoader,
-                className,
-                Predicate.class
-        );
-        return newPlugin(klass);
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public <R extends ConnectRecord<R>> Transformation<R> newTransformation(String className) throws ClassNotFoundException {
-        Class<? extends Transformation> klass = pluginClass(
-                delegatingLoader,
-                className,
-                Transformation.class
-        );
         return newPlugin(klass);
     }
 
@@ -220,8 +192,9 @@ public class Plugins {
                     Connector.class
             );
         } catch (ClassNotFoundException e) {
-            List<PluginDesc<Connector>> matches = new ArrayList<>();
-            for (PluginDesc<Connector> plugin : delegatingLoader.connectors()) {
+            List<PluginDesc<? extends Connector>> matches = new ArrayList<>();
+            Set<PluginDesc<? extends Connector>> connectors = delegatingLoader.connectors();
+            for (PluginDesc<? extends Connector> plugin : connectors) {
                 Class<?> pluginClass = plugin.pluginClass();
                 String simpleName = pluginClass.getSimpleName();
                 if (simpleName.equals(connectorClassOrAlias)
@@ -235,20 +208,19 @@ public class Plugins {
                         "Failed to find any class that implements Connector and which name matches "
                                 + connectorClassOrAlias
                                 + ", available connectors are: "
-                                + pluginNames(delegatingLoader.connectors())
+                                + Utils.join(connectors, ", ")
                 );
             }
             if (matches.size() > 1) {
                 throw new ConnectException(
                         "More than one connector matches alias "
                                 + connectorClassOrAlias
-                                +
-                                ". Please use full package and class name instead. Classes found: "
-                                + pluginNames(matches)
+                                + ". Please use full package and class name instead. Classes found: "
+                                + Utils.join(connectors, ", ")
                 );
             }
 
-            PluginDesc<Connector> entry = matches.get(0);
+            PluginDesc<? extends Connector> entry = matches.get(0);
             klass = entry.pluginClass();
         }
         return klass;

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
@@ -260,7 +259,13 @@ public interface Herder {
      */
     String kafkaClusterId();
 
-    List<ConfigKeyInfo> connectorPluginConfig(PluginType pluginType, String pluginName);
+
+    /**
+     * Returns the configuration of a plugin
+     * @param pluginName the name of the plugin
+     * @return the list of ConfigKeyInfo of the plugin
+     */
+    List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
 
     enum ConfigReloadAction {
         NONE,

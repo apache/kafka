@@ -26,6 +26,8 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.tools.MockConnector;
@@ -52,7 +54,6 @@ import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +70,6 @@ public class ConnectorPluginsResource {
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
     private final List<ConnectorPluginInfo> connectorPlugins;
-    private final Map<String, PluginType> pluginsByType;
 
     static final List<Class<? extends Connector>> CONNECTOR_EXCLUDES = Arrays.asList(
             VerifiableSourceConnector.class, VerifiableSinkConnector.class,
@@ -78,39 +78,38 @@ public class ConnectorPluginsResource {
     );
 
     @SuppressWarnings("rawtypes")
-    static final List<Class<? extends Transformation>> TRANSFORM_EXCLUDES = Arrays.asList(
+    static final List<Class<? extends Transformation>> TRANSFORM_EXCLUDES = Collections.singletonList(
             PredicatedTransformation.class
     );
 
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
         this.connectorPlugins = new ArrayList<>();
-        this.pluginsByType = new HashMap<>();
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
-        for (PluginDesc<Connector> plugin : herder.plugins().connectors()) {
+        for (PluginDesc<SinkConnector> plugin : herder.plugins().sinkConnectors()) {
             if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
-                connectorPlugins.add(new ConnectorPluginInfo(plugin, PluginType.from(plugin.pluginClass())));
-                pluginsByType.put(getAlias(plugin.className()), PluginType.from(plugin.pluginClass()));
+                connectorPlugins.add(new ConnectorPluginInfo(plugin));
+            }
+        }
+        for (PluginDesc<SourceConnector> plugin : herder.plugins().sourceConnectors()) {
+            if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
+                connectorPlugins.add(new ConnectorPluginInfo(plugin));
             }
         }
         for (PluginDesc<Transformation<?>> transform : herder.plugins().transformations()) {
             if (!TRANSFORM_EXCLUDES.contains(transform.pluginClass())) {
-                connectorPlugins.add(new ConnectorPluginInfo(transform, PluginType.TRANSFORMATION));
-                pluginsByType.put(getAlias(transform.className()), PluginType.TRANSFORMATION);
+                connectorPlugins.add(new ConnectorPluginInfo(transform));
             }
         }
         for (PluginDesc<Predicate<?>> predicate : herder.plugins().predicates()) {
-            connectorPlugins.add(new ConnectorPluginInfo(predicate, PluginType.PREDICATE));
-            pluginsByType.put(getAlias(predicate.className()), PluginType.PREDICATE);
+            connectorPlugins.add(new ConnectorPluginInfo(predicate));
         }
         for (PluginDesc<Converter> converter : herder.plugins().converters()) {
-            connectorPlugins.add(new ConnectorPluginInfo(converter, PluginType.CONVERTER));
-            pluginsByType.put(getAlias(converter.className()), PluginType.CONVERTER);
+            connectorPlugins.add(new ConnectorPluginInfo(converter));
         }
         for (PluginDesc<HeaderConverter> headerConverter : herder.plugins().headerConverters()) {
-            connectorPlugins.add(new ConnectorPluginInfo(headerConverter, PluginType.HEADER_CONVERTER));
-            pluginsByType.put(getAlias(headerConverter.className()), PluginType.HEADER_CONVERTER);
+            connectorPlugins.add(new ConnectorPluginInfo(headerConverter));
         }
     }
 
@@ -147,21 +146,21 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/")
     public List<ConnectorPluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
-        return getConnectorPlugins(connectorsOnly);
+        synchronized (this) {
+            if (connectorsOnly) {
+                Set<String> types = new HashSet<>(Arrays.asList(PluginType.SINK.toString(), PluginType.SOURCE.toString()));
+                return Collections.unmodifiableList(connectorPlugins.stream().filter(p -> types.contains(p.type())).collect(Collectors.toList()));
+            } else {
+                return Collections.unmodifiableList(connectorPlugins);
+            }
+        }
     }
 
     @GET
-    @Path("/{type}/config")
-    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("type") String type) {
-        return doGetConfigDef(type);
-    }
-
-    private synchronized List<ConnectorPluginInfo> getConnectorPlugins(boolean connectorsOnly) {
-        if (connectorsOnly) {
-            Set<String> types = new HashSet<>(Arrays.asList(PluginType.SINK.toString(), PluginType.SOURCE.toString()));
-            return Collections.unmodifiableList(connectorPlugins.stream().filter(p -> types.contains(p.type())).collect(Collectors.toList()));
-        } else {
-            return Collections.unmodifiableList(connectorPlugins);
+    @Path("/{name}/config")
+    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("name") String pluginName) {
+        synchronized (this) {
+            return herder.connectorPluginConfig(pluginName);
         }
     }
 
@@ -172,14 +171,4 @@ public class ConnectorPluginsResource {
             : pluginName;
     }
 
-    String getAlias(String name) {
-        name = normalizedPluginName(name);
-        int lastIndexOf = name.lastIndexOf('.');
-        return lastIndexOf >= 0 ? name.substring(lastIndexOf + 1) : name;
-    }
-
-    private synchronized List<ConfigKeyInfo> doGetConfigDef(final String pluginName) {
-        PluginType pluginType = pluginsByType.getOrDefault(getAlias(pluginName), PluginType.UNKNOWN);
-        return herder.connectorPluginConfig(pluginType, pluginName);
-    }
 }

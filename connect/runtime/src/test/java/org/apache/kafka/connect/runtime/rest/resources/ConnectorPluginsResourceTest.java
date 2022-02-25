@@ -44,11 +44,11 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverter;
-import org.apache.kafka.connect.tools.MockConnector;
 import org.apache.kafka.connect.tools.MockSinkConnector;
 import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.tools.SchemaSourceConnector;
@@ -68,6 +68,7 @@ import org.mockito.ArgumentCaptor;
 import javax.ws.rs.BadRequestException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -112,18 +113,21 @@ public class ConnectorPluginsResourceTest {
     private static final ConfigInfos PARTIAL_CONFIG_INFOS;
     private static final int ERROR_COUNT = 0;
     private static final int PARTIAL_CONFIG_ERROR_COUNT = 1;
-    private static final Set<MockConnectorPluginDesc<?>> CONNECTOR_PLUGINS = new TreeSet<>();
+    private static final Set<MockConnectorPluginDesc<?>> SINK_CONNECTOR_PLUGINS = new TreeSet<>();
+    private static final Set<MockConnectorPluginDesc<?>> SOURCE_CONNECTOR_PLUGINS = new TreeSet<>();
     private static final Set<MockConnectorPluginDesc<?>> CONVERTER_PLUGINS = new TreeSet<>();
     private static final Set<MockConnectorPluginDesc<?>> HEADER_CONVERTER_PLUGINS = new TreeSet<>();
     private static final Set<MockConnectorPluginDesc<?>> TRANSFORMATION_PLUGINS = new TreeSet<>();
     private static final Set<MockConnectorPluginDesc<?>> PREDICATE_PLUGINS = new TreeSet<>();
 
-    private final List<Class<? extends Connector>> connectorClasses = asList(
-            VerifiableSourceConnector.class,
+    private final List<Class<? extends SinkConnector>> sinkConnectorClasses = asList(
             VerifiableSinkConnector.class,
+            MockSinkConnector.class
+    );
+
+    private final List<Class<? extends SourceConnector>> sourceConnectorClasses = asList(
+            VerifiableSourceConnector.class,
             MockSourceConnector.class,
-            MockSinkConnector.class,
-            MockConnector.class,
             SchemaSourceConnector.class,
             ConnectorPluginsResourceTestConnector.class
     );
@@ -198,9 +202,13 @@ public class ConnectorPluginsResourceTest {
     @Before
     public void setUp() throws Exception {
         try {
-            for (Class<? extends Connector> klass : connectorClasses) {
-                MockConnectorPluginDesc<? extends Connector> pluginDesc = new MockConnectorPluginDesc<>(klass);
-                CONNECTOR_PLUGINS.add(pluginDesc);
+            for (Class<? extends SinkConnector> klass : sinkConnectorClasses) {
+                MockConnectorPluginDesc<? extends SinkConnector> pluginDesc = new MockConnectorPluginDesc<>(klass);
+                SINK_CONNECTOR_PLUGINS.add(pluginDesc);
+            }
+            for (Class<? extends SourceConnector> klass : sourceConnectorClasses) {
+                MockConnectorPluginDesc<? extends SourceConnector> pluginDesc = new MockConnectorPluginDesc<>(klass);
+                SOURCE_CONNECTOR_PLUGINS.add(pluginDesc);
             }
             for (Class<? extends Converter> klass : converterClasses) {
                 MockConnectorPluginDesc<? extends Converter> pluginDesc = new MockConnectorPluginDesc<>(klass);
@@ -222,26 +230,13 @@ public class ConnectorPluginsResourceTest {
             throw new RuntimeException(e);
         }
         doReturn(plugins).when(herder).plugins();
-        doReturn(CONNECTOR_PLUGINS).when(plugins).connectors();
+        doReturn(SINK_CONNECTOR_PLUGINS).when(plugins).sinkConnectors();
+        doReturn(SOURCE_CONNECTOR_PLUGINS).when(plugins).sourceConnectors();
         doReturn(CONVERTER_PLUGINS).when(plugins).converters();
         doReturn(HEADER_CONVERTER_PLUGINS).when(plugins).headerConverters();
         doReturn(TRANSFORMATION_PLUGINS).when(plugins).transformations();
         doReturn(PREDICATE_PLUGINS).when(plugins).predicates();
         connectorPluginsResource = new ConnectorPluginsResource(herder);
-    }
-
-    @Test
-    public void testGetAlias() {
-        assertEquals("FileStreamSink", connectorPluginsResource.getAlias("org.apache.kafka.connect.file.FileStreamSinkConnector"));
-        assertEquals("FileStreamSink", connectorPluginsResource.getAlias("FileStreamSinkConnector"));
-        assertEquals("FileStreamSink", connectorPluginsResource.getAlias("FileStreamSink"));
-        assertEquals("SomeConverter", connectorPluginsResource.getAlias("SomeConverter"));
-        assertEquals("SomeHeaderConverter", connectorPluginsResource.getAlias("SomeHeaderConverter"));
-        assertEquals("Predicate", connectorPluginsResource.getAlias("org.apache.Predicate"));
-        assertEquals("MyTransformation", connectorPluginsResource.getAlias(".MyTransformation"));
-
-        assertEquals("", connectorPluginsResource.getAlias("org.apache."));
-        assertEquals("", connectorPluginsResource.getAlias("org.apache.Connector"));
     }
 
     @Test
@@ -386,15 +381,18 @@ public class ConnectorPluginsResourceTest {
     public void testListConnectorPlugins() {
         Set<ConnectorPluginInfo> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(true));
 
-        for (MockConnectorPluginDesc<?> plugin : CONNECTOR_PLUGINS) {
-            boolean contained = connectorPlugins.contains(newInfo(plugin.pluginClass(), plugin.version(), plugin.type()));
-            System.out.println(plugin.className());
-            System.out.println(contained);
-            if ((plugin.type() != PluginType.SOURCE && plugin.type() != PluginType.SINK) ||
-                (ConnectorPluginsResource.CONNECTOR_EXCLUDES.contains(plugin.pluginClass()))) {
-                assertFalse(contained);
-            } else {
-                assertTrue(contained);
+        List<Set<MockConnectorPluginDesc<?>>> allConnectorPlugins = Arrays.asList(
+                SINK_CONNECTOR_PLUGINS,
+                SOURCE_CONNECTOR_PLUGINS);
+        for (Set<MockConnectorPluginDesc<?>> plugins : allConnectorPlugins) {
+            for (MockConnectorPluginDesc<?> plugin : plugins) {
+                boolean contained = connectorPlugins.contains(newInfo(plugin));
+                if ((plugin.type() != PluginType.SOURCE && plugin.type() != PluginType.SINK) ||
+                        (ConnectorPluginsResource.CONNECTOR_EXCLUDES.contains(plugin.pluginClass()))) {
+                    assertFalse(contained);
+                } else {
+                    assertTrue(contained);
+                }
             }
         }
         verify(herder, atLeastOnce()).plugins();
@@ -402,8 +400,8 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testConnectorPluginsIncludesTypeAndVersionInformation() throws Exception {
-        ConnectorPluginInfo sinkInfo = newInfo(SampleSinkConnector.class, PluginType.SINK);
-        ConnectorPluginInfo sourceInfo = newInfo(SampleSourceConnector.class, PluginType.SOURCE);
+        ConnectorPluginInfo sinkInfo = newInfo(SampleSinkConnector.class);
+        ConnectorPluginInfo sourceInfo = newInfo(SampleSourceConnector.class);
         assertEquals(PluginType.SINK.toString(), sinkInfo.type());
         assertEquals(PluginType.SOURCE.toString(), sourceInfo.type());
         assertEquals(SampleSinkConnector.VERSION, sinkInfo.version());
@@ -434,22 +432,31 @@ public class ConnectorPluginsResourceTest {
     public void testListAllPlugins() {
         Set<ConnectorPluginInfo> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(false));
 
-        for (MockConnectorPluginDesc<?> plugin : CONNECTOR_PLUGINS) {
-            boolean contained = connectorPlugins.contains(newInfo(plugin.pluginClass(), plugin.version(), plugin.type()));
-            if ((ConnectorPluginsResource.CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) ||
-                (ConnectorPluginsResource.TRANSFORM_EXCLUDES.contains(plugin.pluginClass()))) {
-                assertFalse(contained);
-            } else {
-                assertTrue(contained);
+        List<Set<MockConnectorPluginDesc<?>>> allPlugins = Arrays.asList(
+                SINK_CONNECTOR_PLUGINS,
+                SOURCE_CONNECTOR_PLUGINS,
+                CONVERTER_PLUGINS,
+                HEADER_CONVERTER_PLUGINS,
+                TRANSFORMATION_PLUGINS,
+                PREDICATE_PLUGINS);
+        for (Set<MockConnectorPluginDesc<?>> plugins : allPlugins) {
+            for (MockConnectorPluginDesc<?> plugin : plugins) {
+                boolean contained = connectorPlugins.contains(newInfo(plugin));
+                if ((ConnectorPluginsResource.CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) ||
+                        (ConnectorPluginsResource.TRANSFORM_EXCLUDES.contains(plugin.pluginClass()))) {
+                    assertFalse(contained);
+                } else {
+                    assertTrue(contained);
+                }
             }
+            verify(herder, atLeastOnce()).plugins();
         }
-        verify(herder, atLeastOnce()).plugins();
     }
 
     @Test
     public void testGetConnectorConfigDef() {
         String connName = ConnectorPluginsResourceTestConnector.class.getName();
-        when(herder.connectorPluginConfig(eq(PluginType.SOURCE), eq(connName))).thenAnswer(answer -> {
+        when(herder.connectorPluginConfig(eq(connName))).thenAnswer(answer -> {
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigDef.ConfigKey configKey : ConnectorPluginsResourceTestConnector.CONFIG_DEF.configKeys().values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
@@ -464,20 +471,13 @@ public class ConnectorPluginsResourceTest {
         }
     }
 
-    @Test(expected = org.apache.kafka.connect.runtime.rest.errors.BadRequestException.class)
-    public void testGetConnectorConfigDefWithBadName() {
-        String connName = "AnotherPlugin";
-        when(herder.connectorPluginConfig(eq(PluginType.UNKNOWN), eq(connName))).thenCallRealMethod();
-        connectorPluginsResource.getConnectorConfigDef(connName);
+    protected static ConnectorPluginInfo newInfo(PluginDesc<?> pluginDesc) {
+        return new ConnectorPluginInfo(new MockConnectorPluginDesc<>(pluginDesc.pluginClass(), pluginDesc.version()));
     }
 
-    protected static ConnectorPluginInfo newInfo(Class<?> klass, String version, PluginType type) {
-        return new ConnectorPluginInfo(new MockConnectorPluginDesc<>(klass, version), type);
-    }
-
-    protected static ConnectorPluginInfo newInfo(Class<?> klass, PluginType type)
+    protected static ConnectorPluginInfo newInfo(Class<?> klass)
             throws Exception {
-        return new ConnectorPluginInfo(new MockConnectorPluginDesc<>(klass), type);
+        return new ConnectorPluginInfo(new MockConnectorPluginDesc<>(klass));
     }
 
     public static class MockPluginClassLoader extends PluginClassLoader {
