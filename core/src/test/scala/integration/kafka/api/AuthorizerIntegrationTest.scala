@@ -26,7 +26,7 @@ import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
@@ -70,7 +70,6 @@ import java.util.Collections.singletonList
 
 import scala.annotation.nowarn
 import scala.collection.mutable
-import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
 
 object AuthorizerIntegrationTest {
@@ -144,7 +143,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val transactionalIdDescribeAcl = Map(transactionalIdResource -> Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)))
 
   val numRecords = 1
-  val adminClients = Buffer[Admin]()
 
   producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
   producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
@@ -342,16 +340,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // Allow inter-broker communication
     addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW)), clusterResource)
 
-    if (isKRaftTest()) {
-      TestUtils.createOffsetsTopicWithAdmin(brokers)
-    } else {
-      TestUtils.createOffsetsTopic(zkClient, servers)
-    }
+    createOffsetsTopic(listenerName = interBrokerListenerName)
   }
 
   @AfterEach
   override def tearDown(): Unit = {
-    adminClients.foreach(_.close())
     removeAllClientAcls()
     super.tearDown()
   }
@@ -840,7 +833,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @CsvSource(value = Array("zk,false", "zk,true", "kraft,false", "kraft,true"))
   def testTopicIdAuthorization(quorum: String, withTopicExisting: Boolean): Unit = {
     val topicId = if (withTopicExisting) {
-      createTopic(topic)
+      createTopicWithBrokerPrincipal(topic)
       getTopicIds()(topic)
     } else {
       Uuid.randomUuid()
@@ -917,7 +910,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testFetchFollowerRequest(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     val request = createFetchFollowerRequest
 
@@ -937,7 +930,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIncrementalAlterConfigsRequestRequiresClusterPermissionForBrokerLogger(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     val data = new IncrementalAlterConfigsRequestData
     val alterableConfig = new AlterableConfig().setName("kafka.controller.KafkaController").
@@ -961,7 +954,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetsForLeaderEpochClusterPermission(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     val request = offsetsForLeaderEpochRequest
 
@@ -980,7 +973,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithNoTopicAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     val producer = createProducer()
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
   }
@@ -988,7 +981,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithTopicDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     val producer = createProducer()
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
@@ -997,7 +990,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithTopicRead(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
     val producer = createProducer()
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
@@ -1006,7 +999,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithTopicWrite(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -1040,7 +1033,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeUsingAssignWithNoAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1055,7 +1048,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testSimpleConsumeWithOffsetLookupAndNoGroupAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1075,7 +1068,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testSimpleConsumeWithExplicitSeekAndNoGroupAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1095,7 +1088,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithoutTopicDescribeAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1113,7 +1106,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithTopicDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1132,7 +1125,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithTopicWrite(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1151,7 +1144,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithTopicAndGroupRead(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1170,7 +1163,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithNoTopicAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1188,7 +1181,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithTopicDescribeOnlyAndGroupRead(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1207,7 +1200,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithTopicAndGroupRead(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1215,7 +1208,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // create an unmatched topic
     val unmatchedTopic = "unmatched"
-    createTopic(unmatchedTopic)
+    createTopicWithBrokerPrincipal(unmatchedTopic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)),  new ResourcePattern(TOPIC, unmatchedTopic, LITERAL))
     sendRecords(producer, 1, new TopicPartition(unmatchedTopic, part))
     removeAllClientAcls()
@@ -1240,7 +1233,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionMatchingInternalTopic(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1270,7 +1263,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionMatchingInternalTopicWithDescribeOnlyPermission(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1296,7 +1289,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionNotMatchingInternalTopic(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = createProducer()
@@ -1393,7 +1386,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithTopicWrite(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
@@ -1404,7 +1397,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithTopicDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
@@ -1423,7 +1416,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithTopicAndGroupRead(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
     val consumer = createConsumer()
@@ -1441,7 +1434,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchWithNoGroupAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -1460,7 +1453,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchAllTopicPartitionsAuthorization(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     val offset = 15L
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
@@ -1518,9 +1511,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     groupToPartitionMap.put(groups(3), null)
     groupToPartitionMap.put(groups(4), null)
 
-    createTopic(topics(0))
-    createTopic(topics(1), numPartitions = 2)
-    createTopic(topics(2), numPartitions = 3)
+    createTopicWithBrokerPrincipal(topics(0))
+    createTopicWithBrokerPrincipal(topics(1), numPartitions = 2)
+    createTopicWithBrokerPrincipal(topics(2), numPartitions = 3)
     groupResources.foreach(r => {
       addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), r)
     })
@@ -1648,7 +1641,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchTopicDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     val consumer = createConsumer()
@@ -1659,7 +1652,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchWithTopicAndGroupRead(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
     val consumer = createConsumer()
@@ -1677,7 +1670,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetadataWithTopicDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     val consumer = createConsumer()
     consumer.partitionsFor(topic)
@@ -1693,7 +1686,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testListOffsetsWithTopicDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     val consumer = createConsumer()
     consumer.endOffsets(Set(tp).asJava)
@@ -1710,7 +1703,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeGroupApiWithGroupDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     createAdminClient().describeConsumerGroups(Seq(group).asJava).describedGroups().get(group).get()
@@ -1719,11 +1712,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeGroupCliWithGroupDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupService = new ConsumerGroupService(opts)
     consumerGroupService.describeGroups()
@@ -1733,7 +1726,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testListGroupApiWithAndWithoutListGroupAcls(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     // write some record to the topic
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
@@ -1782,7 +1775,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupApiWithDeleteGroupAcl(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
@@ -1796,7 +1789,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupApiWithNoDeleteGroupAcl(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
@@ -1817,7 +1810,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupOffsetsWithAcl(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DELETE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
@@ -1833,7 +1826,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupOffsetsWithoutDeleteAcl(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
@@ -1848,7 +1841,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupOffsetsWithDeleteAclWithoutTopicAcl(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     // Create the consumer group
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
@@ -1883,7 +1876,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedDeleteTopicsWithDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     val deleteResponse = connectAndReceive[DeleteTopicsResponse](deleteTopicsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, deleteResponse.data.responses.find(topic).errorCode)
@@ -1892,7 +1885,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicsWithWildCardAuth(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DELETE, ALLOW)), new ResourcePattern(TOPIC, "*", LITERAL))
     val deleteResponse = connectAndReceive[DeleteTopicsResponse](deleteTopicsRequest)
     assertEquals(Errors.NONE.code, deleteResponse.data.responses.find(topic).errorCode)
@@ -1909,7 +1902,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedDeleteRecordsWithDescribe(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     val deleteRecordsResponse = connectAndReceive[DeleteRecordsResponse](deleteRecordsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, deleteRecordsResponse.data.topics.asScala.head.
@@ -1919,7 +1912,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteRecordsWithWildCardAuth(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DELETE, ALLOW)), new ResourcePattern(TOPIC, "*", LITERAL))
     val deleteRecordsResponse = connectAndReceive[DeleteRecordsResponse](deleteRecordsRequest)
     assertEquals(Errors.NONE.code, deleteRecordsResponse.data.topics.asScala.head.
@@ -1936,7 +1929,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePartitionsWithWildCardAuth(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, ALTER, ALLOW)), new ResourcePattern(TOPIC, "*", LITERAL))
     val createPartitionsResponse = connectAndReceive[CreatePartitionsResponse](createPartitionsRequest)
     assertEquals(Errors.NONE.code, createPartitionsResponse.data.results.asScala.head.errorCode)
@@ -1960,7 +1953,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendOffsetsWithNoConsumerGroupDescribeAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, CLUSTER_ACTION, ALLOW)), clusterResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
@@ -1976,7 +1969,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendOffsetsWithNoConsumerGroupWriteAccess(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), groupResource)
@@ -1991,7 +1984,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIdempotentProducerNoIdempotentWriteAclInInitProducerId(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
     assertIdempotentSendAuthorizationFailure()
   }
@@ -2030,7 +2023,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIdempotentProducerNoIdempotentWriteAclInProduce(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, IDEMPOTENT_WRITE, ALLOW)), clusterResource)
     idempotentProducerShouldFailInProduce(() => removeAllClientAcls())
@@ -2067,7 +2060,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTransactionalProducerTopicAuthorizationExceptionInSendCallback(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     // add describe access so that we can fetch metadata
@@ -2084,7 +2077,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTransactionalProducerTopicAuthorizationExceptionInCommit(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     // add describe access so that we can fetch metadata
@@ -2102,7 +2095,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessDuringSend(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     val producer = buildTransactionalProducer()
@@ -2117,7 +2110,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnEndTransaction(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
@@ -2132,7 +2125,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testListTransactionsAuthorization(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
 
@@ -2166,7 +2159,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldNotIncludeUnauthorizedTopicsInDescribeTransactionsResponse(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
 
@@ -2189,7 +2182,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldSuccessfullyAbortTransactionAfterTopicAuthorizationException(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)),
@@ -2225,7 +2218,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldSendSuccessfullyWhenIdempotentAndHasCorrectACL(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, IDEMPOTENT_WRITE, ALLOW)), clusterResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = buildIdempotentProducer()
@@ -2245,7 +2238,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeMultipleAddAndRemove(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
 
     for (_ <- 1 to 3) {
       addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
@@ -2263,9 +2256,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(quorum: String): Unit = {
-    createTopic(topic)
-    createTopic("topic-2")
-    createTopic("to")
+    createTopicWithBrokerPrincipal(topic)
+    createTopicWithBrokerPrincipal("topic-2")
+    createTopicWithBrokerPrincipal("to")
 
     val unrelatedPrincipalString = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "unrelated").toString
     val unrelatedTopicResource = new ResourcePattern(TOPIC, "topic-2", LITERAL)
@@ -2286,7 +2279,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeDenyTakesPrecedence(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
     addAndVerifyAcls(Set(allowWriteAce), topicResource)
     assertIdempotentSendSuccess()
@@ -2299,7 +2292,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeWildcardResourceDenyDominate(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     val wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
     val prefixed = new ResourcePattern(TOPIC, "t", PREFIXED)
     val literal = new ResourcePattern(TOPIC, topic, LITERAL)
@@ -2317,7 +2310,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypePrefixedResourceDenyDominate(quorum: String): Unit = {
-    createTopic(topic)
+    createTopicWithBrokerPrincipal(topic)
     val prefixed = new ResourcePattern(TOPIC, topic.substring(0, 1), PREFIXED)
     val literal = new ResourcePattern(TOPIC, topic, LITERAL)
     val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
@@ -2528,10 +2521,18 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createAdminClient(): Admin = {
-    val props = new Properties()
-    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val adminClient = Admin.create(props)
-    adminClients += adminClient
-    adminClient
+    createAdminClient(listenerName)
   }
+
+  private def createTopicWithBrokerPrincipal(
+    topic: String,
+    numPartitions: Int = 1
+  ): Unit =  {
+    createTopic(
+      topic,
+      numPartitions = numPartitions,
+      listenerName = interBrokerListenerName
+    )
+  }
+
 }

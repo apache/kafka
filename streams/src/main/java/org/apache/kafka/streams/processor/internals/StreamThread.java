@@ -546,7 +546,8 @@ public class StreamThread extends Thread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            this.streamsUncaughtExceptionHandler.accept(e, false);
+            requestLeaveGroupDuringShutdown();
+            streamsUncaughtExceptionHandler.accept(e, false);
         } finally {
             completeShutdown(cleanRun);
         }
@@ -932,7 +933,8 @@ public class StreamThread extends Thread {
                 .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
         }
 
-        log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+        log.debug("Main Consumer poll completed in {} ms and fetched {} records from partitions {}",
+            pollLatency, numRecords, records.partitions());
 
         pollSensor.record(pollLatency, now);
 
@@ -1248,7 +1250,7 @@ public class StreamThread extends Thread {
     }
 
     public void requestLeaveGroupDuringShutdown() {
-        this.leaveGroupRequested.set(true);
+        leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {

@@ -30,8 +30,6 @@ import kafka.zk.ReassignPartitionsZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.{ChartFactory, ChartFrame, JFreeChart}
@@ -111,8 +109,7 @@ object ReplicationQuotasTestRig {
         .map(c => createServer(KafkaConfig.fromProps(c)))
 
       TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
-      val brokerList = TestUtils.bootstrapServers(servers,
-        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      val brokerList = TestUtils.plaintextBootstrapServers(servers)
       adminClient = Admin.create(Map[String, Object](
         AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> brokerList
       ).asJava)
@@ -140,7 +137,7 @@ object ReplicationQuotasTestRig {
       createTopic(zkClient, topicName, replicas, servers)
 
       println("Writing Data")
-      val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = 0)
+      val producer = TestUtils.createProducer(TestUtils.plaintextBootstrapServers(servers), acks = 0)
       (0 until config.msgsPerPartition).foreach { x =>
         (0 until config.partitions).foreach { partition =>
           producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
