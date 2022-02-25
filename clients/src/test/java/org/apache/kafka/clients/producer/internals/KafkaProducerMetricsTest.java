@@ -32,7 +32,7 @@ class KafkaProducerMetricsTest {
     private static final String TXN_COMMIT_TIME_TOTAL = "txn-commit-time-ns-total";
     private static final String TXN_ABORT_TIME_TOTAL = "txn-abort-time-ns-total";
     private static final String TXN_SEND_OFFSETS_TIME_TOTAL = "txn-send-offsets-time-ns-total";
-    private static final String METADATA_WAIT_TIME_TOTAL = "metadata-wait-time-ms-total";
+    private static final String METADATA_WAIT_TIME_TOTAL = "metadata-wait-time-ns-total";
 
     private final Metrics metrics = new Metrics();
     private final KafkaProducerMetrics producerMetrics = new KafkaProducerMetrics(metrics);

@@ -69,15 +69,14 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class StreamsProducerTest {
-    private static final double BUFFER_POOL_WAIT_TIME = 1000000;
-    private static final double FLUSH_TME = 2000000;
-    private static final double TXN_INIT_TIME = 3000000;
-    private static final double TXN_BEGIN_TIME = 4000000;
-    private static final double TXN_SEND_OFFSETS_TIME = 5000000;
-    private static final double TXN_COMMIT_TIME = 6000000;
-    private static final double TXN_ABORT_TIME = 7000000;
-    private static final double METADATA_WAIT_TIME_MS = 8;
-    private static final double METADATA_WAIT_TIME = 8000000;
+    private static final double BUFFER_POOL_WAIT_TIME = 1;
+    private static final double FLUSH_TME = 2;
+    private static final double TXN_INIT_TIME = 3;
+    private static final double TXN_BEGIN_TIME = 4;
+    private static final double TXN_SEND_OFFSETS_TIME = 5;
+    private static final double TXN_COMMIT_TIME = 6;
+    private static final double TXN_ABORT_TIME = 7;
+    private static final double METADATA_WAIT_TIME = 8;
 
     private final LogContext logContext = new LogContext("test ");
     private final String topic = "topic";
@@ -1170,7 +1169,7 @@ public class StreamsProducerTest {
             TXN_SEND_OFFSETS_TIME,
             TXN_COMMIT_TIME,
             TXN_ABORT_TIME,
-            METADATA_WAIT_TIME_MS
+            METADATA_WAIT_TIME
         );
 
         final double expectedTotalBlocked = BUFFER_POOL_WAIT_TIME + FLUSH_TME + TXN_INIT_TIME +
@@ -1190,7 +1189,7 @@ public class StreamsProducerTest {
             TXN_SEND_OFFSETS_TIME,
             TXN_COMMIT_TIME,
             TXN_ABORT_TIME,
-            METADATA_WAIT_TIME_MS
+            METADATA_WAIT_TIME
         );
         final double expectedTotalBlocked = BUFFER_POOL_WAIT_TIME + FLUSH_TME + TXN_INIT_TIME +
             TXN_BEGIN_TIME + TXN_SEND_OFFSETS_TIME +  TXN_COMMIT_TIME + TXN_ABORT_TIME +
@@ -1211,7 +1210,7 @@ public class StreamsProducerTest {
             TXN_SEND_OFFSETS_TIME,
             TXN_COMMIT_TIME,
             TXN_ABORT_TIME,
-            METADATA_WAIT_TIME_MS
+            METADATA_WAIT_TIME
         );
 
         assertThat(

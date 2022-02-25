@@ -34,7 +34,6 @@ public class KafkaProducerMetrics implements AutoCloseable {
     private static final String TXN_COMMIT = "txn-commit";
     private static final String TXN_ABORT = "txn-abort";
     private static final String TOTAL_TIME_SUFFIX = "-time-ns-total";
-    private static final String TOTAL_TIME_MS_SUFFIX = "-time-ms-total";
     private static final String METADATA_WAIT = "metadata-wait";
 
     private final Map<String, String> tags;
@@ -76,7 +75,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
         );
         metadataWaitSensor = newLatencySensor(
             METADATA_WAIT,
-            "Total time producer has spent waiting on metadata in "
+            "Total time producer has spent waiting on metadata on topic metadata."
         );
     }
 
@@ -115,8 +114,8 @@ public class KafkaProducerMetrics implements AutoCloseable {
         abortTxnSensor.record(duration);
     }
 
-    public void recordMetadataWait(long durationMs) {
-        metadataWaitSensor.record(durationMs);
+    public void recordMetadataWait(long duration) {
+        metadataWaitSensor.record(duration);
     }
 
     private Sensor newLatencySensor(String name, String description) {
