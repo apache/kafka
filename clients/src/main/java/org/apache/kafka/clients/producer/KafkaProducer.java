@@ -903,6 +903,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw e;
             }
             nowMs += clusterAndWaitTime.waitedOnMetadataMs;
+            producerMetrics.recordMetadataWait(clusterAndWaitTime.waitedOnMetadataMs);
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;

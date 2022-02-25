@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -223,7 +224,9 @@ public class StreamsProducer {
             + getMetricValue(producer.metrics(), "txn-begin-time-ns-total")
             + getMetricValue(producer.metrics(), "txn-send-offsets-time-ns-total")
             + getMetricValue(producer.metrics(), "txn-commit-time-ns-total")
-            + getMetricValue(producer.metrics(), "txn-abort-time-ns-total");
+            + getMetricValue(producer.metrics(), "txn-abort-time-ns-total")
+            + Duration.ofMillis(
+                (long) getMetricValue(producer.metrics(), "metadata-wait-time-ms-total")).toNanos();
     }
 
     public double totalBlockedTime() {
