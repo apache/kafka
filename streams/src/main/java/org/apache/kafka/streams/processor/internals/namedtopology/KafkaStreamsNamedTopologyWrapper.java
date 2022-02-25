@@ -150,7 +150,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     public Collection<NamedTopology> getAllTopologies() {
-        return getAllTopologies();
+        return topologyMetadata.getAllNamedTopologies();
     }
 
     /**
