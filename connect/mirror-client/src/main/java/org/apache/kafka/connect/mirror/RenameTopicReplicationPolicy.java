@@ -42,7 +42,7 @@ public class RenameTopicReplicationPolicy extends DefaultReplicationPolicy {
                 if (topicsArray.length == 2) {
                     topicMap.put(topicsArray[0], topicsArray[1]);
                 } else {
-                    log.info("Malformed arguments were passed in '{}'", topicAssignment);
+                    log.warn("Malformed arguments were passed in '{}'", topicAssignment);
                 }
             }
         }
