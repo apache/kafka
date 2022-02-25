@@ -23,6 +23,7 @@ import kafka.log.UnifiedLog
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
+import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -147,8 +148,14 @@ object KafkaRaftServer {
    */
   def initializeLogDirs(config: KafkaConfig): (MetaProperties, Seq[String]) = {
     val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
+
+    val metadataMissingPolicy =
+      if (config.autoFormatStorage)
+        BrokerMetadataCheckpointMissingPolicy.Create(StorageTool.buildMetadataProperties(config.clusterId, config))
+      else
+        BrokerMetadataCheckpointMissingPolicy.Fail
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
-      getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
+      getBrokerMetadataAndOfflineDirs(logDirs, metadataMissingPolicy)
 
     if (offlineDirs.contains(config.metadataLogDir)) {
       throw new KafkaException("Cannot start server since `meta.properties` could not be " +
@@ -171,6 +178,11 @@ object KafkaRaftServer {
         s"Configured node.id `${config.nodeId}` doesn't match stored node.id `${metaProperties.nodeId}' in " +
           "meta.properties. If you moved your data, make sure your configured controller.id matches. " +
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+    }
+    if (config.clusterId != null && config.clusterId != metaProperties.clusterId) {
+      throw new InconsistentNodeIdException(
+        s"Configured cluster.id `${config.clusterId}` doesn't match stored cluster.id `${metaProperties.clusterId}' in " +
+          "meta.properties.")
     }
 
     (metaProperties, offlineDirs.toSeq)

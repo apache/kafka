@@ -30,6 +30,8 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.mutable
 
 object StorageTool extends Logging {
+  val brokerMetaPropsFile = "meta.properties"
+
   def main(args: Array[String]): Unit = {
     try {
       val parser = ArgumentParsers.
@@ -115,7 +117,7 @@ object StorageTool extends Logging {
         }
       } else {
         foundDirectories += directoryPath.toString
-        val metaPath = directoryPath.resolve("meta.properties")
+        val metaPath = directoryPath.resolve(brokerMetaPropsFile)
         if (!Files.exists(metaPath)) {
           problems += s"$directoryPath is not formatted."
         } else {
@@ -222,17 +224,21 @@ object StorageTool extends Logging {
       stream.println("All of the log directories are already formatted.")
     }
     unformattedDirectories.foreach(directory => {
-      try {
-        Files.createDirectories(Paths.get(directory))
-      } catch {
-        case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
-          s"directory ${directory}: ${e.getMessage}")
-      }
-      val metaPropertiesPath = Paths.get(directory, "meta.properties")
-      val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
-      checkpoint.write(metaProperties.toProperties)
+      formatDirectory(directory, metaProperties)
       stream.println(s"Formatting ${directory}")
     })
     0
+  }
+
+  def formatDirectory(directory: String, metaProperties: MetaProperties) = {
+    try {
+      Files.createDirectories(Paths.get(directory))
+    } catch {
+      case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
+        s"directory ${directory}: ${e.getMessage}")
+    }
+    val metaPropertiesPath = Paths.get(directory, brokerMetaPropsFile)
+    val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
+    checkpoint.write(metaProperties.toProperties)
   }
 }
