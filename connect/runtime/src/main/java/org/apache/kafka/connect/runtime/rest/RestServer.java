@@ -85,8 +85,8 @@ public class RestServer {
     private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
-    private ContextHandlerCollection handlers;
-    private Server jettyServer;
+    private final ContextHandlerCollection handlers;
+    private final Server jettyServer;
 
     private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
@@ -278,7 +278,7 @@ public class RestServer {
         RequestLogHandler requestLogHandler = new RequestLogHandler();
         Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
         slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
-        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %msT");
+        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
         requestLogHandler.setRequestLog(requestLog);
 
         contextHandlers.add(new DefaultHandler());
@@ -453,13 +453,6 @@ public class RestServer {
             connectRestExtension.register(connectRestExtensionContext);
         }
 
-    }
-
-    public static String urlJoin(String base, String path) {
-        if (base.endsWith("/") && path.startsWith("/"))
-            return base + path.substring(1);
-        else
-            return base + path;
     }
 
     /**

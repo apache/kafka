@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -44,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
@@ -117,7 +117,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> mainConsumer,
-                      final StreamsConfig config,
+                      final TaskConfig config,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
@@ -132,7 +132,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            config.taskTimeoutMs,
             "task",
             StreamTask.class
         );
@@ -143,7 +143,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        eosEnabled = StreamThread.eosEnabled(config);
+        this.eosEnabled = config.eosEnabled;
 
         final String threadId = Thread.currentThread().getName();
         this.streamsMetrics = streamsMetrics;
@@ -171,19 +171,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
-        maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        maxBufferedSize = config.maxBufferedSize;
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
         resetOffsetsForPartitions = new HashSet<>();
 
-        recordQueueCreator = new RecordQueueCreator(this.logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
+        recordQueueCreator = new RecordQueueCreator(this.logContext, config.timestampExtractor, config.deserializationExceptionHandler);
 
         recordInfo = new PartitionGroup.RecordInfo();
 
         final Sensor enforcedProcessingSensor;
         enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
-        final long maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        final long maxTaskIdleMs = config.maxTaskIdleMs;
         partitionGroup = new PartitionGroup(
             logContext,
             createPartitionQueues(),
@@ -577,7 +577,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
         // commitNeeded indicates we may have processed some records since last commit
         // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
-        if (commitNeeded) {
+        if (commitNeeded || enforceCheckpoint) {
             stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
 
@@ -704,33 +704,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         }
 
-
         try {
-            // process the record by passing to the source node of the topology
-            final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            log.trace("Start processing one record [{}]", record);
-
-            final ProcessorRecordContext recordContext = new ProcessorRecordContext(
-                record.timestamp,
-                record.offset(),
-                record.partition(),
-                record.topic(),
-                record.headers()
-            );
-            updateProcessorContext(currNode, wallClockTime, recordContext);
-
-            maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
-            final Record<Object, Object> toProcess = new Record<>(
-                record.key(),
-                record.value(),
-                processorContext.timestamp(),
-                processorContext.headers()
-            );
-            maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
-
-            log.trace("Completed processing one record [{}]", record);
+            if (!(record instanceof CorruptedRecord)) {
+                doProcess(wallClockTime);
+            }
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
@@ -774,6 +753,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void doProcess(final long wallClockTime) {
+        // process the record by passing to the source node of the topology
+        final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
+        log.trace("Start processing one record [{}]", record);
+
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            record.timestamp,
+            record.offset(),
+            record.partition(),
+            record.topic(),
+            record.headers()
+        );
+        updateProcessorContext(currNode, wallClockTime, recordContext);
+
+        maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
+        final Record<Object, Object> toProcess = new Record<>(
+            record.key(),
+            record.value(),
+            processorContext.timestamp(),
+            processorContext.headers()
+        );
+        maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
+
+        log.trace("Completed processing one record [{}]", record);
     }
 
     @Override
@@ -1097,15 +1103,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (encryptedString.isEmpty()) {
             return RecordQueue.UNKNOWN;
         }
-        final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
-        final byte version = buffer.get();
-        switch (version) {
-            case LATEST_MAGIC_BYTE:
-                return buffer.getLong();
-            default:
-                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.",
-                         LATEST_MAGIC_BYTE, version);
-                return RecordQueue.UNKNOWN;
+        try {
+            final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
+            final byte version = buffer.get();
+            switch (version) {
+                case LATEST_MAGIC_BYTE:
+                    return buffer.getLong();
+                default:
+                    log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.",
+                            LATEST_MAGIC_BYTE, version);
+                    return RecordQueue.UNKNOWN;
+            }
+        } catch (final Exception exception) {
+            log.warn("Unsupported offset metadata found");
+            return RecordQueue.UNKNOWN;
         }
     }
 

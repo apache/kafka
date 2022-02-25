@@ -32,8 +32,8 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
  * updates to a changelog
  */
 class ChangeLoggingSessionBytesStore
-    extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
-    implements SessionStore<Bytes, byte[]> {
+        extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
+        implements SessionStore<Bytes, byte[]> {
 
     private InternalProcessorContext context;
 
@@ -81,13 +81,13 @@ class ChangeLoggingSessionBytesStore
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         wrapped().remove(sessionKey);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, context.timestamp());
+        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, context.timestamp(), wrapped().getPosition());
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(sessionKey, aggregate);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, context.timestamp());
+        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, context.timestamp(), wrapped().getPosition());
     }
 
     @Override

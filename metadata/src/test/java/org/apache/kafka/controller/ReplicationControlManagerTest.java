@@ -17,11 +17,12 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Optional;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrRequestData.PartitionData;
@@ -37,12 +38,12 @@ import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitionsCollection;
@@ -50,9 +51,10 @@ import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
-import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -63,39 +65,53 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.metadata.BrokerHeartbeatReply;
-import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.config.TopicConfig.SEGMENT_BYTES_CONFIG;
+import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
+import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PARTITIONS;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT;
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
+import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -116,19 +132,19 @@ public class ReplicationControlManagerTest {
         final LogContext logContext = new LogContext();
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
-        final ClusterControlManager clusterControl = new ClusterControlManager(
-            logContext, time, snapshotRegistry, BROKER_SESSION_TIMEOUT_MS,
-            new StripedReplicaPlacer(random));
         final ControllerMetrics metrics = new MockControllerMetrics();
-        final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, Collections.emptyMap());
-        final ReplicationControlManager replicationControl = new ReplicationControlManager(snapshotRegistry,
-            new LogContext(),
-            (short) 3,
-            1,
-            configurationControl,
-            clusterControl,
+        final String clusterId = Uuid.randomUuid().toString();
+        final ClusterControlManager clusterControl = new ClusterControlManager(logContext,
+            clusterId,
+            time,
+            snapshotRegistry,
+            TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
+            new StripedReplicaPlacer(random),
             metrics);
+        final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
+            new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty(),
+                (__, ___) -> { });
+        final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
             RecordTestUtils.replayAll(clusterControl, records);
@@ -137,15 +153,52 @@ public class ReplicationControlManagerTest {
         }
 
         ReplicationControlTestContext() {
+            this(Optional.empty());
+        }
+
+        ReplicationControlTestContext(Optional<CreateTopicPolicy> createTopicPolicy) {
+            this.replicationControl = new ReplicationControlManager(snapshotRegistry,
+                new LogContext(),
+                (short) 3,
+                1,
+                configurationControl,
+                clusterControl,
+                metrics,
+                createTopicPolicy);
             clusterControl.activate();
         }
 
+        CreatableTopicResult createTestTopic(String name,
+                                             int numPartitions,
+                                             short replicationFactor,
+                                             short expectedErrorCode) throws Exception {
+            CreateTopicsRequestData request = new CreateTopicsRequestData();
+            CreatableTopic topic = new CreatableTopic().setName(name);
+            topic.setNumPartitions(numPartitions).setReplicationFactor(replicationFactor);
+            request.topics().add(topic);
+            ControllerResult<CreateTopicsResponseData> result =
+                replicationControl.createTopics(request);
+            CreatableTopicResult topicResult = result.response().topics().find(name);
+            assertNotNull(topicResult);
+            assertEquals(expectedErrorCode, topicResult.errorCode());
+            if (expectedErrorCode == NONE.code()) {
+                replay(result.records());
+            }
+            return topicResult;
+        }
+
         CreatableTopicResult createTestTopic(String name, int[][] replicas) throws Exception {
-            return createTestTopic(name, replicas, (short) 0);
+            return createTestTopic(name, replicas, Collections.emptyMap(), (short) 0);
         }
 
         CreatableTopicResult createTestTopic(String name, int[][] replicas,
-                short expectedErrorCode) throws Exception {
+                                             short expectedErrorCode) throws Exception {
+            return createTestTopic(name, replicas, Collections.emptyMap(), expectedErrorCode);
+        }
+
+        CreatableTopicResult createTestTopic(String name, int[][] replicas,
+                                             Map<String, String> configs,
+                                             short expectedErrorCode) throws Exception {
             assertFalse(replicas.length == 0);
             CreateTopicsRequestData request = new CreateTopicsRequestData();
             CreatableTopic topic = new CreatableTopic().setName(name);
@@ -154,6 +207,9 @@ public class ReplicationControlManagerTest {
                 topic.assignments().add(new CreatableReplicaAssignment().
                     setPartitionIndex(i).setBrokerIds(Replicas.toList(replicas[i])));
             }
+            configs.entrySet().forEach(e -> topic.configs().add(
+                new CreateTopicsRequestData.CreateableTopicConfig().setName(e.getKey()).
+                    setValue(e.getValue())));
             request.topics().add(topic);
             ControllerResult<CreateTopicsResponseData> result =
                 replicationControl.createTopics(request);
@@ -200,7 +256,45 @@ public class ReplicationControlManagerTest {
             }
         }
 
-        void unfenceBrokers(Integer... brokerIds) throws Exception {
+        void alterIsr(
+            TopicIdPartition topicIdPartition,
+            int leaderId,
+            List<Integer> isr
+        ) throws Exception {
+            BrokerRegistration registration = clusterControl.brokerRegistrations().get(leaderId);
+            assertFalse(registration.fenced());
+
+            PartitionRegistration partition = replicationControl.getPartition(
+                topicIdPartition.topicId(),
+                topicIdPartition.partitionId()
+            );
+            assertNotNull(partition);
+            assertEquals(leaderId, partition.leader);
+
+            PartitionData partitionData = new PartitionData()
+                .setPartitionIndex(topicIdPartition.partitionId())
+                .setCurrentIsrVersion(partition.partitionEpoch)
+                .setLeaderEpoch(partition.leaderEpoch)
+                .setNewIsr(isr);
+
+            String topicName = replicationControl.getTopic(topicIdPartition.topicId()).name();
+            TopicData topicData = new TopicData()
+                .setName(topicName)
+                .setPartitions(singletonList(partitionData));
+
+            ControllerResult<AlterIsrResponseData> alterIsr = replicationControl.alterIsr(
+                new AlterIsrRequestData()
+                    .setBrokerId(leaderId)
+                    .setBrokerEpoch(registration.epoch())
+                    .setTopics(singletonList(topicData)));
+            replay(alterIsr.records());
+        }
+
+        void unfenceBrokers(Integer... brokerIds)  throws Exception {
+            unfenceBrokers(Utils.mkSet(brokerIds));
+        }
+
+        void unfenceBrokers(Set<Integer> brokerIds) throws Exception {
             for (int brokerId : brokerIds) {
                 ControllerResult<BrokerHeartbeatReply> result = replicationControl.
                     processBrokerHeartbeat(new BrokerHeartbeatRequestData().
@@ -211,6 +305,19 @@ public class ReplicationControlManagerTest {
                     result.response());
                 replay(result.records());
             }
+        }
+
+        void alterTopicConfig(
+            String topic,
+            String configKey,
+            String configValue
+        ) throws Exception {
+            ConfigRecord configRecord = new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id())
+                .setResourceName(topic)
+                .setName(configKey)
+                .setValue(configValue);
+            replay(singletonList(new ApiMessageAndVersion(configRecord, (short) 0)));
         }
 
         void fenceBrokers(Set<Integer> brokerIds) throws Exception {
@@ -242,6 +349,39 @@ public class ReplicationControlManagerTest {
             PartitionRegistration partition = replicationControl.
                 getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
             return (partition.leader < 0) ? OptionalInt.empty() : OptionalInt.of(partition.leader);
+        }
+    }
+
+    private static class MockCreateTopicPolicy implements CreateTopicPolicy {
+        private final List<RequestMetadata> expecteds;
+        private final AtomicLong index = new AtomicLong(0);
+
+        MockCreateTopicPolicy(List<RequestMetadata> expecteds) {
+            this.expecteds = expecteds;
+        }
+
+        @Override
+        public void validate(RequestMetadata actual) throws PolicyViolationException {
+            long curIndex = index.getAndIncrement();
+            if (curIndex >= expecteds.size()) {
+                throw new PolicyViolationException("Unexpected topic creation: index " +
+                    "out of range at " + curIndex);
+            }
+            RequestMetadata expected = expecteds.get((int) curIndex);
+            if (!expected.equals(actual)) {
+                throw new PolicyViolationException("Expected: " + expected +
+                    ". Got: " + actual);
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            // nothing to do
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // nothing to do
         }
     }
 
@@ -281,18 +421,111 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
         expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
-                setErrorMessage(Errors.TOPIC_ALREADY_EXISTS.exception().getMessage()));
+                setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse3, result3.response());
         Uuid fooId = result2.response().topics().find("foo").topicId();
-        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
-            Arrays.asList(new ApiMessageAndVersion(new PartitionRecord().
+        RecordTestUtils.assertBatchIteratorContains(asList(
+            asList(new ApiMessageAndVersion(new PartitionRecord().
                     setPartitionId(0).setTopicId(fooId).
-                    setReplicas(Arrays.asList(1, 2, 0)).setIsr(Arrays.asList(1, 2, 0)).
+                    setReplicas(asList(1, 2, 0)).setIsr(asList(1, 2, 0)).
                     setRemovingReplicas(Collections.emptyList()).setAddingReplicas(Collections.emptyList()).setLeader(1).
                     setLeaderEpoch(0).setPartitionEpoch(0), (short) 0),
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testBrokerCountMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        ctx.registerBrokers(0);
+
+        assertEquals(1, ctx.metrics.fencedBrokerCount());
+        assertEquals(0, ctx.metrics.activeBrokerCount());
+
+        ctx.unfenceBrokers(0);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(1);
+        ctx.unfenceBrokers(1);
+
+        assertEquals(2, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(2);
+        ctx.unfenceBrokers(2);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(3, ctx.metrics.activeBrokerCount());
+
+        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
+        ctx.replay(result.records());
+        result = replicationControl.unregisterBroker(2);
+        ctx.replay(result.records());
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
+    }
+
+    @Test
+    public void testCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 3));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreatableTopicResult topicResult = result.response().topics().find("foo");
+        assertEquals((short) 0, topicResult.errorCode());
+    }
+
+    @Test
+    public void testInvalidCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 4));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
+            setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
+            setErrorMessage("Unable to replicate the partition 4 time(s): The target " +
+                "replication factor of 4 cannot be reached because only 3 broker(s) " +
+                "are registered."));
+        assertEquals(expectedResponse, result.response());
+    }
+
+    @Test
+    public void testCreateTopicsWithPolicy() throws Exception {
+        MockCreateTopicPolicy createTopicPolicy = new MockCreateTopicPolicy(asList(
+            new CreateTopicPolicy.RequestMetadata("foo", 2, (short) 2,
+                null, Collections.emptyMap()),
+            new CreateTopicPolicy.RequestMetadata("bar", 3, (short) 2,
+                null, Collections.emptyMap()),
+            new CreateTopicPolicy.RequestMetadata("baz", null, null,
+                Collections.singletonMap(0, asList(2, 1, 0)),
+                Collections.singletonMap(SEGMENT_BYTES_CONFIG, "12300000")),
+            new CreateTopicPolicy.RequestMetadata("quux", null, null,
+                Collections.singletonMap(0, asList(2, 1, 0)), Collections.emptyMap())));
+        ReplicationControlTestContext ctx =
+            new ReplicationControlTestContext(Optional.of(createTopicPolicy));
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ctx.createTestTopic("foo", 2, (short) 2, NONE.code());
+        ctx.createTestTopic("bar", 3, (short) 3, POLICY_VIOLATION.code());
+        ctx.createTestTopic("baz", new int[][] {new int[] {2, 1, 0}},
+            Collections.singletonMap(SEGMENT_BYTES_CONFIG, "12300000"), NONE.code());
+        ctx.createTestTopic("quux", new int[][] {new int[] {1, 2, 0}}, POLICY_VIOLATION.code());
     }
 
     @Test
@@ -450,7 +683,7 @@ public class ReplicationControlManagerTest {
         assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
         long brokerEpoch = ctx.currentBrokerEpoch(0);
         PartitionData shrinkIsrRequest = newAlterIsrPartition(
-            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+            replicationControl, topicIdPartition, asList(0, 1));
         ControllerResult<AlterIsrResponseData> shrinkIsrResult = sendAlterIsr(
             replicationControl, 0, brokerEpoch, "foo", shrinkIsrRequest);
         AlterIsrResponseData.PartitionData shrinkIsrResponse = assertAlterIsrResponse(
@@ -458,7 +691,7 @@ public class ReplicationControlManagerTest {
         assertConsistentAlterIsrResponse(replicationControl, topicIdPartition, shrinkIsrResponse);
 
         PartitionData expandIsrRequest = newAlterIsrPartition(
-            replicationControl, topicIdPartition, Arrays.asList(0, 1, 2));
+            replicationControl, topicIdPartition, asList(0, 1, 2));
         ControllerResult<AlterIsrResponseData> expandIsrResult = sendAlterIsr(
             replicationControl, 0, brokerEpoch, "foo", expandIsrRequest);
         AlterIsrResponseData.PartitionData expandIsrResponse = assertAlterIsrResponse(
@@ -482,7 +715,7 @@ public class ReplicationControlManagerTest {
 
         // Invalid leader
         PartitionData invalidLeaderRequest = newAlterIsrPartition(
-            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+            replicationControl, topicIdPartition, asList(0, 1));
         ControllerResult<AlterIsrResponseData> invalidLeaderResult = sendAlterIsr(
             replicationControl, 1, ctx.currentBrokerEpoch(1),
             "foo", invalidLeaderRequest);
@@ -490,13 +723,13 @@ public class ReplicationControlManagerTest {
 
         // Stale broker epoch
         PartitionData invalidBrokerEpochRequest = newAlterIsrPartition(
-            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+            replicationControl, topicIdPartition, asList(0, 1));
         assertThrows(StaleBrokerEpochException.class, () -> sendAlterIsr(
             replicationControl, 0, brokerEpoch - 1, "foo", invalidBrokerEpochRequest));
 
         // Invalid leader epoch
         PartitionData invalidLeaderEpochRequest = newAlterIsrPartition(
-            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+            replicationControl, topicIdPartition, asList(0, 1));
         invalidLeaderEpochRequest.setLeaderEpoch(500);
         ControllerResult<AlterIsrResponseData> invalidLeaderEpochResult = sendAlterIsr(
             replicationControl, 1, ctx.currentBrokerEpoch(1),
@@ -505,8 +738,8 @@ public class ReplicationControlManagerTest {
 
         // Invalid ISR (3 is not a valid replica)
         PartitionData invalidIsrRequest1 = newAlterIsrPartition(
-            replicationControl, topicIdPartition, Arrays.asList(0, 1));
-        invalidIsrRequest1.setNewIsr(Arrays.asList(0, 1, 3));
+            replicationControl, topicIdPartition, asList(0, 1));
+        invalidIsrRequest1.setNewIsr(asList(0, 1, 3));
         ControllerResult<AlterIsrResponseData> invalidIsrResult1 = sendAlterIsr(
             replicationControl, 1, ctx.currentBrokerEpoch(1),
             "foo", invalidIsrRequest1);
@@ -514,8 +747,8 @@ public class ReplicationControlManagerTest {
 
         // Invalid ISR (does not include leader 0)
         PartitionData invalidIsrRequest2 = newAlterIsrPartition(
-            replicationControl, topicIdPartition, Arrays.asList(0, 1));
-        invalidIsrRequest2.setNewIsr(Arrays.asList(1, 2));
+            replicationControl, topicIdPartition, asList(0, 1));
+        invalidIsrRequest2.setNewIsr(asList(1, 2));
         ControllerResult<AlterIsrResponseData> invalidIsrResult2 = sendAlterIsr(
             replicationControl, 1, ctx.currentBrokerEpoch(1),
             "foo", invalidIsrRequest2);
@@ -647,28 +880,28 @@ public class ReplicationControlManagerTest {
         assertNull(replicationControl.getPartition(topicId, 3));
         assertCreatedTopicConfigs(ctx, "foo", requestConfigs);
 
-        assertEquals(Collections.singletonMap(topicId, new ResultOrError<>("foo")),
+        assertEquals(singletonMap(topicId, new ResultOrError<>("foo")),
             replicationControl.findTopicNames(Long.MAX_VALUE, Collections.singleton(topicId)));
-        assertEquals(Collections.singletonMap("foo", new ResultOrError<>(topicId)),
+        assertEquals(singletonMap("foo", new ResultOrError<>(topicId)),
             replicationControl.findTopicIds(Long.MAX_VALUE, Collections.singleton("foo")));
         Uuid invalidId = new Uuid(topicId.getMostSignificantBits() + 1,
             topicId.getLeastSignificantBits());
-        assertEquals(Collections.singletonMap(invalidId,
+        assertEquals(singletonMap(invalidId,
             new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_ID))),
                 replicationControl.findTopicNames(Long.MAX_VALUE, Collections.singleton(invalidId)));
-        assertEquals(Collections.singletonMap("bar",
+        assertEquals(singletonMap("bar",
             new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_OR_PARTITION))),
                 replicationControl.findTopicIds(Long.MAX_VALUE, Collections.singleton("bar")));
 
         ControllerResult<Map<Uuid, ApiError>> invalidDeleteResult = replicationControl.
             deleteTopics(Collections.singletonList(invalidId));
         assertEquals(0, invalidDeleteResult.records().size());
-        assertEquals(Collections.singletonMap(invalidId, new ApiError(UNKNOWN_TOPIC_ID, null)),
+        assertEquals(singletonMap(invalidId, new ApiError(UNKNOWN_TOPIC_ID, null)),
             invalidDeleteResult.response());
         ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.
             deleteTopics(Collections.singletonList(topicId));
         assertTrue(deleteResult.isAtomic());
-        assertEquals(Collections.singletonMap(topicId, new ApiError(NONE, null)),
+        assertEquals(singletonMap(topicId, new ApiError(NONE, null)),
             deleteResult.response());
         assertEquals(1, deleteResult.records().size());
         ctx.replay(deleteResult.records());
@@ -676,10 +909,10 @@ public class ReplicationControlManagerTest {
         assertNull(replicationControl.getPartition(topicId, 1));
         assertNull(replicationControl.getPartition(topicId, 2));
         assertNull(replicationControl.getPartition(topicId, 3));
-        assertEquals(Collections.singletonMap(topicId, new ResultOrError<>(
+        assertEquals(singletonMap(topicId, new ResultOrError<>(
             new ApiError(UNKNOWN_TOPIC_ID))), replicationControl.findTopicNames(
                 Long.MAX_VALUE, Collections.singleton(topicId)));
-        assertEquals(Collections.singletonMap("foo", new ResultOrError<>(
+        assertEquals(singletonMap("foo", new ResultOrError<>(
             new ApiError(UNKNOWN_TOPIC_OR_PARTITION))), replicationControl.findTopicIds(
                 Long.MAX_VALUE, Collections.singleton("foo")));
         assertEmptyTopicConfigs(ctx, "foo");
@@ -715,7 +948,7 @@ public class ReplicationControlManagerTest {
             setName("quux").setCount(2).setAssignments(null));
         ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
             replicationControl.createPartitions(topics);
-        assertEquals(Arrays.asList(new CreatePartitionsTopicResult().
+        assertEquals(asList(new CreatePartitionsTopicResult().
                 setName("foo").
                 setErrorCode(NONE.code()).
                 setErrorMessage(null),
@@ -735,20 +968,20 @@ public class ReplicationControlManagerTest {
         ctx.replay(createPartitionsResult.records());
         List<CreatePartitionsTopic> topics2 = new ArrayList<>();
         topics2.add(new CreatePartitionsTopic().
-            setName("foo").setCount(6).setAssignments(Arrays.asList(
-                new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(1, 0)))));
+            setName("foo").setCount(6).setAssignments(asList(
+                new CreatePartitionsAssignment().setBrokerIds(asList(1, 0)))));
         topics2.add(new CreatePartitionsTopic().
-            setName("bar").setCount(5).setAssignments(Arrays.asList(
-            new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(1)))));
+            setName("bar").setCount(5).setAssignments(asList(
+            new CreatePartitionsAssignment().setBrokerIds(asList(1)))));
         topics2.add(new CreatePartitionsTopic().
-            setName("quux").setCount(4).setAssignments(Arrays.asList(
-            new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(1, 0)))));
+            setName("quux").setCount(4).setAssignments(asList(
+            new CreatePartitionsAssignment().setBrokerIds(asList(1, 0)))));
         topics2.add(new CreatePartitionsTopic().
-            setName("foo2").setCount(3).setAssignments(Arrays.asList(
-            new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(2, 0)))));
+            setName("foo2").setCount(3).setAssignments(asList(
+            new CreatePartitionsAssignment().setBrokerIds(asList(2, 0)))));
         ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult2 =
             replicationControl.createPartitions(topics2);
-        assertEquals(Arrays.asList(new CreatePartitionsTopicResult().
+        assertEquals(asList(new CreatePartitionsTopicResult().
                 setName("foo").
                 setErrorCode(NONE.code()).
                 setErrorMessage(null),
@@ -775,13 +1008,13 @@ public class ReplicationControlManagerTest {
     public void testValidateGoodManualPartitionAssignments() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ctx.registerBrokers(1, 2, 3);
-        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1),
+        ctx.replicationControl.validateManualPartitionAssignment(asList(1),
             OptionalInt.of(1));
-        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1),
+        ctx.replicationControl.validateManualPartitionAssignment(asList(1),
             OptionalInt.empty());
-        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 3),
+        ctx.replicationControl.validateManualPartitionAssignment(asList(1, 2, 3),
             OptionalInt.of(3));
-        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 3),
+        ctx.replicationControl.validateManualPartitionAssignment(asList(1, 2, 3),
             OptionalInt.empty());
     }
 
@@ -791,20 +1024,20 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(1, 2);
         assertEquals("The manual partition assignment includes an empty replica list.",
             assertThrows(InvalidReplicaAssignmentException.class, () ->
-                ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(),
+                ctx.replicationControl.validateManualPartitionAssignment(asList(),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes broker 3, but no such " +
             "broker is registered.", assertThrows(InvalidReplicaAssignmentException.class, () ->
-                ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 3),
+                ctx.replicationControl.validateManualPartitionAssignment(asList(1, 2, 3),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes the broker 2 more than " +
             "once.", assertThrows(InvalidReplicaAssignmentException.class, () ->
-                ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 2),
+                ctx.replicationControl.validateManualPartitionAssignment(asList(1, 2, 2),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes a partition with 2 " +
             "replica(s), but this is not consistent with previous partitions, which have " +
                 "3 replica(s).", assertThrows(InvalidReplicaAssignmentException.class, () ->
-                    ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2),
+                    ctx.replicationControl.validateManualPartitionAssignment(asList(1, 2),
                         OptionalInt.of(3))).getMessage());
     }
 
@@ -824,18 +1057,18 @@ public class ReplicationControlManagerTest {
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
             replication.alterPartitionReassignments(
-                new AlterPartitionReassignmentsRequestData().setTopics(Arrays.asList(
-                    new ReassignableTopic().setName("foo").setPartitions(Arrays.asList(
+                new AlterPartitionReassignmentsRequestData().setTopics(asList(
+                    new ReassignableTopic().setName("foo").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
-                            setReplicas(Arrays.asList(3, 2, 1)),
+                            setReplicas(asList(3, 2, 1)),
                         new ReassignablePartition().setPartitionIndex(1).
-                            setReplicas(Arrays.asList(0, 2, 1)),
+                            setReplicas(asList(0, 2, 1)),
                         new ReassignablePartition().setPartitionIndex(2).
-                            setReplicas(Arrays.asList(0, 2, 1)))),
+                            setReplicas(asList(0, 2, 1)))),
                 new ReassignableTopic().setName("bar"))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
-                setErrorMessage(null).setResponses(Arrays.asList(
-                    new ReassignableTopicResponse().setName("foo").setPartitions(Arrays.asList(
+                setErrorMessage(null).setResponses(asList(
+                    new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                         new ReassignablePartitionResponse().setPartitionIndex(0).
                             setErrorMessage(null),
                         new ReassignablePartitionResponse().setPartitionIndex(1).
@@ -849,41 +1082,41 @@ public class ReplicationControlManagerTest {
         ctx.replay(alterResult.records());
         ListPartitionReassignmentsResponseData currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
-                setTopics(Arrays.asList(new OngoingTopicReassignment().
-                    setName("foo").setPartitions(Arrays.asList(
+                setTopics(asList(new OngoingTopicReassignment().
+                    setName("foo").setPartitions(asList(
                     new OngoingPartitionReassignment().setPartitionIndex(1).
-                        setRemovingReplicas(Arrays.asList(3)).
-                        setAddingReplicas(Arrays.asList(0)).
-                        setReplicas(Arrays.asList(0, 2, 1, 3))))));
+                        setRemovingReplicas(asList(3)).
+                        setAddingReplicas(asList(0)).
+                        setReplicas(asList(0, 2, 1, 3))))));
         assertEquals(currentReassigning, replication.listPartitionReassignments(null));
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(Arrays.asList(
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(asList(
                 new ListPartitionReassignmentsTopics().setName("bar").
-                    setPartitionIndexes(Arrays.asList(0, 1, 2)))));
-        assertEquals(currentReassigning, replication.listPartitionReassignments(Arrays.asList(
+                    setPartitionIndexes(asList(0, 1, 2)))));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(asList(
             new ListPartitionReassignmentsTopics().setName("foo").
-                setPartitionIndexes(Arrays.asList(0, 1, 2)))));
+                setPartitionIndexes(asList(0, 1, 2)))));
         ControllerResult<AlterPartitionReassignmentsResponseData> cancelResult =
             replication.alterPartitionReassignments(
-                new AlterPartitionReassignmentsRequestData().setTopics(Arrays.asList(
-                    new ReassignableTopic().setName("foo").setPartitions(Arrays.asList(
+                new AlterPartitionReassignmentsRequestData().setTopics(asList(
+                    new ReassignableTopic().setName("foo").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
                             setReplicas(null),
                         new ReassignablePartition().setPartitionIndex(1).
                             setReplicas(null),
                         new ReassignablePartition().setPartitionIndex(2).
                             setReplicas(null))),
-                    new ReassignableTopic().setName("bar").setPartitions(Arrays.asList(
+                    new ReassignableTopic().setName("bar").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
                             setReplicas(null))))));
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
             new PartitionChangeRecord().setTopicId(fooId).
                 setPartitionId(1).
-                setReplicas(Arrays.asList(2, 1, 3)).
+                setReplicas(asList(2, 1, 3)).
                 setLeader(3).
                 setRemovingReplicas(Collections.emptyList()).
                 setAddingReplicas(Collections.emptyList()), (short) 0)),
-            new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(Arrays.asList(
-                new ReassignableTopicResponse().setName("foo").setPartitions(Arrays.asList(
+            new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
+                new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
                         setErrorCode(NO_REASSIGNMENT_IN_PROGRESS.code()).setErrorMessage(null),
                     new ReassignablePartitionResponse().setPartitionIndex(1).
@@ -891,7 +1124,7 @@ public class ReplicationControlManagerTest {
                     new ReassignablePartitionResponse().setPartitionIndex(2).
                         setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
                         setErrorMessage("Unable to find partition foo:2."))),
-                new ReassignableTopicResponse().setName("bar").setPartitions(Arrays.asList(
+                new ReassignableTopicResponse().setName("bar").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
                         setErrorCode(NO_REASSIGNMENT_IN_PROGRESS.code()).
                         setErrorMessage(null)))))),
@@ -899,11 +1132,11 @@ public class ReplicationControlManagerTest {
         log.info("running final alterIsr...");
         ControllerResult<AlterIsrResponseData> alterIsrResult = replication.alterIsr(
             new AlterIsrRequestData().setBrokerId(3).setBrokerEpoch(103).
-                setTopics(Arrays.asList(new TopicData().setName("foo").setPartitions(Arrays.asList(
+                setTopics(asList(new TopicData().setName("foo").setPartitions(asList(
                     new PartitionData().setPartitionIndex(1).setCurrentIsrVersion(1).
-                        setLeaderEpoch(0).setNewIsr(Arrays.asList(3, 0, 2, 1)))))));
-        assertEquals(new AlterIsrResponseData().setTopics(Arrays.asList(
-            new AlterIsrResponseData.TopicData().setName("foo").setPartitions(Arrays.asList(
+                        setLeaderEpoch(0).setNewIsr(asList(3, 0, 2, 1)))))));
+        assertEquals(new AlterIsrResponseData().setTopics(asList(
+            new AlterIsrResponseData.TopicData().setName("foo").setPartitions(asList(
                 new AlterIsrResponseData.PartitionData().
                     setPartitionIndex(1).
                     setErrorCode(FENCED_LEADER_EPOCH.code()))))),
@@ -931,22 +1164,22 @@ public class ReplicationControlManagerTest {
             new int[] {}, new int[] {}, 1, 1, 1), replication.getPartition(fooId, 0));
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
             replication.alterPartitionReassignments(
-                new AlterPartitionReassignmentsRequestData().setTopics(Arrays.asList(
-                    new ReassignableTopic().setName("foo").setPartitions(Arrays.asList(
+                new AlterPartitionReassignmentsRequestData().setTopics(asList(
+                    new ReassignableTopic().setName("foo").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
-                            setReplicas(Arrays.asList(1, 2, 3)),
+                            setReplicas(asList(1, 2, 3)),
                         new ReassignablePartition().setPartitionIndex(1).
-                            setReplicas(Arrays.asList(1, 2, 3, 0)),
+                            setReplicas(asList(1, 2, 3, 0)),
                         new ReassignablePartition().setPartitionIndex(2).
-                            setReplicas(Arrays.asList(5, 6, 7)),
+                            setReplicas(asList(5, 6, 7)),
                         new ReassignablePartition().setPartitionIndex(3).
-                            setReplicas(Arrays.asList()))),
-                new ReassignableTopic().setName("bar").setPartitions(Arrays.asList(
+                            setReplicas(asList()))),
+                new ReassignableTopic().setName("bar").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
-                            setReplicas(Arrays.asList(1, 2, 3, 4, 0)))))));
+                            setReplicas(asList(1, 2, 3, 4, 0)))))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
-                setErrorMessage(null).setResponses(Arrays.asList(
-            new ReassignableTopicResponse().setName("foo").setPartitions(Arrays.asList(
+                setErrorMessage(null).setResponses(asList(
+            new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                 new ReassignablePartitionResponse().setPartitionIndex(0).
                     setErrorMessage(null),
                 new ReassignablePartitionResponse().setPartitionIndex(1).
@@ -959,7 +1192,7 @@ public class ReplicationControlManagerTest {
                     setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
                     setErrorMessage("The manual partition assignment includes an empty " +
                         "replica list."))),
-            new ReassignableTopicResponse().setName("bar").setPartitions(Arrays.asList(
+            new ReassignableTopicResponse().setName("bar").setPartitions(asList(
                 new ReassignablePartitionResponse().setPartitionIndex(0).
                     setErrorMessage(null))))),
             alterResult.response());
@@ -972,55 +1205,55 @@ public class ReplicationControlManagerTest {
             new int[] {}, new int[] {0, 1}, 4, 1, 2), replication.getPartition(barId, 0));
         ListPartitionReassignmentsResponseData currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
-                setTopics(Arrays.asList(new OngoingTopicReassignment().
-                    setName("bar").setPartitions(Arrays.asList(
+                setTopics(asList(new OngoingTopicReassignment().
+                    setName("bar").setPartitions(asList(
                     new OngoingPartitionReassignment().setPartitionIndex(0).
                         setRemovingReplicas(Collections.emptyList()).
-                        setAddingReplicas(Arrays.asList(0, 1)).
-                        setReplicas(Arrays.asList(1, 2, 3, 4, 0))))));
+                        setAddingReplicas(asList(0, 1)).
+                        setReplicas(asList(1, 2, 3, 4, 0))))));
         assertEquals(currentReassigning, replication.listPartitionReassignments(null));
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(Arrays.asList(
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(asList(
             new ListPartitionReassignmentsTopics().setName("foo").
-                setPartitionIndexes(Arrays.asList(0, 1, 2)))));
-        assertEquals(currentReassigning, replication.listPartitionReassignments(Arrays.asList(
+                setPartitionIndexes(asList(0, 1, 2)))));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(asList(
             new ListPartitionReassignmentsTopics().setName("bar").
-                setPartitionIndexes(Arrays.asList(0, 1, 2)))));
+                setPartitionIndexes(asList(0, 1, 2)))));
         ControllerResult<AlterIsrResponseData> alterIsrResult = replication.alterIsr(
             new AlterIsrRequestData().setBrokerId(4).setBrokerEpoch(104).
-                setTopics(Arrays.asList(new TopicData().setName("bar").setPartitions(Arrays.asList(
+                setTopics(asList(new TopicData().setName("bar").setPartitions(asList(
                     new PartitionData().setPartitionIndex(0).setCurrentIsrVersion(2).
-                        setLeaderEpoch(1).setNewIsr(Arrays.asList(4, 1, 2, 3, 0)))))));
-        assertEquals(new AlterIsrResponseData().setTopics(Arrays.asList(
-            new AlterIsrResponseData.TopicData().setName("bar").setPartitions(Arrays.asList(
+                        setLeaderEpoch(1).setNewIsr(asList(4, 1, 2, 3, 0)))))));
+        assertEquals(new AlterIsrResponseData().setTopics(asList(
+            new AlterIsrResponseData.TopicData().setName("bar").setPartitions(asList(
                 new AlterIsrResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(4).
                     setLeaderEpoch(1).
-                    setIsr(Arrays.asList(4, 1, 2, 3, 0)).
+                    setIsr(asList(4, 1, 2, 3, 0)).
                     setCurrentIsrVersion(3).
                     setErrorCode(NONE.code()))))),
             alterIsrResult.response());
         ControllerResult<AlterPartitionReassignmentsResponseData> cancelResult =
             replication.alterPartitionReassignments(
-                new AlterPartitionReassignmentsRequestData().setTopics(Arrays.asList(
-                    new ReassignableTopic().setName("foo").setPartitions(Arrays.asList(
+                new AlterPartitionReassignmentsRequestData().setTopics(asList(
+                    new ReassignableTopic().setName("foo").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
                             setReplicas(null))),
-                    new ReassignableTopic().setName("bar").setPartitions(Arrays.asList(
+                    new ReassignableTopic().setName("bar").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
                             setReplicas(null))))));
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new PartitionChangeRecord().setTopicId(barId).
                     setPartitionId(0).
                     setLeader(4).
-                    setReplicas(Arrays.asList(2, 3, 4)).
+                    setReplicas(asList(2, 3, 4)).
                     setRemovingReplicas(null).
                     setAddingReplicas(Collections.emptyList()), (short) 0)),
-            new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(Arrays.asList(
-                new ReassignableTopicResponse().setName("foo").setPartitions(Arrays.asList(
+            new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
+                new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
                         setErrorCode(NO_REASSIGNMENT_IN_PROGRESS.code()).setErrorMessage(null))),
-                new ReassignableTopicResponse().setName("bar").setPartitions(Arrays.asList(
+                new ReassignableTopicResponse().setName("bar").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
                         setErrorMessage(null)))))),
             cancelResult);
@@ -1050,6 +1283,160 @@ public class ReplicationControlManagerTest {
         assertEquals(new PartitionRegistration(new int[] {2, 4, 5},
                 new int[] {2}, Replicas.NONE, Replicas.NONE, 2, 0, 0),
             ctx.replicationControl.getPartition(fooId, 1));
+    }
+
+    private void assertLeaderAndIsr(
+        ReplicationControlManager replication,
+        TopicIdPartition topicIdPartition,
+        int leaderId,
+        int[] isr
+    ) {
+        PartitionRegistration registration = replication.getPartition(
+            topicIdPartition.topicId(),
+            topicIdPartition.partitionId()
+        );
+        assertArrayEquals(isr, registration.isr);
+        assertEquals(leaderId, registration.leader);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testElectUncleanLeaders(boolean electAllPartitions) throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
+
+        TopicIdPartition partition0 = new TopicIdPartition(fooId, 0);
+        TopicIdPartition partition1 = new TopicIdPartition(fooId, 1);
+        TopicIdPartition partition2 = new TopicIdPartition(fooId, 2);
+
+        ctx.fenceBrokers(Utils.mkSet(2, 3));
+        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+
+        assertLeaderAndIsr(replication, partition0, NO_LEADER, new int[]{1});
+        assertLeaderAndIsr(replication, partition1, 4, new int[]{4});
+        assertLeaderAndIsr(replication, partition2, 0, new int[]{0});
+
+        ElectLeadersRequestData request = buildElectLeadersRequest(
+            ElectionType.UNCLEAN,
+            electAllPartitions ? null : singletonMap("foo", asList(0, 1, 2))
+        );
+
+        // No election can be done yet because no replicas are available for partition 0
+        ControllerResult<ElectLeadersResponseData> result1 = replication.electLeaders(request);
+        assertEquals(Collections.emptyList(), result1.records());
+
+        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, electAllPartitions, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                new ApiError(ELIGIBLE_LEADERS_NOT_AVAILABLE)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 2),
+                new ApiError(ELECTION_NOT_NEEDED)
+            )
+        ));
+        assertElectLeadersResponse(expectedResponse1, result1.response());
+
+        // Now we bring 2 back online which should allow the unclean election of partition 0
+        ctx.unfenceBrokers(Utils.mkSet(2));
+
+        // Bring 2 back into the ISR for partition 1. This allows us to verify that
+        // preferred election does not occur as a result of the unclean election request.
+        ctx.alterIsr(partition1, 4, asList(2, 4));
+
+        ControllerResult<ElectLeadersResponseData> result = replication.electLeaders(request);
+        assertEquals(1, result.records().size());
+
+        ApiMessageAndVersion record = result.records().get(0);
+        assertTrue(record.message() instanceof PartitionChangeRecord);
+
+        PartitionChangeRecord partitionChangeRecord = (PartitionChangeRecord) record.message();
+        assertEquals(0, partitionChangeRecord.partitionId());
+        assertEquals(2, partitionChangeRecord.leader());
+        assertEquals(singletonList(2), partitionChangeRecord.isr());
+        ctx.replay(result.records());
+
+        assertLeaderAndIsr(replication, partition0, 2, new int[]{2});
+        assertLeaderAndIsr(replication, partition1, 4, new int[]{2, 4});
+        assertLeaderAndIsr(replication, partition2, 0, new int[]{0});
+
+        ElectLeadersResponseData expectedResponse = buildElectLeadersResponse(NONE, electAllPartitions, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                ApiError.NONE
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 2),
+                new ApiError(ELECTION_NOT_NEEDED)
+            )
+        ));
+        assertElectLeadersResponse(expectedResponse, result.response());
+    }
+
+    @Test
+    public void testPreferredElectionDoesNotTriggerUncleanElection() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(1, 2, 3, 4);
+        ctx.unfenceBrokers(1, 2, 3, 4);
+
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{new int[]{1, 2, 3}}).topicId();
+        TopicIdPartition partition = new TopicIdPartition(fooId, 0);
+
+        ctx.fenceBrokers(Utils.mkSet(2, 3));
+        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+        ctx.unfenceBrokers(Utils.mkSet(2));
+
+        assertLeaderAndIsr(replication, partition, NO_LEADER, new int[]{1});
+
+        ctx.alterTopicConfig("foo", "unclean.leader.election.enable", "true");
+
+        ElectLeadersRequestData request = buildElectLeadersRequest(
+            ElectionType.PREFERRED,
+            singletonMap("foo", singletonList(0))
+        );
+
+        // No election should be done even though unclean election is available
+        ControllerResult<ElectLeadersResponseData> result = replication.electLeaders(request);
+        assertEquals(Collections.emptyList(), result.records());
+
+        ElectLeadersResponseData expectedResponse = buildElectLeadersResponse(NONE, false, singletonMap(
+            new TopicPartition("foo", 0), new ApiError(PREFERRED_LEADER_NOT_AVAILABLE)
+        ));
+        assertEquals(expectedResponse, result.response());
+    }
+
+    private ElectLeadersRequestData buildElectLeadersRequest(
+        ElectionType electionType,
+        Map<String, List<Integer>> partitions
+    ) {
+        ElectLeadersRequestData request = new ElectLeadersRequestData().
+            setElectionType(electionType.value);
+
+        if (partitions == null) {
+            request.setTopicPartitions(null);
+        } else {
+            partitions.forEach((topic, partitionIds) -> {
+                request.topicPartitions().add(new TopicPartitions()
+                    .setTopic(topic)
+                    .setPartitions(partitionIds)
+                );
+            });
+        }
+        return request;
     }
 
     @Test
@@ -1083,7 +1470,7 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testElectLeaders() throws Exception {
+    public void testElectPreferredLeaders() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
@@ -1091,60 +1478,130 @@ public class ReplicationControlManagerTest {
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
         ElectLeadersRequestData request1 = new ElectLeadersRequestData().
-            setElectionType((byte) 0).
-            setTopicPartitions(new TopicPartitionsCollection(Arrays.asList(
+            setElectionType(ElectionType.PREFERRED.value).
+            setTopicPartitions(new TopicPartitionsCollection(asList(
                 new TopicPartitions().setTopic("foo").
-                    setPartitions(Arrays.asList(0, 1)),
+                    setPartitions(asList(0, 1)),
                 new TopicPartitions().setTopic("bar").
-                    setPartitions(Arrays.asList(0, 1))).iterator()));
+                    setPartitions(asList(0, 1))).iterator()));
         ControllerResult<ElectLeadersResponseData> election1Result =
             replication.electLeaders(request1);
-        ElectLeadersResponseData expectedResponse1 = new ElectLeadersResponseData().
-            setErrorCode((short) 0).
-            setReplicaElectionResults(Arrays.asList(
-                new ReplicaElectionResult().setTopic("foo").
-                    setPartitionResult(Arrays.asList(
-                        new PartitionResult().setPartitionId(0).
-                            setErrorCode(NONE.code()).
-                            setErrorMessage(null),
-                        new PartitionResult().setPartitionId(1).
-                            setErrorCode(NONE.code()).
-                            setErrorMessage(null))),
-                new ReplicaElectionResult().setTopic("bar").
-                    setPartitionResult(Arrays.asList(
-                        new PartitionResult().setPartitionId(0).
-                            setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
-                            setErrorMessage("No such topic as bar"),
-                        new PartitionResult().setPartitionId(1).
-                            setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
-                            setErrorMessage("No such topic as bar")))));
-        assertEquals(expectedResponse1, election1Result.response());
+        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, false, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                new ApiError(PREFERRED_LEADER_NOT_AVAILABLE)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 0),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 1),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            )
+        ));
+        assertElectLeadersResponse(expectedResponse1, election1Result.response());
         assertEquals(Collections.emptyList(), election1Result.records());
         ctx.unfenceBrokers(0, 1);
 
         ControllerResult<AlterIsrResponseData> alterIsrResult = replication.alterIsr(
             new AlterIsrRequestData().setBrokerId(2).setBrokerEpoch(102).
-                setTopics(Arrays.asList(new AlterIsrRequestData.TopicData().setName("foo").
-                    setPartitions(Arrays.asList(new AlterIsrRequestData.PartitionData().
+                setTopics(asList(new AlterIsrRequestData.TopicData().setName("foo").
+                    setPartitions(asList(new AlterIsrRequestData.PartitionData().
                         setPartitionIndex(0).setCurrentIsrVersion(0).
-                        setLeaderEpoch(0).setNewIsr(Arrays.asList(1, 2, 3)))))));
-        assertEquals(new AlterIsrResponseData().setTopics(Arrays.asList(
-            new AlterIsrResponseData.TopicData().setName("foo").setPartitions(Arrays.asList(
+                        setLeaderEpoch(0).setNewIsr(asList(1, 2, 3)))))));
+        assertEquals(new AlterIsrResponseData().setTopics(asList(
+            new AlterIsrResponseData.TopicData().setName("foo").setPartitions(asList(
                 new AlterIsrResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(2).
                     setLeaderEpoch(0).
-                    setIsr(Arrays.asList(1, 2, 3)).
+                    setIsr(asList(1, 2, 3)).
                     setCurrentIsrVersion(1).
                     setErrorCode(NONE.code()))))),
             alterIsrResult.response());
+
+        ElectLeadersResponseData expectedResponse2 = buildElectLeadersResponse(NONE, false, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                ApiError.NONE
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 0),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 1),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            )
+        ));
+
         ctx.replay(alterIsrResult.records());
         ControllerResult<ElectLeadersResponseData> election2Result =
             replication.electLeaders(request1);
-        assertEquals(expectedResponse1, election2Result.response());
-        assertEquals(Arrays.asList(new ApiMessageAndVersion(new PartitionChangeRecord().
+        assertElectLeadersResponse(expectedResponse2, election2Result.response());
+        assertEquals(asList(new ApiMessageAndVersion(new PartitionChangeRecord().
             setPartitionId(0).
             setTopicId(fooId).
             setLeader(1), (short) 0)), election2Result.records());
     }
+
+    private void assertElectLeadersResponse(
+        ElectLeadersResponseData expected,
+        ElectLeadersResponseData actual
+    ) {
+        assertEquals(Errors.forCode(expected.errorCode()), Errors.forCode(actual.errorCode()));
+        assertEquals(collectElectLeadersErrors(expected), collectElectLeadersErrors(actual));
+    }
+
+    private Map<TopicPartition, PartitionResult> collectElectLeadersErrors(ElectLeadersResponseData response) {
+        Map<TopicPartition, PartitionResult> res = new HashMap<>();
+        response.replicaElectionResults().forEach(topicResult -> {
+            String topic = topicResult.topic();
+            topicResult.partitionResult().forEach(partitionResult -> {
+                TopicPartition topicPartition = new TopicPartition(topic, partitionResult.partitionId());
+                res.put(topicPartition, partitionResult);
+            });
+        });
+        return res;
+    }
+
+    private ElectLeadersResponseData buildElectLeadersResponse(
+        Errors topLevelError,
+        boolean electAllPartitions,
+        Map<TopicPartition, ApiError> errors
+    ) {
+        Map<String, List<Map.Entry<TopicPartition, ApiError>>> errorsByTopic = errors.entrySet().stream()
+            .collect(Collectors.groupingBy(entry -> entry.getKey().topic()));
+
+        ElectLeadersResponseData response = new ElectLeadersResponseData()
+            .setErrorCode(topLevelError.code());
+
+        errorsByTopic.forEach((topic, partitionErrors) -> {
+            ReplicaElectionResult electionResult = new ReplicaElectionResult().setTopic(topic);
+            electionResult.setPartitionResult(partitionErrors.stream()
+                .filter(entry -> !electAllPartitions || entry.getValue().error() != ELECTION_NOT_NEEDED)
+                .map(entry -> {
+                    TopicPartition topicPartition = entry.getKey();
+                    ApiError error = entry.getValue();
+                    return new PartitionResult()
+                        .setPartitionId(topicPartition.partition())
+                        .setErrorCode(error.error().code())
+                        .setErrorMessage(error.message());
+                })
+                .collect(Collectors.toList()));
+            response.replicaElectionResults().add(electionResult);
+        });
+
+        return response;
+    }
+
 }

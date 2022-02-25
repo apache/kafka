@@ -677,7 +677,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         advertised_listeners = []
         protocol_map = []
 
-        controller_listener_names = self.controller_listener_name_list()
+        controller_listener_names = self.controller_listener_name_list(node)
 
         for port in self.port_mappings.values():
             if port.open:
@@ -758,12 +758,17 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 KafkaService.STDOUT_STDERR_CAPTURE)
         return cmd
 
-    def controller_listener_name_list(self):
+    def controller_listener_name_list(self, node):
         if self.quorum_info.using_zk:
             return []
         broker_to_controller_listener_name = self.controller_listener_name(self.controller_quorum.controller_security_protocol)
-        return [broker_to_controller_listener_name] if (self.controller_quorum.intercontroller_security_protocol == self.controller_quorum.controller_security_protocol) \
-            else [broker_to_controller_listener_name, self.controller_listener_name(self.controller_quorum.intercontroller_security_protocol)]
+        # Brokers always use the first controller listener, so include a second, inter-controller listener if and only if:
+        # 1) the node is a controller node
+        # 2) the inter-controller listener name differs from the broker-to-controller listener name
+        return [broker_to_controller_listener_name, self.controller_listener_name(self.controller_quorum.intercontroller_security_protocol)] \
+            if (quorum.NodeQuorumInfo(self.quorum_info, node).has_controller_role and
+                self.controller_quorum.intercontroller_security_protocol != self.controller_quorum.controller_security_protocol) \
+            else [broker_to_controller_listener_name]
 
     def start_node(self, node, timeout_sec=60):
         if node not in self.nodes_to_start:
@@ -772,7 +777,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.node_quorum_info = quorum.NodeQuorumInfo(self.quorum_info, node)
         if self.quorum_info.has_controllers:
-            for controller_listener in self.controller_listener_name_list():
+            for controller_listener in self.controller_listener_name_list(node):
                 if self.node_quorum_info.has_controller_role:
                     self.open_port(controller_listener)
                 else: # co-located case where node doesn't have a controller
@@ -793,7 +798,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                                        KafkaService.SECURITY_PROTOCOLS.index(security_protocol_to_use))
                                                       for node in self.controller_quorum.nodes[:self.controller_quorum.num_nodes_controller_role]])
             # define controller.listener.names
-            self.controller_listener_names = ','.join(self.controller_listener_name_list())
+            self.controller_listener_names = ','.join(self.controller_listener_name_list(node))
             # define sasl.mechanism.controller.protocol to match remote quorum if one exists
             if self.remote_controller_quorum:
                 self.controller_sasl_mechanism = self.remote_controller_quorum.controller_sasl_mechanism
@@ -902,7 +907,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
-    def kafka_topics_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None):
+    def kafka_topics_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol=None, offline_nodes=[]):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
             raise Exception("Must invoke kafka-topics against a broker, not a KRaft controller")
         if force_use_zk_connection:
@@ -918,7 +923,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     security_protocol_to_use = self.security_protocol
             else:
                 security_protocol_to_use = kafka_security_protocol
-            bootstrap_server_or_zookeeper = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
+            bootstrap_server_or_zookeeper = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use, offline_nodes=offline_nodes))
             skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
         if skip_optional_security_settings:
             optional_jass_krb_system_props_prefix = ""
@@ -1125,7 +1130,50 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running topic delete command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def describe_topic(self, topic, node=None):
+    def has_under_replicated_partitions(self):
+        """
+        Check whether the cluster has under-replicated partitions.
+
+        :return True if there are under-replicated partitions, False otherwise.
+        """
+        return len(self.describe_under_replicated_partitions()) > 0
+
+    def await_no_under_replicated_partitions(self, timeout_sec=30):
+        """
+        Wait for all under-replicated partitions to clear.
+
+        :param timeout_sec: the maximum time in seconds to wait
+        """
+        wait_until(lambda: not self.has_under_replicated_partitions(),
+                   timeout_sec = timeout_sec,
+                   err_msg="Timed out waiting for under-replicated-partitions to clear")
+
+    def describe_under_replicated_partitions(self):
+        """
+        Use the topic tool to find the under-replicated partitions in the cluster.
+
+        :return the under-replicated partitions as a list of dictionaries
+                (e.g. [{"topic": "foo", "partition": 1}, {"topic": "bar", "partition": 0}, ... ])
+        """
+
+        node = self.nodes[0]
+        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --describe --under-replicated-partitions" % \
+            self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection)
+
+        self.logger.debug("Running topic command to describe under-replicated partitions\n%s" % cmd)
+        output = ""
+        for line in node.account.ssh_capture(cmd):
+            output += line
+
+        under_replicated_partitions = self.parse_describe_topic(output)["partitions"]
+        self.logger.debug("Found %d under-replicated-partitions" % len(under_replicated_partitions))
+
+        return under_replicated_partitions
+
+    def describe_topic(self, topic, node=None, offline_nodes=[]):
         if node is None:
             node = self.nodes[0]
 
@@ -1133,7 +1181,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --topic %s --describe" % \
-               (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection), topic)
+               (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection, offline_nodes=offline_nodes), topic)
 
         self.logger.info("Running topic describe command...\n%s" % cmd)
         output = ""
@@ -1404,10 +1452,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         found_lines = [line for line in describe_topic_output.splitlines() if grep_for in line]
         return None if not found_lines else found_lines[0]
 
-    def isr_idx_list(self, topic, partition=0):
+    def isr_idx_list(self, topic, partition=0, node=None, offline_nodes=[]):
         """ Get in-sync replica list the given topic and partition.
         """
-        node = self.nodes[0]
+        if node is None:
+          node = self.nodes[0]
         if not self.all_nodes_topic_command_supports_bootstrap_server():
             self.logger.debug("Querying zookeeper to find in-sync replicas for topic %s and partition %d" % (topic, partition))
             zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
@@ -1422,7 +1471,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             isr_idx_list = partition_state["isr"]
         else:
             self.logger.debug("Querying Kafka Admin API to find in-sync replicas for topic %s and partition %d" % (topic, partition))
-            describe_output = self.describe_topic(topic, node)
+            describe_output = self.describe_topic(topic, node, offline_nodes=offline_nodes)
             self.logger.debug(describe_output)
             requested_partition_line = self._describe_topic_line_for_partition(partition, describe_output)
             # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2

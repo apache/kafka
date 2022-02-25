@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -56,11 +57,10 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -75,9 +75,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Random;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -128,7 +126,7 @@ public final class RaftClientTestContext {
         private final MockMessageQueue messageQueue = new MockMessageQueue();
         private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
-        private final Random random = Mockito.spy(new Random(1));
+        private final MockableRandom random = new MockableRandom(1L);
         private final LogContext logContext = new LogContext();
         private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext);
         private final Set<Integer> voters;
@@ -164,7 +162,7 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder updateRandom(Consumer<Random> consumer) {
+        Builder updateRandom(Consumer<MockableRandom> consumer) {
             consumer.accept(random);
             return this;
         }
@@ -429,7 +427,7 @@ public final class RaftClientTestContext {
         assertEquals(ElectionState.withVotedCandidate(epoch, leaderId, voters), quorumStateStore.readElectionState());
     }
 
-    void assertElectedLeader(int epoch, int leaderId) throws IOException {
+    public void assertElectedLeader(int epoch, int leaderId) throws IOException {
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
     }
 

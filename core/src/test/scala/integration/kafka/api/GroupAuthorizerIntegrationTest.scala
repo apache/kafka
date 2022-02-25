@@ -14,6 +14,7 @@ package kafka.api
 
 import java.util.Properties
 import java.util.concurrent.ExecutionException
+
 import kafka.api.GroupAuthorizerIntegrationTest._
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
@@ -30,7 +31,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -75,11 +76,11 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
 
     // Allow inter-broker communication
-    TestUtils.addAndVerifyAcls(servers.head,
+    TestUtils.addAndVerifyAcls(brokers,
       Set(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, principal = BrokerPrincipal)),
       new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL))
 
@@ -119,13 +120,13 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
 
     createTopic(topic)
 
-    TestUtils.addAndVerifyAcls(servers.head,
+    TestUtils.addAndVerifyAcls(brokers,
       Set(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW)),
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
     val producer = createProducer()
     producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
 
-    TestUtils.addAndVerifyAcls(servers.head,
+    TestUtils.addAndVerifyAcls(brokers,
       Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))

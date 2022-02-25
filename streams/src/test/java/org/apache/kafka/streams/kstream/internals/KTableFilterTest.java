@@ -36,8 +36,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
@@ -66,12 +64,11 @@ public class KTableFilterTest {
 
     private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private void doTestKTable(final StreamsBuilder builder,
                               final KTable<String, Integer> table2,
                               final KTable<String, Integer> table3,
                               final String topic) {
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
         table3.toStream().process(supplier);
 
@@ -86,7 +83,7 @@ public class KTableFilterTest {
             inputTopic.pipeInput("B", null, 15L);
         }
 
-        final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
+        final List<MockApiProcessor<String, Integer, Void, Void>> processors = supplier.capturedProcessors(2);
 
         processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", null, 10),
             new KeyValueTimestamp<>("B", 2, 5),

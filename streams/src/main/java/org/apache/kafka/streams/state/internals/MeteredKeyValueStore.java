@@ -22,30 +22,44 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.StoreQueryUtils.getDeserializeValue;
 
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
@@ -80,6 +94,19 @@ public class MeteredKeyValueStore<K, V>
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
+    @SuppressWarnings("rawtypes")
+    private final Map<Class, QueryHandler> queryHandlers =
+        mkMap(
+            mkEntry(
+                RangeQuery.class,
+                (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
+            ),
+            mkEntry(
+                KeyQuery.class,
+                (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
+            )
+        );
+
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                          final String metricsScope,
                          final Time time,
@@ -112,7 +139,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
-        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext<?, ?>) context : null;
         taskId = context.taskId();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
@@ -147,10 +174,11 @@ public class MeteredKeyValueStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
@@ -159,13 +187,26 @@ public class MeteredKeyValueStore<K, V>
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
+    }
+
+    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+        if (configs == null) {
+            return applicationId;
+        } else {
+            return StreamsConfig.InternalConfig.getString(
+                configs,
+                StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+                applicationId
+            );
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -175,31 +216,119 @@ public class MeteredKeyValueStore<K, V>
         final KeyValueStore<Bytes, byte[]> wrapped = wrapped();
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
-                new CacheFlushListener<byte[], byte[]>() {
-                    @Override
-                    public void apply(final byte[] rawKey, final byte[] rawNewValue, final byte[] rawOldValue, final long timestamp) {
-                        listener.apply(
-                            serdes.keyFrom(rawKey),
-                            rawNewValue != null ? serdes.valueFrom(rawNewValue) : null,
-                            rawOldValue != null ? serdes.valueFrom(rawOldValue) : null,
-                            timestamp
-                        );
-                    }
-
-                    @Override
-                    public void apply(final Record<byte[], Change<byte[]>> record) {
-                        listener.apply(
-                            record.withKey(serdes.keyFrom(record.key()))
-                            .withValue(new Change<>(
-                                record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                                record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
-                            ))
-                        );
-                    }
-                },
+                record -> listener.apply(
+                    record.withKey(serdes.keyFrom(record.key()))
+                        .withValue(new Change<>(
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                        ))
+                ),
                 sendOldValues);
         }
         return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+
+        final long start = time.nanoseconds();
+        final QueryResult<R> result;
+
+        final QueryHandler handler = queryHandlers.get(query.getClass());
+        if (handler == null) {
+            result = wrapped().query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+            }
+        } else {
+            result = (QueryResult<R>) handler.apply(
+                query,
+                positionBound,
+                config,
+                this
+            );
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + getClass() + " with serdes "
+                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public Position getPosition() {
+        return wrapped().getPosition();
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
+
+        final QueryResult<R> result;
+        final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
+        final RangeQuery<Bytes, byte[]> rawRangeQuery;
+        if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
+            rawRangeQuery = RangeQuery.withRange(
+                keyBytes(typedQuery.getLowerBound().get()),
+                keyBytes(typedQuery.getUpperBound().get())
+            );
+        } else if (typedQuery.getLowerBound().isPresent()) {
+            rawRangeQuery = RangeQuery.withLowerBound(keyBytes(typedQuery.getLowerBound().get()));
+        } else if (typedQuery.getUpperBound().isPresent()) {
+            rawRangeQuery = RangeQuery.withUpperBound(keyBytes(typedQuery.getUpperBound().get()));
+        } else {
+            rawRangeQuery = RangeQuery.withNoBounds();
+        }
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
+            wrapped().query(rawRangeQuery, positionBound, config);
+        if (rawResult.isSuccess()) {
+            final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
+            final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueTimestampedIterator(
+                iterator,
+                getSensor,
+                getDeserializeValue(serdes, wrapped())
+            );
+            final QueryResult<KeyValueIterator<K, V>> typedQueryResult =
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
+                    rawResult,
+                    resultIterator
+                );
+            result = (QueryResult<R>) typedQueryResult;
+        } else {
+            // the generic type doesn't matter, since failed queries have no result set.
+            result = (QueryResult<R>) rawResult;
+        }
+        return result;
+    }
+
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                           final PositionBound positionBound,
+                                           final QueryConfig config) {
+        final QueryResult<R> result;
+        final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
+        final KeyQuery<Bytes, byte[]> rawKeyQuery =
+            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
+        final QueryResult<byte[]> rawResult =
+            wrapped().query(rawKeyQuery, positionBound, config);
+        if (rawResult.isSuccess()) {
+            final Function<byte[], V> deserializer = getDeserializeValue(serdes, wrapped());
+            final V value = deserializer.apply(rawResult.getResult());
+            final QueryResult<V> typedQueryResult =
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, value);
+            result = (QueryResult<R>) typedQueryResult;
+        } else {
+            // the generic type doesn't matter, since failed queries have no result set.
+            result = (QueryResult<R>) rawResult;
+        }
+        return result;
     }
 
     @Override
@@ -364,6 +493,50 @@ public class MeteredKeyValueStore<K, V>
             return KeyValue.pair(
                 serdes.keyFrom(keyValue.key.get()),
                 outerValue(keyValue.value));
+        }
+
+        @Override
+        public void close() {
+            try {
+                iter.close();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        }
+
+        @Override
+        public K peekNextKey() {
+            return serdes.keyFrom(iter.peekNextKey().get());
+        }
+    }
+
+    private class MeteredKeyValueTimestampedIterator implements KeyValueIterator<K, V> {
+
+        private final KeyValueIterator<Bytes, byte[]> iter;
+        private final Sensor sensor;
+        private final long startNs;
+        private final Function<byte[], V> valueDeserializer;
+
+        private MeteredKeyValueTimestampedIterator(final KeyValueIterator<Bytes, byte[]> iter,
+                                        final Sensor sensor,
+                                        final Function<byte[], V> valueDeserializer) {
+            this.iter = iter;
+            this.sensor = sensor;
+            this.valueDeserializer = valueDeserializer;
+            this.startNs = time.nanoseconds();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, V> next() {
+            final KeyValue<Bytes, byte[]> keyValue = iter.next();
+            return KeyValue.pair(
+                    serdes.keyFrom(keyValue.key.get()),
+                    valueDeserializer.apply(keyValue.value));
         }
 
         @Override

@@ -42,6 +42,7 @@ import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSourceTask.SourceTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -117,8 +118,8 @@ import static org.junit.Assert.assertTrue;
 public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String TOPIC = "topic";
     private static final String OTHER_TOPIC = "other-topic";
-    private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
-    private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
+    private static final Map<String, Object> PARTITION = Collections.singletonMap("key", "partition".getBytes());
+    private static final Map<String, Object> OFFSET = Collections.singletonMap("key", 12);
 
     // Connect-format data
     private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
@@ -219,18 +220,32 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+    }
+
+    private void createWorkerTaskWithErrorToleration() {
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.ALL_OPERATOR);
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter);
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
     }
 
-    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+    private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
+        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator);
+    }
+
+    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
+                                  HeaderConverter headerConverter) {
+        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+    }
+
+    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
+                                  HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
             transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run);
+                retryWithToleranceOperator, statusBackingStore, Runnable::run);
     }
 
     @Test
@@ -286,6 +301,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall();
         expectOffsetFlush(true);
 
         statusListener.onShutdown(taskId);
@@ -333,6 +351,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall();
         expectOffsetFlush(true);
 
         statusListener.onShutdown(taskId);
@@ -547,6 +568,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
 
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall().atLeastOnce();
+
         expectTopicCreation(TOPIC);
 
         sourceTask.stop();
@@ -589,6 +613,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall().atLeastOnce();
 
         expectTopicCreation(TOPIC);
 
@@ -716,25 +743,23 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         expectTopicCreation(TOPIC);
 
         // First round
-        expectSendRecordOnce(false);
+        expectSendRecordOnce();
         // Any Producer retriable exception should work here
         expectSendRecordSyncFailure(new org.apache.kafka.common.errors.TimeoutException("retriable sync failure"));
 
         // Second round
-        expectSendRecordOnce(true);
-        expectSendRecordOnce(false);
+        expectSendRecordOnce();
+        expectSendRecordOnce();
 
         PowerMock.replayAll();
 
         // Try to send 3, make first pass, second fail. Should save last two
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertEquals(Arrays.asList(record2, record3), Whitebox.getInternalState(workerTask, "toSend"));
 
         // Next they all succeed
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
 
         PowerMock.verifyAll();
@@ -792,16 +817,41 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         expectTopicCreation(TOPIC);
 
         // Source task commit record failure will not cause the task to abort
-        expectSendRecordOnce(false);
-        expectSendRecordTaskCommitRecordFail(false, false);
-        expectSendRecordOnce(false);
+        expectSendRecordOnce();
+        expectSendRecordTaskCommitRecordFail(false);
+        expectSendRecordOnce();
 
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSourceTaskIgnoresProducerException() throws Exception {
+        createWorkerTaskWithErrorToleration();
+        expectTopicCreation(TOPIC);
+
+        // send two records
+        // record 1 will succeed
+        // record 2 will invoke the producer's failure callback, but ignore the exception via retryOperator
+        // and no ConnectException will be thrown
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+
+        expectSendRecordOnce();
+        expectSendRecordProducerCallbackFail();
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class), EasyMock.isNull());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
 
         PowerMock.verifyAll();
     }
@@ -930,7 +980,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         expectTopicCreation(TOPIC);
 
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord(TOPIC, true, false, true, true, true, headers);
+        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord(TOPIC, true, true, true, true, headers);
 
         PowerMock.replayAll();
 
@@ -968,8 +1018,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         expectTopicCreation(TOPIC);
 
-        Capture<ProducerRecord<byte[], byte[]>> sentRecordA = expectSendRecord(TOPIC, false, false, true, true, false, null);
-        Capture<ProducerRecord<byte[], byte[]>> sentRecordB = expectSendRecord(TOPIC, false, false, true, true, false, null);
+        Capture<ProducerRecord<byte[], byte[]>> sentRecordA = expectSendRecord(TOPIC, false, true, true, false, null);
+        Capture<ProducerRecord<byte[], byte[]>> sentRecordB = expectSendRecord(TOPIC, false, true, true, false, null);
 
         PowerMock.replayAll();
 
@@ -1009,8 +1059,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
         EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.singletonMap(TOPIC, topicDesc));
 
-        expectSendRecordTaskCommitRecordSucceed(false, false);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false);
+        expectSendRecordTaskCommitRecordSucceed(false);
 
         PowerMock.replayAll();
 
@@ -1037,19 +1087,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Second round - calls to describe and create succeed
         expectTopicCreation(TOPIC);
         // Exactly two records are sent
-        expectSendRecordTaskCommitRecordSucceed(false, false);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false);
+        expectSendRecordTaskCommitRecordSucceed(false);
 
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertEquals(Arrays.asList(record1, record2), Whitebox.getInternalState(workerTask, "toSend"));
 
         // Next they all succeed
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
     }
 
@@ -1073,19 +1121,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // Second round
         expectTopicCreation(TOPIC);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false);
+        expectSendRecordTaskCommitRecordSucceed(false);
 
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertEquals(Arrays.asList(record1, record2), Whitebox.getInternalState(workerTask, "toSend"));
 
         // Next they all succeed
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
     }
 
@@ -1105,8 +1151,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // First round
         expectPreliminaryCalls(OTHER_TOPIC);
         expectTopicCreation(TOPIC);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false);
+        expectSendRecordTaskCommitRecordSucceed(false);
 
         // First call to describe the topic times out
         EasyMock.expect(admin.describeTopics(OTHER_TOPIC))
@@ -1114,19 +1160,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // Second round
         expectTopicCreation(OTHER_TOPIC);
-        expectSendRecord(OTHER_TOPIC, false, true, true, true, true, emptyHeaders());
+        expectSendRecord(OTHER_TOPIC, false, true, true, true, emptyHeaders());
 
         PowerMock.replayAll();
 
         // Try to send 3, make first pass, second fail. Should save last two
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertEquals(Arrays.asList(record3), Whitebox.getInternalState(workerTask, "toSend"));
 
         // Next they all succeed
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
 
         PowerMock.verifyAll();
@@ -1148,8 +1192,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // First round
         expectPreliminaryCalls(OTHER_TOPIC);
         expectTopicCreation(TOPIC);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false);
+        expectSendRecordTaskCommitRecordSucceed(false);
 
         EasyMock.expect(admin.describeTopics(OTHER_TOPIC)).andReturn(Collections.emptyMap());
         // First call to create the topic times out
@@ -1159,19 +1203,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // Second round
         expectTopicCreation(OTHER_TOPIC);
-        expectSendRecord(OTHER_TOPIC, false, true, true, true, true, emptyHeaders());
+        expectSendRecord(OTHER_TOPIC, false, true, true, true, emptyHeaders());
 
         PowerMock.replayAll();
 
         // Try to send 3, make first pass, second fail. Should save last two
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertEquals(Arrays.asList(record3), Whitebox.getInternalState(workerTask, "toSend"));
 
         // Next they all succeed
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
 
         PowerMock.verifyAll();
@@ -1199,7 +1241,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFails() throws Exception {
+    public void testTopicCreateFails() {
         if (!enableTopicCreation)
             // should only test with topic creation enabled
             return;
@@ -1224,7 +1266,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFailsWithExceptionWhenCreateReturnsTopicNotCreatedOrFound() throws Exception {
+    public void testTopicCreateFailsWithExceptionWhenCreateReturnsTopicNotCreatedOrFound() {
         if (!enableTopicCreation)
             // should only test with topic creation enabled
             return;
@@ -1264,8 +1306,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
         EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(foundTopic(TOPIC));
 
-        expectSendRecordTaskCommitRecordSucceed(false, false);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false);
+        expectSendRecordTaskCommitRecordSucceed(false);
 
         PowerMock.replayAll();
 
@@ -1290,8 +1332,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
         EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(createdTopic(TOPIC));
 
-        expectSendRecordTaskCommitRecordSucceed(false, false);
-        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false);
+        expectSendRecordTaskCommitRecordSucceed(false);
 
         PowerMock.replayAll();
 
@@ -1318,8 +1360,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private void expectPreliminaryCalls(String topic) {
         expectConvertHeadersAndKeyValue(topic, true, emptyHeaders());
         expectApplyTransformationChain(false);
-        offsetWriter.offset(PARTITION, OFFSET);
-        PowerMock.expectLastCall();
     }
 
     private CountDownLatch expectEmptyPolls(int minimum, final AtomicInteger count) throws InterruptedException {
@@ -1359,12 +1399,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @SuppressWarnings("unchecked")
-    private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
+    private void expectSendRecordSyncFailure(Throwable error) {
         expectConvertHeadersAndKeyValue(false);
         expectApplyTransformationChain(false);
-
-        offsetWriter.offset(PARTITION, OFFSET);
-        PowerMock.expectLastCall();
 
         EasyMock.expect(
             producer.send(EasyMock.anyObject(ProducerRecord.class),
@@ -1373,33 +1410,28 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordAnyTimes() throws InterruptedException {
-        return expectSendRecordTaskCommitRecordSucceed(true, false);
+        return expectSendRecordTaskCommitRecordSucceed(true);
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordOnce(boolean isRetry) throws InterruptedException {
-        return expectSendRecordTaskCommitRecordSucceed(false, isRetry);
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordOnce() throws InterruptedException {
+        return expectSendRecordTaskCommitRecordSucceed(false);
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordProducerCallbackFail() throws InterruptedException {
-        return expectSendRecord(TOPIC, false, false, false, false, true, emptyHeaders());
+        return expectSendRecord(TOPIC, false, false, false, true, emptyHeaders());
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordSucceed(boolean anyTimes, boolean isRetry) throws InterruptedException {
-        return expectSendRecord(TOPIC, anyTimes, isRetry, true, true, true, emptyHeaders());
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordSucceed(boolean anyTimes) throws InterruptedException {
+        return expectSendRecord(TOPIC, anyTimes, true, true, true, emptyHeaders());
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordFail(boolean anyTimes, boolean isRetry) throws InterruptedException {
-        return expectSendRecord(TOPIC, anyTimes, isRetry, true, false, true, emptyHeaders());
-    }
-
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
-        return expectSendRecord(TOPIC, anyTimes, isRetry, succeed, true, true, emptyHeaders());
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordFail(boolean anyTimes) throws InterruptedException {
+        return expectSendRecord(TOPIC, anyTimes, true, false, true, emptyHeaders());
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(
         String topic,
         boolean anyTimes,
-        boolean isRetry,
         boolean sendSuccess,
         boolean commitSuccess,
         boolean isMockedConverters,
@@ -1413,16 +1445,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
 
-        // 1. Offset data is passed to the offset storage.
-        if (!isRetry) {
-            offsetWriter.offset(PARTITION, OFFSET);
-            if (anyTimes)
-                PowerMock.expectLastCall().anyTimes();
-            else
-                PowerMock.expectLastCall();
-        }
-
-        // 2. Converted data passed to the producer, which will need callbacks invoked for flush to work
+        // 1. Converted data passed to the producer, which will need callbacks invoked for flush to work
         IExpectationSetters<Future<RecordMetadata>> expect = EasyMock.expect(
             producer.send(EasyMock.capture(sent),
                 EasyMock.capture(producerCallbacks)));
@@ -1446,7 +1469,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             expect.andAnswer(expectResponse);
 
         if (sendSuccess) {
-            // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
+            // 2. As a result of a successful producer send callback, we'll notify the source task of the record commit
             expectTaskCommitRecordWithOffset(anyTimes, commitSuccess);
             expectTaskGetTopic(anyTimes);
         }
@@ -1559,7 +1582,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             assertEquals(RECORDS.size(), metrics.currentMetricValueAsDouble(taskGroup, "batch-size-avg"), 0.000001d);
             assertTrue(pollRate > 0.0d);
         } else {
-            assertTrue(pollRate == 0.0d);
+            assertEquals(0.0d, pollRate, 0.0);
         }
         assertTrue(pollTotal >= minimumPollCountExpected);
 
@@ -1568,7 +1591,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         if (minimumPollCountExpected > 0) {
             assertTrue(writeRate > 0.0d);
         } else {
-            assertTrue(writeRate == 0.0d);
+            assertEquals(0.0d, writeRate, 0.0);
         }
         assertTrue(writeTotal >= minimumPollCountExpected);
 

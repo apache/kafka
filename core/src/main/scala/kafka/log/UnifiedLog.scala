@@ -59,7 +59,7 @@ object LogAppendInfo {
   /**
    * In ProduceResponse V8+, we add two new fields record_errors and error_message (see KIP-467).
    * For any record failures with InvalidTimestamp or InvalidRecordException, we construct a LogAppendInfo object like the one
-   * in unknownLogAppendInfoWithLogStartOffset, but with additiona fields recordErrors and errorMessage
+   * in unknownLogAppendInfoWithLogStartOffset, but with additional fields recordErrors and errorMessage
    */
   def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
@@ -353,13 +353,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def logDirFailureChannel: LogDirFailureChannel = localLog.logDirFailureChannel
 
-  def updateConfig(newConfig: LogConfig): Unit = {
+  def updateConfig(newConfig: LogConfig): LogConfig = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
     val oldRecordVersion = oldConfig.recordVersion
     val newRecordVersion = newConfig.recordVersion
     if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
+    oldConfig
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset
@@ -611,6 +612,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     localLog.checkIfMemoryMappedBufferClosed()
     UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
       reloadFromCleanShutdown = false, logIdent)
+  }
+
+  @threadsafe
+  def hasLateTransaction(currentTimeMs: Long): Boolean = {
+    producerStateManager.hasLateTransaction(currentTimeMs)
   }
 
   def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
@@ -929,7 +935,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 s"next offset: ${localLog.logEndOffset}, " +
                 s"and messages: $validRecords")
 
-              if (localLog.unflushedMessages >= config.flushInterval) flush()
+              if (localLog.unflushedMessages >= config.flushInterval) flush(false)
           }
           appendInfo
         }
@@ -958,16 +964,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def maybeIncrementFirstUnstableOffset(): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
 
-    val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
+    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         Some(convertToOffsetMetadataOrThrow(offset))
       case other => other
     }
 
-    if (updatedFirstStableOffset != this.firstUnstableOffsetMetadata) {
-      debug(s"First unstable offset updated to $updatedFirstStableOffset")
-      this.firstUnstableOffsetMetadata = updatedFirstStableOffset
+    if (updatedFirstUnstableOffset != this.firstUnstableOffsetMetadata) {
+      debug(s"First unstable offset updated to $updatedFirstUnstableOffset")
+      this.firstUnstableOffsetMetadata = updatedFirstUnstableOffset
     }
   }
 
@@ -1497,28 +1503,47 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     producerStateManager.takeSnapshot()
     updateHighWatermarkWithLogEndOffset()
     // Schedule an asynchronous flush of the old segment
-    scheduler.schedule("flush-log", () => flush(newSegment.baseOffset))
+    scheduler.schedule("flush-log", () => flushUptoOffsetExclusive(newSegment.baseOffset))
     newSegment
   }
 
   /**
    * Flush all local log segments
+   *
+   * @param forceFlushActiveSegment should be true during a clean shutdown, and false otherwise. The reason is that
+   * we have to pass logEndOffset + 1 to the `localLog.flush(offset: Long): Unit` function to flush empty
+   * active segments, which is important to make sure we persist the active segment file during shutdown, particularly
+   * when it's empty.
    */
-  def flush(): Unit = flush(logEndOffset)
+  def flush(forceFlushActiveSegment: Boolean): Unit = flush(logEndOffset, forceFlushActiveSegment)
 
   /**
    * Flush local log segments for all offsets up to offset-1
    *
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
-  def flush(offset: Long): Unit = {
-    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset") {
-      if (offset > localLog.recoveryPoint) {
-        debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
+  def flushUptoOffsetExclusive(offset: Long): Unit = flush(offset, false)
+
+  /**
+   * Flush local log segments for all offsets up to offset-1 if includingOffset=false; up to offset
+   * if includingOffset=true. The recovery point is set to offset.
+   *
+   * @param offset The offset to flush up to; the new recovery point
+   * @param includingOffset Whether the flush includes the provided offset.
+   */
+  private def flush(offset: Long, includingOffset: Boolean): Unit = {
+    val flushOffset = if (includingOffset) offset + 1  else offset
+    val newRecoveryPoint = offset
+    val includingOffsetStr =  if (includingOffset) "inclusive" else "exclusive"
+    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset " +
+      s"($includingOffsetStr) and recovery point $newRecoveryPoint") {
+      if (flushOffset > localLog.recoveryPoint) {
+        debug(s"Flushing log up to offset $offset ($includingOffsetStr)" +
+          s"with recovery point $newRecoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}," +
           s"unflushed: ${localLog.unflushedMessages}")
-        localLog.flush(offset)
+        localLog.flush(flushOffset)
         lock synchronized {
-          localLog.markFlushed(offset)
+          localLog.markFlushed(newRecoveryPoint)
         }
       }
     }
@@ -1750,7 +1775,8 @@ object UnifiedLog extends Logging {
             recoveryPoint: Long,
             scheduler: Scheduler,
             brokerTopicStats: BrokerTopicStats,
-            time: Time = Time.SYSTEM,
+            time: Time,
+            maxTransactionTimeoutMs: Int,
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
@@ -1767,8 +1793,9 @@ object UnifiedLog extends Logging {
       logDirFailureChannel,
       config.recordVersion,
       s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
-    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    val offsets = LogLoader.load(LoadLogParams(
+    val producerStateManager = new ProducerStateManager(topicPartition, dir,
+      maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
+    val offsets = new LogLoader(
       dir,
       topicPartition,
       config,
@@ -1779,9 +1806,9 @@ object UnifiedLog extends Logging {
       segments,
       logStartOffset,
       recoveryPoint,
-      maxProducerIdExpirationMs,
       leaderEpochCache,
-      producerStateManager))
+      producerStateManager
+    ).load()
     val localLog = new LocalLog(dir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel)
     new UnifiedLog(offsets.logStartOffset,

@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 
 import scala.annotation.nowarn
@@ -54,10 +54,10 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     verifyNoRequestMetrics("Request metrics not removed in a previous test")
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, kafkaServerJaasEntryName))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   @AfterEach
@@ -82,7 +82,10 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     // Produce and consume some records
     val numRecords = 10
     val recordSize = 100000
-    val producer = createProducer()
+    val prop = new Properties()
+    // idempotence producer doesn't support old version of messages
+    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    val producer = createProducer(configOverrides = prop)
     sendRecords(producer, numRecords, recordSize, tp)
 
     val consumer = createConsumer()
@@ -118,7 +121,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     saslProps.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
     saslProps.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty(kafkaClientSaslMechanism, "badUser", "badPass"))
     // Use acks=0 to verify error metric when connection is closed without a response
-    val producer = TestUtils.createProducer(brokerList,
+    val producer = TestUtils.createProducer(bootstrapServers(),
       acks = 0,
       requestTimeoutMs = 1000,
       maxBlockMs = 1000,

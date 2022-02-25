@@ -452,7 +452,7 @@ public class TopicAdmin implements AutoCloseable {
         String topicNameList = String.join(", ", topics);
 
         Map<String, KafkaFuture<TopicDescription>> newResults =
-                admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).values();
+                admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).topicNameValues();
 
         // Iterate over each future so that we can handle individual failures like when some topics don't exist
         Map<String, TopicDescription> existingTopics = new HashMap<>();
@@ -605,7 +605,7 @@ public class TopicAdmin implements AutoCloseable {
             return Collections.emptyMap();
         }
         String bootstrapServers = bootstrapServers();
-        String topicNameList = topics.stream().collect(Collectors.joining(", "));
+        String topicNameList = String.join(", ", topics);
         Collection<ConfigResource> resources = topics.stream()
                                                      .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
                                                      .collect(Collectors.toList());

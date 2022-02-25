@@ -63,6 +63,7 @@ class LogManager(logDirs: Seq[File],
                  val flushRecoveryOffsetCheckpointMs: Long,
                  val flushStartOffsetCheckpointMs: Long,
                  val retentionCheckMs: Long,
+                 val maxTransactionTimeoutMs: Int,
                  val maxPidExpirationMs: Int,
                  interBrokerProtocolVersion: ApiVersion,
                  scheduler: Scheduler,
@@ -271,6 +272,7 @@ class LogManager(logDirs: Seq[File],
       config = config,
       logStartOffset = logStartOffset,
       recoveryPoint = logRecoveryPoint,
+      maxTransactionTimeoutMs = maxTransactionTimeoutMs,
       maxProducerIdExpirationMs = maxPidExpirationMs,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       scheduler = scheduler,
@@ -524,7 +526,7 @@ class LogManager(logDirs: Seq[File],
       val jobsForDir = logs.map { log =>
         val runnable: Runnable = () => {
           // flush the log to ensure latest possible recovery point
-          log.flush()
+          log.flush(true)
           log.close()
         }
         runnable
@@ -724,6 +726,16 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
+   * Abort cleaning of the provided partition and log a message about it.
+   */
+  def abortCleaning(topicPartition: TopicPartition): Unit = {
+    if (cleaner != null) {
+      cleaner.abortCleaning(topicPartition)
+      info(s"The cleaning for partition $topicPartition is aborted")
+    }
+  }
+
+  /**
    * Resume cleaning of the provided partition and log a message about it.
    */
   private def resumeCleaning(topicPartition: TopicPartition): Unit = {
@@ -772,6 +784,25 @@ class LogManager(logDirs: Seq[File],
   def topicConfigUpdated(topic: String): Unit = {
     partitionsInitializing.keys.filter(_.topic() == topic).foreach {
       topicPartition => partitionsInitializing.replace(topicPartition, false, true)
+    }
+  }
+
+  /**
+   * Update the configuration of the provided topic.
+   */
+  def updateTopicConfig(topic: String,
+                        newTopicConfig: Properties): Unit = {
+    topicConfigUpdated(topic)
+    val logs = logsByTopic(topic)
+    if (logs.nonEmpty) {
+      // Combine the default properties with the overrides in zk to create the new LogConfig
+      val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
+      logs.foreach { log =>
+        val oldLogConfig = log.updateConfig(newLogConfig)
+        if (oldLogConfig.compact && !newLogConfig.compact) {
+          abortCleaning(log.topicPartition)
+        }
+      }
     }
   }
 
@@ -853,6 +884,7 @@ class LogManager(logDirs: Seq[File],
           config = config,
           logStartOffset = 0L,
           recoveryPoint = 0L,
+          maxTransactionTimeoutMs = maxTransactionTimeoutMs,
           maxProducerIdExpirationMs = maxPidExpirationMs,
           producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
           scheduler = scheduler,
@@ -1213,7 +1245,7 @@ class LogManager(logDirs: Seq[File],
         debug(s"Checking if flush is needed on ${topicPartition.topic} flush interval ${log.config.flushMs}" +
               s" last flushed ${log.lastFlushTime} time since last flush: $timeSinceLastFlush")
         if(timeSinceLastFlush >= log.config.flushMs)
-          log.flush()
+          log.flush(false)
       } catch {
         case e: Throwable =>
           error(s"Error flushing topic ${topicPartition.topic}", e)
@@ -1278,6 +1310,7 @@ object LogManager {
       flushRecoveryOffsetCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
       flushStartOffsetCheckpointMs = config.logFlushStartOffsetCheckpointIntervalMs,
       retentionCheckMs = config.logCleanupIntervalMs,
+      maxTransactionTimeoutMs = config.transactionMaxTimeoutMs,
       maxPidExpirationMs = config.transactionalIdExpirationMs,
       scheduler = kafkaScheduler,
       brokerTopicStats = brokerTopicStats,

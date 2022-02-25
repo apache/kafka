@@ -33,11 +33,12 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -61,7 +62,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * topic transactionally, committing the offsets and messages together.
  */
 public class TransactionalMessageCopier {
-
+    private static final Logger log = LoggerFactory.getLogger(TransactionalMessageCopier.class);
     private static final DateFormat FORMAT = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
 
     /** Get the command-line argument parser. */
@@ -280,8 +281,28 @@ public class TransactionalMessageCopier {
         return toJsonString(shutdownData);
     }
 
+    private static void abortTransactionAndResetPosition(
+        KafkaProducer<String, String> producer,
+        KafkaConsumer<String, String> consumer
+    ) {
+        producer.abortTransaction();
+        resetToLastCommittedPositions(consumer);
+    }
+
     public static void main(String[] args) {
         Namespace parsedArgs = argParser().parseArgsOrFail(args);
+        try {
+            runEventLoop(parsedArgs);
+            Exit.exit(0);
+        } catch (Exception e) {
+            log.error("Shutting down after unexpected error in event loop", e);
+            System.err.println("Shutting down after unexpected error " + e.getClass().getSimpleName()
+                + ": " + e.getMessage() + " (see the log for additional detail)");
+            Exit.exit(1);
+        }
+    }
+
+    public static void runEventLoop(Namespace parsedArgs) {
         final String transactionalId = parsedArgs.getString("transactionalId");
         final String outputTopic = parsedArgs.getString("outputTopic");
 
@@ -354,19 +375,18 @@ public class TransactionalMessageCopier {
                         producer.sendOffsetsToTransaction(consumerPositions(consumer), groupMetadata);
 
                         if (enableRandomAborts && random.nextInt() % 3 == 0) {
-                            throw new KafkaException("Aborting transaction");
+                            abortTransactionAndResetPosition(producer, consumer);
                         } else {
                             producer.commitTransaction();
                             remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
                             numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
                             totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                         }
-                    } catch (ProducerFencedException | OutOfOrderSequenceException e) {
-                        // We cannot recover from these errors, so just rethrow them and let the process fail
-                        throw e;
+                    } catch (ProducerFencedException e) {
+                        throw new KafkaException(String.format("The transactional.id %s has been claimed by another process", transactionalId), e);
                     } catch (KafkaException e) {
-                        producer.abortTransaction();
-                        resetToLastCommittedPositions(consumer);
+                        log.debug("Aborting transaction after catching exception", e);
+                        abortTransactionAndResetPosition(producer, consumer);
                     }
                 }
             }
@@ -380,6 +400,5 @@ public class TransactionalMessageCopier {
             Utils.closeQuietly(producer, "producer");
             Utils.closeQuietly(consumer, "consumer");
         }
-        Exit.exit(0);
     }
 }

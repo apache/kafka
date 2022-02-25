@@ -60,7 +60,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Time time;
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;
-    private ConnectorsAndTasks previousRevocation;
+    private final ConnectorsAndTasks previousRevocation;
     private boolean canRevoke;
     // visible for testing
     protected final Set<String> candidateWorkersForReassignment;

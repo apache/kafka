@@ -108,6 +108,8 @@ class TransactionsTest(Test):
                     time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
                 self.kafka.start_node(node)
 
+            self.kafka.await_no_under_replicated_partitions()
+
     def create_and_start_message_copier(self, input_topic, input_partition, output_topic, transactional_id, use_group_metadata):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,

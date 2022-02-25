@@ -184,8 +184,10 @@ public interface ReplicatedLog extends AutoCloseable {
 
     /**
      * Flush the current log to disk.
+     *
+     * @param forceFlushActiveSegment Whether to force flush the active segment. Should be `true` during close; otherwise false.
      */
-    void flush();
+    void flush(boolean forceFlushActiveSegment);
 
     /**
      * Possibly perform cleaning of snapshots and logs

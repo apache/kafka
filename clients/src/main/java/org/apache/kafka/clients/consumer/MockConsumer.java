@@ -45,6 +45,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.clients.consumer.KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS;
 
 
 /**
@@ -446,7 +447,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public final synchronized void close() {
+    public void close() {
+        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+    }
+
+    @Override
+    public synchronized void close(Duration timeout) {
         this.closed = true;
     }
 
@@ -554,6 +560,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance() {
+        enforceRebalance(null);
+    }
+
+    @Override
+    public void enforceRebalance(final String reason) {
         shouldRebalance = true;
     }
 
@@ -567,10 +578,5 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public Duration lastPollTimeout() {
         return lastPollTimeout;
-    }
-
-    @Override
-    public void close(Duration timeout) {
-        close();
     }
 }

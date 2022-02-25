@@ -23,7 +23,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 
 import scala.jdk.CollectionConverters._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaYammerMetrics
 
@@ -52,7 +52,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     // Do some Metrics Registry cleanup by removing the metrics that this test checks.
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605
@@ -61,7 +61,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
         metricName.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
     }
 
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   /*

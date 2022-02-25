@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collections;
@@ -55,7 +56,7 @@ public class StandbyTask extends AbstractTask implements Task {
     StandbyTask(final TaskId id,
                 final Set<TopicPartition> inputPartitions,
                 final ProcessorTopology topology,
-                final StreamsConfig config,
+                final TaskConfig config,
                 final StreamsMetricsImpl streamsMetrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory,
@@ -67,7 +68,7 @@ public class StandbyTask extends AbstractTask implements Task {
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            config.taskTimeoutMs,
             "standby-task",
             StandbyTask.class
         );
@@ -76,7 +77,7 @@ public class StandbyTask extends AbstractTask implements Task {
         processorContext.transitionToStandby(cache);
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
-        eosEnabled = StreamThread.eosEnabled(config);
+        this.eosEnabled = config.eosEnabled;
     }
 
     @Override

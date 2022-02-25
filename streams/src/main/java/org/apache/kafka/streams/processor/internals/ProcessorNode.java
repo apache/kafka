@@ -147,7 +147,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final ClassCastException e) {
             final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
             final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();
-            throw new StreamsException(String.format("ClassCastException invoking Processor. Do the Processor's "
+            throw new StreamsException(String.format("ClassCastException invoking processor: %s. Do the Processor's "
                     + "input types match the deserialized types? Check the Serde setup and change the default Serdes in "
                     + "StreamConfig or provide correct Serdes via method parameters. Make sure the Processor can accept "
                     + "the deserialized input of type key: %s, and value: %s.%n"
@@ -155,6 +155,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                     + "another cause (in user code, for example). For example, if a processor wires in a store, but casts "
                     + "the generics incorrectly, a class cast exception could be raised during processing, but the "
                     + "cause would not be wrong Serdes.",
+                    this.name(),
                     keyClass,
                     valueClass),
                 e);

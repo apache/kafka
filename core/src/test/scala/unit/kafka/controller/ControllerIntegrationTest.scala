@@ -23,7 +23,7 @@ import com.yammer.metrics.core.Timer
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
@@ -41,14 +41,14 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
-class ControllerIntegrationTest extends ZooKeeperTestHarness {
+class ControllerIntegrationTest extends QuorumTestHarness {
   var servers = Seq.empty[KafkaServer]
   val firstControllerEpoch = KafkaController.InitialControllerEpoch + 1
   val firstControllerEpochZkVersion = KafkaController.InitialControllerEpochZkVersion + 1
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     servers = Seq.empty[KafkaServer]
   }
 
@@ -218,6 +218,35 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     //Start other broker and check metadata
     verifyMetadata(otherBroker)
+  }
+
+  @Test
+  def testMetadataPropagationOnBrokerShutdownWithNoReplicas(): Unit = {
+    servers = makeServers(3)
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val replicaBroker = servers.filter(e => e.config.brokerId != controllerId).head
+
+    val controllerBroker = servers.filter(e => e.config.brokerId == controllerId).head
+    val otherBroker = servers.filter(e => e.config.brokerId != controllerId &&
+      e.config.brokerId != replicaBroker.config.brokerId).head
+
+    val topic = "topic1"
+    val assignment = Map(0 -> Seq(replicaBroker.config.brokerId))
+
+    // Create topic
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
+
+    // Shutdown the broker with replica
+    replicaBroker.shutdown()
+    replicaBroker.awaitShutdown()
+
+    // Shutdown the other broker
+    otherBroker.shutdown()
+    otherBroker.awaitShutdown()
+
+    // The controller should be the only alive broker
+    TestUtils.waitUntilBrokerMetadataIsPropagated(Seq(controllerBroker))
   }
 
   @Test
@@ -1098,27 +1127,26 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
-    assertEquals(None, topicIdAfterCreate)
-    val emptyTopicId = controller.controllerContext.topicIds.get("t")
-    assertEquals(None, emptyTopicId)
+    assertEquals(None, zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))
+    assertEquals(None, controller.controllerContext.topicIds.get(tp.topic))
 
     servers(controllerId).shutdown()
     servers(controllerId).awaitShutdown()
     servers = makeServers(1)
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
-    val topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
-    assertNotEquals(emptyTopicId, topicIdAfterUpgrade)
+
+    val (topicIdAfterUpgrade, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
+    assertNotEquals(None, topicIdAfterUpgrade, s"topic id for ${tp.topic} not found in ZK")
+
     val controller2 = getController().kafkaController
-    assertNotEquals(emptyTopicId, controller2.controllerContext.topicIds.get("t"))
-    val topicId = controller2.controllerContext.topicIds.get("t").get
-    assertEquals(topicIdAfterUpgrade.get, topicId)
-    assertEquals("t", controller2.controllerContext.topicNames(topicId))
+    val topicId = controller2.controllerContext.topicIds.get(tp.topic)
+    assertEquals(topicIdAfterUpgrade, topicId)
+    assertEquals(tp.topic, controller2.controllerContext.topicNames(topicId.get))
 
     TestUtils.waitUntilTrue(() => servers(0).logManager.getLog(tp).isDefined, "log was not created")
 
     val topicIdInLog = servers(0).logManager.getLog(tp).get.topicId
-    assertEquals(Some(topicId), topicIdInLog)
+    assertEquals(topicId, topicIdInLog)
 
     adminZkClient.deleteTopic(tp.topic)
     TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.allTopics.contains(tp.topic),

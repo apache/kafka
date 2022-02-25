@@ -26,7 +26,8 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -34,19 +35,21 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class KStreamMapTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testMap() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topicName = "topic";
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.map((key, value) -> KeyValue.pair(value, key)).process(supplier);
 
@@ -66,6 +69,14 @@ public class KStreamMapTest {
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed().get(i));
         }
+    }
+
+    @Test
+    public void testKeyValueMapperResultNotNull() {
+        final KStreamMap<String, Integer, String, Integer> supplier = new KStreamMap<>((key, value) -> null);
+        final Throwable throwable = assertThrows(NullPointerException.class,
+                () -> supplier.get().process(new Record<>("K", 0, 0L)));
+        assertThat(throwable.getMessage(), is("The provided KeyValueMapper returned null which is not allowed."));
     }
 
     @Test

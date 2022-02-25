@@ -561,7 +561,7 @@ public class AbstractConfig {
         Map<String, String> providerMap = new HashMap<>();
 
         for (String provider: configProviders.split(",")) {
-            String providerClass = CONFIG_PROVIDERS_CONFIG + "." + provider + ".class";
+            String providerClass = providerClassProperty(provider);
             if (indirectConfigs.containsKey(providerClass))
                 providerMap.put(provider, indirectConfigs.get(providerClass));
 
@@ -576,12 +576,16 @@ public class AbstractConfig {
                 provider.configure(configProperties);
                 configProviderInstances.put(entry.getKey(), provider);
             } catch (ClassNotFoundException e) {
-                log.error("ClassNotFoundException exception occurred: " + entry.getValue());
-                throw new ConfigException("Invalid config:" + entry.getValue() + " ClassNotFoundException exception occurred", e);
+                log.error("Could not load config provider class " + entry.getValue(), e);
+                throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
             }
         }
 
         return configProviderInstances;
+    }
+
+    private static String providerClassProperty(String providerName) {
+        return String.format("%s.%s.class", CONFIG_PROVIDERS_CONFIG, providerName);
     }
 
     @Override
