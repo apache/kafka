@@ -745,6 +745,11 @@ public class ReplicationControlManager {
                     }
                 }
 
+                /* Setting the LeaderRecoveryState field is always safe because it will always be the same
+                 * as the value set in the request. For version 0, that is always the default RECOVERED
+                 * which is ignored when serializing to version 0. For any other version, the
+                 * LeaderRecoveryState field is supported.
+                 */
                 responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(partitionId).
                     setErrorCode(Errors.NONE.code()).

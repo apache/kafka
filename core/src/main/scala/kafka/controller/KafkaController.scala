@@ -2286,14 +2286,21 @@ class KafkaController(val config: KafkaConfig,
                     new AlterPartitionResponseData.PartitionData()
                       .setPartitionIndex(tp.partition)
                       .setErrorCode(error.code))
-                  case Right(leaderAndIsr) => topicResp.partitions.add(
-                    new AlterPartitionResponseData.PartitionData()
-                      .setPartitionIndex(tp.partition)
-                      .setLeaderId(leaderAndIsr.leader)
-                      .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-                      .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
-                      .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
-                      .setPartitionEpoch(leaderAndIsr.zkVersion))
+                  case Right(leaderAndIsr) =>
+                    /* Setting the LeaderRecoveryState field is always safe because it will always be the same
+                     * as the value set in the request. For version 0, that is always the default RECOVERED
+                     * which is ignored when serializing to version 0. For any other version, the
+                     * LeaderRecoveryState field is supported.
+                     */
+                    topicResp.partitions.add(
+                      new AlterPartitionResponseData.PartitionData()
+                        .setPartitionIndex(tp.partition)
+                        .setLeaderId(leaderAndIsr.leader)
+                        .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+                        .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                        .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
+                        .setPartitionEpoch(leaderAndIsr.zkVersion)
+                    )
                 }
             }
           }
