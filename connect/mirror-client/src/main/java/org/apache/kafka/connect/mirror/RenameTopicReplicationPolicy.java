@@ -17,7 +17,6 @@ public class RenameTopicReplicationPolicy extends DefaultReplicationPolicy {
     @Override
     public void configure(Map<String, ?> props) {
         super.configure(props);
-        props.forEach((k,v) -> log.error(k+"  -->  "+v));
         if (props.containsKey(REPLICATION_POLICY_TOPICS_MAP)) {
             String configMap = (String) props.get(REPLICATION_POLICY_TOPICS_MAP);
             log.info("Using custom remote topic renaming: '{}'", configMap);
