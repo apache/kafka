@@ -50,13 +50,13 @@ public class RetryUtil {
     public static <T> T retry(Callable<T> callable, long maxRetries, long retryBackoffMs) throws Exception {
         Throwable lastError = null;
         int attempt = 0;
-        long maxAttempts = maxRetries + 1;
-        while (attempt++ < maxAttempts) {
+        final long maxAttempts = maxRetries + 1;
+        while (++attempt <= maxAttempts) {
             try {
                 return callable.call();
             } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
-                log.warn("RetriableException caught, retrying automatically up to {} more times. " +
-                        "Reason: {}", maxRetries - attempt, e.getMessage());
+                log.warn("RetriableException caught on attempt {}, retrying automatically up to {} more times. " +
+                        "Reason: {}", attempt, maxRetries - attempt, e.getMessage());
                 lastError = e;
             } catch (WakeupException e) {
                 lastError = e;
