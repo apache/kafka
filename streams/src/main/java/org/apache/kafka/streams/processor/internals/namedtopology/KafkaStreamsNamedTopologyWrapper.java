@@ -258,7 +258,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     private RemoveNamedTopologyResult resetOffsets(final KafkaFutureImpl<Void> removeTopologyFuture,
-                                                   Set<TopicPartition> partitionsToReset) {
+                                                   final Set<TopicPartition> partitionsToReset) {
         if (!partitionsToReset.isEmpty()) {
             removeTopologyFuture.whenComplete((v, throwable) -> {
                 if (throwable != null) {
