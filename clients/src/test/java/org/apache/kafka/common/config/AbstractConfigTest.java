@@ -82,7 +82,7 @@ public class AbstractConfigTest {
         assertTrue(config.unknown().contains("foo.bar"));
         assertFalse(config.unused().contains("foo.bar"));
         originalsWithPrefix.get("bar");
-        assertTrue(config.unknown().contains("foo.bar"));
+        assertFalse(config.unknown().contains("foo.bar"));
         assertFalse(config.unused().contains("foo.bar"));
 
         Map<String, Object> expected = new HashMap<>();
@@ -109,6 +109,7 @@ public class AbstractConfigTest {
         assertEquals("GSSAPI", valuesWithPrefixOverride.get("sasl.mechanism"));
         assertFalse(config.unused().contains("sasl.mechanism"));
         assertFalse(config.unused().contains("prefix.sasl.mechanism"));
+        assertFalse(config.unknown().contains("prefix.sasl.mechanism"));
 
         // prefix overrides default
         assertTrue(config.unknown().contains("prefix.sasl.kerberos.kinit.cmd"));
@@ -116,6 +117,7 @@ public class AbstractConfigTest {
         assertEquals("/usr/bin/kinit2", valuesWithPrefixOverride.get("sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("prefix.sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unknown().contains("prefix.sasl.kerberos.kinit.cmd"));
 
         // prefix override with no default
         assertTrue(config.unknown().contains("prefix.ssl.truststore.location"));
@@ -123,6 +125,7 @@ public class AbstractConfigTest {
         assertEquals("my location", valuesWithPrefixOverride.get("ssl.truststore.location"));
         assertFalse(config.unused().contains("ssl.truststore.location"));
         assertFalse(config.unused().contains("prefix.ssl.truststore.location"));
+        assertFalse(config.unknown().contains("prefix.ssl.truststore.location"));
 
         // global overrides default
         assertTrue(config.unused().contains("ssl.keymanager.algorithm"));
@@ -171,6 +174,8 @@ public class AbstractConfigTest {
         assertFalse(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
         assertFalse(config.unused().contains("test-mechanism.sasl.jaas.config"));
         assertFalse(config.unused().contains("sasl.jaas.config"));
+        assertFalse(config.unknown().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
+        assertFalse(config.unknown().contains("test-mechanism.sasl.jaas.config"));
 
         // prefix with mechanism overrides default
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
@@ -179,6 +184,7 @@ public class AbstractConfigTest {
         assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
         assertEquals("/usr/bin/kinit2", valuesWithPrefixOverride.get("gssapi.sasl.kerberos.kinit.cmd"));
         assertFalse(config.unused().contains("listener.name.listener1.sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unknown().contains("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd"));
 
         // prefix override for mechanism with no default
         assertFalse(config.unused().contains("sasl.kerberos.service.name"));
@@ -187,6 +193,7 @@ public class AbstractConfigTest {
         assertFalse(config.unused().contains("sasl.kerberos.service.name"));
         assertEquals("testkafka", valuesWithPrefixOverride.get("gssapi.sasl.kerberos.service.name"));
         assertFalse(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
+        assertFalse(config.unknown().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
 
         // unset with no default
         assertTrue(config.unused().contains("ssl.provider"));

@@ -230,6 +230,7 @@ public class AbstractConfig {
     public Set<String> unknown() {
         Set<String> keys = new HashSet<>(originals.keySet());
         keys.removeAll(values.keySet());
+        keys.removeAll(used);
         return keys;
     }
 
