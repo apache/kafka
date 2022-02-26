@@ -203,7 +203,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         final KafkaFutureImpl<Void> removeTopologyFuture = new KafkaFutureImpl<>();
 
-        if (!isRunningOrRebalancing()) {
+        if (hasStartedOrFinishedShuttingDown()) {
             log.error("Attempted to remove topology {} from while the Kafka Streams was in state {}, "
                           + "application must be started first.", topologyToRemove, state
             );
