@@ -149,6 +149,10 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         return Optional.ofNullable(topologyMetadata.lookupBuilderForNamedTopology(name)).map(InternalTopologyBuilder::namedTopology);
     }
 
+    public Collection<NamedTopology> getAllTopologies() {
+        return topologyMetadata.getAllNamedTopologies();
+    }
+
     /**
      * Add a new NamedTopology to a running Kafka Streams app. If multiple instances of the application are running,
      * you should inform all of them by calling {@code #addNamedTopology(NamedTopology)} on each client in order for
