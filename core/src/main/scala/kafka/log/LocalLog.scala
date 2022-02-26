@@ -168,11 +168,14 @@ class LocalLog(@volatile private var _dir: File,
    * @param offset The offset to flush up to (non-inclusive)
    */
   private[log] def flush(offset: Long): Unit = {
-    val segmentsToFlush = segments.values(recoveryPoint, offset)
-    segmentsToFlush.foreach(_.flush())
-    // If there are any new segments, we need to flush the parent directory for crash consistency.
-    if (segmentsToFlush.exists(_.baseOffset >= this.recoveryPoint))
-      Utils.flushDir(dir.toPath)
+    val currentRecoveryPoint = recoveryPoint
+    if (currentRecoveryPoint <= offset) {
+      val segmentsToFlush = segments.values(currentRecoveryPoint, offset)
+      segmentsToFlush.foreach(_.flush())
+      // If there are any new segments, we need to flush the parent directory for crash consistency.
+      if (segmentsToFlush.exists(_.baseOffset >= currentRecoveryPoint))
+        Utils.flushDir(dir.toPath)
+    }
   }
 
   /**
