@@ -100,7 +100,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     /**
      * Start up Streams with a collection of initial NamedTopologies (may be empty)
      */
-    public void start(final Collection<NamedTopology> initialTopologies) {
+    public synchronized void start(final Collection<NamedTopology> initialTopologies) {
         log.info("Starting Streams with topologies: {}", initialTopologies);
         for (final NamedTopology topology : initialTopologies) {
             final AddNamedTopologyResult addNamedTopologyResult = addNamedTopology(topology);
@@ -145,7 +145,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     /**
      * @return the NamedTopology for the specific name, or Optional.empty() if the application has no NamedTopology of that name
      */
-    public Optional<NamedTopology> getTopologyByName(final String name) {
+    public synchronized Optional<NamedTopology> getTopologyByName(final String name) {
         return Optional.ofNullable(topologyMetadata.lookupBuilderForNamedTopology(name)).map(InternalTopologyBuilder::namedTopology);
     }
 
@@ -180,7 +180,9 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             );
         } else {
             topologyMetadata.registerAndBuildNewTopology(future, newTopology.internalTopologyBuilder());
+            completedFutureForUnstartedApp(future, "adding topology");
         }
+
         return new AddNamedTopologyResult(future);
     }
 
@@ -218,6 +220,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 new UnknownTopologyException("Unable to remove topology", topologyToRemove)
             );
         }
+
         final Set<TopicPartition> partitionsToReset = metadataForLocalThreads()
             .stream()
             .flatMap(t -> {
@@ -230,53 +233,72 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         topologyMetadata.unregisterTopology(removeTopologyFuture, topologyToRemove);
 
-        if (resetOffsets) {
+        if (!completedFutureForUnstartedApp(removeTopologyFuture, "removing topology") && resetOffsets) {
             log.info("Resetting offsets for the following partitions of {} removed NamedTopology {}: {}",
                      removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully" : "successfully",
                      topologyToRemove, partitionsToReset
             );
-            if (!partitionsToReset.isEmpty()) {
-                removeTopologyFuture.whenComplete((v, throwable) -> {
-                    if (throwable != null) {
-                        removeTopologyFuture.completeExceptionally(throwable);
-                    }
-                    DeleteConsumerGroupOffsetsResult deleteOffsetsResult = null;
-                    while (deleteOffsetsResult == null) {
-                        try {
-                            deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
-                                applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
-                            deleteOffsetsResult.all().get();
-                        } catch (final InterruptedException ex) {
-                            ex.printStackTrace();
-                            break;
-                        } catch (final ExecutionException ex) {
-                            if (ex.getCause() != null &&
-                                ex.getCause() instanceof GroupSubscribedToTopicException &&
-                                ex.getCause()
-                                    .getMessage()
-                                    .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
-                                ex.printStackTrace();
-                            } else if (ex.getCause() != null &&
-                                ex.getCause() instanceof GroupIdNotFoundException) {
-                                log.debug("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
-                                break;
-                            } else {
-                                removeTopologyFuture.completeExceptionally(ex);
-                            }
-                            deleteOffsetsResult = null;
-                        }
-                        try {
-                            Thread.sleep(100);
-                        } catch (final InterruptedException ex) {
-                            ex.printStackTrace();
-                        }
-                    }
-                    removeTopologyFuture.complete(null);
-                });
-                return new RemoveNamedTopologyResult(removeTopologyFuture,  removeTopologyFuture);
-            }
+            resetOffsets(removeTopologyFuture, partitionsToReset);
         }
         return new RemoveNamedTopologyResult(removeTopologyFuture);
+    }
+
+    /**
+     * @return  true iff the application is still in CREATED and the future was completed
+     */
+    private synchronized boolean completedFutureForUnstartedApp(final KafkaFutureImpl<Void> updateTopologyFuture,
+                                                                final String operation) {
+        if (state == State.CREATED && !updateTopologyFuture.isDone()) {
+            updateTopologyFuture.complete(null);
+            log.info("Completed {} since application has not been started", operation);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private RemoveNamedTopologyResult resetOffsets(final KafkaFutureImpl<Void> removeTopologyFuture,
+                                                   Set<TopicPartition> partitionsToReset) {
+        if (!partitionsToReset.isEmpty()) {
+            removeTopologyFuture.whenComplete((v, throwable) -> {
+                if (throwable != null) {
+                    removeTopologyFuture.completeExceptionally(throwable);
+                }
+                DeleteConsumerGroupOffsetsResult deleteOffsetsResult = null;
+                while (deleteOffsetsResult == null) {
+                    try {
+                        deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
+                            applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
+                        deleteOffsetsResult.all().get();
+                    } catch (final InterruptedException ex) {
+                        ex.printStackTrace();
+                        break;
+                    } catch (final ExecutionException ex) {
+                        if (ex.getCause() != null &&
+                            ex.getCause() instanceof GroupSubscribedToTopicException &&
+                            ex.getCause()
+                                .getMessage()
+                                .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
+                            ex.printStackTrace();
+                        } else if (ex.getCause() != null &&
+                            ex.getCause() instanceof GroupIdNotFoundException) {
+                            log.debug("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
+                            break;
+                        } else {
+                            removeTopologyFuture.completeExceptionally(ex);
+                        }
+                        deleteOffsetsResult = null;
+                    }
+                    try {
+                        Thread.sleep(100);
+                    } catch (final InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                }
+                removeTopologyFuture.complete(null);
+            });
+        }
+        return new RemoveNamedTopologyResult(removeTopologyFuture,  removeTopologyFuture);
     }
 
     /**
