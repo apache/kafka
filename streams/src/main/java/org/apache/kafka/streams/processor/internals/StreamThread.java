@@ -548,6 +548,7 @@ public class StreamThread extends Thread {
             failedStreamThreadSensor.record();
             requestLeaveGroupDuringShutdown();
             streamsUncaughtExceptionHandler.accept(e, false);
+            // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
             completeShutdown(cleanRun);
         }

@@ -58,7 +58,7 @@ public class TaskExecutionMetadata {
         }
     }
 
-    class NamedTopologyMetadata {
+    private class NamedTopologyMetadata {
         private final Logger log;
         private final Map<TaskId, Long> tasksToErrorTime = new ConcurrentHashMap<>();
 
@@ -73,11 +73,11 @@ public class TaskExecutionMetadata {
         }
 
         public boolean canProcessTask(final Task task, final long now) {
-            // TODO: implement exponential backoff, for now we just wait 15s
+            // TODO: implement exponential backoff, for now we just wait 5s
             final Long errorTime = tasksToErrorTime.get(task.id());
             if (errorTime == null) {
                 return true;
-            } else if (now - errorTime > 15000L) {
+            } else if (now - errorTime > 5000L) {
                 log.info("End backoff for task {} at t={}", task.id(), now);
                 tasksToErrorTime.remove(task.id());
                 if (tasksToErrorTime.isEmpty()) {
