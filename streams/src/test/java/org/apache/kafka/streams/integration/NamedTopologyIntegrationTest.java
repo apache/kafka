@@ -340,7 +340,7 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldAddNamedTopologiesBeforeStartingAndRouteQueriesToCorrectTopology() throws Exception {
+    public void shouldAddAndRemoveNamedTopologiesBeforeStartingAndRouteQueriesToCorrectTopology() throws Exception {
         try {
             // for this test we have one of the topologies read from an input topic with just one partition so
             // that there's only one instance of that topology's store and thus should always have exactly one
@@ -354,6 +354,9 @@ public class NamedTopologyIntegrationTest {
 
             topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
             topology2Builder.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
+            streams.addNamedTopology(topology1Builder.build());
+            streams.removeNamedTopology(TOPOLOGY_1);
+            assertThat(streams.getTopologyByName(TOPOLOGY_1), is(Optional.empty()));
             streams.addNamedTopology(topology1Builder.build());
             streams.addNamedTopology(topology2Builder.build());
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
