@@ -125,7 +125,7 @@ object DumpLogSegments {
                                maxMessageSize: Int): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
-    val fileRecords = FileRecords.open(logFile, false)
+    val fileRecords = FileRecords.open(logFile)
     val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
 
     if (index.entries == 0) {
@@ -166,7 +166,7 @@ object DumpLogSegments {
                                    timeIndexDumpErrors: TimeIndexDumpErrors): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
-    val fileRecords = FileRecords.open(logFile, false)
+    val fileRecords = FileRecords.open(logFile)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.IndexFileSuffix)
     val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
     val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
@@ -249,7 +249,7 @@ object DumpLogSegments {
                       skipRecordMetadata: Boolean): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val fileRecords = FileRecords.open(file, false)
+    val fileRecords = FileRecords.open(file)
     try {
       var validBytes = 0L
       var lastOffset = -1L

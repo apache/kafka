@@ -421,28 +421,16 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     public static FileRecords open(File file,
-                                   boolean mutable,
                                    boolean fileAlreadyExists,
                                    int initFileSize,
                                    boolean preallocate) throws IOException {
-        FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
+        FileChannel channel = openChannel(file, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
         return new FileRecords(file, channel, 0, end, false);
     }
 
-    public static FileRecords open(File file,
-                                   boolean fileAlreadyExists,
-                                   int initFileSize,
-                                   boolean preallocate) throws IOException {
-        return open(file, true, fileAlreadyExists, initFileSize, preallocate);
-    }
-
-    public static FileRecords open(File file, boolean mutable) throws IOException {
-        return open(file, mutable, false, 0, false);
-    }
-
     public static FileRecords open(File file) throws IOException {
-        return open(file, true);
+        return open(file, false, 0, false);
     }
 
     /**
@@ -450,27 +438,22 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * For windows NTFS and some old LINUX file system, set preallocate to true and initFileSize
      * with one value (for example 512 * 1025 *1024 ) can improve the kafka produce performance.
      * @param file File path
-     * @param mutable mutable
      * @param fileAlreadyExists File already exists or not
      * @param initFileSize The size used for pre allocate file, for example 512 * 1025 *1024
      * @param preallocate Pre-allocate file or not, gotten from configuration.
      */
     private static FileChannel openChannel(File file,
-                                           boolean mutable,
                                            boolean fileAlreadyExists,
                                            int initFileSize,
                                            boolean preallocate) throws IOException {
-        if (mutable) {
-            if (fileAlreadyExists || !preallocate) {
-                return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                        StandardOpenOption.WRITE);
-            } else {
-                RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
-            }
+        if (fileAlreadyExists || !preallocate) {
+            return FileChannel
+                .open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
+                    StandardOpenOption.WRITE);
         } else {
-            return FileChannel.open(file.toPath());
+            RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+            randomAccessFile.setLength(initFileSize);
+            return randomAccessFile.getChannel();
         }
     }
 

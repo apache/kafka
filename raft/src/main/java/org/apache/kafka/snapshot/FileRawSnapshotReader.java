@@ -78,7 +78,6 @@ public final class FileRawSnapshotReader implements RawSnapshotReader, AutoClose
         try {
             fileRecords = FileRecords.open(
                 filePath.toFile(),
-                false, // mutable
                 true, // fileAlreadyExists
                 0, // initFileSize
                 false // preallocate
