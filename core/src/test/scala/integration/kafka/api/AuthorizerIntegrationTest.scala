@@ -13,7 +13,6 @@
 package kafka.api
 
 import java.lang.{Byte => JByte}
-import java.net.InetAddress
 import java.time.Duration
 import java.util
 import java.util.concurrent.ExecutionException
@@ -2412,26 +2411,31 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     createTopicWithBrokerPrincipal(topic)
     removeAllClientAcls()
 
-    val acls = Set(
-      new AccessControlEntry(clientPrincipalString, InetAddress.getLocalHost.getHostAddress, DESCRIBE, ALLOW)
-    )
+    val socket = connect(anySocketServer, listenerName)
+    try {
+      val acls = Set(
+        new AccessControlEntry(clientPrincipalString, socket.getLocalAddress.getHostAddress, DESCRIBE, ALLOW)
+      )
 
-    addAndVerifyAcls(acls, topicResource)
+      addAndVerifyAcls(acls, topicResource)
 
-    val metadataRequestTopic = new MetadataRequestTopic()
-      .setName(topic)
+      val metadataRequestTopic = new MetadataRequestTopic()
+        .setName(topic)
 
-    val metadataRequest = new MetadataRequest.Builder(new MetadataRequestData()
-      .setTopics(Collections.singletonList(metadataRequestTopic))
-      .setAllowAutoTopicCreation(false)
-    ).build()
+      val metadataRequest = new MetadataRequest.Builder(new MetadataRequestData()
+        .setTopics(Collections.singletonList(metadataRequestTopic))
+        .setAllowAutoTopicCreation(false)
+      ).build()
 
-    val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
-    val topicResponseOpt = metadataResponse.topicMetadata().asScala.find(_.topic == topic)
-    assertTrue(topicResponseOpt.isDefined)
+      val metadataResponse = sendAndReceive[MetadataResponse](metadataRequest, socket)
+      val topicResponseOpt = metadataResponse.topicMetadata().asScala.find(_.topic == topic)
+      assertTrue(topicResponseOpt.isDefined)
 
-    val topicResponse = topicResponseOpt.get
-    assertEquals(Errors.NONE, topicResponse.error)
+      val topicResponse = topicResponseOpt.get
+      assertEquals(Errors.NONE, topicResponse.error)
+    } finally {
+      socket.close()
+    }
   }
 
   private def testDescribeClusterClusterAuthorizedOperations(
