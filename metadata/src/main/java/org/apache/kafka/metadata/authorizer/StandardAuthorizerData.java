@@ -373,7 +373,7 @@ public class StandardAuthorizerData {
         // The hostname should be cached in the InetAddress object, so calling this more
         // than once shouldn't be too expensive.
         if (!acl.host().equals(WILDCARD)) {
-            String host = requestContext.clientAddress().getHostName();
+            String host = requestContext.clientAddress().getHostAddress();
             if (!acl.host().equals(host)) return null;
         }
         // Check if the operation field matches. Here we hit a slight complication.

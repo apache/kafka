@@ -2450,6 +2450,39 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testHostAddressBasedAcls(quorum: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    removeAllClientAcls()
+
+    val socket = connect(anySocketServer, listenerName)
+    try {
+      val acls = Set(
+        new AccessControlEntry(clientPrincipalString, socket.getLocalAddress.getHostAddress, DESCRIBE, ALLOW)
+      )
+
+      addAndVerifyAcls(acls, topicResource)
+
+      val metadataRequestTopic = new MetadataRequestTopic()
+        .setName(topic)
+
+      val metadataRequest = new MetadataRequest.Builder(new MetadataRequestData()
+        .setTopics(Collections.singletonList(metadataRequestTopic))
+        .setAllowAutoTopicCreation(false)
+      ).build()
+
+      val metadataResponse = sendAndReceive[MetadataResponse](metadataRequest, socket)
+      val topicResponseOpt = metadataResponse.topicMetadata().asScala.find(_.topic == topic)
+      assertTrue(topicResponseOpt.isDefined)
+
+      val topicResponse = topicResponseOpt.get
+      assertEquals(Errors.NONE, topicResponse.error)
+    } finally {
+      socket.close()
+    }
+  }
+
   private def testDescribeClusterClusterAuthorizedOperations(
     version: Short,
     expectedClusterAuthorizedOperations: Int
