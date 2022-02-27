@@ -77,7 +77,6 @@ import org.mockito.quality.Strictness;
 import org.powermock.api.easymock.annotation.Mock;
 
 import javax.management.MBeanServer;
-import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
@@ -86,7 +85,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -98,7 +96,6 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.easymock.EasyMock.anyObject;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -122,12 +119,12 @@ public class WorkerTest extends ThreadedTest {
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
     private final ConnectorClientConfigOverridePolicy allConnectorClientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
 
-    private Map<String, String> workerProps = new HashMap<>();
+    private final Map<String, String> workerProps = new HashMap<>();
     private WorkerConfig config;
     private Worker worker;
 
-    private Map<String, String> defaultProducerConfigs = new HashMap<>();
-    private Map<String, String> defaultConsumerConfigs = new HashMap<>();
+    private final Map<String, String> defaultProducerConfigs = new HashMap<>();
+    private final Map<String, String> defaultConsumerConfigs = new HashMap<>();
 
     @org.mockito.Mock
     private Plugins plugins;
@@ -170,7 +167,7 @@ public class WorkerTest extends ThreadedTest {
     private String mockFileProviderTestId;
     private Map<String, String> connectorProps;
 
-    private boolean enableTopicCreation;
+    private final boolean enableTopicCreation;
 
     private MockedStatic<Plugins> pluginsMockedStatic;
     private MockedStatic<ConnectUtils> connectUtilsMockedStatic;
@@ -619,8 +616,6 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
-        TaskConfig taskConfig = new TaskConfig(origProps);
-
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                 noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
@@ -641,9 +636,9 @@ public class WorkerTest extends ThreadedTest {
         verify(plugins, Mockito.times(2)).currentThreadLoader();
         verify(plugins).newTask(TestSourceTask.class);
         verify(task).version();
-        verifyTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
-        verifyTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
-        verifyTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER);
+        verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
+        verifyTaskConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
+        verifyTaskHeaderConverter();
 
         verify(executorService).submit(any(WorkerSourceTask.class));
         verify(plugins).delegatingLoader();
@@ -657,7 +652,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testTaskStatusMetricsStatuses() throws Exception {
+    public void testTaskStatusMetricsStatuses() {
         mockInternalConverters();
         mockStorage();
         mockFileConfigProvider();
@@ -671,15 +666,9 @@ public class WorkerTest extends ThreadedTest {
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         TaskConfig taskConfig = new TaskConfig(origProps);
-        // We should expect this call, but the pluginLoader being swapped in is only mocked.
-        // EasyMock.expect(pluginLoader.loadClass(TestSourceTask.class.getName()))
-        //        .andReturn((Class) TestSourceTask.class);
+
         when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
         when(task.version()).thenReturn("1.0");
-
-//        workerTask.initialize(taskConfig);
-//        EasyMock.expectLastCall();
-
 
         // Expect that the worker will create converters and will find them using the current classloader ...
         assertNotNull(taskKeyConverter);
@@ -761,9 +750,9 @@ public class WorkerTest extends ThreadedTest {
         // Called when we stop the worker
         verify(instantiatedTask).loader();
         verify(instantiatedTask).stop();
-        verifyTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
-        verifyTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
-        verifyTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER);
+        verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
+        verifyTaskConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
+        verifyTaskHeaderConverter();
         verify(plugins, Mockito.times(2)).currentThreadLoader();
 
     }
@@ -778,21 +767,7 @@ public class WorkerTest extends ThreadedTest {
         mockInternalConverters();
         mockFileConfigProvider();
 
-//        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
-//        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
         connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(Mockito.any())).thenReturn(CLUSTER_ID);
-
-//        when(Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
-//        when(Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
-//
-//        when(Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
-
-//        taskStatusListener.onFailure(EasyMock.eq(TASK_ID), EasyMock.<ConfigException>anyObject());
-//        EasyMock.expectLastCall();
-//
-//        expectClusterId();
-//
-//        PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID,
             new MockTime(),
@@ -809,9 +784,6 @@ public class WorkerTest extends ThreadedTest {
         assertEquals(1L, (long) metricGroup.taskCounter("c2").metricValue(0L));
         assertEquals(0L, (long) metricGroup.taskCounter("fakeConnector").metricValue(0L));
 
-
-//        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), Mockito.times(2));
-//        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader));
         connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(Mockito.any()));
     }
 
@@ -830,18 +802,9 @@ public class WorkerTest extends ThreadedTest {
         // We would normally expect this since the plugin loader would have been swapped in. However, since we mock out
         // all classloader changes, the call actually goes to the normal default classloader. However, this works out
         // fine since we just wanted a ClassNotFoundException anyway.
-        // EasyMock.expect(pluginLoader.loadClass(origProps.get(TaskConfig.TASK_CLASS_CONFIG)))
-        //        .andThrow(new ClassNotFoundException());
 
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
-
-//        taskStatusListener.onFailure(EasyMock.eq(TASK_ID), EasyMock.<ConfigException>anyObject());
-//        EasyMock.expectLastCall();
-
-//        expectClusterId();
-//
-//        PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
@@ -863,7 +826,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testCleanupTasksOnStop() throws Exception {
+    public void testCleanupTasksOnStop() {
         mockInternalConverters();
         mockStorage();
         mockFileConfigProvider();
@@ -893,60 +856,10 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
-//        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader).times(2);
-//        expectNewWorkerTask();
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         TaskConfig taskConfig = new TaskConfig(origProps);
-        // We should expect this call, but the pluginLoader being swapped in is only mocked.
-        // EasyMock.expect(pluginLoader.loadClass(TestSourceTask.class.getName()))
-        //        .andReturn((Class) TestSourceTask.class);
-
-
-//        when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
-//        when(task.version()).thenReturn("1.0");
-
-//        workerTask.initialize(taskConfig);
-//        EasyMock.expectLastCall();
-
-
-
-//        when(executorService.submit(workerTask)).thenReturn(null);
-
-
-//        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
-//        EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
-//                .andReturn(pluginLoader);
-
-//        when(Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader)
-//                .times(2);
-
-//        when(workerTask.loader()).thenReturn(pluginLoader);
-
-//        when(Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader)
-//                .times(2);
-
-
-//        plugins.connectorClass(WorkerTestConnector.class.getName());
-
-//        EasyMock.expectLastCall().andReturn(WorkerTestConnector.class);
-        // Remove on Worker.stop()
-//        workerTask.stop();
-//        EasyMock.expectLastCall();
-
-
-//        when(workerTask.awaitStop(EasyMock.anyLong())).thenReturn(true);
-        // Note that in this case we *do not* commit offsets since it's an unclean shutdown
-//        EasyMock.expectLastCall();
-//
-
-//        workerTask.removeMetrics();
-//        EasyMock.expectLastCall();
-
-
-//
-//        PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                             noneConnectorClientConfigOverridePolicy);
@@ -982,20 +895,17 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testConverterOverrides() throws Exception {
+    public void testConverterOverrides() {
         mockInternalConverters();
         mockStorage();
         mockFileConfigProvider();
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
-//        expectNewWorkerTask();
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         TaskConfig taskConfig = new TaskConfig(origProps);
-        // We should expect this call, but the pluginLoader being swapped in is only mocked.
-        // EasyMock.expect(pluginLoader.loadClass(TestSourceTask.class.getName()))
-        //        .andReturn((Class) TestSourceTask.class);
+
         when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
         when(task.version()).thenReturn("1.0");
 
@@ -1033,7 +943,7 @@ public class WorkerTest extends ThreadedTest {
         connProps.put("value.converter.extra.config", "bar");
         worker.startTask(TASK_ID, ClusterConfigState.EMPTY, connProps, origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
-        assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
+        assertEquals(new HashSet<>(Collections.singletonList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -1255,12 +1165,6 @@ public class WorkerTest extends ThreadedTest {
         mockInternalConverters();
         mockFileConfigProvider();
 
-        Map<String, String> props = new HashMap<>();
-        props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
-        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
-
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
         Worker worker = new Worker("worker-1",
                 Time.SYSTEM,
@@ -1272,7 +1176,6 @@ public class WorkerTest extends ThreadedTest {
         MetricName name = worker.metrics().metrics().metricName("test.avg", "grp1");
         worker.metrics().metrics().addMetric(name, new Avg());
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        Set<ObjectInstance> ret = server.queryMBeans(null, null);
 
         List<MetricsReporter> list = worker.metrics().metrics().reporters();
         for (MetricsReporter reporter : list) {
@@ -1284,9 +1187,6 @@ public class WorkerTest extends ThreadedTest {
         }
         //verify metric is created with correct jmx prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1")));
-//        verifyStorage();
-//        expectClusterId();
-
     }
 
     private void assertStatusMetrics(long expected, String metricName) {
@@ -1367,8 +1267,8 @@ public class WorkerTest extends ThreadedTest {
                        .thenReturn(returning);
     }
 
-    private void verifyTaskConverter(ClassLoaderUsage classLoaderUsage, String converterClassConfig) {
-        verify(plugins).newConverter(any(AbstractConfig.class), Mockito.eq(converterClassConfig), Mockito.eq(classLoaderUsage));
+    private void verifyTaskConverter(String converterClassConfig) {
+        verify(plugins).newConverter(any(AbstractConfig.class), Mockito.eq(converterClassConfig), Mockito.eq(ClassLoaderUsage.CURRENT_CLASSLOADER));
     }
 
     private void mockTaskHeaderConverter(ClassLoaderUsage classLoaderUsage, HeaderConverter returning) {
@@ -1376,8 +1276,8 @@ public class WorkerTest extends ThreadedTest {
                .thenReturn(returning);
     }
 
-    private void verifyTaskHeaderConverter(ClassLoaderUsage classLoaderUsage) {
-        verify(plugins).newHeaderConverter(any(AbstractConfig.class), Mockito.eq(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG), Mockito.eq(classLoaderUsage));
+    private void verifyTaskHeaderConverter() {
+        verify(plugins).newHeaderConverter(any(AbstractConfig.class), Mockito.eq(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG), Mockito.eq(ClassLoaderUsage.CURRENT_CLASSLOADER));
     }
 
 
