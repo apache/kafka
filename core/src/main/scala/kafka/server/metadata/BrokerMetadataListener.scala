@@ -203,8 +203,8 @@ class BrokerMetadataListener(
       var index = 0
       batch.records().forEach { messageAndVersion =>
         if (isTraceEnabled) {
-          trace("Metadata batch %d: processing [%d/%d]: %s.".format(batch.lastOffset, index + 1,
-            batch.records().size(), messageAndVersion.message().toString()))
+          trace(s"Metadata batch ${batch.lastOffset}: processing [${index + 1}/${batch.records.size}]:" +
+            s" ${messageAndVersion.message}")
         }
 
         _highestOffset  = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
@@ -252,6 +252,9 @@ class BrokerMetadataListener(
     val delta = _delta
     _image = _delta.apply()
     _delta = new MetadataDelta(_image)
+    if (isDebugEnabled) {
+      debug(s"Publishing new metadata delta ${delta} at offset ${_image.highestOffsetAndEpoch().offset}.")
+    }
     publisher.publish(delta, _image)
   }
 

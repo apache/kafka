@@ -132,12 +132,18 @@ public class ReplicationControlManagerTest {
         final LogContext logContext = new LogContext();
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
-        final ClusterControlManager clusterControl = new ClusterControlManager(
-            logContext, time, snapshotRegistry, TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
-            new StripedReplicaPlacer(random));
         final ControllerMetrics metrics = new MockControllerMetrics();
+        final String clusterId = Uuid.randomUuid().toString();
+        final ClusterControlManager clusterControl = new ClusterControlManager(logContext,
+            clusterId,
+            time,
+            snapshotRegistry,
+            TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
+            new StripedReplicaPlacer(random),
+            metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty());
+            new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty(),
+                (__, ___) -> { });
         final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
@@ -415,7 +421,7 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
         expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
-                setErrorMessage(Errors.TOPIC_ALREADY_EXISTS.exception().getMessage()));
+                setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse3, result3.response());
         Uuid fooId = result2.response().topics().find("foo").topicId();
         RecordTestUtils.assertBatchIteratorContains(asList(
@@ -427,6 +433,41 @@ public class ReplicationControlManagerTest {
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testBrokerCountMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        ctx.registerBrokers(0);
+
+        assertEquals(1, ctx.metrics.fencedBrokerCount());
+        assertEquals(0, ctx.metrics.activeBrokerCount());
+
+        ctx.unfenceBrokers(0);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(1);
+        ctx.unfenceBrokers(1);
+
+        assertEquals(2, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(2);
+        ctx.unfenceBrokers(2);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(3, ctx.metrics.activeBrokerCount());
+
+        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
+        ctx.replay(result.records());
+        result = replicationControl.unregisterBroker(2);
+        ctx.replay(result.records());
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
     }
 
     @Test

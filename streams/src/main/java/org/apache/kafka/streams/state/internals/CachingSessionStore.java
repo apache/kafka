@@ -19,10 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
@@ -53,7 +55,7 @@ class CachingSessionStore
         "Note that the built-in numerical serdes do not follow this for negative numbers";
 
     private String cacheName;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
 
@@ -80,7 +82,7 @@ class CachingSessionStore
         super.init(context, root);
     }
 
-    private void initInternal(final InternalProcessorContext context) {
+    private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
 
         cacheName = context.taskId() + "-" + name();
@@ -91,7 +93,7 @@ class CachingSessionStore
         });
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext<?, ?> context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
         final Windowed<Bytes> bytesKey = SessionKeySchema.from(binaryKey);
         if (flushListener != null) {
@@ -109,10 +111,11 @@ class CachingSessionStore
                 context.setRecordContext(entry.entry().context());
                 try {
                     flushListener.apply(
-                        binaryKey.get(),
-                        newValueBytes,
-                        sendOldValues ? oldValueBytes : null,
-                        entry.entry().context().timestamp());
+                        new Record<>(
+                            binaryKey.get(),
+                            new Change<>(newValueBytes, sendOldValues ? oldValueBytes : null),
+                            entry.entry().context().timestamp(),
+                            entry.entry().context().headers()));
                 } finally {
                     context.setRecordContext(current);
                 }

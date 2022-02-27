@@ -20,15 +20,14 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 
-import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public final class TransactionalRequestResult {
-
     private final CountDownLatch latch;
     private volatile RuntimeException error = null;
     private final String operation;
+    private volatile boolean isAcked = false;
 
     public TransactionalRequestResult(String operation) {
         this(new CountDownLatch(1), operation);
@@ -49,29 +48,20 @@ public final class TransactionalRequestResult {
     }
 
     public void await() {
-        boolean completed = false;
-
-        while (!completed) {
-            try {
-                latch.await();
-                completed = true;
-            } catch (InterruptedException e) {
-                // Keep waiting until done, we have no other option for these transactional requests.
-            }
-        }
-
-        if (!isSuccessful())
-            throw error();
+        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
     }
 
     public void await(long timeout, TimeUnit unit) {
         try {
             boolean success = latch.await(timeout, unit);
-            if (!isSuccessful()) {
-                throw error();
-            }
             if (!success) {
-                throw new TimeoutException("Timeout expired after " + timeout + " " + unit.name().toLowerCase(Locale.ROOT) + " while awaiting " + operation);
+                throw new TimeoutException("Timeout expired after " + unit.toMillis(timeout) +
+                    "ms while awaiting " + operation);
+            }
+
+            isAcked = true;
+            if (error != null) {
+                throw error;
             }
         } catch (InterruptedException e) {
             throw new InterruptException("Received interrupt while awaiting " + operation, e);
@@ -83,11 +73,15 @@ public final class TransactionalRequestResult {
     }
 
     public boolean isSuccessful() {
-        return error == null;
+        return isCompleted() && error == null;
     }
 
     public boolean isCompleted() {
         return latch.getCount() == 0L;
+    }
+
+    public boolean isAcked() {
+        return isAcked;
     }
 
 }

@@ -433,14 +433,14 @@ class ZooKeeperClient(connectString: String,
             isConnectedOrExpiredCondition.signalAll()
           }
           if (state == KeeperState.AuthFailed) {
-            error("Auth failed.")
+            error(s"Auth failed, initialized=$isFirstConnectionEstablished connectionState=$connectionState")
             stateChangeHandlers.values.foreach(_.onAuthFailure())
 
             // If this is during initial startup, we fail fast. Otherwise, schedule retry.
             val initialized = inLock(isConnectedOrExpiredLock) {
               isFirstConnectionEstablished
             }
-            if (initialized)
+            if (initialized && !connectionState.isAlive)
               scheduleReinitialize("auth-failed", "Reinitializing due to auth failure.", RetryBackoffMs)
           } else if (state == KeeperState.Expired) {
             scheduleReinitialize("session-expired", "Session expired.", delayMs = 0L)

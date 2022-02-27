@@ -42,7 +42,7 @@ import scala.collection.Seq
 import scala.util.Try
 
 /**
-  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
+  * The ConfigHandler is used to process broker configuration change notifications.
   */
 trait ConfigHandler {
   def processConfigChanges(entityName: String, value: Properties): Unit

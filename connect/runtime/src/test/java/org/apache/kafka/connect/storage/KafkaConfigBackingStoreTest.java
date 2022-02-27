@@ -73,7 +73,6 @@ import static org.junit.Assert.assertTrue;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({KafkaConfigBackingStore.class, ConnectUtils.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
-@SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaConfigBackingStoreTest {
     private static final String TOPIC = "connect-configs";
     private static final short TOPIC_REPLICATION_FACTOR = 5;
@@ -977,7 +976,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testRecordToRestartRequest() throws Exception {
+    public void testRecordToRestartRequest() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
         Struct struct = RESTART_REQUEST_STRUCTS.get(0);
@@ -989,7 +988,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testRecordToRestartRequestOnlyFailedInconsistent() throws Exception {
+    public void testRecordToRestartRequestOnlyFailedInconsistent() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
         Struct struct = ONLY_FAILED_MISSING_STRUCT;
@@ -997,18 +996,18 @@ public class KafkaConfigBackingStoreTest {
         RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
         assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
         assertEquals(struct.getBoolean(INCLUDE_TASKS_FIELD_NAME), restartRequest.includeTasks());
-        assertEquals(false, restartRequest.onlyFailed());
+        assertFalse(restartRequest.onlyFailed());
     }
 
     @Test
-    public void testRecordToRestartRequestIncludeTasksInconsistent() throws Exception {
+    public void testRecordToRestartRequestIncludeTasksInconsistent() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
         Struct struct = INLUDE_TASKS_MISSING_STRUCT;
         SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
         RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
         assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
-        assertEquals(false, restartRequest.includeTasks());
+        assertFalse(restartRequest.includeTasks());
         assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
     }
 

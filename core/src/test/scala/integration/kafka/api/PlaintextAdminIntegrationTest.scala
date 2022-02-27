@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
+
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
 import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
@@ -43,7 +44,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
@@ -70,8 +71,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   private val changedBrokerLoggers = scala.collection.mutable.Set[String]()
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     brokerLoggerConfigResource = new ConfigResource(
       ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
   }
@@ -92,7 +93,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testListNodes(): Unit = {
     client = Admin.create(createConfig)
-    val brokerStrs = brokerList.split(",").toList.sorted
+    val brokerStrs = bootstrapServers().split(",").toList.sorted
     var nodeStrs: List[String] = null
     do {
       val nodes = client.describeCluster().nodes().get().asScala
@@ -208,7 +209,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val controller = result.controller().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
       getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
-    val brokers = brokerList.split(",")
+    val brokers = bootstrapServers().split(",")
     assertEquals(brokers.size, nodes.size)
     for (node <- nodes.asScala) {
       val hostStr = s"${node.host}:${node.port}"
@@ -307,7 +308,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     import scala.concurrent.ExecutionContext.Implicits._
     val producerFuture = Future {
       val producer = TestUtils.createProducer(
-        TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
+        bootstrapServers(),
         securityProtocol = securityProtocol,
         trustStoreFile = trustStoreFile,
         retries = 0, // Producer should not have to retry when broker is moving replica between log directories.
@@ -673,7 +674,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     restartDeadBrokers()
 
     client.close()
-    brokerList = TestUtils.bootstrapServers(servers, listenerName)
     client = Admin.create(createConfig)
 
     TestUtils.waitUntilTrue(() => {

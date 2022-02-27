@@ -41,7 +41,6 @@ import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,7 +61,6 @@ public class PluginsTest {
     private TestHeaderConverter headerConverter;
     private TestInternalConverter internalConverter;
 
-    @SuppressWarnings("deprecation")
     @Before
     public void setup() {
         Map<String, String> pluginProps = new HashMap<>();
@@ -100,7 +98,6 @@ public class PluginsTest {
         assertEquals("foo2", converter.configs.get("extra.config"));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldInstantiateAndConfigureInternalConverters() {
         instantiateAndConfigureInternalConverter(true, Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"));
@@ -432,7 +429,7 @@ public class PluginsTest {
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
         }
     }
 
@@ -446,7 +443,7 @@ public class PluginsTest {
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
         }
 
         @Override

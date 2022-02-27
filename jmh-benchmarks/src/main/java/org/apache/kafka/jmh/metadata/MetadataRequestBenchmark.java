@@ -32,7 +32,6 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
-import kafka.server.ZkMetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
@@ -41,6 +40,7 @@ import kafka.server.ZkAdminManager;
 import kafka.server.ZkSupport;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.metadata.MockConfigRepository;
+import kafka.server.metadata.ZkMetadataCache;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -223,5 +223,10 @@ public class MetadataRequestBenchmark {
     @Benchmark
     public String testRequestToJson() {
         return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
+    }
+
+    @Benchmark
+    public void testTopicIdInfo() {
+        metadataCache.topicIdInfo();
     }
 }

@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.protocol.Errors
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.kafka.common.message.ListGroupsRequestData
@@ -44,8 +44,8 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // need a quota prop to register a "throttle-time" metrics after server startup
     val quotaProps = new Properties()

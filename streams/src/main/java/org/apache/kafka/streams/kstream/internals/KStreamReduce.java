@@ -113,7 +113,9 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
             }
 
             store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
-            tupleForwarder.maybeForward(record.key(), newAgg, sendOldValues ? oldAgg : null, newTimestamp);
+            tupleForwarder.maybeForward(
+                record.withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                    .withTimestamp(newTimestamp));
         }
     }
 
@@ -137,7 +139,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
         private TimestampedKeyValueStore<K, V> store;
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<?, ?> context) {
             store = context.getStateStore(storeName);
         }
 
