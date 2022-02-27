@@ -22,17 +22,18 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{AuthenticationException, DisconnectException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.AbstractRequest
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.{ArgumentMatchers, Mockito}
+import org.mockito.ArgumentMatchers.{any, anyLong, same}
+import org.mockito.ArgumentMatchers
+import org.mockito.Mockito.{mock, verify, when}
 
 import java.util
 import scala.collection.mutable
 
 class InterBrokerSendThreadTest {
   private val time = new MockTime()
-  private val networkClient: NetworkClient = EasyMock.createMock(classOf[NetworkClient])
+  private val networkClient: NetworkClient = mock(classOf[NetworkClient])
   private val completionHandler = new StubCompletionHandler
   private val requestTimeoutMs = 1000
 
@@ -63,14 +64,15 @@ class InterBrokerSendThreadTest {
 
   @Test
   def shutdownThreadShouldNotCauseException(): Unit = {
-    val networkClient = Mockito.mock(classOf[NetworkClient])
     // InterBrokerSendThread#shutdown calls NetworkClient#initiateClose first so NetworkClient#poll
     // can throw DisconnectException when thread is running
-    Mockito.when(networkClient.poll(ArgumentMatchers.anyLong, ArgumentMatchers.anyLong)).thenThrow(new DisconnectException())
+    when(networkClient.poll(anyLong(), anyLong())).thenThrow(new DisconnectException())
     var exception: Throwable = null
     val thread = new TestInterBrokerSendThread(networkClient, e => exception = e)
     thread.shutdown()
     thread.pollOnce(100)
+
+    verify(networkClient).poll(anyLong(), anyLong())
     assertNull(exception)
   }
 
@@ -79,14 +81,12 @@ class InterBrokerSendThreadTest {
     val sendThread = new TestInterBrokerSendThread()
 
     // poll is always called but there should be no further invocations on NetworkClient
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(new util.ArrayList())
-
-    EasyMock.replay(networkClient)
+    when(networkClient.poll(anyLong(), anyLong()))
+      .thenReturn(new util.ArrayList[ClientResponse]())
 
     sendThread.doWork()
 
-    EasyMock.verify(networkClient)
+    verify(networkClient).poll(anyLong(), anyLong())
     assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
@@ -99,29 +99,34 @@ class InterBrokerSendThreadTest {
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
 
-    EasyMock.expect(networkClient.newClientRequest(
-      EasyMock.eq("1"),
-      EasyMock.same(handler.request),
-      EasyMock.anyLong(),
-      EasyMock.eq(true),
-      EasyMock.eq(requestTimeoutMs),
-      EasyMock.same(handler.handler)))
-      .andReturn(clientRequest)
+    when(networkClient.newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      anyLong(),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler)))
+      .thenReturn(clientRequest)
 
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
-      .andReturn(true)
+    when(networkClient.ready(node, time.milliseconds()))
+      .thenReturn(true)
 
-    EasyMock.expect(networkClient.send(clientRequest, time.milliseconds()))
-
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(new util.ArrayList())
-
-    EasyMock.replay(networkClient)
+    when(networkClient.poll(anyLong(), anyLong()))
+      .thenReturn(new util.ArrayList[ClientResponse]())
 
     sendThread.enqueue(handler)
     sendThread.doWork()
 
-    EasyMock.verify(networkClient)
+    verify(networkClient).newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      anyLong(),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler))
+    verify(networkClient).ready(any[Node], anyLong())
+    verify(networkClient).send(same(clientRequest), anyLong())
+    verify(networkClient).poll(anyLong(), anyLong())
     assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
@@ -134,36 +139,45 @@ class InterBrokerSendThreadTest {
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
 
-    EasyMock.expect(networkClient.newClientRequest(
-      EasyMock.eq("1"),
-      EasyMock.same(handler.request),
-      EasyMock.anyLong(),
-      EasyMock.eq(true),
-      EasyMock.eq(requestTimeoutMs),
-      EasyMock.same(handler.handler)))
-      .andReturn(clientRequest)
+    when(networkClient.newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      anyLong(),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler)))
+      .thenReturn(clientRequest)
 
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
-      .andReturn(false)
+    when(networkClient.ready(node, time.milliseconds()))
+      .thenReturn(false)
 
-    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
-      .andReturn(0)
+    when(networkClient.connectionDelay(any[Node], anyLong()))
+      .thenReturn(0)
 
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(new util.ArrayList())
+    when(networkClient.poll(anyLong(), anyLong()))
+      .thenReturn(new util.ArrayList[ClientResponse]())
 
-    EasyMock.expect(networkClient.connectionFailed(node))
-      .andReturn(true)
+   when(networkClient.connectionFailed(node))
+      .thenReturn(true)
 
-    EasyMock.expect(networkClient.authenticationException(node))
-      .andReturn(new AuthenticationException(""))
-
-    EasyMock.replay(networkClient)
+    when(networkClient.authenticationException(node))
+      .thenReturn(new AuthenticationException(""))
 
     sendThread.enqueue(handler)
     sendThread.doWork()
 
-    EasyMock.verify(networkClient)
+    verify(networkClient).newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      anyLong,
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler))
+    verify(networkClient).ready(any[Node], anyLong)
+    verify(networkClient).connectionDelay(any[Node], anyLong)
+    verify(networkClient).poll(anyLong, anyLong)
+    verify(networkClient).connectionFailed(any[Node])
+    verify(networkClient).authenticationException(any[Node])
     assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
@@ -184,35 +198,44 @@ class InterBrokerSendThreadTest {
       handler.handler)
     time.sleep(1500)
 
-    EasyMock.expect(networkClient.newClientRequest(
-      EasyMock.eq("1"),
-      EasyMock.same(handler.request),
-      EasyMock.eq(handler.creationTimeMs),
-      EasyMock.eq(true),
-      EasyMock.eq(requestTimeoutMs),
-      EasyMock.same(handler.handler)))
-      .andReturn(clientRequest)
+    when(networkClient.newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      ArgumentMatchers.eq(handler.creationTimeMs),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler)))
+      .thenReturn(clientRequest)
 
     // make the node unready so the request is not cleared
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
-      .andReturn(false)
+    when(networkClient.ready(node, time.milliseconds()))
+      .thenReturn(false)
 
-    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
-      .andReturn(0)
+    when(networkClient.connectionDelay(any[Node], anyLong()))
+      .thenReturn(0)
 
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(new util.ArrayList())
+    when(networkClient.poll(anyLong(), anyLong()))
+      .thenReturn(new util.ArrayList[ClientResponse]())
 
     // rule out disconnects so the request stays for the expiry check
-    EasyMock.expect(networkClient.connectionFailed(node))
-      .andReturn(false)
-
-    EasyMock.replay(networkClient)
+    when(networkClient.connectionFailed(node))
+      .thenReturn(false)
 
     sendThread.enqueue(handler)
     sendThread.doWork()
 
-    EasyMock.verify(networkClient)
+    verify(networkClient).newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      ArgumentMatchers.eq(handler.creationTimeMs),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler))
+    verify(networkClient).ready(any[Node], anyLong)
+    verify(networkClient).connectionDelay(any[Node], anyLong)
+    verify(networkClient).poll(anyLong, anyLong)
+    verify(networkClient).connectionFailed(any[Node])
+
     assertFalse(sendThread.hasUnsentRequests)
     assertTrue(completionHandler.executedWithDisconnectedResponse)
   }

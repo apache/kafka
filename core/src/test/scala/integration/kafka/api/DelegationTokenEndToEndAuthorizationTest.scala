@@ -102,7 +102,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
     super.setUp(testInfo)
-    privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
   }
 
   private def createDelegationTokens(): (DelegationToken, DelegationToken) = {

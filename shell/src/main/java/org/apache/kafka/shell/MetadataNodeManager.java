@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -316,6 +317,15 @@ public final class MetadataNodeManager implements AutoCloseable {
                     node.rmrf(record.key());
                 else
                     node.create(record.key()).setContents(record.value() + "");
+                break;
+            }
+            case PRODUCER_IDS_RECORD: {
+                ProducerIdsRecord record = (ProducerIdsRecord) message;
+                DirectoryNode producerIds = data.root.mkdirs("producerIds");
+                producerIds.create("lastBlockBrokerId").setContents(record.brokerId() + "");
+                producerIds.create("lastBlockBrokerEpoch").setContents(record.brokerEpoch() + "");
+
+                producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
                 break;
             }
             default:

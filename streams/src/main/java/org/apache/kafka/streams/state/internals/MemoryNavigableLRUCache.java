@@ -19,6 +19,10 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,6 +110,23 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {
         return new TreeMap<>(this.map);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
+
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            getPosition(),
+            context
+        );
     }
 
 

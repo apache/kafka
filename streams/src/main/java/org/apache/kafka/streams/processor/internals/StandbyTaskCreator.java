@@ -35,10 +35,11 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.filterMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 
 class StandbyTaskCreator {
     private final TopologyMetadata topologyMetadata;
-    private final StreamsConfig config;
+    private final StreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
@@ -50,14 +51,14 @@ class StandbyTaskCreator {
     private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
 
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
-                       final StreamsConfig config,
+                       final StreamsConfig applicationConfig,
                        final StreamsMetricsImpl streamsMetrics,
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
                        final String threadId,
                        final Logger log) {
         this.topologyMetadata = topologyMetadata;
-        this.config = config;
+        this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
@@ -90,18 +91,19 @@ class StandbyTaskCreator {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
-            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
-            if (topology == null) {
-                // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 newUnknownTasks.put(taskId, partitions);
                 continue;
             }
+
+            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     Task.TaskType.STANDBY,
-                    StreamThread.eosEnabled(config),
+                    eosEnabled(applicationConfig),
                     getLogContext(taskId),
                     stateDirectory,
                     storeChangelogReader,
@@ -111,7 +113,7 @@ class StandbyTaskCreator {
 
                 final InternalProcessorContext context = new ProcessorContextImpl(
                     taskId,
-                    config,
+                    applicationConfig,
                     stateManager,
                     streamsMetrics,
                     dummyCache
@@ -160,7 +162,7 @@ class StandbyTaskCreator {
             taskId,
             inputPartitions,
             topology,
-            config,
+            topologyMetadata.getTaskConfigFor(taskId),
             streamsMetrics,
             stateManager,
             stateDirectory,

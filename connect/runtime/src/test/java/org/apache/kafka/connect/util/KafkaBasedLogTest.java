@@ -128,11 +128,7 @@ public class KafkaBasedLogTest {
     private Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
     private Callback<ConsumerRecord<String, String>> consumedCallback = (error, record) -> {
         TopicPartition partition = new TopicPartition(record.topic(), record.partition());
-        List<ConsumerRecord<String, String>> records = consumedRecords.get(partition);
-        if (records == null) {
-            records = new ArrayList<>();
-            consumedRecords.put(partition, records);
-        }
+        List<ConsumerRecord<String, String>> records = consumedRecords.computeIfAbsent(partition, k -> new ArrayList<>());
         records.add(record);
     };
 

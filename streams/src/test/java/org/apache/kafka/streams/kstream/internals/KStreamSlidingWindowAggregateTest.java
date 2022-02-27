@@ -47,9 +47,9 @@ import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.Matcher;
@@ -83,7 +83,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @RunWith(Parameterized.class)
 public class KStreamSlidingWindowAggregateTest {
 
@@ -101,7 +100,6 @@ public class KStreamSlidingWindowAggregateTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testAggregateSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -114,13 +112,13 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -158,7 +156,6 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testReduceSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -171,12 +168,12 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
             .reduce(
                 MockReducer.STRING_ADDER,
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -227,14 +224,14 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.as(storeSupplier)
             );
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -390,7 +387,7 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table1 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -399,14 +396,14 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.as(storeSupplier2)
             );
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         table2.toStream().process(supplier);
@@ -422,7 +419,7 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic1.pipeInput("B", "2", 11L);
             inputTopic1.pipeInput("C", "3", 12L);
 
-            final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
+            final List<MockApiProcessor<Windowed<String>, String, Void, Void>> processors = supplier.capturedProcessors(3);
 
             processors.get(0).checkAndClearProcessResult(
                     // left windows created by the first set of records to table 1
@@ -492,7 +489,6 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testEarlyRecordsSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -501,13 +497,13 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(50), ofMillis(200)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(50), ofMillis(200)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -526,7 +522,7 @@ public class KStreamSlidingWindowAggregateTest {
         for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
             final Windowed<String> window = entry.key();
             final Long start = window.window().start();
-            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
+            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
             if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
                 actual.replace(start, valueAndTimestamp);
             }
@@ -543,7 +539,6 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testEarlyRecordsRepeatedInput() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -552,13 +547,13 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(5), ofMillis(20)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(5), ofMillis(20)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -578,7 +573,7 @@ public class KStreamSlidingWindowAggregateTest {
         for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
             final Windowed<String> window = entry.key();
             final Long start = window.window().start();
-            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
+            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
             if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
                 actual.replace(start, valueAndTimestamp);
             }
@@ -603,14 +598,14 @@ public class KStreamSlidingWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.as(storeSupplier)
             );
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -793,7 +788,6 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testAggregateRandomInput() {
 
@@ -821,7 +815,7 @@ public class KStreamSlidingWindowAggregateTest {
                 },
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
         final long seed = new Random().nextLong();
         final Random shuffle = new Random(seed);
@@ -856,8 +850,8 @@ public class KStreamSlidingWindowAggregateTest {
             try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
                 final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
-                for (int i = 0; i < input.size(); i++) {
-                    inputTopic1.pipeInput("A", input.get(i).value(), input.get(i).timestamp());
+                for (final ValueAndTimestamp<String> i : input) {
+                    inputTopic1.pipeInput("A", i.value(), i.timestamp());
                 }
             }
 
@@ -866,7 +860,7 @@ public class KStreamSlidingWindowAggregateTest {
             for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
                 final Windowed<String> window = entry.key();
                 final Long start = window.window().start();
-                final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
+                final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
                 if (results.putIfAbsent(start, valueAndTimestamp) != null) {
                     results.replace(start, valueAndTimestamp);
                 }
@@ -878,12 +872,8 @@ public class KStreamSlidingWindowAggregateTest {
                 t
             );
         } catch (final Throwable t) {
-            final StringBuilder sb =
-                new StringBuilder()
-                    .append("Exception in randomized scenario. Reproduce with seed: ")
-                    .append(seed)
-                    .append(".");
-            throw new AssertionError(sb.toString(), t);
+            final String msg = "Exception in randomized scenario. Reproduce with seed: " + seed + ".";
+            throw new AssertionError(msg, t);
         }
     }
 

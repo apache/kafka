@@ -17,11 +17,12 @@
 
 package kafka.cluster
 
-import org.apache.kafka.common.{Endpoint => JEndpoint, KafkaException}
+import org.apache.kafka.common.{KafkaException, Endpoint => JEndpoint}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 
+import java.util.Locale
 import scala.collection.Map
 
 object EndPoint {
@@ -55,6 +56,13 @@ object EndPoint {
         val listenerName = ListenerName.normalised(listenerNameString)
         new EndPoint(host, port.toInt, listenerName, securityProtocol(listenerName))
       case _ => throw new KafkaException(s"Unable to parse $connectionString to a broker endpoint")
+    }
+  }
+
+  def parseListenerName(connectionString: String): String = {
+    connectionString match {
+      case uriParseExp(listenerNameString, _, _) => listenerNameString.toUpperCase(Locale.ROOT)
+      case _ => throw new KafkaException(s"Unable to parse a listener name from $connectionString")
     }
   }
 }

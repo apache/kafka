@@ -20,7 +20,7 @@ package kafka.server
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.requests.AbstractResponse
 
 sealed trait MetadataSupport {
@@ -56,11 +56,19 @@ sealed trait MetadataSupport {
    */
   def ensureConsistentWith(config: KafkaConfig): Unit
 
-  def maybeForward(request: RequestChannel.Request,
-                   handler: RequestChannel.Request => Unit,
-                   responseCallback: Option[AbstractResponse] => Unit): Unit
+  def canForward(): Boolean
 
-  def controllerId: Option[Int]
+  def maybeForward(
+    request: RequestChannel.Request,
+    handler: RequestChannel.Request => Unit,
+    responseCallback: Option[AbstractResponse] => Unit
+  ): Unit = {
+    if (!request.isForwarded && canForward()) {
+      forwardingManager.get.forwardRequest(request, responseCallback)
+    } else {
+      handler(request)
+    }
+  }
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
@@ -68,8 +76,6 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager],
                      metadataCache: ZkMetadataCache) extends MetadataSupport {
-  val adminZkClient = new AdminZkClient(zkClient)
-
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
 
@@ -79,16 +85,7 @@ case class ZkSupport(adminManager: ZkAdminManager,
     }
   }
 
-  override def maybeForward(request: RequestChannel.Request,
-                            handler: RequestChannel.Request => Unit,
-                            responseCallback: Option[AbstractResponse] => Unit): Unit = {
-    forwardingManager match {
-      case Some(mgr) if !request.isForwarded && !controller.isActive => mgr.forwardRequest(request, responseCallback)
-      case _ => handler(request)
-    }
-  }
-
-  override def controllerId: Option[Int] =  metadataCache.getControllerId
+  override def canForward(): Boolean = forwardingManager.isDefined && (!controller.isActive)
 }
 
 case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCache)
@@ -103,19 +100,5 @@ case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCa
     }
   }
 
-  override def maybeForward(request: RequestChannel.Request,
-                            handler: RequestChannel.Request => Unit,
-                            responseCallback: Option[AbstractResponse] => Unit): Unit = {
-    if (!request.isForwarded) {
-      fwdMgr.forwardRequest(request, responseCallback)
-    } else {
-      handler(request) // will reject
-    }
-  }
-
-  /**
-   * Get the broker ID to return from a MetadataResponse. This will be a broker ID, as
-   * described in KRaftMetadataCache#getControllerId. See that function for more details.
-   */
-  override def controllerId: Option[Int] = metadataCache.getControllerId
+  override def canForward(): Boolean = true
 }

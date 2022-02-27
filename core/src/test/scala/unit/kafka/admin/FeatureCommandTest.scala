@@ -75,7 +75,7 @@ class FeatureCommandTest extends BaseRequestTest {
   @Test
   def testDescribeFeaturesSuccess(): Unit = {
     updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
-    val featureApis = new FeatureApis(new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--describe")))
+    val featureApis = new FeatureApis(new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--describe")))
     featureApis.setSupportedFeatures(defaultSupportedFeatures)
     try {
       val initialDescribeOutput = TestUtils.grabConsoleOutput(featureApis.describeFeatures())
@@ -99,7 +99,7 @@ class FeatureCommandTest extends BaseRequestTest {
    */
   @Test
   def testUpgradeAllFeaturesSuccess(): Unit = {
-    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--upgrade-all"))
+    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--upgrade-all"))
     val featureApis = new FeatureApis(upgradeOpts)
     try {
       // Step (1):
@@ -146,8 +146,8 @@ class FeatureCommandTest extends BaseRequestTest {
    */
   @Test
   def testDowngradeFeaturesSuccess(): Unit = {
-    val downgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--downgrade-all"))
-    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--upgrade-all"))
+    val downgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--downgrade-all"))
+    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--upgrade-all"))
     val featureApis = new FeatureApis(upgradeOpts)
     try {
       // Step (1):
@@ -197,7 +197,7 @@ class FeatureCommandTest extends BaseRequestTest {
    */
   @Test
   def testUpgradeFeaturesFailure(): Unit = {
-    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--upgrade-all"))
+    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--upgrade-all"))
     val featureApis = new FeatureApis(upgradeOpts)
     try {
       // Step (1): Update the supported features across all brokers.

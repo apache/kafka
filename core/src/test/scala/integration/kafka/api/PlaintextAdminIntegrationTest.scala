@@ -93,7 +93,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testListNodes(): Unit = {
     client = Admin.create(createConfig)
-    val brokerStrs = brokerList.split(",").toList.sorted
+    val brokerStrs = bootstrapServers().split(",").toList.sorted
     var nodeStrs: List[String] = null
     do {
       val nodes = client.describeCluster().nodes().get().asScala
@@ -209,7 +209,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val controller = result.controller().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
       getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
-    val brokers = brokerList.split(",")
+    val brokers = bootstrapServers().split(",")
     assertEquals(brokers.size, nodes.size)
     for (node <- nodes.asScala) {
       val hostStr = s"${node.host}:${node.port}"
@@ -308,7 +308,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     import scala.concurrent.ExecutionContext.Implicits._
     val producerFuture = Future {
       val producer = TestUtils.createProducer(
-        TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
+        bootstrapServers(),
         securityProtocol = securityProtocol,
         trustStoreFile = trustStoreFile,
         retries = 0, // Producer should not have to retry when broker is moving replica between log directories.
@@ -674,7 +674,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     restartDeadBrokers()
 
     client.close()
-    brokerList = TestUtils.bootstrapServers(servers, listenerName)
     client = Admin.create(createConfig)
 
     TestUtils.waitUntilTrue(() => {

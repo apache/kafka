@@ -77,7 +77,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
   def createNoAutoCommitConsumer(group: String): KafkaConsumer[String, String] = {
     val props = new Properties
-    props.put("bootstrap.servers", brokerList)
+    props.put("bootstrap.servers", bootstrapServers())
     props.put("group.id", group)
     props.put("enable.auto.commit", "false")
     new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
@@ -96,14 +96,14 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
                                strategy: String = classOf[RangeAssignor].getName,
                                customPropsOpt: Option[Properties] = None,
                                syncCommit: Boolean = false): ConsumerGroupExecutor = {
-    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic, strategy, customPropsOpt, syncCommit)
+    val executor = new ConsumerGroupExecutor(bootstrapServers(), numConsumers, group, topic, strategy, customPropsOpt, syncCommit)
     addExecutor(executor)
     executor
   }
 
   def addSimpleGroupExecutor(partitions: Iterable[TopicPartition] = Seq(new TopicPartition(topic, 0)),
                              group: String = group): SimpleConsumerGroupExecutor = {
-    val executor = new SimpleConsumerGroupExecutor(brokerList, group, partitions)
+    val executor = new SimpleConsumerGroupExecutor(bootstrapServers(), group, partitions)
     addExecutor(executor)
     executor
   }

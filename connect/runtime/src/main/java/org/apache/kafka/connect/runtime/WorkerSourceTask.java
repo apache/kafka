@@ -36,9 +36,11 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -65,7 +67,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
@@ -260,6 +261,10 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
         } finally {
+            submittedRecords.awaitAllMessages(
+                    workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG),
+                    TimeUnit.MILLISECONDS
+            );
             // It should still be safe to commit offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
@@ -364,9 +369,18 @@ class WorkerSourceTask extends WorkerTask {
                     producerRecord,
                     (recordMetadata, e) -> {
                         if (e != null) {
-                            log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
-                            log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
-                            producerSendException.compareAndSet(null, e);
+                            if (retryWithToleranceOperator.getErrorToleranceType() == ToleranceType.ALL) {
+                                log.trace("Ignoring failed record send: {} failed to send record to {}: ",
+                                        WorkerSourceTask.this, topic, e);
+                                // executeFailed here allows the use of existing logging infrastructure/configuration
+                                retryWithToleranceOperator.executeFailed(Stage.KAFKA_PRODUCE, WorkerSourceTask.class,
+                                        preTransformRecord, e);
+                                commitTaskRecord(preTransformRecord, null);
+                            } else {
+                                log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
+                                log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                                producerSendException.compareAndSet(null, e);
+                            }
                         } else {
                             submittedRecord.ack();
                             counter.completeRecord();
@@ -477,7 +491,7 @@ class WorkerSourceTask extends WorkerTask {
         }
 
         if (committableOffsets.isEmpty()) {
-            log.info("{} Either no records were produced by the task since the last offset commit, " 
+            log.debug("{} Either no records were produced by the task since the last offset commit, " 
                     + "or every record has been filtered out by a transformation " 
                     + "or dropped due to transformation or conversion errors.",
                     this

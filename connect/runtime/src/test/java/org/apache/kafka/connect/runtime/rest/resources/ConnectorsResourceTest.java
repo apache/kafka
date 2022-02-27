@@ -168,13 +168,13 @@ public class ConnectorsResourceTest {
         EasyMock.replay(forward);
     }
 
-    private static final Map<String, String> getConnectorConfig(Map<String, String> mapToClone) {
+    private static Map<String, String> getConnectorConfig(Map<String, String> mapToClone) {
         Map<String, String> result = new HashMap<>(mapToClone);
         return result;
     }
 
     @Test
-    public void testListConnectors() throws Throwable {
+    public void testListConnectors() {
         final Capture<Callback<Collection<String>>> cb = Capture.newInstance();
         EasyMock.expect(herder.connectors()).andReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
 
@@ -188,7 +188,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testExpandConnectorsStatus() throws Throwable {
+    public void testExpandConnectorsStatus() {
         EasyMock.expect(herder.connectors()).andReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorStateInfo connector = EasyMock.mock(ConnectorStateInfo.class);
         ConnectorStateInfo connector2 = EasyMock.mock(ConnectorStateInfo.class);
@@ -212,7 +212,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testExpandConnectorsInfo() throws Throwable {
+    public void testExpandConnectorsInfo() {
         EasyMock.expect(herder.connectors()).andReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorInfo connector = EasyMock.mock(ConnectorInfo.class);
         ConnectorInfo connector2 = EasyMock.mock(ConnectorInfo.class);
@@ -236,7 +236,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testFullExpandConnectors() throws Throwable {
+    public void testFullExpandConnectors() {
         EasyMock.expect(herder.connectors()).andReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorInfo connectorInfo = EasyMock.mock(ConnectorInfo.class);
         ConnectorInfo connectorInfo2 = EasyMock.mock(ConnectorInfo.class);
@@ -266,7 +266,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testExpandConnectorsWithConnectorNotFound() throws Throwable {
+    public void testExpandConnectorsWithConnectorNotFound() {
         EasyMock.expect(herder.connectors()).andReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorStateInfo connector = EasyMock.mock(ConnectorStateInfo.class);
         ConnectorStateInfo connector2 = EasyMock.mock(ConnectorStateInfo.class);
@@ -467,7 +467,7 @@ public class ConnectorsResourceTest {
 
     // Not found exceptions should pass through to caller so they can be processed for 404s
     @Test
-    public void testDeleteConnectorNotFound() throws Throwable {
+    public void testDeleteConnectorNotFound() {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
         herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackException(cb, new NotFoundException("not found"));
@@ -686,7 +686,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testGetConnectorTaskConfigsConnectorNotFound() throws Throwable {
+    public void testGetConnectorTaskConfigsConnectorNotFound() {
         final Capture<Callback<List<TaskInfo>>> cb = Capture.newInstance();
         herder.taskConfigs(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackException(cb, new NotFoundException("connector not found"));
@@ -756,7 +756,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testPutConnectorTaskConfigsConnectorNotFound() throws Throwable {
+    public void testPutConnectorTaskConfigsConnectorNotFound() {
         final Capture<Callback<Void>> cb = Capture.newInstance();
         herder.putTaskConfigs(
             EasyMock.eq(CONNECTOR_NAME),
@@ -903,7 +903,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testRestartTaskNotFound() throws Throwable {
+    public void testRestartTaskNotFound() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         final Capture<Callback<Void>> cb = Capture.newInstance();
         herder.restartTask(EasyMock.eq(taskId), EasyMock.capture(cb));
@@ -1040,7 +1040,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testCompleteOrForwardWithErrorAndNoForwardUrl() throws Throwable {
+    public void testCompleteOrForwardWithErrorAndNoForwardUrl() {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
         herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         String leaderUrl = null;

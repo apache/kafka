@@ -1488,7 +1488,7 @@ public class WorkerTest extends ThreadedTest {
         }
 
         @Override
-        public List<SourceRecord> poll() throws InterruptedException {
+        public List<SourceRecord> poll() {
             return null;
         }
 

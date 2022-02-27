@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 
 import javax.management.ObjectName
-import kafka.log.{AppendOrigin, Defaults, UnifiedLog, LogConfig}
+import kafka.log.{AppendOrigin, Defaults, LogConfig, UnifiedLog}
 import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager, RequestLocal}
 import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -34,9 +34,11 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
-import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
+import org.mockito.Mockito.{atLeastOnce, mock, reset, times, verify, when}
 
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -53,14 +55,12 @@ class TransactionStateManagerTest {
 
   val time = new MockTime()
   val scheduler = new MockScheduler(time)
-  val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-  val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
+  val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
+  val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
-  EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-    .andReturn(Some(numPartitions))
-    .anyTimes()
-
-  EasyMock.replay(zkClient)
+  when(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
+    .thenReturn(Some(numPartitions))
+  
   val metrics = new Metrics()
 
   val txnConfig = TransactionConfig()
@@ -87,7 +87,6 @@ class TransactionStateManagerTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    EasyMock.reset(zkClient, replicaManager)
     transactionManager.shutdown()
   }
 
@@ -149,16 +148,16 @@ class TransactionStateManagerTest {
     val startOffset = 0L
     val endOffset = 1L
 
-    val fileRecordsMock = EasyMock.mock[FileRecords](classOf[FileRecords])
-    val logMock = EasyMock.mock[UnifiedLog](classOf[UnifiedLog])
-    EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
-    EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
-      maxLength = EasyMock.anyInt(),
-      isolation = EasyMock.eq(FetchLogEnd),
-      minOneMessage = EasyMock.eq(true))
-    ).andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
-    EasyMock.expect(replicaManager.getLogEndOffset(topicPartition)).andStubReturn(Some(endOffset))
+    val fileRecordsMock = mock[FileRecords](classOf[FileRecords])
+    val logMock = mock[UnifiedLog](classOf[UnifiedLog])
+    when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true))
+    ).thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+    when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
     txnMetadata1.state = PrepareCommit
     txnMetadata1.addPartitions(Set[TopicPartition](
@@ -171,19 +170,14 @@ class TransactionStateManagerTest {
     // is triggered before the loading returns
     val latch = new CountDownLatch(1)
 
-    EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)
-    val bufferCapture = EasyMock.newCapture[ByteBuffer]
-    fileRecordsMock.readInto(EasyMock.capture(bufferCapture), EasyMock.anyInt())
-    EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
-      override def answer: Unit = {
-        latch.await()
-        val buffer = bufferCapture.getValue
-        buffer.put(records.buffer.duplicate)
-        buffer.flip()
-      }
+    when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
+    val bufferCapture: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
+    when(fileRecordsMock.readInto(bufferCapture.capture(), anyInt())).thenAnswer(_ => {
+      latch.await()
+      val buffer = bufferCapture.getValue
+      buffer.put(records.buffer.duplicate)
+      buffer.flip()
     })
-
-    EasyMock.replay(logMock, fileRecordsMock, replicaManager)
 
     val coordinatorEpoch = 0
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
@@ -642,16 +636,25 @@ class TransactionStateManagerTest {
     loadTransactionsForPartitions(partitionIds)
     val allTransactionalIds = loadExpiredTransactionalIds(numTransactionalIds = 20)
 
-    EasyMock.reset(replicaManager)
+    reset(replicaManager)
     expectLogConfig(partitionIds, maxBatchSize)
 
     val attemptedAppends = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
     expectTransactionalIdExpiration(Errors.MESSAGE_TOO_LARGE, attemptedAppends)
-    EasyMock.replay(replicaManager)
 
     assertEquals(allTransactionalIds, listExpirableTransactionalIds())
     transactionManager.removeExpiredTransactionalIds()
-    EasyMock.verify(replicaManager)
+    verify(replicaManager, atLeastOnce()).appendRecords(
+      anyLong(),
+      ArgumentMatchers.eq((-1).toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any()
+    )
 
     for (batches <- attemptedAppends.values; batch <- batches) {
       assertTrue(batch.sizeInBytes() > maxBatchSize)
@@ -671,21 +674,30 @@ class TransactionStateManagerTest {
     loadTransactionsForPartitions(partitionIds)
     val allTransactionalIds = loadExpiredTransactionalIds(numTransactionalIds = 20)
 
-    EasyMock.reset(replicaManager)
+    reset(replicaManager)
 
     // Partition 0 returns log config as normal
     expectLogConfig(Seq(onlinePartitionId), maxBatchSize)
     // No log config returned for partition 0 since it is offline
-    EasyMock.expect(replicaManager.getLogConfig(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, offlinePartitionId)))
-      .andStubReturn(None)
+    when(replicaManager.getLogConfig(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, offlinePartitionId)))
+      .thenReturn(None)
 
     val appendedRecords = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
     expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
-    EasyMock.replay(replicaManager)
 
     assertEquals(allTransactionalIds, listExpirableTransactionalIds())
     transactionManager.removeExpiredTransactionalIds()
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(
+      anyLong(),
+      ArgumentMatchers.eq((-1).toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any()
+    )
 
     assertEquals(Set(onlinePartitionId), appendedRecords.keySet.map(_.partition))
 
@@ -707,16 +719,24 @@ class TransactionStateManagerTest {
     loadTransactionsForPartitions(partitionIds)
     val allTransactionalIds = loadExpiredTransactionalIds(numTransactionalIds = 1000)
 
-    EasyMock.reset(replicaManager)
+    reset(replicaManager)
     expectLogConfig(partitionIds, maxBatchSize)
 
     val appendedRecords = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
     expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
-    EasyMock.replay(replicaManager)
 
     assertEquals(allTransactionalIds, listExpirableTransactionalIds())
     transactionManager.removeExpiredTransactionalIds()
-    EasyMock.verify(replicaManager)
+    verify(replicaManager, atLeastOnce()).appendRecords(
+      anyLong(),
+      ArgumentMatchers.eq((-1).toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
 
     assertEquals(Set.empty, listExpirableTransactionalIds())
     assertEquals(partitionIds.toSet, appendedRecords.keys.map(_.partition))
@@ -801,7 +821,7 @@ class TransactionStateManagerTest {
     prepareTxnLog(topicPartition, 0, records)
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => ())
     assertEquals(0, transactionManager.loadingPartitions.size)
-    assertTrue(transactionManager.transactionMetadataCache.get(partitionId).isDefined)
+    assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
     assertEquals(1, transactionManager.transactionMetadataCache.get(partitionId).get.coordinatorEpoch)
   }
 
@@ -813,26 +833,28 @@ class TransactionStateManagerTest {
     val startOffset = 0L
     val endOffset = 10L
 
-    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
-    EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
-    EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
-      maxLength = EasyMock.anyInt(),
-      isolation = EasyMock.eq(FetchLogEnd),
-      minOneMessage = EasyMock.eq(true))
-    ).andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), MemoryRecords.EMPTY))
-    EasyMock.expect(replicaManager.getLogEndOffset(topicPartition)).andStubReturn(Some(endOffset))
-
-    EasyMock.replay(logMock)
-    EasyMock.replay(replicaManager)
+    val logMock: UnifiedLog = mock(classOf[UnifiedLog])
+    when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true))
+    ).thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), MemoryRecords.EMPTY))
+    when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _) => ())
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
 
-    EasyMock.verify(logMock)
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).getLog(topicPartition)
+    verify(logMock).logStartOffset
+    verify(logMock).read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true))
+    verify(replicaManager, times(2)).getLogEndOffset(topicPartition)
     assertEquals(0, transactionManager.loadingPartitions.size)
   }
 
@@ -857,20 +879,20 @@ class TransactionStateManagerTest {
     appendError: Errors,
     capturedAppends: mutable.Map[TopicPartition, mutable.Buffer[MemoryRecords]]
   ): Unit = {
-    val recordsCapture: Capture[Map[TopicPartition, MemoryRecords]] = EasyMock.newCapture()
-    val callbackCapture: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
-    EasyMock.expect(replicaManager.appendRecords(
-      EasyMock.anyLong(),
-      EasyMock.eq((-1).toShort),
-      EasyMock.eq(true),
-      EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.capture(recordsCapture),
-      EasyMock.capture(callbackCapture),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject(),
-      EasyMock.anyObject()
-    )).andAnswer(() => callbackCapture.getValue.apply(
+    when(replicaManager.appendRecords(
+      anyLong(),
+      ArgumentMatchers.eq((-1).toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      recordsCapture.capture(),
+      callbackCapture.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any()
+    )).thenAnswer(_ => callbackCapture.getValue.apply(
       recordsCapture.getValue.map { case (topicPartition, records) =>
         val batches = capturedAppends.getOrElse(topicPartition, {
           val batches = mutable.Buffer.empty[MemoryRecords]
@@ -882,7 +904,7 @@ class TransactionStateManagerTest {
 
         topicPartition -> new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP, 0L)
       }.toMap
-    )).anyTimes()
+    ))
   }
 
   private def loadTransactionsForPartitions(
@@ -897,15 +919,13 @@ class TransactionStateManagerTest {
     partitionIds: Seq[Int],
     maxBatchSize: Int
   ): Unit = {
-    val logConfig: LogConfig = EasyMock.mock(classOf[LogConfig])
-    EasyMock.expect(logConfig.maxMessageSize).andStubReturn(maxBatchSize)
+    val logConfig: LogConfig = mock(classOf[LogConfig])
+    when(logConfig.maxMessageSize).thenReturn(maxBatchSize)
 
     for (partitionId <- partitionIds) {
-      EasyMock.expect(replicaManager.getLogConfig(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)))
-        .andStubReturn(Some(logConfig))
+      when(replicaManager.getLogConfig(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)))
+        .thenReturn(Some(logConfig))
     }
-
-    EasyMock.replay(logConfig)
   }
 
   private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState): Unit = {
@@ -924,9 +944,7 @@ class TransactionStateManagerTest {
     val appendedRecords = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
     expectTransactionalIdExpiration(error, appendedRecords)
 
-    EasyMock.replay(replicaManager)
     transactionManager.removeExpiredTransactionalIds()
-    EasyMock.verify(replicaManager)
 
     val stateAllowsExpiration = txnState match {
       case Empty | CompleteCommit | CompleteAbort => true
@@ -984,58 +1002,52 @@ class TransactionStateManagerTest {
   private def prepareTxnLog(topicPartition: TopicPartition,
                             startOffset: Long,
                             records: MemoryRecords): Unit = {
-    EasyMock.reset(replicaManager)
+    reset(replicaManager)
 
-    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
-    val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
+    val logMock: UnifiedLog = mock(classOf[UnifiedLog])
+    val fileRecordsMock: FileRecords = mock(classOf[FileRecords])
 
     val endOffset = startOffset + records.records.asScala.size
 
-    EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
-    EasyMock.expect(replicaManager.getLogEndOffset(topicPartition)).andStubReturn(Some(endOffset))
+    when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
+    when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
-    EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
-      maxLength = EasyMock.anyInt(),
-      isolation = EasyMock.eq(FetchLogEnd),
-      minOneMessage = EasyMock.eq(true)))
-      .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true)))
+      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
 
-    EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)
+    when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
 
-    val bufferCapture = EasyMock.newCapture[ByteBuffer]
-    fileRecordsMock.readInto(EasyMock.capture(bufferCapture), EasyMock.anyInt())
-    EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
-      override def answer: Unit = {
-        val buffer = bufferCapture.getValue
-        buffer.put(records.buffer.duplicate)
-        buffer.flip()
-      }
+    val bufferCapture: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
+    when(fileRecordsMock.readInto(bufferCapture.capture(), anyInt())).thenAnswer(_ => {
+      val buffer = bufferCapture.getValue
+      buffer.put(records.buffer.duplicate)
+      buffer.flip()
     })
-    EasyMock.replay(logMock, fileRecordsMock, replicaManager)
   }
 
   private def prepareForTxnMessageAppend(error: Errors): Unit = {
-    EasyMock.reset(replicaManager)
+    reset(replicaManager)
 
-    val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      origin = EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject(),
-      EasyMock.anyObject())
-    ).andAnswer(() => capturedArgument.getValue.apply(
+    val capturedArgument: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    when(replicaManager.appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedArgument.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    ).thenAnswer(_ => capturedArgument.getValue.apply(
       Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
         new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
     )
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
-      .andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any()))
+      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
   }
 
   @Test

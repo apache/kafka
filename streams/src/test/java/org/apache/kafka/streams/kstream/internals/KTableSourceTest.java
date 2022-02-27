@@ -39,7 +39,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -61,7 +60,6 @@ public class KTableSourceTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -69,7 +67,7 @@ public class KTableSourceTest {
 
         final KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()));
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
