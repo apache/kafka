@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import java.util.Collection;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.MetricName;
@@ -44,7 +43,6 @@ import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -59,17 +57,12 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
-import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.ThreadedTest;
-import org.apache.kafka.connect.util.TopicAdmin;
-import org.apache.kafka.connect.util.TopicCreationGroup;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -78,9 +71,9 @@ import org.junit.runners.Parameterized;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
-import org.powermock.api.easymock.PowerMock;
+import org.mockito.quality.Strictness;
 import org.powermock.api.easymock.annotation.Mock;
 
 import javax.management.MBeanServer;
@@ -98,7 +91,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -106,7 +98,6 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.NOOP_OPERATOR;
 import static org.easymock.EasyMock.anyObject;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -171,8 +162,6 @@ public class WorkerTest extends ThreadedTest {
     private CloseableConnectorContext ctx;
 
     @org.mockito.Mock private TestSourceTask task;
-    @Mock private Converter keyConverter;
-    @Mock private Converter valueConverter;
     @org.mockito.Mock private Converter taskKeyConverter;
     @org.mockito.Mock private Converter taskValueConverter;
     @org.mockito.Mock private HeaderConverter taskHeaderConverter;
@@ -186,6 +175,7 @@ public class WorkerTest extends ThreadedTest {
     private MockedStatic<Plugins> pluginsMockedStatic;
     private MockedStatic<ConnectUtils> connectUtilsMockedStatic;
     private MockedConstruction<WorkerSourceTask> sourceTaskMockedConstruction;
+    private MockitoSession mockitoSession;
 
     @ParameterizedTest.Parameters
     public static Collection<Boolean> parameters() {
@@ -199,7 +189,12 @@ public class WorkerTest extends ThreadedTest {
     @Before
     public void setup() {
         super.setup();
-        MockitoAnnotations.openMocks(this);
+
+        // Use strick mode to detect unused mocks
+        mockitoSession = Mockito.mockitoSession()
+                                .initMocks(this)
+                                .strictness(Strictness.STRICT_STUBS)
+                                .startMocking();
 
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
@@ -261,6 +256,8 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.close();
         connectUtilsMockedStatic.close();
         sourceTaskMockedConstruction.close();
+
+        mockitoSession.finishMocking();
     }
 
     private void expectClusterId() {
@@ -779,7 +776,6 @@ public class WorkerTest extends ThreadedTest {
         tasks.put(new ConnectorTaskId("c2", 0), Mockito.mock(WorkerSourceTask.class));
 
         mockInternalConverters();
-        mockStorage();
         mockFileConfigProvider();
 
 //        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
@@ -822,7 +818,6 @@ public class WorkerTest extends ThreadedTest {
     @Test
     public void testStartTaskFailure() {
         mockInternalConverters();
-        mockStorage();
         mockFileConfigProvider();
 
         Map<String, String> origProps = new HashMap<>();
@@ -1257,21 +1252,8 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testWorkerMetrics() throws Exception {
-//        mockInternalConverters();
-//        mockStorage();
-//        mockFileConfigProvider();
-
-        // Create
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
-//        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader).times(2);
-
-        when(plugins.newConnector(WorkerTestConnector.class.getName())).thenReturn(sourceConnector);
-        when(sourceConnector.version()).thenReturn("1.0");
-
-
-//        EasyMock.expect(plugins.newConnector(WorkerTestConnector.class.getName()))
-//                .andReturn(sourceConnector);
-//        when(sourceConnector.version()).thenReturn("1.0");
+        mockInternalConverters();
+        mockFileConfigProvider();
 
         Map<String, String> props = new HashMap<>();
         props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
@@ -1279,34 +1261,7 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
 
-        when(plugins.compareAndSwapLoaders(sourceConnector)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
-
-//        EasyMock.expect(plugins.compareAndSwapLoaders(sourceConnector))
-//                .andReturn(delegatingLoader)
-//                .times(2);
-//        sourceConnector.initialize(anyObject(ConnectorContext.class));
-//        EasyMock.expectLastCall();
-
-//        sourceConnector.start(props);
-//        EasyMock.expectLastCall();
-
-//        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader))
-//                .andReturn(pluginLoader).times(2);
-
-//        connectorStatusListener.onStartup(CONNECTOR_ID);
-//        EasyMock.expectLastCall();
-
-        // Remove
-//        sourceConnector.stop();
-
-//        EasyMock.expectLastCall();
-
-//        connectorStatusListener.onShutdown(CONNECTOR_ID);
-//        EasyMock.expectLastCall();
-
-//        PowerMock.replayAll();
-
         Worker worker = new Worker("worker-1",
                 Time.SYSTEM,
                 plugins,
