@@ -20,7 +20,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -58,12 +57,12 @@ final class TaskMovement {
                                                                                      final UUID client,
                                                                                      final Map<UUID, ClientState> clientStates,
                                                                                      final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
-                                                                                     final Map<TaskId, List<UUID>> tasksToClientByLag) {
-        final List<UUID> taskClients = requireNonNull(tasksToClientByLag.get(task), "uninitialized list");
+                                                                                     final Map<TaskId, SortedSet<UUID>> tasksToClientByLag) {
+        final SortedSet<UUID> taskClients = requireNonNull(tasksToClientByLag.get(task), "uninitialized set");
         if (taskIsCaughtUpOnClient(task, client, tasksToCaughtUpClients)) {
             return false;
         }
-        final long mostCaughtUpLag = clientStates.get(taskClients.get(0)).lagFor(task);
+        final long mostCaughtUpLag = clientStates.get(taskClients.first()).lagFor(task);
         final long clientLag = clientStates.get(client).lagFor(task);
         return mostCaughtUpLag < clientLag;
     }
@@ -76,7 +75,7 @@ final class TaskMovement {
     }
 
     static int assignActiveTaskMovements(final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
-                                         final Map<TaskId, List<UUID>> tasksToClientByLag,
+                                         final Map<TaskId, SortedSet<UUID>> tasksToClientByLag,
                                          final Map<UUID, ClientState> clientStates,
                                          final Map<UUID, Set<TaskId>> warmups,
                                          final AtomicInteger remainingWarmupReplicas) {
@@ -163,7 +162,7 @@ final class TaskMovement {
     }
 
     static int assignStandbyTaskMovements(final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
-                                          final Map<TaskId, List<UUID>> tasksToClientByLag,
+                                          final Map<TaskId, SortedSet<UUID>> tasksToClientByLag,
                                           final Map<UUID, ClientState> clientStates,
                                           final AtomicInteger remainingWarmupReplicas,
                                           final Map<UUID, Set<TaskId>> warmups) {
@@ -269,13 +268,13 @@ final class TaskMovement {
         destinationClientState.assignStandby(task);
     }
 
-    private static UUID mostCaughtUpEligibleClient(final Map<TaskId, List<UUID>> tasksToClientByLag,
+    private static UUID mostCaughtUpEligibleClient(final Map<TaskId, SortedSet<UUID>> tasksToClientByLag,
                                                    final TaskId task,
                                                    final UUID destinationClient) {
         return mostCaughtUpEligibleClient(tasksToClientByLag, client -> true, task, destinationClient);
     }
 
-    private static UUID mostCaughtUpEligibleClient(final Map<TaskId, List<UUID>> tasksToClientByLag,
+    private static UUID mostCaughtUpEligibleClient(final Map<TaskId, SortedSet<UUID>> tasksToClientByLag,
                                                    final Function<UUID, Boolean> constraint,
                                                    final TaskId task,
                                                    final UUID destinationClient) {

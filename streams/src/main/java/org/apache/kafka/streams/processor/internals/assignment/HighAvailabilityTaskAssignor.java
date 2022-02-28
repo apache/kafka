@@ -22,11 +22,9 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -70,7 +68,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             configs.acceptableRecoveryLag
         );
 
-        final Map<TaskId, List<UUID>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
+        final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
 
         // We temporarily need to know which standby tasks were intended as warmups
         // for active tasks, so that we don't move them (again) when we plan standby
@@ -259,14 +257,14 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         return taskToCaughtUpClients;
     }
 
-    private static Map<TaskId, List<UUID>> tasksToClientByLag(final Set<TaskId> statefulTasks,
+    private static Map<TaskId, SortedSet<UUID>> tasksToClientByLag(final Set<TaskId> statefulTasks,
                                                               final Map<UUID, ClientState> clientStates) {
-        final Map<TaskId, List<UUID>> tasksToClientByLag = new HashMap<>();
+        final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = new HashMap<>();
         for (final TaskId task : statefulTasks) {
-            final List<Map.Entry<UUID, ClientState>> clientLag = new ArrayList<>(clientStates.entrySet());
-            clientLag.sort(Comparator.<Map.Entry<UUID, ClientState>>comparingLong(
-                    a -> a.getValue().lagFor(task)).thenComparing(Map.Entry::getKey));
-            tasksToClientByLag.put(task, clientLag.stream().map(Map.Entry::getKey).collect(Collectors.toList()));
+            final SortedSet<UUID> clientLag = new TreeSet<>(Comparator.<UUID>comparingLong(a ->
+                    clientStates.get(a).lagFor(task)).thenComparing(a -> a));
+            clientLag.addAll(clientStates.keySet());
+            tasksToClientByLag.put(task, clientLag);
         }
         return tasksToClientByLag;
     }
