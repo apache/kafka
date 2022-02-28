@@ -46,7 +46,7 @@ object GetOffsetShell {
     }
   }
 
-  private def fetchOffsets(args: Array[String]): Unit = {
+  private[tools] def fetchOffsets(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
     val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                            .withRequiredArg
@@ -71,11 +71,12 @@ object GetOffsetShell {
                            .withRequiredArg
                            .describedAs("partition ids")
                            .ofType(classOf[String])
-    val timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
+    val timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]" +
+                                  " It also accepts \"earliest\", \"latest\", \"max-timestamp\", -1(latest), -2(earliest) -3(max timestamp) ")
                            .withRequiredArg
-                           .describedAs("timestamp/-1(latest)/-2(earliest)/-3(max timestamp)")
-                           .ofType(classOf[java.lang.Long])
-                           .defaultsTo(-1L)
+                           .describedAs("timestamp/latest/earliest/max-timestamp/-1(latest)/-2(earliest)/-3(max timestamp)")
+                           .ofType(classOf[String])
+                           .defaultsTo("latest")
     val commandConfigOpt = parser.accepts("command-config", s"Property file containing configs to be passed to Admin Client.")
                            .withRequiredArg
                            .describedAs("config file")
@@ -104,7 +105,24 @@ object GetOffsetShell {
       throw new IllegalArgumentException("--topic-partitions cannot be used with --topic or --partitions")
     }
 
-    val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
+    val listOffsetsTimestamp = options.valueOf(timeOpt)
+    val offsetSpec = listOffsetsTimestamp match {
+      case "earliest" => OffsetSpec.earliest()
+      case "latest" => OffsetSpec.latest()
+      case "max-timestamp" => OffsetSpec.maxTimestamp()
+      case _ =>
+        try {
+          java.lang.Long.parseLong(listOffsetsTimestamp) match {
+            case ListOffsetsRequest.EARLIEST_TIMESTAMP => OffsetSpec.earliest()
+            case ListOffsetsRequest.LATEST_TIMESTAMP => OffsetSpec.latest()
+            case ListOffsetsRequest.MAX_TIMESTAMP => OffsetSpec.maxTimestamp()
+            case value => OffsetSpec.forTimestamp(value)
+          }
+        } catch {
+          case e: NumberFormatException =>
+            throw new IllegalArgumentException(s"Malformed time argument $listOffsetsTimestamp, please use latest/earliest/max-timestamp/-1(latest)/-2(earliest)/-3(max timestamp), or a specified long format timestamp", e)
+        }
+    }
 
     val topicPartitionFilter = if (options.has(topicPartitionsOpt)) {
       createTopicPartitionFilterWithPatternList(options.valueOf(topicPartitionsOpt))
@@ -130,13 +148,6 @@ object GetOffsetShell {
 
       if (partitionInfos.isEmpty) {
         throw new IllegalArgumentException("Could not match any topic-partitions with the specified filters")
-      }
-
-      val offsetSpec = listOffsetsTimestamp match {
-        case ListOffsetsRequest.EARLIEST_TIMESTAMP => OffsetSpec.earliest()
-        case ListOffsetsRequest.LATEST_TIMESTAMP => OffsetSpec.latest()
-        case ListOffsetsRequest.MAX_TIMESTAMP => OffsetSpec.maxTimestamp()
-        case _ => OffsetSpec.forTimestamp(listOffsetsTimestamp)
       }
 
       val timestampsToSearch = partitionInfos.map(tp => tp -> offsetSpec).toMap.asJava

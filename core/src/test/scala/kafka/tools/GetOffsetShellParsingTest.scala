@@ -235,6 +235,12 @@ class GetOffsetShellParsingTest {
       () => GetOffsetShell.createTopicPartitionFilterWithPatternList(":-b"))
   }
 
+  @Test
+  def testInvalidTimeValue(): Unit = {
+    assertThrows(classOf[IllegalArgumentException],
+      () => GetOffsetShell.fetchOffsets(Array("--bootstrap-server", "localhost:9092", "--time", "invalid")))
+  }
+
   private def topicPartition(topic: String, partition: Int): TopicPartition = {
     new TopicPartition(topic, partition)
   }
