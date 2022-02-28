@@ -149,12 +149,27 @@ public class NamedTopologyTest {
     }
 
     @Test
-    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopic() {
+    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopicAfterStart() {
         builder1.stream("stream");
         builder2.stream("stream");
 
         streams.start();
 
+        streams.addNamedTopology(builder1.build());
+
+        final ExecutionException exception = assertThrows(
+            ExecutionException.class,
+            () -> streams.addNamedTopology(builder2.build()).all().get()
+        );
+
+        assertThat(exception.getCause().getClass(), equalTo(TopologyException.class));
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopicBeforeStart() {
+        builder1.stream("stream");
+        builder2.stream("stream");
+        
         streams.addNamedTopology(builder1.build());
 
         final ExecutionException exception = assertThrows(
