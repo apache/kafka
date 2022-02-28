@@ -449,7 +449,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   private def createAdminClient(): Admin = {
     val props = new Properties()
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     Admin.create(props)
   }
 }

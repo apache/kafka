@@ -114,7 +114,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -210,7 +210,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 0)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }

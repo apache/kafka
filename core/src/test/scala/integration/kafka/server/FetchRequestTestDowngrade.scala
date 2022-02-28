@@ -50,7 +50,7 @@ class FetchRequestTestDowngrade extends BaseRequestTest {
 
         ensureControllerIn(Seq(0))
         assertEquals(0, controllerSocketServer.config.brokerId)
-        val partitionLeaders = createTopic(tp.topic, Map(tp.partition -> Seq(1, 0)))
+        val partitionLeaders = createTopicWithAssignment(tp.topic, Map(tp.partition -> Seq(1, 0)))
         TestUtils.waitForAllPartitionsMetadata(servers, tp.topic, 1)
         ensureControllerIn(Seq(1))
         assertEquals(1, controllerSocketServer.config.brokerId)

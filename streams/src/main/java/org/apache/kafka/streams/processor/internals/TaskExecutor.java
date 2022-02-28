@@ -51,12 +51,15 @@ public class TaskExecutor {
     private final boolean hasNamedTopologies;
     private final ProcessingMode processingMode;
     private final Tasks tasks;
+    private final TaskExecutionMetadata taskExecutionMetadata;
 
     public TaskExecutor(final Tasks tasks,
+                        final TaskExecutionMetadata taskExecutionMetadata,
                         final ProcessingMode processingMode,
                         final boolean hasNamedTopologies,
                         final LogContext logContext) {
         this.tasks = tasks;
+        this.taskExecutionMetadata = taskExecutionMetadata;
         this.processingMode = processingMode;
         this.hasNamedTopologies = hasNamedTopologies;
         this.log = logContext.logger(getClass());
@@ -69,23 +72,28 @@ public class TaskExecutor {
     int process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
         Task lastProcessed = null;
-        try {
-            for (final Task task : tasks.activeTasks()) {
-                lastProcessed = task;
-                totalProcessed += processTask(task, maxNumRecords, time);
+
+        for (final Task task : tasks.activeTasks()) {
+            final long now = time.milliseconds();
+            try {
+                if (taskExecutionMetadata.canProcessTask(task, now)) {
+                    lastProcessed = task;
+                    totalProcessed += processTask(task, maxNumRecords, now, time);
+                }
+            } catch (final Throwable t) {
+                taskExecutionMetadata.registerTaskError(task, t, now);
+                tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
+                commitSuccessfullyProcessedTasks();
+                throw t;
             }
-        } catch (final Exception e) {
-            tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
-            commitSuccessfullyProcessedTasks();
-            throw e;
         }
 
         return totalProcessed;
     }
 
-    private long processTask(final Task task, final int maxNumRecords, final Time time) {
+    private long processTask(final Task task, final int maxNumRecords, final long begin, final Time time) {
         int processed = 0;
-        long now = time.milliseconds();
+        long now = begin;
 
         final long then = now;
         try {
@@ -94,12 +102,14 @@ public class TaskExecutor {
                 processed++;
             }
             // TODO: enable regardless of whether using named topologies
-            if (hasNamedTopologies && processingMode != EXACTLY_ONCE_V2) {
+            if (processed > 0 && hasNamedTopologies && processingMode != EXACTLY_ONCE_V2) {
+                log.trace("Successfully processed task {}", task.id());
                 tasks.addToSuccessfullyProcessed(task);
             }
         } catch (final TimeoutException timeoutException) {
+            // TODO consolidate TimeoutException retries with general error handling
             task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-            log.debug(
+            log.error(
                 String.format(
                     "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
                     task.id()),
@@ -110,11 +120,11 @@ public class TaskExecutor {
                 "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
             throw e;
         } catch (final StreamsException e) {
-            log.error("Failed to process stream task {} due to the following error:", task.id(), e);
+            log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
             e.setTaskId(task.id());
             throw e;
         } catch (final RuntimeException e) {
-            log.error("Failed to process stream task {} due to the following error:", task.id(), e);
+            log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
             throw new StreamsException(e, task.id());
         } finally {
             now = time.milliseconds();
@@ -132,7 +142,7 @@ public class TaskExecutor {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<Task> tasksToCommit,
-                                                            final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
+                                                    final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
         int committed = 0;
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
@@ -253,7 +263,7 @@ public class TaskExecutor {
         if (!tasks.successfullyProcessed().isEmpty()) {
             log.info("Streams encountered an error when processing tasks." +
                 " Will commit all previously successfully processed tasks {}",
-                tasks.successfullyProcessed().toString());
+                tasks.successfullyProcessed().stream().map(Task::id));
             commitTasksAndMaybeUpdateCommittableOffsets(tasks.successfullyProcessed(), new HashMap<>());
         }
         tasks.clearSuccessfullyProcessed();

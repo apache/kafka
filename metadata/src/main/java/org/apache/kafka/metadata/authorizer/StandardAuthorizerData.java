@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 
+import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
 import static org.apache.kafka.common.acl.AclOperation.ALTER_CONFIGS;
 import static org.apache.kafka.common.acl.AclOperation.DELETE;
@@ -372,7 +373,7 @@ public class StandardAuthorizerData {
         // The hostname should be cached in the InetAddress object, so calling this more
         // than once shouldn't be too expensive.
         if (!acl.host().equals(WILDCARD)) {
-            String host = requestContext.clientAddress().getHostName();
+            String host = requestContext.clientAddress().getHostAddress();
             if (!acl.host().equals(host)) return null;
         }
         // Check if the operation field matches. Here we hit a slight complication.
@@ -382,21 +383,26 @@ public class StandardAuthorizerData {
         //
         // But this rule only applies to ALLOW ACLs. So for example, a DENY ACL for READ
         // on a resource does not DENY describe for that resource.
-        if (acl.permissionType().equals(ALLOW)) {
-            switch (action.operation()) {
-                case DESCRIBE:
-                    if (!IMPLIES_DESCRIBE.contains(acl.operation())) return null;
-                    break;
-                case DESCRIBE_CONFIGS:
-                    if (!IMPLIES_DESCRIBE_CONFIGS.contains(acl.operation())) return null;
-                    break;
-                default:
-                    if (!action.operation().equals(acl.operation())) return null;
-                    break;
+        if (acl.operation() != ALL) {
+            if (acl.permissionType().equals(ALLOW)) {
+                switch (action.operation()) {
+                    case DESCRIBE:
+                        if (!IMPLIES_DESCRIBE.contains(acl.operation())) return null;
+                        break;
+                    case DESCRIBE_CONFIGS:
+                        if (!IMPLIES_DESCRIBE_CONFIGS.contains(acl.operation())) return null;
+                        break;
+                    default:
+                        if (action.operation() != acl.operation()) {
+                            return null;
+                        }
+                        break;
+                }
+            } else if (action.operation() != acl.operation()) {
+                return null;
             }
-        } else {
-            if (!action.operation().equals(acl.operation())) return null;
         }
+
         return acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED;
     }
 

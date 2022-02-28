@@ -91,7 +91,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
 
         // Initialize TopicBasedRemoteLogMetadataManager.
         Map<String, Object> configs = new HashMap<>();
-        configs.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList());
+        configs.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(listenerName()));
         configs.put(BROKER_ID, 0);
         configs.put(LOG_DIR, logDir);
         configs.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, METADATA_TOPIC_PARTITIONS_COUNT);

@@ -560,7 +560,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   protected def createScramAdminClient(scramMechanism: String, user: String, password: String): Admin = {
-    createAdminClient(brokerList, securityProtocol, trustStoreFile, clientSaslProperties,
+    createAdminClient(bootstrapServers(), securityProtocol, trustStoreFile, clientSaslProperties,
       scramMechanism, user, password)
   }
 

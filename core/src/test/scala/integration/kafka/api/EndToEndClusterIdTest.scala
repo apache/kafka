@@ -123,7 +123,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get.clusterId)
 
     val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, classOf[MockProducerInterceptor].getName)
     producerProps.put("mock.interceptor.append", appendStr)
     producerProps.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockProducerMetricsReporter].getName)
@@ -144,7 +144,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     assertNotNull(MockProducerMetricsReporter.CLUSTER_META)
     isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get.clusterId)
 
-    this.consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    this.consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, classOf[MockConsumerInterceptor].getName)
     this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockConsumerMetricsReporter].getName)
     val testConsumer = new KafkaConsumer(this.consumerConfig, new MockDeserializer, new MockDeserializer)

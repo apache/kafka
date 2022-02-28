@@ -85,7 +85,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     // create adminClient
     val props = new Properties()
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     adminClient = Admin.create(props)
     topicService = TopicService(adminClient)
     testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"

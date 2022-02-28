@@ -51,7 +51,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
         val topic = "topic"
 
         // Create topic with leader as 0 for the 2 partitions.
-        createTopic(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
+        createTopicWithAssignment(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
 
         val reassignment = Map(
             new TopicPartition(topic, 0) -> Seq(1, 0),

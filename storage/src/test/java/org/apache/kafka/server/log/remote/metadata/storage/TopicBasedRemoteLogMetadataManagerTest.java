@@ -83,7 +83,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         leaderTopicReplicas.add(1);
         leaderTopicReplicas.add(2);
         assignedLeaderTopicReplicas.put(0, JavaConverters.asScalaBuffer(leaderTopicReplicas));
-        remoteLogMetadataManagerHarness.createTopic(leaderTopic, JavaConverters.mapAsScalaMap(assignedLeaderTopicReplicas));
+        remoteLogMetadataManagerHarness.createTopicWithAssignment(
+            leaderTopic, JavaConverters.mapAsScalaMap(assignedLeaderTopicReplicas),
+            remoteLogMetadataManagerHarness.listenerName());
 
         String followerTopic = "new-follower";
         HashMap<Object, Seq<Object>> assignedFollowerTopicReplicas = new HashMap<>();
@@ -93,7 +95,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         followerTopicReplicas.add(2);
         followerTopicReplicas.add(0);
         assignedFollowerTopicReplicas.put(0, JavaConverters.asScalaBuffer(followerTopicReplicas));
-        remoteLogMetadataManagerHarness.createTopic(followerTopic, JavaConverters.mapAsScalaMap(assignedFollowerTopicReplicas));
+        remoteLogMetadataManagerHarness.createTopicWithAssignment(
+            followerTopic, JavaConverters.mapAsScalaMap(assignedFollowerTopicReplicas),
+            remoteLogMetadataManagerHarness.listenerName());
 
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition newFollowerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));

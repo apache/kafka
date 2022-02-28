@@ -752,7 +752,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   private def createReadCommittedConsumer(group: String = "group",
                                           maxPollRecords: Int = 500,
                                           props: Properties = new Properties) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
       groupId = group,
       enableAutoCommit = false,
       readCommitted = true,
@@ -762,7 +762,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   private def createReadUncommittedConsumer(group: String) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
       groupId = group,
       enableAutoCommit = false)
     nonTransactionalConsumers += consumer
