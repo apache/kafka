@@ -42,7 +42,7 @@ class BrokerMetadataListenerTest {
       time = Time.SYSTEM,
       threadNamePrefix = None,
       maxBytesBetweenSnapshots = maxBytesBetweenSnapshots,
-      snapshotter = None)
+      snapshotter = snapshotter)
   }
 
   @Test
@@ -166,7 +166,8 @@ class BrokerMetadataListenerTest {
   @Test
   def testCreateSnapshot(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
-    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter))
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
     try {
       val brokerIds = 0 to 3
 
