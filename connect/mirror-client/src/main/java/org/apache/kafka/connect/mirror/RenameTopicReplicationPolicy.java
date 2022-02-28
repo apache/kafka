@@ -53,5 +53,4 @@ public class RenameTopicReplicationPolicy extends DefaultReplicationPolicy {
         String targetTopic = topicMap.containsKey(topic) ?  topicMap.get(topic) : topic;
         return super.formatRemoteTopic(sourceClusterAlias, targetTopic);
     }
-
 }
