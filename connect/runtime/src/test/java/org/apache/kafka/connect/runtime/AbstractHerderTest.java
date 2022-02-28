@@ -23,12 +23,14 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.provider.DirectoryConfigProvider;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -956,7 +958,7 @@ public class AbstractHerderTest {
         assertEquals(new SampleTransformation<>().config().names().size(), transformationConfigs.size());
     }
 
-    @Test(expected = BadRequestException.class)
+    @Test(expected = NotFoundException.class)
     public void testGetConnectorConfigDefWithBadName() throws Exception {
         String connName = "AnotherPlugin";
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
@@ -967,6 +969,21 @@ public class AbstractHerderTest {
                 .createMock();
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugin(anyString())).andThrow(new ClassNotFoundException());
+        replayAll();
+        herder.connectorPluginConfig(connName);
+    }
+
+    @Test(expected = BadRequestException.class)
+    public void testGetConnectorConfigDefWithInvalidPluginType() throws Exception {
+        String connName = "AnotherPlugin";
+        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
+                        ConnectorClientConfigOverridePolicy.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .addMockedMethod("generation")
+                .createMock();
+        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugin(anyString())).andReturn(new DirectoryConfigProvider());
         replayAll();
         herder.connectorPluginConfig(connName);
     }

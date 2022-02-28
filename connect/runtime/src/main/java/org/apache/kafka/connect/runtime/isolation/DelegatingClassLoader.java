@@ -52,7 +52,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceLoader;
@@ -132,10 +131,15 @@ public class DelegatingClassLoader extends URLClassLoader {
         this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
     }
 
-    public Set<PluginDesc<? extends Connector>> connectors() {
-        Set<PluginDesc<? extends Connector>> connectors = new HashSet<>();
-        connectors.addAll(sinkConnectors);
-        connectors.addAll(sourceConnectors);
+    @SuppressWarnings("unchecked")
+    public Set<PluginDesc<Connector>> connectors() {
+        Set<PluginDesc<Connector>> connectors = new TreeSet<>();
+        for (PluginDesc<SinkConnector> sinkConnector : sinkConnectors) {
+            connectors.add((PluginDesc<Connector>) (PluginDesc<? extends Connector>) sinkConnector);
+        }
+        for (PluginDesc<SourceConnector> sourceConnector : sourceConnectors) {
+            connectors.add((PluginDesc<Connector>) (PluginDesc<? extends Connector>) sourceConnector);
+        }
         return connectors;
     }
 
@@ -248,8 +252,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             if (CLASSPATH_NAME.equals(path)) {
                 scanUrlsAndAddPlugins(
                         getParent(),
-                        ClasspathHelper.forJavaClassPath().toArray(new URL[0]),
-                        null
+                        ClasspathHelper.forJavaClassPath().toArray(new URL[0])
                 );
             } else {
                 Path pluginPath = Paths.get(path).toAbsolutePath();
@@ -290,13 +293,12 @@ public class DelegatingClassLoader extends URLClassLoader {
                 urls,
                 this
         );
-        scanUrlsAndAddPlugins(loader, urls, pluginLocation);
+        scanUrlsAndAddPlugins(loader, urls);
     }
 
     private void scanUrlsAndAddPlugins(
             ClassLoader loader,
-            URL[] urls,
-            Path pluginLocation
+            URL[] urls
     ) throws ReflectiveOperationException {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
@@ -457,8 +459,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     private void addAllAliases() {
-        addAliases(sinkConnectors);
-        addAliases(sourceConnectors);
+        addAliases(connectors());
         addAliases(converters);
         addAliases(headerConverters);
         addAliases(transformations);
@@ -523,7 +524,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     @Override
     public Enumeration<URL> getResources(String name) throws IOException {
         if (serviceLoaderManifestForPlugin(name)) {
-            // Default implementation of getResources searches the parent class loader and and also its own URL paths. This will enable the
+            // Default implementation of getResources searches the parent class loader and also its own URL paths. This will enable the
             // PluginClassLoader to limit its resource search to only its own URL paths.
             return null;
         } else {

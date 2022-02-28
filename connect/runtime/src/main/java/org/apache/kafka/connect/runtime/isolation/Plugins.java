@@ -193,7 +193,7 @@ public class Plugins {
             );
         } catch (ClassNotFoundException e) {
             List<PluginDesc<? extends Connector>> matches = new ArrayList<>();
-            Set<PluginDesc<? extends Connector>> connectors = delegatingLoader.connectors();
+            Set<PluginDesc<Connector>> connectors = delegatingLoader.connectors();
             for (PluginDesc<? extends Connector> plugin : connectors) {
                 Class<?> pluginClass = plugin.pluginClass();
                 String simpleName = pluginClass.getSimpleName();

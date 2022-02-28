@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.PredicatedTransformation;
@@ -28,16 +27,12 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.tools.MockConnector;
 import org.apache.kafka.connect.tools.MockSinkConnector;
 import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.tools.SchemaSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.transforms.Transformation;
-import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.FutureCallback;
 
 import javax.ws.rs.BadRequestException;
@@ -53,6 +48,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -71,15 +67,20 @@ public class ConnectorPluginsResource {
     private final Herder herder;
     private final List<ConnectorPluginInfo> connectorPlugins;
 
-    static final List<Class<? extends Connector>> CONNECTOR_EXCLUDES = Arrays.asList(
-            VerifiableSourceConnector.class, VerifiableSinkConnector.class,
-            MockConnector.class, MockSourceConnector.class, MockSinkConnector.class,
+    static final List<Class<? extends SinkConnector>> SINK_CONNECTOR_EXCLUDES = Arrays.asList(
+            VerifiableSinkConnector.class,
+            MockSinkConnector.class
+    );
+
+    static final List<Class<? extends SourceConnector>> SOURCE_CONNECTOR_EXCLUDES = Arrays.asList(
+            VerifiableSourceConnector.class,
+            MockSourceConnector.class,
             SchemaSourceConnector.class
     );
 
-    @SuppressWarnings("rawtypes")
-    static final List<Class<? extends Transformation>> TRANSFORM_EXCLUDES = Collections.singletonList(
-            PredicatedTransformation.class
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static final List<Class<? extends Transformation<?>>> TRANSFORM_EXCLUDES = Collections.singletonList(
+            (Class) PredicatedTransformation.class
     );
 
     public ConnectorPluginsResource(Herder herder) {
@@ -87,30 +88,19 @@ public class ConnectorPluginsResource {
         this.connectorPlugins = new ArrayList<>();
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
-        for (PluginDesc<SinkConnector> plugin : herder.plugins().sinkConnectors()) {
-            if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
-                connectorPlugins.add(new ConnectorPluginInfo(plugin));
-            }
-        }
-        for (PluginDesc<SourceConnector> plugin : herder.plugins().sourceConnectors()) {
-            if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
-                connectorPlugins.add(new ConnectorPluginInfo(plugin));
-            }
-        }
-        for (PluginDesc<Transformation<?>> transform : herder.plugins().transformations()) {
-            if (!TRANSFORM_EXCLUDES.contains(transform.pluginClass())) {
-                connectorPlugins.add(new ConnectorPluginInfo(transform));
-            }
-        }
-        for (PluginDesc<Predicate<?>> predicate : herder.plugins().predicates()) {
-            connectorPlugins.add(new ConnectorPluginInfo(predicate));
-        }
-        for (PluginDesc<Converter> converter : herder.plugins().converters()) {
-            connectorPlugins.add(new ConnectorPluginInfo(converter));
-        }
-        for (PluginDesc<HeaderConverter> headerConverter : herder.plugins().headerConverters()) {
-            connectorPlugins.add(new ConnectorPluginInfo(headerConverter));
-        }
+        addConnectorPlugins(herder.plugins().sinkConnectors(), SINK_CONNECTOR_EXCLUDES);
+        addConnectorPlugins(herder.plugins().sourceConnectors(), SOURCE_CONNECTOR_EXCLUDES);
+        addConnectorPlugins(herder.plugins().transformations(), TRANSFORM_EXCLUDES);
+        addConnectorPlugins(herder.plugins().predicates(), Collections.emptySet());
+        addConnectorPlugins(herder.plugins().converters(), Collections.emptySet());
+        addConnectorPlugins(herder.plugins().headerConverters(), Collections.emptySet());
+    }
+
+    private <T> void addConnectorPlugins(Collection<PluginDesc<T>> plugins, Collection<Class<? extends T>> excludes) {
+        plugins.stream()
+                .filter(p -> !excludes.contains(p.pluginClass()))
+                .map(ConnectorPluginInfo::new)
+                .forEach(connectorPlugins::add);
     }
 
     @PUT

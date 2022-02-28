@@ -784,7 +784,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
         } catch (ClassNotFoundException cnfe) {
-            throw new BadRequestException("Unknown plugin " + pluginName + ".");
+            throw new NotFoundException("Unknown plugin " + pluginName + ".");
         }
         for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
             results.add(AbstractHerder.convertConfigKey(configKey));
