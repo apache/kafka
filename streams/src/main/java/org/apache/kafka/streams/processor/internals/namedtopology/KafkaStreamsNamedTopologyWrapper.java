@@ -99,6 +99,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     /**
      * Start up Streams with a collection of initial NamedTopologies (may be empty)
+     *
+     * Note: this is synchronized to ensure that the application state cannot change while we add topologies
      */
     public synchronized void start(final Collection<NamedTopology> initialTopologies) {
         log.info("Starting Streams with topologies: {}", initialTopologies);
@@ -233,14 +235,15 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         topologyMetadata.unregisterTopology(removeTopologyFuture, topologyToRemove);
 
-        if (!completedFutureForUnstartedApp(removeTopologyFuture, "removing topology") && resetOffsets) {
+        if (resetOffsets && !completedFutureForUnstartedApp(removeTopologyFuture, "removing topology")) {
             log.info("Resetting offsets for the following partitions of {} removed NamedTopology {}: {}",
                      removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully" : "successfully",
                      topologyToRemove, partitionsToReset
             );
-            resetOffsets(removeTopologyFuture, partitionsToReset);
+            return resetOffsets(removeTopologyFuture, partitionsToReset);
+        } else {
+            return new RemoveNamedTopologyResult(removeTopologyFuture);
         }
-        return new RemoveNamedTopologyResult(removeTopologyFuture);
     }
 
     /**
