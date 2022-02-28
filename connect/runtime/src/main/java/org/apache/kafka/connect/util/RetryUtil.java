@@ -39,11 +39,11 @@ public class RetryUtil {
      *
      * <p>If {@code retryBackoffMs} is set to 0, no wait will happen in between the retries.
      *
-     * @param callable the function to execute.
-     * @param maxRetries maximum number of retries; must be 0 or more
+     * @param callable       the function to execute.
+     * @param maxRetries     maximum number of retries; must be 0 or more
      * @param retryBackoffMs the number of milliseconds to delay upon receiving a
-     * {@link org.apache.kafka.connect.errors.RetriableException} before retrying again; must be 0 or more
-     *
+     *                       {@link org.apache.kafka.connect.errors.RetriableException} before retrying again; 
+     *                       must be 0 or more
      * @throws ConnectException If the task exhausted all the retries.
      */
     public static <T> T retry(Callable<T> callable, long maxRetries, long retryBackoffMs) throws Exception {
