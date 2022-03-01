@@ -786,7 +786,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       alterConfigs(servers, adminClients.head, props, perBrokerConfig = false).all().get()
 
       // Double the maxWaitMs as used in waitForConfigOnServer
-      servers.foreach { server => TestUtils.retry(20000) {
+      val maxWaitMs = 200000
+      println(s"Using maxWaitMs of $maxWaitMs")
+      servers.foreach { server => TestUtils.retry(maxWaitMs) {
           val value = server.config.originals.get(propName)
           println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: $value")
           assertEquals(newSize.toString, value)
