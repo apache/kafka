@@ -790,7 +790,17 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       println(s"Using maxWaitMs of $maxWaitMs")
       servers.foreach { server => TestUtils.retry(maxWaitMs) {
           val value = server.config.originals.get(propName)
-          println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: $value")
+
+          // Check if using admin.describeConfigs returns expected value.
+          // Limiting this to num.network.threads as it is where the CI is breaking currently
+          val adminValue = if (propName == "num.network.threads") {
+            val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
+            val config = adminClients.head.describeConfigs(List(brokerResource).asJava).values().get(brokerResource).get()
+            if (config.get(propName) != null) config.get(propName).value() else "null"
+          } else {
+            "n/a"
+          }
+          println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: $value, adminConf: $adminValue")
           assertEquals(newSize.toString, value)
         }
       }
