@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
 
+
 public class KafkaConsumerMetrics implements AutoCloseable {
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;

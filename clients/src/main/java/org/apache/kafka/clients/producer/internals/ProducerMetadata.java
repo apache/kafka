@@ -18,7 +18,11 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -42,6 +46,8 @@ public class ProducerMetadata extends Metadata {
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
     private final Time time;
+    private final Sensor metadataRequestRateSensor;
+    private final Metrics metrics;
 
     // LI-HOTFIX: this constructor should only be used for unit tests
     // after the following hotfix changes:
@@ -53,7 +59,7 @@ public class ProducerMetadata extends Metadata {
         LogContext logContext,
         ClusterResourceListeners clusterResourceListeners,
         Time time) {
-        this(refreshBackoffMs, metadataExpireMs, metadataIdleMs, logContext, clusterResourceListeners, time, true);
+        this(refreshBackoffMs, metadataExpireMs, metadataIdleMs, logContext, clusterResourceListeners, time, true, new Metrics());
     }
 
     public ProducerMetadata(long refreshBackoffMs,
@@ -62,12 +68,26 @@ public class ProducerMetadata extends Metadata {
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
                             Time time,
-                            boolean allowAutoTopicCreation) {
+                            boolean allowAutoTopicCreation,
+                            Metrics metrics) {
         super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
+        this.metrics = metrics;
+        this.metadataRequestRateSensor = metrics.sensor("producer-metadata-request-rate");
+        MetricName requestRate = metrics.metricName("producer-metadata-request-rate",
+            "producer-metrics",
+            "The average per-second number of metadata request sent by the producer");
+        MetricName requestTotal = metrics.metricName("producer-metadata-request-total",
+            "producer-metrics",
+            "The total number of metadata request sent by the producer");
+
+        this.metadataRequestRateSensor.add(new Meter(requestRate, requestTotal));
+    }
+    public void recordMetadataRequest() {
+        this.metadataRequestRateSensor.record();
     }
 
     @Override

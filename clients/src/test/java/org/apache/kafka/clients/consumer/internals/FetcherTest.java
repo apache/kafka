@@ -4753,11 +4753,11 @@ public class FetcherTest {
                                    SubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1);
+        metrics = new Metrics(metricConfig, time);
         subscriptions = subscriptionState;
         metadata = new ConsumerMetadata(0, metadataExpireMs, false, false,
-                subscriptions, logContext, new ClusterResourceListeners());
+            subscriptions, logContext, new ClusterResourceListeners(), metrics);
         client = new MockClient(time, metadata);
-        metrics = new Metrics(metricConfig, time);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
         metricsRegistry = new FetcherMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);

@@ -728,7 +728,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
                     !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
                     config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
-                    subscriptions, logContext, clusterResourceListeners);
+                    subscriptions, logContext, clusterResourceListeners, metrics);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
             this.metadata.bootstrap(addresses);
@@ -1000,8 +1000,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throwIfNoAssignorsConfigured();
                 fetcher.clearBufferedDataForUnassignedTopics(topics);
                 log.info("Subscribed to topic(s): {}", Utils.join(topics, ", "));
-                if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
+                if (this.subscriptions.subscribe(new HashSet<>(topics), listener)) {
                     metadata.requestUpdateForNewTopics();
+                    metadata.recordMetadataRequest();
+                }
             }
         } finally {
             release();
@@ -1067,6 +1069,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.subscriptions.subscribe(pattern, listener);
             this.coordinator.updatePatternSubscription(metadata.fetch());
             this.metadata.requestUpdateForNewTopics();
+            this.metadata.recordMetadataRequest();
         } finally {
             release();
         }
@@ -1159,6 +1162,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 if (this.subscriptions.assignFromUser(new HashSet<>(partitions))) {
                     if (!skipMetadataCacheUpdate) {
                         metadata.requestUpdateForNewTopics();
+                        metadata.recordMetadataRequest();
                     }
                 }
             }

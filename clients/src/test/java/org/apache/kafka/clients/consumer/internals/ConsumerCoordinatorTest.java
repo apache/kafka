@@ -187,13 +187,13 @@ public abstract class ConsumerCoordinatorTest {
     public void setup() {
         LogContext logContext = new LogContext();
         this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
+        this.metrics = new Metrics(time);
         this.metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false,
-                false, subscriptions, logContext, new ClusterResourceListeners());
+            false, subscriptions, logContext, new ClusterResourceListeners(), metrics);
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(metadataResponse);
         this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100,
                 requestTimeoutMs, Integer.MAX_VALUE);
-        this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
@@ -1748,7 +1748,7 @@ public abstract class ConsumerCoordinatorTest {
 
     private void testInternalTopicInclusion(boolean includeInternalTopics) {
         metadata = new ConsumerMetadata(0, Long.MAX_VALUE, includeInternalTopics,
-                false, subscriptions, new LogContext(), new ClusterResourceListeners());
+                false, subscriptions, new LogContext(), new ClusterResourceListeners(), metrics);
         client = new MockClient(time, metadata);
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, subscriptions)) {
             subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);

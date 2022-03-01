@@ -41,7 +41,7 @@ public class SenderMetricsRegistry {
     public final MetricName recordQueueTimeAvg;
     public final MetricName recordQueueTimeMax;
     public final MetricName requestLatencyAvg;
-    public final MetricName requestLatencyMax;   
+    public final MetricName requestLatencyMax;
     public final MetricName produceThrottleTimeAvg;
     public final MetricName produceThrottleTimeMax;
     public final MetricName recordSendRate;
@@ -67,7 +67,7 @@ public class SenderMetricsRegistry {
     private final MetricNameTemplate topicRecordRetryTotal;
     private final MetricNameTemplate topicRecordErrorRate;
     private final MetricNameTemplate topicRecordErrorTotal;
-    
+
     private final Metrics metrics;
     private final Set<String> tags;
     private final LinkedHashSet<String> topicTags;
@@ -76,9 +76,9 @@ public class SenderMetricsRegistry {
         this.metrics = metrics;
         this.tags = this.metrics.config().tags().keySet();
         this.allTemplates = new ArrayList<>();
-        
+
         /***** Client level *****/
-        
+
         this.batchSizeAvg = createMetricName("batch-size-avg",
                 "The average number of bytes sent per partition per-request.");
         this.batchSizeMax = createMetricName("batch-size-max",
@@ -90,35 +90,35 @@ public class SenderMetricsRegistry {
                 "The average time in ms record batches spent in the send buffer.");
         this.recordQueueTimeMax = createMetricName("record-queue-time-max",
                 "The maximum time in ms record batches spent in the send buffer.");
-        this.requestLatencyAvg = createMetricName("request-latency-avg", 
+        this.requestLatencyAvg = createMetricName("request-latency-avg",
                 "The average request latency in ms");
-        this.requestLatencyMax = createMetricName("request-latency-max", 
+        this.requestLatencyMax = createMetricName("request-latency-max",
                 "The maximum request latency in ms");
-        this.recordSendRate = createMetricName("record-send-rate", 
+        this.recordSendRate = createMetricName("record-send-rate",
                 "The average number of records sent per second.");
-        this.recordSendTotal = createMetricName("record-send-total", 
+        this.recordSendTotal = createMetricName("record-send-total",
                 "The total number of records sent.");
         this.recordsPerRequestAvg = createMetricName("records-per-request-avg",
                 "The average number of records per request.");
         this.recordRetryRate = createMetricName("record-retry-rate",
                 "The average per-second number of retried record sends");
-        this.recordRetryTotal = createMetricName("record-retry-total", 
+        this.recordRetryTotal = createMetricName("record-retry-total",
                 "The total number of retried record sends");
         this.recordErrorRate = createMetricName("record-error-rate",
                 "The average per-second number of record sends that resulted in errors");
         this.recordErrorTotal = createMetricName("record-error-total",
                 "The total number of record sends that resulted in errors");
-        this.recordSizeMax = createMetricName("record-size-max", 
+        this.recordSizeMax = createMetricName("record-size-max",
                 "The maximum record size");
-        this.recordSizeAvg = createMetricName("record-size-avg", 
+        this.recordSizeAvg = createMetricName("record-size-avg",
                 "The average record size");
         this.requestsInFlight = createMetricName("requests-in-flight",
                 "The current number of in-flight requests awaiting a response.");
         this.metadataAge = createMetricName("metadata-age",
                 "The age in seconds of the current producer metadata being used.");
-        this.batchSplitRate = createMetricName("batch-split-rate", 
+        this.batchSplitRate = createMetricName("batch-split-rate",
                 "The average number of batch splits per second");
-        this.batchSplitTotal = createMetricName("batch-split-total", 
+        this.batchSplitTotal = createMetricName("batch-split-total",
                 "The total number of batch splits");
 
         this.produceThrottleTimeAvg = createMetricName("produce-throttle-time-avg",
@@ -137,7 +137,7 @@ public class SenderMetricsRegistry {
                 "The total number of records sent for a topic.");
         this.topicByteRate = createTopicTemplate("byte-rate",
                 "The average number of bytes sent per second for a topic.");
-        this.topicByteTotal = createTopicTemplate("byte-total", 
+        this.topicByteTotal = createTopicTemplate("byte-total",
                 "The total number of bytes sent for a topic.");
         this.topicCompressionRate = createTopicTemplate("compression-rate",
                 "The average compression rate of record batches for a topic, defined as the average ratio " +
