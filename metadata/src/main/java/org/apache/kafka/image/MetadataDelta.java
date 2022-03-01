@@ -157,6 +157,7 @@ public final class MetadataDelta {
         highestEpoch = epoch;
 
         MetadataRecordType type = MetadataRecordType.fromId(record.apiKey());
+        System.err.print("t:" + type.id());
         switch (type) {
             case REGISTER_BROKER_RECORD:
                 replay((RegisterBrokerRecord) record);

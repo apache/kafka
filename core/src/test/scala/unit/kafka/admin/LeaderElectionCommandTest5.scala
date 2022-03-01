@@ -37,8 +37,8 @@ import org.junit.jupiter.api.{BeforeEach, Tag}
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
 @Tag("integration")
-final class LeaderElectionCommandTest(cluster: ClusterInstance) {
-  import LeaderElectionCommandTest._
+final class LeaderElectionCommandTest5(cluster: ClusterInstance) {
+  import LeaderElectionCommandTest5._
 
   val broker1 = 0
   val broker2 = 1
@@ -245,16 +245,16 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     assertTrue(electionResultOutputIter.hasNext)
     val firstLine = electionResultOutputIter.next()
     assertTrue(firstLine.contains(s"Successfully completed leader election (PREFERRED) for partitions $topicPartition0"),
-    s"Unexpected output: $firstLine")
+      s"Unexpected output: $firstLine")
 
     assertTrue(electionResultOutputIter.hasNext)
     val secondLine = electionResultOutputIter.next()
     assertTrue(secondLine.contains(s"Valid replica already elected for partitions $topicPartition1"),
-    s"Unexpected output: $secondLine")
+      s"Unexpected output: $secondLine")
   }
 }
 
-object LeaderElectionCommandTest {
+object LeaderElectionCommandTest5 {
   def createConfig(servers: Seq[KafkaServer]): Map[String, Object] = {
     Map(
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers(servers),

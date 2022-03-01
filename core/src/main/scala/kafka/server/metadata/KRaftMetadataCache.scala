@@ -356,7 +356,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
-  def setImage(newImage: MetadataImage): Unit = _currentImage = newImage
+  def setImage(newImage: MetadataImage): Unit = {
+//    info("!!! setImage:" + newImage + ";;" + _currentImage)
+    _currentImage = newImage
+  }
 
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)

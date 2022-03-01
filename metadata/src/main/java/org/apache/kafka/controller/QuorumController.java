@@ -1495,6 +1495,7 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Void> waitForReadyBrokers(int minBrokers) {
         final CompletableFuture<Void> future = new CompletableFuture<>();
         appendControlEvent("waitForReadyBrokers", () -> {
+            System.out.println("!!! waitForReadyBrokers:" + future);
             clusterControl.addReadyBrokersFuture(future, minBrokers);
         });
         return future;

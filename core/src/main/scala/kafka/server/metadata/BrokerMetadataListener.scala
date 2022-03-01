@@ -145,6 +145,7 @@ class BrokerMetadataListener(
       try {
         info(s"Loading snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}.")
         _delta = new MetadataDelta(_image) // Discard any previous deltas.
+//        System.out.println("!!! _delta:" + _delta)
         val loadResults = loadBatches(
           _delta,
           reader,
@@ -237,6 +238,7 @@ class BrokerMetadataListener(
     override def run(): Unit = {
       _publisher = Some(publisher)
       log.info(s"Starting to publish metadata events at offset ${highestMetadataOffset}.")
+//      System.err.print("pub meta:" + highestMetadataOffset)
       try {
         publish(publisher)
         future.complete(null)
@@ -253,7 +255,7 @@ class BrokerMetadataListener(
     _image = _delta.apply()
     _delta = new MetadataDelta(_image)
     if (isDebugEnabled) {
-      debug(s"Publishing new metadata delta ${delta} at offset ${_image.highestOffsetAndEpoch().offset}.")
+      info(s"Publishing new metadata delta ${delta} at offset ${_image.highestOffsetAndEpoch().offset}.")
     }
     publisher.publish(delta, _image)
   }

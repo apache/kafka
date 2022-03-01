@@ -222,7 +222,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void waitForReadyBrokers() throws InterruptedException {
             try {
+                System.err.print("waitForReadyBrokers");
+
                 clusterReference.get().waitForReadyBrokers();
+                System.err.print(" broker ready");
+                System.err.flush();
             } catch (ExecutionException e) {
                 throw new AssertionError("Failed while waiting for brokers to become ready", e);
             }

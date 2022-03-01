@@ -77,7 +77,7 @@ object BrokerMetadataPublisher extends Logging {
       Option(newTopicsImage.getPartition(topicId, partitionId)) match {
         case Some(partition) =>
           if (!partition.replicas.contains(brokerId)) {
-            info(s"Found stray log dir $log: the current replica assignment ${partition.replicas} " +
+            error(s"Found stray log dir $log: the current replica assignment ${partition.replicas} " +
               s"does not contain the local brokerId $brokerId.")
             Some(log.topicPartition)
           } else {
@@ -85,7 +85,7 @@ object BrokerMetadataPublisher extends Logging {
           }
 
         case None =>
-          info(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
+          error(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
           Some(log.topicPartition)
       }
     }
@@ -117,22 +117,26 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
   var _firstPublish = true
 
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
+    System.err.print("pub:")
+    newImage.cluster().brokers().entrySet().forEach{entry => System.err.print(s"${entry.getValue.id()} ${entry.getValue.fenced()};")}
+    System.err.flush()
+
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
 
     try {
-      trace(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
+      error(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
 
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
+        error(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
+        error(s"Publishing metadata at offset $highestOffsetAndEpoch.")
       }
 
       // Apply feature deltas.
@@ -183,7 +187,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           resource.`type`() match {
             case TOPIC =>
               // Apply changes to a topic's dynamic configuration.
-              info(s"Updating topic ${resource.name()} with new configuration : " +
+              error(s"Updating topic ${resource.name()} with new configuration : " +
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.Topic).
                 processConfigChanges(resource.name(), props)
@@ -191,13 +195,13 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
             case BROKER => if (resource.name().isEmpty) {
               // Apply changes to "cluster configs" (also known as default BROKER configs).
               // These are stored in KRaft with an empty name field.
-              info(s"Updating cluster configuration : " +
+              error(s"Updating cluster configuration : " +
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.Broker).
                 processConfigChanges(ConfigEntityName.Default, props)
             } else if (resource.name().equals(brokerId.toString)) {
               // Apply changes to this broker's dynamic configuration.
-              info(s"Updating broker ${brokerId} with new configuration : " +
+              error(s"Updating broker ${brokerId} with new configuration : " +
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.Broker).
                 processConfigChanges(resource.name(), props)

@@ -95,6 +95,7 @@ public class BrokerRegistration {
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
+//        System.out.println("!!! fromRecord:" + record);
         Map<String, Endpoint> listeners = new HashMap<>();
         for (BrokerEndpoint endpoint : record.endPoints()) {
             listeners.put(endpoint.name(), new Endpoint(endpoint.name(),

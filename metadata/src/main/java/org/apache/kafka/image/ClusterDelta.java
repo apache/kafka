@@ -90,6 +90,8 @@ public final class ClusterDelta {
     }
 
     public void replay(UnfenceBrokerRecord record) {
+        System.err.print("unf:" + record.id() + "," + record.epoch());
+        System.err.flush();
         BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
         changedBrokers.put(record.id(), Optional.of(broker.cloneWithFencing(false)));
     }
