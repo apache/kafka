@@ -18,6 +18,8 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -34,6 +36,7 @@ import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -53,8 +56,10 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -73,6 +78,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -773,6 +779,70 @@ public class NamedTopologyIntegrationTest {
         } finally {
             CLUSTER.deleteTopicsAndWait(NEW_STREAM);
         }
+    }
+
+    @Test
+    public void shouldBackOffTaskAndEmitDataWithinSameTopology() throws Exception {
+        final AtomicInteger noOutputExpected = new AtomicInteger(0);
+        final AtomicInteger outputExpected = new AtomicInteger(0);
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+
+        streams = new KafkaStreamsNamedTopologyWrapper(props);
+        streams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
+
+        final NamedTopologyBuilder builder = streams.newNamedTopologyBuilder("topology_A");
+        builder.stream(DELAYED_INPUT_STREAM_1).peek((k, v) -> outputExpected.incrementAndGet()).to(OUTPUT_STREAM_1);
+        builder.stream(DELAYED_INPUT_STREAM_2)
+            .peek((k, v) -> {
+                throw new RuntimeException("Kaboom");
+            })
+            .peek((k, v) -> noOutputExpected.incrementAndGet())
+            .to(OUTPUT_STREAM_2);
+
+        streams.addNamedTopology(builder.build());
+
+        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(streams);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            DELAYED_INPUT_STREAM_2,
+            Arrays.asList(
+                new KeyValue<>(1, "A")
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            0L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            DELAYED_INPUT_STREAM_1,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(1, "B")
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            0L);
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerDeserializer.class,
+                StringDeserializer.class
+            ),
+            OUTPUT_STREAM_1,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(1, "B")
+            )
+        );
+        assertThat(noOutputExpected.get(), equalTo(0));
+        assertThat(outputExpected.get(), equalTo(2));
     }
 
     /**
