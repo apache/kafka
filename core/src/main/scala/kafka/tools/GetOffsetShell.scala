@@ -71,10 +71,9 @@ object GetOffsetShell {
                            .withRequiredArg
                            .describedAs("partition ids")
                            .ofType(classOf[String])
-    val timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]" +
-                                  " It also accepts \"earliest\", \"latest\", \"max-timestamp\", -1(latest), -2(earliest) -3(max timestamp) ")
+    val timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
                            .withRequiredArg
-                           .describedAs("timestamp/latest/earliest/max-timestamp/-1(latest)/-2(earliest)/-3(max timestamp)")
+                           .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp")
                            .ofType(classOf[String])
                            .defaultsTo("latest")
     val commandConfigOpt = parser.accepts("command-config", s"Property file containing configs to be passed to Admin Client.")
@@ -105,33 +104,14 @@ object GetOffsetShell {
       throw new IllegalArgumentException("--topic-partitions cannot be used with --topic or --partitions")
     }
 
-    val listOffsetsTimestamp = options.valueOf(timeOpt)
-    val offsetSpec = listOffsetsTimestamp match {
-      case "earliest" => OffsetSpec.earliest()
-      case "latest" => OffsetSpec.latest()
-      case "max-timestamp" => OffsetSpec.maxTimestamp()
-      case _ =>
-        try {
-          java.lang.Long.parseLong(listOffsetsTimestamp) match {
-            case ListOffsetsRequest.EARLIEST_TIMESTAMP => OffsetSpec.earliest()
-            case ListOffsetsRequest.LATEST_TIMESTAMP => OffsetSpec.latest()
-            case ListOffsetsRequest.MAX_TIMESTAMP => OffsetSpec.maxTimestamp()
-            case value => OffsetSpec.forTimestamp(value)
-          }
-        } catch {
-          case e: NumberFormatException =>
-            throw new IllegalArgumentException(s"Malformed time argument $listOffsetsTimestamp, please use latest/earliest/max-timestamp/-1(latest)/-2(earliest)/-3(max timestamp), or a specified long format timestamp", e)
-        }
-    }
+    val offsetSpec = parseOffsetSpec(options.valueOf(timeOpt))
 
     val topicPartitionFilter = if (options.has(topicPartitionsOpt)) {
       createTopicPartitionFilterWithPatternList(options.valueOf(topicPartitionsOpt))
     } else {
-      val partitionIdsRequested = createPartitionSet(options.valueOf(partitionsOpt))
-
-      TopicFilterAndPartitionFilter(
-        if (options.has(topicOpt)) IncludeList(options.valueOf(topicOpt)) else IncludeList(".*"),
-        PartitionsSetFilter(partitionIdsRequested)
+      createTopicPartitionFilterWithTopicAndPartitionPattern(
+        if (options.has(topicOpt)) Some(options.valueOf(topicOpt)) else None,
+        options.valueOf(partitionsOpt)
       )
     }
 
@@ -164,7 +144,6 @@ object GetOffsetShell {
                 System.err.println(s"Error: topic-partition ${tp.topic}:${tp.partition} does not have a leader. Skip getting offsets")
               case _ =>
                 System.err.println(s"Error while getting end offsets for topic-partition ${tp.topic}:${tp.partition}")
-                e.printStackTrace()
             }
             None
         }
@@ -175,6 +154,26 @@ object GetOffsetShell {
       }
     } finally {
       client.close()
+    }
+  }
+
+  private def parseOffsetSpec(listOffsetsTimestamp: String): OffsetSpec = {
+    listOffsetsTimestamp match {
+      case "earliest" => OffsetSpec.earliest()
+      case "latest" => OffsetSpec.latest()
+      case "max-timestamp" => OffsetSpec.maxTimestamp()
+      case _ =>
+        try {
+          listOffsetsTimestamp.toLong match {
+            case ListOffsetsRequest.EARLIEST_TIMESTAMP => OffsetSpec.earliest()
+            case ListOffsetsRequest.LATEST_TIMESTAMP => OffsetSpec.latest()
+            case ListOffsetsRequest.MAX_TIMESTAMP => OffsetSpec.maxTimestamp()
+            case value => OffsetSpec.forTimestamp(value)
+          }
+        } catch {
+          case e: NumberFormatException =>
+            throw new IllegalArgumentException(s"Malformed time argument $listOffsetsTimestamp, please use -1 or latest / -2 or earliest / -3 or max-timestamp, or a specified long format timestamp", e)
+        }
     }
   }
 
@@ -222,6 +221,16 @@ object GetOffsetShell {
     )
   }
 
+  def createTopicPartitionFilterWithTopicAndPartitionPattern(
+    topicOpt: Option[String],
+    partitionIds: String
+  ): TopicFilterAndPartitionFilter = {
+    TopicFilterAndPartitionFilter(
+      IncludeList(topicOpt.getOrElse(".*")),
+      PartitionsSetFilter(createPartitionSet(partitionIds))
+    )
+  }
+
   def createPartitionSet(partitionsString: String): Set[Int] = {
     if (partitionsString == null || partitionsString.isEmpty)
       Set.empty
@@ -253,7 +262,7 @@ object GetOffsetShell {
         .partitions
         .asScala
         .map(tp => new TopicPartition(topic, tp.partition))
-        .filter(topicPartitionFilter.isPartitionAllowed)
+        .filter(topicPartitionFilter.isTopicPartitionAllowed)
     }.toBuffer
   }
 }
@@ -287,7 +296,7 @@ trait TopicPartitionFilter {
   /**
    * Used to filter topics and topic-partitions after describing them
    */
-  def isPartitionAllowed(partition: TopicPartition): Boolean
+  def isTopicPartitionAllowed(partition: TopicPartition): Boolean
 }
 
 /**
@@ -298,7 +307,7 @@ case class TopicFilterAndPartitionFilter(
   partitionFilter: PartitionFilter
 ) extends TopicPartitionFilter {
 
-  override def isPartitionAllowed(partition: TopicPartition): Boolean = {
+  override def isTopicPartitionAllowed(partition: TopicPartition): Boolean = {
     isTopicAllowed(partition.topic) && partitionFilter.isPartitionAllowed(partition.partition)
   }
 
@@ -313,7 +322,7 @@ case class CompositeTopicPartitionFilter(filters: Array[TopicPartitionFilter]) e
     filters.exists(_.isTopicAllowed(topic))
   }
 
-  override def isPartitionAllowed(tp: TopicPartition): Boolean = {
-    filters.exists(_.isPartitionAllowed(tp))
+  override def isTopicPartitionAllowed(tp: TopicPartition): Boolean = {
+    filters.exists(_.isTopicPartitionAllowed(tp))
   }
 }
