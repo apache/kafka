@@ -785,8 +785,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       // Very temporary copy and paste hack to observe behaviour in CI via the magic println for this test only
       alterConfigs(servers, adminClients.head, props, perBrokerConfig = false).all().get()
 
-      // Same maxWaitMs as used in waitForConfigOnServer
-      servers.foreach { server => TestUtils.retry(10000) {
+      // Double the maxWaitMs as used in waitForConfigOnServer
+      servers.foreach { server => TestUtils.retry(20000) {
           val value = server.config.originals.get(propName)
           println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: $value")
           assertEquals(newSize.toString, value)
