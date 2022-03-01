@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LiCombinedControlRequestData;
 import org.apache.kafka.common.message.LiCombinedControlResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -48,11 +49,12 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
 
         // fields from the StopReplicaRequest
         private final List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitions;
+        private final Map<String, Uuid> topicIds;
 
         public Builder(short version, int controllerId, int controllerEpoch,
             List<LiCombinedControlRequestData.LeaderAndIsrPartitionState> leaderAndIsrPartitionStates, Collection<Node> leaderAndIsrLiveLeaders,
             List<LiCombinedControlRequestData.UpdateMetadataPartitionState> updateMetadataPartitionStates, List<LiCombinedControlRequestData.UpdateMetadataBroker> updateMetadataLiveBrokers,
-            List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitions) {
+            List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitions, Map<String, Uuid> topicIds) {
             // Since we've moved the maxBrokerEpoch down to the partition level
             // the request level maxBrokerEpoch will always be -1
             super(ApiKeys.LI_COMBINED_CONTROL, version, controllerId, controllerEpoch, -1, -1);
@@ -61,6 +63,7 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
             this.updateMetadataPartitionStates = updateMetadataPartitionStates;
             this.updateMetadataLiveBrokers = updateMetadataLiveBrokers;
             this.stopReplicaPartitions = stopReplicaPartitions;
+            this.topicIds = topicIds;
         }
 
         @Override
@@ -78,14 +81,14 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
             data.setLiveLeaders(leaders);
 
             Map<String, LiCombinedControlRequestData.LeaderAndIsrTopicState> leaderAndIsrTopicStateMap =
-                groupByLeaderAndIsrTopic(leaderAndIsrPartitionStates);
+                groupByLeaderAndIsrTopic(leaderAndIsrPartitionStates, topicIds);
             data.setLeaderAndIsrTopicStates(new ArrayList<>(leaderAndIsrTopicStateMap.values()));
 
             // setting the UpdateMetadata fields
             data.setLiveBrokers(updateMetadataLiveBrokers);
 
             Map<String, LiCombinedControlRequestData.UpdateMetadataTopicState> updateMetadataTopicStateMap =
-                groupByUpdateMetadataTopic(updateMetadataPartitionStates);
+                groupByUpdateMetadataTopic(updateMetadataPartitionStates, topicIds);
             data.setUpdateMetadataTopicStates(new ArrayList<>(updateMetadataTopicStateMap.values()));
 
             // setting the StopReplica fields
@@ -94,25 +97,32 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
             return new LiCombinedControlRequest(data, version);
         }
 
-        private static Map<String, LiCombinedControlRequestData.LeaderAndIsrTopicState> groupByLeaderAndIsrTopic(List<LiCombinedControlRequestData.LeaderAndIsrPartitionState> partitionStates) {
+        private static Map<String, LiCombinedControlRequestData.LeaderAndIsrTopicState> groupByLeaderAndIsrTopic(
+                List<LiCombinedControlRequestData.LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds) {
             Map<String, LiCombinedControlRequestData.LeaderAndIsrTopicState> topicStates = new HashMap<>();
             // We don't null out the topic name in LeaderAndIsrRequestPartition since it's ignored by
             // the generated code if version > 0
             for (LiCombinedControlRequestData.LeaderAndIsrPartitionState partition : partitionStates) {
                 LiCombinedControlRequestData.LeaderAndIsrTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
-                    t -> new LiCombinedControlRequestData.LeaderAndIsrTopicState().setTopicName(partition.topicName()));
+                    t -> new LiCombinedControlRequestData.LeaderAndIsrTopicState()
+                            .setTopicName(partition.topicName())
+                            .setTopicId(topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID)));
                 topicState.partitionStates().add(partition);
             }
             return topicStates;
         }
 
-        private static Map<String, LiCombinedControlRequestData.UpdateMetadataTopicState> groupByUpdateMetadataTopic(List<LiCombinedControlRequestData.UpdateMetadataPartitionState> partitionStates) {
+        private static Map<String, LiCombinedControlRequestData.UpdateMetadataTopicState> groupByUpdateMetadataTopic(
+                List<LiCombinedControlRequestData.UpdateMetadataPartitionState> partitionStates, Map<String, Uuid> topicIds) {
             Map<String, LiCombinedControlRequestData.UpdateMetadataTopicState> topicStates = new HashMap<>();
             for (LiCombinedControlRequestData.UpdateMetadataPartitionState partition : partitionStates) {
                 // We don't null out the topic name in UpdateMetadataTopicState since it's ignored by the generated
                 // code if version > 0
                 LiCombinedControlRequestData.UpdateMetadataTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
-                    t -> new LiCombinedControlRequestData.UpdateMetadataTopicState().setTopicName(partition.topicName()));
+                    t -> new LiCombinedControlRequestData.UpdateMetadataTopicState()
+                            .setTopicName(partition.topicName())
+                            .setTopicId(topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID))
+                );
                 topicState.partitionStates().add(partition);
             }
             return topicStates;
@@ -231,7 +241,7 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
         }
         responseData.setStopReplicaPartitionErrors(stopReplicaPartitions);
 
-        return new LiCombinedControlResponse(responseData);
+        return new LiCombinedControlResponse(responseData, version());
     }
 
     private List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitions() {
@@ -286,7 +296,7 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
     }
 
     @Override
-    public ApiMessage data() {
+    public LiCombinedControlRequestData data() {
         return data;
     }
 }

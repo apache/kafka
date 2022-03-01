@@ -152,6 +152,18 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             //   append(")");
             return bld.toString();
         }
+
+        public List<UpdateMetadataPartitionState> partitionStates() {
+            return partitionStates;
+        }
+
+        public List<UpdateMetadataBroker> liveBrokers() {
+            return liveBrokers;
+        }
+
+        public Map<String, Uuid> topicIds() {
+            return topicIds;
+        }
     }
 
     private final UpdateMetadataRequestData data;

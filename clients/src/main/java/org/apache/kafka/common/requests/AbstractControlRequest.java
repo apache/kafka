@@ -36,7 +36,15 @@ public abstract class AbstractControlRequest extends AbstractRequest {
             this.brokerEpoch = brokerEpoch;
             this.maxBrokerEpoch = maxBrokerEpoch;
         }
+        // visible only for testing
+        public int controllerId() {
+            return controllerId;
+        }
 
+        // visible only for testing
+        public int controllerEpoch() {
+            return controllerEpoch;
+        }
     }
 
     protected AbstractControlRequest(ApiKeys api, short version) {

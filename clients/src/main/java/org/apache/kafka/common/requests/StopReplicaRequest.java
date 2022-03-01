@@ -97,6 +97,18 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 append(")");
             return bld.toString();
         }
+
+        public List<StopReplicaTopicState> topicStates() {
+            return topicStates;
+        }
+
+        public boolean deletePartitions() {
+            return deletePartitions;
+        }
+
+        public long brokerEpoch() {
+            return brokerEpoch;
+        }
     }
 
     private final StopReplicaRequestData data;

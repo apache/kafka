@@ -30,9 +30,11 @@ import org.apache.kafka.common.protocol.Errors;
 
 public class LiCombinedControlResponse extends AbstractResponse {
     private final LiCombinedControlResponseData data;
-    public LiCombinedControlResponse(LiCombinedControlResponseData data) {
+    private final short version;
+    public LiCombinedControlResponse(LiCombinedControlResponseData data, short version) {
         super(ApiKeys.LI_COMBINED_CONTROL);
         this.data = data;
+        this.version = version;
     }
 
     public List<LiCombinedControlResponseData.LeaderAndIsrPartitionError> leaderAndIsrPartitionErrors() {
@@ -90,7 +92,7 @@ public class LiCombinedControlResponse extends AbstractResponse {
 
     public static LiCombinedControlResponse parse(ByteBuffer buffer, short version) {
         return new LiCombinedControlResponse(new LiCombinedControlResponseData(
-                new ByteBufferAccessor(buffer), version));
+                new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
@@ -138,7 +140,11 @@ public class LiCombinedControlResponse extends AbstractResponse {
     }
 
     @Override
-    public ApiMessage data() {
+    public LiCombinedControlResponseData data() {
         return data;
+    }
+
+    public short version() {
+        return version;
     }
 }

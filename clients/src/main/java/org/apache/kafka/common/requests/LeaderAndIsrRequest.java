@@ -82,6 +82,22 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             return new LeaderAndIsrRequest(data, version);
         }
 
+        public Iterable<LeaderAndIsrPartitionState> partitionStates() {
+            return partitionStates;
+        }
+
+        public Map<String, Uuid> topicIds() {
+            return topicIds;
+        }
+
+        public Collection<Node> liveLeaders() {
+            return liveLeaders;
+        }
+
+        public long maxBrokerEpoch() {
+            return maxBrokerEpoch;
+        }
+
         private static Map<String, LeaderAndIsrTopicState> groupByTopic(List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds) {
             Map<String, LeaderAndIsrTopicState> topicStates = new HashMap<>();
             // We don't null out the topic name in LeaderAndIsrRequestPartition since it's ignored by
