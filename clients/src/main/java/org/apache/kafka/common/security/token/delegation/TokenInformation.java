@@ -40,7 +40,7 @@ public class TokenInformation {
 
     public TokenInformation(String tokenId, KafkaPrincipal owner,
                             Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
-        this(tokenId, owner, owner, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
+        this(tokenId, owner, null, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
     }
 
     public TokenInformation(String tokenId, KafkaPrincipal owner, KafkaPrincipal tokenRequester,

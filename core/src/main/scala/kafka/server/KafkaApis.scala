@@ -2931,27 +2931,31 @@ class KafkaApis(val requestChannel: RequestChannel,
           createResult.issueTimestamp, createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))
     }
 
+    val ownerPrincipalName = createTokenRequest.data().ownerPrincipalName()
+    val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
+      request.context.principal
+    } else {
+      new KafkaPrincipal(createTokenRequest.data().ownerPrincipalType(), ownerPrincipalName)
+    }
+    val requester = request.context.principal
+
     if (!allowTokenRequests(request))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, request.context.principal))
+        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion(), requestThrottleMs,
+          Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
     else {
       val renewerList = createTokenRequest.data.renewers.asScala.toList.map(entry =>
         new KafkaPrincipal(entry.principalType, entry.principalName))
 
       if (renewerList.exists(principal => principal.getPrincipalType != KafkaPrincipal.USER_TYPE)) {
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, Errors.INVALID_PRINCIPAL_TYPE, request.context.principal))
+          CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion(), requestThrottleMs,
+            Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
       }
       else {
-        val ownerPrincipalName = createTokenRequest.data().ownerPrincipalName()
-        val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
-          request.context.principal
-        } else {
-          new KafkaPrincipal(createTokenRequest.data().ownerPrincipalType(), ownerPrincipalName)
-        }
         tokenManager.createToken(
           owner,
-          request.context.principal,
+          requester,
           renewerList,
           createTokenRequest.data.maxLifetimeMs,
           sendResponseCallback

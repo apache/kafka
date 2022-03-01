@@ -40,20 +40,25 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
         super(ApiKeys.DESCRIBE_DELEGATION_TOKEN);
         List<DescribedDelegationToken> describedDelegationTokenList = tokens
             .stream()
-            .map(dt -> new DescribedDelegationToken()
-                .setTokenId(dt.tokenInfo().tokenId())
-                .setPrincipalType(dt.tokenInfo().owner().getPrincipalType())
-                .setPrincipalName(dt.tokenInfo().owner().getName())
-                .setTokenRequesterPrincipalType(dt.tokenInfo().tokenRequester().getPrincipalType())
-                .setTokenRequesterPrincipalName(dt.tokenInfo().tokenRequester().getName())
-                .setIssueTimestamp(dt.tokenInfo().issueTimestamp())
-                .setMaxTimestamp(dt.tokenInfo().maxTimestamp())
-                .setExpiryTimestamp(dt.tokenInfo().expiryTimestamp())
-                .setHmac(dt.hmac())
-                .setRenewers(dt.tokenInfo().renewers()
-                    .stream()
-                    .map(r -> new DescribedDelegationTokenRenewer().setPrincipalName(r.getName()).setPrincipalType(r.getPrincipalType()))
-                    .collect(Collectors.toList())))
+            .map(dt -> {
+                DescribedDelegationToken ddt = new DescribedDelegationToken()
+                    .setTokenId(dt.tokenInfo().tokenId())
+                    .setPrincipalType(dt.tokenInfo().owner().getPrincipalType())
+                    .setPrincipalName(dt.tokenInfo().owner().getName())
+                    .setIssueTimestamp(dt.tokenInfo().issueTimestamp())
+                    .setMaxTimestamp(dt.tokenInfo().maxTimestamp())
+                    .setExpiryTimestamp(dt.tokenInfo().expiryTimestamp())
+                    .setHmac(dt.hmac())
+                    .setRenewers(dt.tokenInfo().renewers()
+                        .stream()
+                        .map(r -> new DescribedDelegationTokenRenewer().setPrincipalName(r.getName()).setPrincipalType(r.getPrincipalType()))
+                        .collect(Collectors.toList()));
+                if (dt.tokenInfo().tokenRequester() != null) {
+                    ddt.setTokenRequesterPrincipalType(dt.tokenInfo().tokenRequester().getPrincipalType())
+                        .setTokenRequesterPrincipalName(dt.tokenInfo().tokenRequester().getName());
+                }
+                return ddt;
+            })
             .collect(Collectors.toList());
 
         this.data = new DescribeDelegationTokenResponseData()
