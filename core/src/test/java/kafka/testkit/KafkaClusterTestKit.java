@@ -380,6 +380,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
         ControllerServer controllerServer = controllers.values().iterator().next();
         Controller controller = controllerServer.controller();
         controller.waitForReadyBrokers(brokers.size()).get();
+
+        TestUtils.waitForCondition(() ->
+            brokers().values().stream().allMatch(brokerServer -> {
+                System.err.print("checking:" + brokerServer.metadataCache().brokerId() + "," + brokerServer.metadataCache().getAliveBrokers().size());
+                return brokerServer.metadataCache().getAliveBrokers().size() == brokers.size();}),
+                "Failed to wait for publisher pu");
+
     }
 
     public Properties controllerClientProperties() throws ExecutionException, InterruptedException {
