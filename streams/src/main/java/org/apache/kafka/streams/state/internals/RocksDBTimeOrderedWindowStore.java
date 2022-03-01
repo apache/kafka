@@ -16,14 +16,23 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+
+import java.io.File;
+import java.util.Collection;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -35,6 +44,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
+import org.apache.kafka.streams.state.internals.SegmentedBytesStore.SegmentRestorationCallback;
 
 /**
  * RocksDB store backed by two SegmentedBytesStores which can optimize scan by time as well as window
@@ -63,8 +73,6 @@ import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFir
  */
 public class RocksDBTimeOrderedWindowStore implements WindowStore<Bytes, byte[]> {
 
-
-
     private final boolean retainDuplicates;
     private final long windowSize;
     private final String name;
@@ -73,8 +81,9 @@ public class RocksDBTimeOrderedWindowStore implements WindowStore<Bytes, byte[]>
     private RocksDBSegmentedBytesStore indexStore;
 
     private StateStoreContext stateStoreContext;
+    private boolean consistencyEnabled = false;
     private Position position;
-    private boolean open;
+    protected OffsetCheckpoint positionCheckpoint;
 
 
     private class IndexToBaseStoreIterator implements KeyValueIterator<Bytes, byte[]> {
@@ -166,16 +175,92 @@ public class RocksDBTimeOrderedWindowStore implements WindowStore<Bytes, byte[]>
         if (hasIndexStore()) {
             indexStore.openSegments(context);
         }
-        open = true;
 
-        // TODO: register changelog callback and populate base and index store
         // register callback here since only window store knows how the keys are serialized in changelog
+        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
+        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+
+        // register and possibly restore the state from the logs
+        stateStoreContext.register(
+            root,
+            (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
+            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+        );
+
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                context.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         this.stateStoreContext = context;
         init(StoreToProcessorContextAdapter.adapt(context), root);
+    }
+
+    // Visible for testing
+    void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+        // Record key should be serialized using index's format, for index store we need to transfer
+        // record key so that it has prefix and record value to be empty.
+        // For base store, we need to reformat record key.
+        final SegmentRestorationCallback<byte[], byte[]> callback = (segment, record) -> {
+            if (segment != null) {
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                    record,
+                    consistencyEnabled,
+                    position
+                );
+            }
+        };
+
+
+        if (hasIndexStore()) {
+            Collection<ConsumerRecord<byte[], byte[]>> keyFirstRecords = records.stream().map(record ->  {
+                final byte[] key = WindowKeySchema.extractStoreKeyBytes(record.key());
+                final long timeStamp = WindowKeySchema.extractStoreTimestamp(record.key());
+                final int seqNum = WindowKeySchema.extractStoreSequence(record.key());
+                final byte[] newKey = PrefixedWindowKeySchemas.TimeFirstWindowKeySchema
+                    .toTimeOrderedStoreKeyBinary(Bytes.wrap(key), timeStamp, seqNum).get();
+                return new ConsumerRecord<>(
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.timestamp(),
+                    record.timestampType(),
+                    record.serializedKeySize(),
+                    record.serializedValueSize(),
+                    newKey,
+                    record.value(),
+                    record.headers(),
+                    record.leaderEpoch()
+                );
+            }).collect(Collectors.toList());
+            indexStore.restoreAllInternal(keyFirstRecords, callback);
+        }
+
+        Collection<ConsumerRecord<byte[], byte[]>> timeFirstRecords = records.stream().map(record ->  {
+            final byte[] key = WindowKeySchema.extractStoreKeyBytes(record.key());
+            final long timeStamp = WindowKeySchema.extractStoreTimestamp(record.key());
+            final int seqNum = WindowKeySchema.extractStoreSequence(record.key());
+            final byte[] newKey = PrefixedWindowKeySchemas.TimeFirstWindowKeySchema
+                .toTimeOrderedStoreKeyBinary(Bytes.wrap(key), timeStamp, seqNum).get();
+            return new ConsumerRecord<>(
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.timestamp(),
+                record.timestampType(),
+                record.serializedKeySize(),
+                record.serializedValueSize(),
+                newKey,
+                record.value(),
+                record.headers(),
+                record.leaderEpoch()
+            );
+        }).collect(Collectors.toList());
+        baseStore.restoreAllInternal(timeFirstRecords, callback);
     }
 
     @Override
@@ -188,7 +273,6 @@ public class RocksDBTimeOrderedWindowStore implements WindowStore<Bytes, byte[]>
 
     @Override
     public void close() {
-        open = false;
         baseStore.close();
         if (hasIndexStore()) {
             indexStore.close();
@@ -207,7 +291,7 @@ public class RocksDBTimeOrderedWindowStore implements WindowStore<Bytes, byte[]>
 
     @Override
     public boolean isOpen() {
-        return open;
+        return baseStore.isOpen() && (!hasIndexStore() || indexStore.isOpen());
     }
 
     @Override

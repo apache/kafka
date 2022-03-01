@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -223,5 +224,9 @@ public interface SegmentedBytesStore extends StateStore {
          * @return  List of segments to search
          */
         <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to, boolean forward);
+    }
+
+    interface SegmentRestorationCallback<K, V> {
+        void onRestoraton(final Segment segment, final ConsumerRecord<K, V> record);
     }
 }

@@ -498,7 +498,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final Collection<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
         records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
-        final Map<S, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
+        final Map<S, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records, null);
         assertEquals(2, writeBatchMap.size());
         for (final WriteBatch batch : writeBatchMap.values()) {
             assertEquals(1, batch.count());

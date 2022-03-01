@@ -227,7 +227,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
             LOG.warn("Skipping record for expired segment.");
         } else {
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            if (position != null) {
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
+            }
             segment.put(key, value);
         }
     }
@@ -275,8 +277,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
 
-        open = true;
-
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
@@ -284,7 +284,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     public void openSegments(final ProcessorContext context) {
+        this.context = context;
         segments.openExisting(context, observedStreamTime);
+        open = true;
     }
 
     @Override
@@ -319,10 +321,15 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return segments.allSegments(false);
     }
 
-    // Visible for testing
     void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+        restoreAllInternal(records, null);
+    }
+
+    // Visible for testing
+    void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records,
+        final SegmentRestorationCallback<byte[], byte[]> callback) {
         try {
-            final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
+            final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records, callback);
             for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
                 final S segment = entry.getKey();
                 final WriteBatch batch = entry.getValue();
@@ -335,7 +342,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     // Visible for testing
-    Map<S, WriteBatch> getWriteBatches(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+    Map<S, WriteBatch> getWriteBatches(final Collection<ConsumerRecord<byte[], byte[]>> records,
+        final SegmentRestorationCallback<byte[], byte[]> callback) {
         // advance stream time to the max timestamp in the batch
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key()));
@@ -347,7 +355,12 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key()));
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
-            if (segment != null) {
+            if (callback != null) {
+                callback.onRestoraton(segment, record);
+            }
+            if (segment != null && position != null) {
+                // Position could be null if init is not called and segments are opened directly
+                // via openSegments
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
                     consistencyEnabled,
