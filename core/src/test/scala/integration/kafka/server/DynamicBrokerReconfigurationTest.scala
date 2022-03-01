@@ -26,7 +26,6 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
@@ -36,7 +35,6 @@ import kafka.log.{CleanerConfig, LogConfig}
 import kafka.message.ProducerCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.{Processor, RequestChannel}
-import kafka.server.QuorumTestHarness
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -99,11 +97,17 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private val sslProperties2 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
   private val invalidSslProperties = invalidSslConfigs
 
+  private var originalLogLevels: Map[String, String] = null
+
   def addExtraProps(props: Properties): Unit = {
   }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
+    // Eliminate log output while println debugging
+    originalLogLevels = Map.from(Log4jController.loggers)
+    Log4jController.loggers.foreach(ln => Log4jController.logLevel(ln._1, "FATAL"))
+
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism)))
     super.setUp(testInfo)
 
@@ -164,6 +168,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.shutdownServers(servers)
     super.tearDown()
     closeSasl()
+
+    // Restore log levels for any other tests running in this process
+    originalLogLevels.foreach(ln => Log4jController.logLevel(ln._1, ln._2))
   }
 
   @Test
@@ -727,6 +734,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   @Test
   def testThreadPoolResize(): Unit = {
+
+
     val requestHandlerPrefix = "data-plane-kafka-request-handler-"
     val networkThreadPrefix = "data-plane-kafka-network-thread-"
     val fetcherThreadPrefix = "ReplicaFetcherThread-"
@@ -770,9 +779,21 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     def resizeThreadPool(propName: String, newSize: Int, threadPrefix: String): Unit = {
-      val props = new Properties
+      val props = new Properties()
       props.put(propName, newSize.toString)
-      reconfigureServers(props, perBrokerConfig = false, (propName, newSize.toString))
+
+      // Very temporary copy and paste hack to observe behaviour in CI via the magic println for this test only
+      alterConfigs(servers, adminClients.head, props, perBrokerConfig = false).all().get()
+
+      // Same maxWaitMs as used in waitForConfigOnServer
+      servers.foreach { server => TestUtils.retry(10000) {
+          val value = server.config.originals.get(propName)
+          println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: $value")
+          assertEquals(newSize.toString, value)
+        }
+      }
+
+      // reconfigureServers(props, perBrokerConfig = false, (propName, newSize.toString))
       maybeVerifyThreadPoolSize(propName, newSize, threadPrefix)
     }
 
@@ -791,6 +812,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       // Verify that all threads are alive
       maybeVerifyThreadPoolSize(propName, threadPoolSize, threadPrefix)
     }
+
+
 
     val config = servers.head.config
     verifyThreadPoolResize(KafkaConfig.NumIoThreadsProp, config.numIoThreads,
