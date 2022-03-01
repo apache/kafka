@@ -37,8 +37,8 @@ import org.junit.jupiter.api.{BeforeEach, Tag}
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 3)
 @Tag("integration")
-final class LeaderElectionCommandTest3(cluster: ClusterInstance) {
-  import LeaderElectionCommandTest3._
+final class LeaderElectionCommandTest9(cluster: ClusterInstance) {
+  import LeaderElectionCommandTest9._
 
   val broker1 = 0
   val broker2 = 1
@@ -262,7 +262,7 @@ final class LeaderElectionCommandTest3(cluster: ClusterInstance) {
   }
 }
 
-object LeaderElectionCommandTest3 {
+object LeaderElectionCommandTest9 {
   def createConfig(servers: Seq[KafkaServer]): Map[String, Object] = {
     Map(
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers(servers),

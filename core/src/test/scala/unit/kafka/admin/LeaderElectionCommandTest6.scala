@@ -35,7 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Tag}
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
+@ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 3)
 @Tag("integration")
 final class LeaderElectionCommandTest6(cluster: ClusterInstance) {
   import LeaderElectionCommandTest6._
@@ -84,6 +84,8 @@ final class LeaderElectionCommandTest6(cluster: ClusterInstance) {
     )
 
     TestUtils.assertLeader(client, topicPartition, broker3)
+    System.err.println("testall end")
+    System.err.flush()
   }
 
   @ClusterTest
@@ -119,6 +121,8 @@ final class LeaderElectionCommandTest6(cluster: ClusterInstance) {
     )
 
     TestUtils.assertLeader(client, topicPartition, broker3)
+    System.err.println("testtp end")
+    System.err.flush()
   }
 
   @ClusterTest
@@ -155,6 +159,8 @@ final class LeaderElectionCommandTest6(cluster: ClusterInstance) {
     )
 
     TestUtils.assertLeader(client, topicPartition, broker3)
+    System.err.println("testpj end")
+    System.err.flush()
   }
 
   @ClusterTest
@@ -187,6 +193,8 @@ final class LeaderElectionCommandTest6(cluster: ClusterInstance) {
     )
 
     TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("testpre end")
+    System.err.flush()
   }
 
   @ClusterTest

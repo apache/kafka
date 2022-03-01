@@ -117,7 +117,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
   var _firstPublish = true
 
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
-    System.err.print("pub:")
+    System.err.print(s"${conf.nodeId}-pub:")
     newImage.cluster().brokers().entrySet().forEach{entry => System.err.print(s"${entry.getValue.id()} ${entry.getValue.fenced()};")}
     System.err.flush()
 
