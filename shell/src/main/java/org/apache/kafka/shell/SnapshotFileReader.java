@@ -72,7 +72,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         queue.append(new EventQueue.Event() {
             @Override
             public void run() throws Exception {
-                fileRecords = FileRecords.open(new File(snapshotPath), false);
+                fileRecords = FileRecords.open(new File(snapshotPath));
                 batchIterator = fileRecords.batches().iterator();
                 scheduleHandleNextBatch();
                 future.complete(null);
