@@ -384,7 +384,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         TestUtils.waitForCondition(() ->
             brokers().values().stream().allMatch(brokerServer -> {
                 System.err.print("checking:" + brokerServer.metadataCache().brokerId() + "," + brokerServer.metadataCache().getAliveBrokers().size());
-                return brokerServer.metadataCache().getAliveBrokers().size() == brokers.size();}),
+                return brokerServer.metadataCache().getAliveBrokers().size() == brokers.size(); }),
                 "Failed to wait for publisher pu");
 
     }
