@@ -27,7 +27,7 @@ import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -181,7 +181,7 @@ object KafkaRaftServer {
   }
 
   val configSchema = new KafkaConfigSchema(Map(
-    ConfigResource.Type.BROKER -> KafkaConfig.configDef,
+    ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
     ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
   ).asJava)
 }

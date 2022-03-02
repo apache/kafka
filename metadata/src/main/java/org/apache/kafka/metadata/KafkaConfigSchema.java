@@ -26,6 +26,11 @@ import java.util.Map;
 import static java.util.Collections.emptyMap;
 
 
+/**
+ * Tracks information about the schema of configuration keys for brokers, topics, and other
+ * resources. Since this class does not depend on core, it is useful in the controller for
+ * determining the type of config keys (string, int, password, etc.)
+ */
 public class KafkaConfigSchema {
     public static final KafkaConfigSchema EMPTY = new KafkaConfigSchema(emptyMap());
 
@@ -35,6 +40,9 @@ public class KafkaConfigSchema {
         this.configDefs = configDefs;
     }
 
+    /**
+     * Returns true if the configuration key specified is splittable (only lists are splittable.)
+     */
     public boolean isSplittable(ConfigResource.Type type, String key) {
         ConfigDef configDef = configDefs.get(type);
         if (configDef == null) return false;
@@ -43,19 +51,30 @@ public class KafkaConfigSchema {
         return configKey.type == ConfigDef.Type.LIST;
     }
 
+    /**
+     * Returns true if the configuration key specified in this ConfigRecord is sensitive, or if
+     * we don't know whether it is sensitive.
+     */
     public boolean isSensitive(ConfigRecord record) {
         ConfigResource.Type type = ConfigResource.Type.forId(record.resourceType());
         return isSensitive(type, record.name());
     }
 
+    /**
+     * Returns true if the configuration key specified is sensitive, or if we don't know whether
+     * it is sensitive.
+     */
     public boolean isSensitive(ConfigResource.Type type, String key) {
         ConfigDef configDef = configDefs.get(type);
-        if (configDef == null) return false;
+        if (configDef == null) return true;
         ConfigDef.ConfigKey configKey = configDef.configKeys().get(key);
-        if (configKey == null) return false;
+        if (configKey == null) return true;
         return configKey.type.isSensitive();
     }
 
+    /**
+     * Get the default value of the configuration key, or null if no default is specified.
+     */
     public String getDefault(ConfigResource.Type type, String key) {
         ConfigDef configDef = configDefs.get(type);
         if (configDef == null) return null;

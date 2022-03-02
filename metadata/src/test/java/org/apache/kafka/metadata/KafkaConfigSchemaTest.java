@@ -40,7 +40,8 @@ public class KafkaConfigSchemaTest {
         CONFIGS.put(BROKER, new ConfigDef().
             define("foo.bar", ConfigDef.Type.LIST, "1", ConfigDef.Importance.HIGH, "foo bar").
             define("baz", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
-            define("quux", ConfigDef.Type.INT, ConfigDef.Importance.HIGH, "quux"));
+            define("quux", ConfigDef.Type.INT, ConfigDef.Importance.HIGH, "quux").
+            define("quuux", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "quuux"));
         CONFIGS.put(TOPIC, new ConfigDef().
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc").
             define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def").
@@ -67,4 +68,12 @@ public class KafkaConfigSchemaTest {
         assertEquals("true", schema.getDefault(TOPIC, "ghi"));
     }
 
+    @Test
+    public void testIsSensitive() {
+        KafkaConfigSchema schema = new KafkaConfigSchema(CONFIGS);
+        assertFalse(schema.isSensitive(BROKER, "foo.bar"));
+        assertTrue(schema.isSensitive(BROKER, "quuux"));
+        assertTrue(schema.isSensitive(BROKER, "unknown.config.key"));
+        assertFalse(schema.isSensitive(TOPIC, "abc"));
+    }
 }
