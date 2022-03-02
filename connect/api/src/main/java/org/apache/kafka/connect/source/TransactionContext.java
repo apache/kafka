@@ -38,8 +38,9 @@ public interface TransactionContext {
     /**
      * Requests a transaction abort the next batch of records from {@link SourceTask#poll()}. All of
      * the records in that transaction will be discarded and will not appear in a committed transaction.
-     * However, offsets for that transaction will still be committed so than the records in that transaction are not reprocessed. If the data should instead be reprocessed,
-     * the task should not invoke this method and should instead throw an exception.
+     * However, offsets for that transaction will still be committed so than the records in that transaction
+     * are not reprocessed. If the data should instead be reprocessed, the task should not invoke this method
+     * and should instead throw an exception.
      */
     void abortTransaction();
 
@@ -47,8 +48,8 @@ public interface TransactionContext {
      * Requests a transaction abort after a source record is processed. The source record will be the
      * last record in the aborted transaction. All of the records in that transaction will be discarded
      * and will not appear in a committed transaction. However, offsets for that transaction will still
-     * be committed. If the data should be reprocessed, the task should not invoke this method and
-     * should instead throw an exception.
+     * be committed so that the records in that transaction are not reprocessed. If the data should be
+     * reprocessed, the task should not invoke this method and should instead throw an exception.
      * @param record the record to abort the transaction after; may not be null.
      */
     void abortTransaction(SourceRecord record);
