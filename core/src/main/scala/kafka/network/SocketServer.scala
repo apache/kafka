@@ -581,16 +581,18 @@ class DataPlaneAcceptor(socketServer: SocketServer,
    * the configs have passed validation using {@link #validateReconfiguration ( Map )}.
    */
   override def reconfigure(configs: util.Map[String, _]): Unit = {
+    val brokerId = configs.get(KafkaConfig.BrokerIdProp).asInstanceOf[Int]
     val newNumNetworkThreads = configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int]
-
+    println(s"SocketServer on $brokerId - newThreads: $newNumNetworkThreads, currentProcessors: ${processors.length}")
     if (newNumNetworkThreads != processors.length) {
-      info(s"Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
+      println(s"SocketServer on $brokerId - Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
       if (newNumNetworkThreads > processors.length) {
-        addProcessors(newNumNetworkThreads - processors.length)
+        addProcessors(newNumNetworkThreads - processors.length, brokerId)
       } else if (newNumNetworkThreads < processors.length) {
         removeProcessors(processors.length - newNumNetworkThreads)
       }
     }
+    println(s"SocketServer on $brokerId reconfigure complete")
   }
 
   /**
@@ -885,15 +887,16 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   @Override
   def wakeup(): Unit = nioSelector.wakeup()
 
-  def addProcessors(toCreate: Int): Unit = {
+  def addProcessors(toCreate: Int, brokerId: Int = -1): Unit = {
     val listenerName = endPoint.listenerName
     val securityProtocol = endPoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
-
+    println(s"SocketServer on $brokerId - addProcessors adding $toCreate")
     for (_ <- 0 until toCreate) {
       val processor = newProcessor(socketServer.nextProcessorId(), listenerName, securityProtocol)
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
+      println(s"SocketServer on $brokerId - addProcessors added processor ${processor.id}")
     }
 
     processors ++= listenerProcessors
