@@ -896,7 +896,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       val processor = newProcessor(socketServer.nextProcessorId(), listenerName, securityProtocol)
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
-      println(s"SocketServer on $brokerId - addProcessors added processor ${processor.id}")
+      println(s"SocketServer on $brokerId - addProcessors added processor ${processor.id} for $listenerName")
     }
 
     processors ++= listenerProcessors
