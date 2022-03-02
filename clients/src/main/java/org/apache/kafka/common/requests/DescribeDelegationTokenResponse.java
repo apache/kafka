@@ -36,7 +36,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
 
     private final DescribeDelegationTokenResponseData data;
 
-    public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error, List<DelegationToken> tokens) {
+    public DescribeDelegationTokenResponse(int version, int throttleTimeMs, Errors error, List<DelegationToken> tokens) {
         super(ApiKeys.DESCRIBE_DELEGATION_TOKEN);
         List<DescribedDelegationToken> describedDelegationTokenList = tokens
             .stream()
@@ -53,7 +53,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
                         .stream()
                         .map(r -> new DescribedDelegationTokenRenewer().setPrincipalName(r.getName()).setPrincipalType(r.getPrincipalType()))
                         .collect(Collectors.toList()));
-                if (dt.tokenInfo().tokenRequester() != null) {
+                if (version > 2) {
                     ddt.setTokenRequesterPrincipalType(dt.tokenInfo().tokenRequester().getPrincipalType())
                         .setTokenRequesterPrincipalName(dt.tokenInfo().tokenRequester().getName());
                 }
@@ -67,8 +67,8 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
             .setTokens(describedDelegationTokenList);
     }
 
-    public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error) {
-        this(throttleTimeMs, error, new ArrayList<>());
+    public DescribeDelegationTokenResponse(int version, int throttleTimeMs, Errors error) {
+        this(version, throttleTimeMs, error, new ArrayList<>());
     }
 
     public DescribeDelegationTokenResponse(DescribeDelegationTokenResponseData data) {

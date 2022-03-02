@@ -2927,8 +2927,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Sending create token response for correlation id ${request.header.correlationId} " +
         s"to client ${request.header.clientId}.")
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, createResult.error, createResult.owner, createResult.tokenRequester,
-          createResult.issueTimestamp, createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))
+        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs, createResult.error, createResult.owner,
+          createResult.tokenRequester, createResult.issueTimestamp, createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId,
+          ByteBuffer.wrap(createResult.hmac)))
     }
 
     val ownerPrincipalName = createTokenRequest.data().ownerPrincipalName()
@@ -2941,7 +2942,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!allowTokenRequests(request))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion(), requestThrottleMs,
+        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
           Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
     else {
       val renewerList = createTokenRequest.data.renewers.asScala.toList.map(entry =>
@@ -2949,7 +2950,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (renewerList.exists(principal => principal.getPrincipalType != KafkaPrincipal.USER_TYPE)) {
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion(), requestThrottleMs,
+          CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
             Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
       }
       else {
@@ -3026,7 +3027,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a describe token response
     def sendResponseCallback(error: Errors, tokenDetails: List[DelegationToken]): Unit = {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new DescribeDelegationTokenResponse(requestThrottleMs, error, tokenDetails.asJava))
+        new DescribeDelegationTokenResponse(request.context.requestVersion(), requestThrottleMs, error, tokenDetails.asJava))
       trace("Sending describe token response for correlation id %d to client %s."
         .format(request.header.correlationId, request.header.clientId))
     }

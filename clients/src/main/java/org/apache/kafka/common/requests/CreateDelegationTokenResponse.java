@@ -39,7 +39,8 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
             new CreateDelegationTokenResponseData(new ByteBufferAccessor(buffer), version));
     }
 
-    public static CreateDelegationTokenResponse prepareResponse(int throttleTimeMs,
+    public static CreateDelegationTokenResponse prepareResponse(int version,
+            int throttleTimeMs,
             Errors error,
             KafkaPrincipal owner,
             KafkaPrincipal tokenRequester,
@@ -58,20 +59,16 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
                 .setMaxTimestampMs(maxTimestamp)
                 .setTokenId(tokenId)
                 .setHmac(hmac.array());
-        if (tokenRequester != null) {
+        if (version > 2) {
             data.setTokenRequesterPrincipalType(tokenRequester.getPrincipalType())
                 .setTokenRequesterPrincipalName(tokenRequester.getName());
         }
         return new CreateDelegationTokenResponse(data);
     }
 
-    public static CreateDelegationTokenResponse prepareResponse(int requestVersion, int throttleTimeMs, Errors error,
+    public static CreateDelegationTokenResponse prepareResponse(int version, int throttleTimeMs, Errors error,
                                                                 KafkaPrincipal owner, KafkaPrincipal requester) {
-        if (requestVersion > 2) {
-            return prepareResponse(throttleTimeMs, error, owner, requester, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
-        } else {
-            return prepareResponse(throttleTimeMs, error, owner, null, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
-        }
+        return prepareResponse(version, throttleTimeMs, error, owner, requester, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
     }
 
     @Override
