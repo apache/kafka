@@ -1928,9 +1928,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
     Option(getString(KafkaConfig.InterBrokerListenerNameProp)) match {
-      case Some(_) if originals.containsKey(KafkaConfig.InterBrokerSecurityProtocolProp) =>
-        throw new ConfigException(s"Only one of ${KafkaConfig.InterBrokerListenerNameProp} and " +
-          s"${KafkaConfig.InterBrokerSecurityProtocolProp} should be set.")
+      case Some(_) if originals.containsKey(KafkaConfig.InterBrokerSecurityProtocolProp) &&
+        getString(KafkaConfig.InterBrokerSecurityProtocolProp).nonEmpty =>
+          throw new ConfigException(s"Only one of ${KafkaConfig.InterBrokerListenerNameProp} : " +
+            s"${getString(KafkaConfig.InterBrokerListenerNameProp)} and ${KafkaConfig.InterBrokerSecurityProtocolProp} : " +
+              s"${getString(KafkaConfig.InterBrokerSecurityProtocolProp)} should be set.")
       case Some(name) =>
         val listenerName = ListenerName.normalised(name)
         val securityProtocol = effectiveListenerSecurityProtocolMap.getOrElse(listenerName,
