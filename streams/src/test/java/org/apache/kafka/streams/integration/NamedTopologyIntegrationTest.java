@@ -793,6 +793,7 @@ public class NamedTopologyIntegrationTest {
     @Test
     public void shouldBackOffTaskAndEmitDataWithinSameTopology() throws Exception {
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_1, 2, 1);
+        CLUSTER.createTopic(DELAYED_INPUT_STREAM_2, 2, 1);
 
         try {
             final AtomicInteger noOutputExpected = new AtomicInteger(0);
@@ -856,7 +857,7 @@ public class NamedTopologyIntegrationTest {
             assertThat(noOutputExpected.get(), equalTo(0));
             assertThat(outputExpected.get(), equalTo(2));
         } finally {
-            CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1);
+            CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1, DELAYED_INPUT_STREAM_2);
         }
     }
 
