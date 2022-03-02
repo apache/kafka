@@ -22,7 +22,7 @@ import kafka.common.{LongRef, RecordValidationException}
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.Logging
-import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{CorruptRecordException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
@@ -571,13 +571,9 @@ private[log] object LogValidator extends Logging {
   private def processRecordErrors(recordErrors: Seq[ApiRecordError]): Unit = {
     if (recordErrors.nonEmpty) {
       val errors = recordErrors.map(_.recordError)
-      if (recordErrors.exists(_.apiError == Errors.INVALID_TIMESTAMP)) {
-        throw new RecordValidationException(new InvalidTimestampException(
-          "One or more records have been rejected due to invalid timestamp"), errors)
-      } else {
-        throw new RecordValidationException(new InvalidRecordException(
-          "One or more records have been rejected"), errors)
-      }
+      throw new RecordValidationException(new InvalidRecordException(
+        "One or more records have been rejected due to " + errors.size + " record errors " +
+          "in total, and only showing the first three errors at most: " + errors.asJava.subList(0, math.min(errors.size, 3))), errors)
     }
   }
 
