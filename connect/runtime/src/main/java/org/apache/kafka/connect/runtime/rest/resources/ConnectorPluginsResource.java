@@ -50,10 +50,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -138,8 +136,9 @@ public class ConnectorPluginsResource {
     public List<ConnectorPluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
         synchronized (this) {
             if (connectorsOnly) {
-                Set<String> types = new HashSet<>(Arrays.asList(PluginType.SINK.toString(), PluginType.SOURCE.toString()));
-                return Collections.unmodifiableList(connectorPlugins.stream().filter(p -> types.contains(p.type())).collect(Collectors.toList()));
+                return Collections.unmodifiableList(connectorPlugins.stream()
+                        .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
+                        .collect(Collectors.toList()));
             } else {
                 return Collections.unmodifiableList(connectorPlugins);
             }

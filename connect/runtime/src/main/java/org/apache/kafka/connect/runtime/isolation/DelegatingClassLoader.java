@@ -131,15 +131,10 @@ public class DelegatingClassLoader extends URLClassLoader {
         this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public Set<PluginDesc<Connector>> connectors() {
-        Set<PluginDesc<Connector>> connectors = new TreeSet<>();
-        for (PluginDesc<SinkConnector> sinkConnector : sinkConnectors) {
-            connectors.add((PluginDesc<Connector>) (PluginDesc<? extends Connector>) sinkConnector);
-        }
-        for (PluginDesc<SourceConnector> sourceConnector : sourceConnectors) {
-            connectors.add((PluginDesc<Connector>) (PluginDesc<? extends Connector>) sourceConnector);
-        }
+        Set<PluginDesc<Connector>> connectors = new TreeSet<>((Set) sinkConnectors);
+        connectors.addAll((Set) sourceConnectors);
         return connectors;
     }
 
