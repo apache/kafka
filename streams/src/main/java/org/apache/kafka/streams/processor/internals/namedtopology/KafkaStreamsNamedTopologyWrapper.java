@@ -182,7 +182,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             );
         } else {
             topologyMetadata.registerAndBuildNewTopology(future, newTopology.internalTopologyBuilder());
-            completedFutureForUnstartedApp(future, "adding topology");
+            maybeCompleteFutureIfStillInCREATED(future, "adding topology " + newTopology.name());
         }
 
         return new AddNamedTopologyResult(future);
@@ -209,7 +209,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         if (hasStartedOrFinishedShuttingDown()) {
             log.error("Attempted to remove topology {} from while the Kafka Streams was in state {}, "
-                          + "application must be started first.", topologyToRemove, state
+                          + "topologies cannot be modified if the application has begun or completed shutting down.",
+                      topologyToRemove, state
             );
             removeTopologyFuture.completeExceptionally(
                 new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state)
@@ -235,7 +236,10 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         topologyMetadata.unregisterTopology(removeTopologyFuture, topologyToRemove);
 
-        if (resetOffsets && !completedFutureForUnstartedApp(removeTopologyFuture, "removing topology")) {
+        final boolean skipResetForUnstartedApplication =
+            maybeCompleteFutureIfStillInCREATED(removeTopologyFuture, "removing topology " + topologyToRemove);
+
+        if (resetOffsets && !skipResetForUnstartedApplication) {
             log.info("Resetting offsets for the following partitions of {} removed NamedTopology {}: {}",
                      removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully" : "successfully",
                      topologyToRemove, partitionsToReset
@@ -249,8 +253,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     /**
      * @return  true iff the application is still in CREATED and the future was completed
      */
-    private synchronized boolean completedFutureForUnstartedApp(final KafkaFutureImpl<Void> updateTopologyFuture,
-                                                                final String operation) {
+    private boolean maybeCompleteFutureIfStillInCREATED(final KafkaFutureImpl<Void> updateTopologyFuture,
+                                                        final String operation) {
         if (state == State.CREATED && !updateTopologyFuture.isDone()) {
             updateTopologyFuture.complete(null);
             log.info("Completed {} since application has not been started", operation);
@@ -301,7 +305,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 removeTopologyFuture.complete(null);
             });
         }
-        return new RemoveNamedTopologyResult(removeTopologyFuture,  removeTopologyFuture);
+        return new RemoveNamedTopologyResult(removeTopologyFuture, removeTopologyFuture);
     }
 
     /**
