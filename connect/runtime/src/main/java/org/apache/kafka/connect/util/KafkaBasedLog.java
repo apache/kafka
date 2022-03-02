@@ -76,6 +76,10 @@ public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
     private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(30);
     private static final long MAX_SLEEP_MS = TimeUnit.SECONDS.toMillis(1);
+    // 15min of admin retry duration to ensure successful metadata propagation.  10 seconds of backoff
+    // in between retries
+    private static final Duration ADMIN_CLIENT_RETRY_DURATION = Duration.ofMinutes(15);
+    private static final long ADMIN_CLIENT_RETRY_BACKOFF_MS = 10 * 1000;
 
     private Time time;
     private final String topic;
@@ -368,7 +372,9 @@ public class KafkaBasedLog<K, V> {
             // Unlike using the consumer
             try {
                 if (shouldRetry) {
-                    return admin.retryEndOffsets(assignment);
+                    return admin.retryEndOffsets(assignment,
+                            ADMIN_CLIENT_RETRY_DURATION,
+                            ADMIN_CLIENT_RETRY_BACKOFF_MS);
                 }
 
                 return admin.endOffsets(assignment);

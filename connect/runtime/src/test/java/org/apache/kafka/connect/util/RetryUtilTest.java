@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.kafka.common.errors.TimeoutException;
@@ -27,6 +28,7 @@ import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.time.Duration;
 import java.util.concurrent.Callable;
 
 @RunWith(PowerMockRunner.class)
@@ -43,17 +45,16 @@ public class RetryUtilTest {
     @Test
     public void testSuccess() throws Exception {
         Mockito.when(mockCallable.call()).thenReturn("success");
-        assertEquals("success", RetryUtil.retry(mockCallable, 10, 100));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(100), 1));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
 
-    @Test
+    @Test(timeout = 150)
     public void testExhaustingRetries() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException());
         ConnectException e = assertThrows(ConnectException.class,
-                () -> RetryUtil.retry(mockCallable, 10, 100));
-        // Expecting 11 calls: 1 call for the first execution, and 10 retry calls
-        Mockito.verify(mockCallable, Mockito.times(11)).call();
+                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(50), 1));
+        Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
     }
 
     @Test
@@ -64,7 +65,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException())
                 .thenReturn("success");
 
-        assertEquals("success", RetryUtil.retry(mockCallable, 10, 100));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(100), 1));
         Mockito.verify(mockCallable, Mockito.times(4)).call();
     }
 
@@ -78,7 +79,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException("timeout"))
                 .thenThrow(new NullPointerException("Non retriable"));
         NullPointerException e = assertThrows(NullPointerException.class,
-                () -> RetryUtil.retry(mockCallable, 10, 100));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(100), 1));
         assertEquals("Non retriable", e.getMessage());
         Mockito.verify(mockCallable, Mockito.times(6)).call();
     }
@@ -87,7 +88,7 @@ public class RetryUtilTest {
     public void noRetryAndSucceed() throws Exception {
         Mockito.when(mockCallable.call()).thenReturn("success");
 
-        assertEquals("success", RetryUtil.retry(mockCallable, 0, 100));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(0), 100));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
 
@@ -96,7 +97,7 @@ public class RetryUtilTest {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
         TimeoutException e = assertThrows(TimeoutException.class,
-                () -> RetryUtil.retry(mockCallable, 0, 100));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(0), 100));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
         assertEquals("timeout exception", e.getMessage());
     }
@@ -109,7 +110,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException())
                 .thenReturn("success");
 
-        assertEquals("success", RetryUtil.retry(mockCallable, 10, 0));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(50), 0));
         Mockito.verify(mockCallable, Mockito.times(4)).call();
     }
 
@@ -117,9 +118,18 @@ public class RetryUtilTest {
     public void testNoBackoffTimeAndFail() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
-        ConnectException e  = assertThrows(ConnectException.class,
-                () -> RetryUtil.retry(mockCallable, 10, 0));
-        Mockito.verify(mockCallable, Mockito.times(11)).call();
-        assertEquals("Fail to retry the task after 11 attempts.  Reason: timeout exception", e.getMessage());
+        ConnectException e = assertThrows(ConnectException.class,
+                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(80), 0));
+        Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
+        assertTrue(e.getMessage().contains("Reason: timeout exception"));
+    }
+
+    @Test
+    public void testBackoffLessThanTimeout() throws Exception {
+        Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
+
+        TimeoutException e = assertThrows(TimeoutException.class,
+                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(50), 100));
+        Mockito.verify(mockCallable, Mockito.atMostOnce()).call();
     }
 }

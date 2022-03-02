@@ -490,7 +490,7 @@ public class KafkaBasedLogTest {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
-        admin.retryEndOffsets(EasyMock.eq(tps));
+        admin.retryEndOffsets(EasyMock.eq(tps), EasyMock.anyObject(), EasyMock.anyLong());
         PowerMock.expectLastCall().andReturn(endOffsets).times(1);
         admin.endOffsets(EasyMock.eq(tps));
         PowerMock.expectLastCall().andReturn(endOffsets).times(1);
@@ -509,7 +509,7 @@ public class KafkaBasedLogTest {
 
         Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
         // Getting end offsets using the admin client should fail with unsupported version
-        admin.retryEndOffsets(EasyMock.eq(tps));
+        admin.retryEndOffsets(EasyMock.eq(tps), EasyMock.anyObject(), EasyMock.anyLong());
         PowerMock.expectLastCall().andThrow(new UnsupportedVersionException("too old"));
 
         // Falls back to the consumer
@@ -535,7 +535,7 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
         // Getting end offsets upon startup should work fine
-        admin.retryEndOffsets(EasyMock.eq(tps));
+        admin.retryEndOffsets(EasyMock.eq(tps), EasyMock.anyObject(), EasyMock.anyLong());
         PowerMock.expectLastCall().andReturn(endOffsets).times(1);
         // Getting end offsets using the admin client should fail with leader not available
         admin.endOffsets(EasyMock.eq(tps));

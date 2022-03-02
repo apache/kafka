@@ -54,6 +54,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -484,7 +485,7 @@ public class TopicAdminTest {
             TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
 
             assertThrows(ConnectException.class, () -> {
-                admin.retryEndOffsets(tps);
+                admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
             });
         }
     }
@@ -508,7 +509,7 @@ public class TopicAdminTest {
             Map<String, Object> adminConfig = new HashMap<>();
             adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
             TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
-            Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps);
+            Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
             assertNotNull(endoffsets);
             assertTrue(endoffsets.containsKey(tp1));
             assertEquals(1000L, endoffsets.get(tp1).longValue());

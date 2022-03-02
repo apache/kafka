@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.concurrent.Callable;
 
 public class RetryUtil {
@@ -30,47 +31,57 @@ public class RetryUtil {
 
     /**
      * The method executes the callable at least once, optionally retrying the callable if
-     * {@link org.apache.kafka.connect.errors.RetriableException} is being thrown.  If all retries are exhausted,
+     * {@link org.apache.kafka.connect.errors.RetriableException} is being thrown.  If timeout is exhausted,
      * then the last exception is wrapped with a {@link org.apache.kafka.connect.errors.ConnectException} and thrown.
      *
-     * <p>If {@code maxRetries} is set to 0, the task will be
-     * executed exactly once.  If {@code maxRetries} is set to {@code n}, the callable will be executed at
-     * most {@code n + 1} times.
+     * <p>If {@code timeoutDuration} is set to 0, the task will be
+     * executed exactly once.  If {@code timeoutDuration} is less than {@code retryBackoffMs}, the callable will be
+     * executed only once.
      *
      * <p>If {@code retryBackoffMs} is set to 0, no wait will happen in between the retries.
      *
-     * @param callable       the function to execute.
-     * @param maxRetries     maximum number of retries; must be 0 or more
-     * @param retryBackoffMs the number of milliseconds to delay upon receiving a
-     *                       {@link org.apache.kafka.connect.errors.RetriableException} before retrying again; 
-     *                       must be 0 or more
+     * @param callable          the function to execute.
+     * @param timeoutDuration   timeout duration
+     * @param retryBackoffMs    the number of milliseconds to delay upon receiving a
+     *                          {@link org.apache.kafka.connect.errors.RetriableException} before retrying again;
+     *                          must be 0 or more
      * @throws ConnectException If the task exhausted all the retries.
      */
-    public static <T> T retry(Callable<T> callable, long maxRetries, long retryBackoffMs) throws Exception {
-        if (maxRetries <= 0) {
+
+    public static <T> T retryUntilTimeout(Callable<T> callable, Duration timeoutDuration, long retryBackoffMs) throws Exception {
+        long timeoutMs = timeoutDuration.toMillis();
+        if (retryBackoffMs >= timeoutMs) {
+            log.warn("retryBackoffMs, {}, needs to be less than timeoutMs, {}.  Callable will only execute once.", retryBackoffMs, timeoutMs);
+        }
+
+        if (retryBackoffMs >= timeoutMs ||
+                timeoutMs <= 0) {
             // no retry
             return callable.call();
         }
 
-        Throwable lastError = null;
+        long end = System.currentTimeMillis() + timeoutMs;
         int attempt = 0;
-        final long maxAttempts = maxRetries + 1;
-        while (++attempt <= maxAttempts) {
+        Throwable lastError = null;
+        while (System.currentTimeMillis() <= end) {
+            attempt++;
             try {
                 return callable.call();
             } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
-                log.warn("RetriableException caught on attempt {}, retrying automatically up to {} more times. " +
-                        "Reason: {}", attempt, maxRetries - attempt, e.getMessage(), e);
+                log.warn("RetriableException caught on attempt {}, retrying automatically. " +
+                        "Reason: {}", attempt, e.getMessage(), e);
                 lastError = e;
             } catch (WakeupException e) {
                 lastError = e;
             }
 
-            if (attempt < maxAttempts) {
+            // if current time is less than the ending time, no more retry is necessary
+            // won't sleep if retryBackoffMs equals to 0
+            if (retryBackoffMs > 0 && System.currentTimeMillis() < end) {
                 Utils.sleep(retryBackoffMs);
             }
         }
 
-        throw new ConnectException("Fail to retry the task after " + maxAttempts + " attempts.  Reason: " + lastError.getMessage(), lastError);
+        throw new ConnectException("Fail to retry the task after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
     }
 }
