@@ -6290,8 +6290,25 @@ public class KafkaAdminClientTest {
             String transactionalId = "copyCat";
             Node transactionCoordinator = env.cluster().nodes().iterator().next();
 
+            // fail to find the coordinator at first with a retriable error
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, transactionalId, transactionCoordinator));
+            // and then succeed in the attempt to find the transaction coordinator
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, transactionalId, transactionCoordinator));
-
+            // unfortunately, a coordinator load is in progress and we need to retry our init PID request
+            env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof InitProducerIdRequest,
+                    new InitProducerIdResponse(new InitProducerIdResponseData().setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())),
+                    transactionCoordinator
+            );
+            // then find out that the coordinator has changed since then
+            env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof InitProducerIdRequest,
+                    new InitProducerIdResponse(new InitProducerIdResponseData().setErrorCode(Errors.NOT_COORDINATOR.code())),
+                    transactionCoordinator
+            );
+            // and as a result, try once more to locate the coordinator (this time succeeding on the first try)
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, transactionalId, transactionCoordinator));
+            // and finally, complete the init PID request
             InitProducerIdResponseData initProducerIdResponseData = new InitProducerIdResponseData()
                     .setProducerId(4761)
                     .setProducerEpoch((short) 489);

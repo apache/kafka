@@ -121,10 +121,6 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
                         "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
                                 "failed due to transactional ID authorization failure"));
 
-            // We intentionally omit cases for PRODUCER_FENCED, TRANSACTIONAL_ID_NOT_FOUND, and INVALID_PRODUCER_EPOCH
-            // since those errors should never happen when our InitProducerIdRequest doesn't include a producer epoch or ID
-            // and should therefore fall under the "unexpected error" catch-all case below
-
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("InitProducerId request for transactionalId `{}` failed because the " +
@@ -139,6 +135,10 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
                 log.debug("InitProducerId request for transactionalId `{}` returned error {}. Will attempt " +
                         "to find the coordinator again and retry", transactionalIdKey.idValue, error);
                 return ApiResult.unmapped(Collections.singletonList(transactionalIdKey));
+
+            // We intentionally omit cases for PRODUCER_FENCED, TRANSACTIONAL_ID_NOT_FOUND, and INVALID_PRODUCER_EPOCH
+            // since those errors should never happen when our InitProducerIdRequest doesn't include a producer epoch or ID
+            // and should therefore fall under the "unexpected error" catch-all case below
 
             default:
                 return ApiResult.failed(transactionalIdKey, error.exception("InitProducerId request for " +
