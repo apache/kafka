@@ -298,7 +298,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             // can be satisfied by placing the 2nd standby client on a different `zone` tag compared to active and corresponding standby tasks.
             // The `zone` on either `cluster` tags are valid candidates for the partial rack awareness, as our goal is to distribute clients on the different `zone` tags.
 
-            // This statement checks if we have used more clients than the all the unique values for the given tag,
+            // This statement checks if we have used more clients than the number of unique values for the given tag,
             // and if so, removes those tag entries from the tagEntryToUsedClients map.
             if (allTagValues.size() <= countOfUsedClients) {
                 allTagValues.forEach(tagValue -> tagEntryToUsedClients.remove(new TagEntry(tagKey, tagValue)));
