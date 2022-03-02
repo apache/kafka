@@ -27,6 +27,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -70,7 +71,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator, Task {
 
     // visible for testing
-    static final byte LATEST_MAGIC_BYTE = 1;
+    static final byte LATEST_MAGIC_BYTE = 2;
 
     private final Time time;
     private final Consumer<byte[], byte[]> mainConsumer;
@@ -452,7 +453,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                         }
                     }
                     final long partitionTime = partitionTimes.get(partition);
-                    committableOffsets.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
+                    //committableOffsets.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
+                    committableOffsets.put(partition, new OffsetAndMetadata(offset,
+                        encodeTimestampAndProcessorMetadata(partition, partitionTime, processorContext.getProcessorMetadata())));
                 }
 
                 break;
@@ -889,7 +892,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             offsetResetter.accept(resetOffsetsForPartitions);
             resetOffsetsForPartitions.clear();
 
-            initializeTaskTime(offsetsAndMetadata.entrySet().stream()
+            initializeTaskTimeAndProcessorMetadata(offsetsAndMetadata.entrySet().stream()
                 .filter(e -> e.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
             );
@@ -907,20 +910,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void initializeTaskTime(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
+    private void initializeTaskTimeAndProcessorMetadata(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
+        ProcessorMetadata processorMetadata = new ProcessorMetadata();
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final OffsetAndMetadata metadata = entry.getValue();
 
             if (metadata != null) {
-                final long committedTimestamp = decodeTimestamp(metadata.metadata());
+                final KeyValue<Long, ProcessorMetadata> committedTimestampAndMeta = decodeTimestampAndMeta(metadata.metadata(), partition);
+                final long committedTimestamp = committedTimestampAndMeta.key;
                 partitionGroup.setPartitionTime(partition, committedTimestamp);
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
                     + " to {} in stream task {}", partition, committedTimestamp, id);
+
+                final ProcessorMetadata tmpProcessorMeta = committedTimestampAndMeta.value;
+                processorMetadata.merge(tmpProcessorMeta);
             } else {
                 log.debug("No committed timestamp was found in metadata for partition {}", partition);
             }
         }
+
+        processorContext.setProcessorMetadata(processorMetadata);
 
         final Set<TopicPartition> nonCommitted = new HashSet<>(inputPartitions());
         nonCommitted.removeAll(offsetsAndMetadata.keySet());
@@ -1095,11 +1105,53 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return commitRequested;
     }
 
+    static String encodeTimestampAndProcessorMetadata(final TopicPartition partition,
+        final long partitionTime, final ProcessorMetadata metadata) {
+        final byte[] serializedMeta = metadata.serialize(partition);
+        // Format: MAGIC_BYTE(1) + PartitionTime(8) + processMeta
+        final ByteBuffer buffer = ByteBuffer.allocate(1 + 8 + serializedMeta.length);
+        buffer.put(LATEST_MAGIC_BYTE);
+        buffer.putLong(partitionTime);
+        buffer.put(serializedMeta);
+        return Base64.getEncoder().encodeToString(buffer.array());
+    }
+
     static String encodeTimestamp(final long partitionTime) {
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);
         buffer.putLong(partitionTime);
         return Base64.getEncoder().encodeToString(buffer.array());
+    }
+
+    KeyValue<Long, ProcessorMetadata> decodeTimestampAndMeta(final String encryptedString, final TopicPartition partition) {
+        long timestamp = RecordQueue.UNKNOWN;
+        ProcessorMetadata metadata = null;
+
+        if (encryptedString.isEmpty()) {
+            return KeyValue.pair(RecordQueue.UNKNOWN, null);
+        }
+        try {
+            final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
+            final byte version = buffer.get();
+            switch (version) {
+                case (byte) 1:
+                    timestamp = buffer.getLong();
+                    break;
+                case LATEST_MAGIC_BYTE:
+                    timestamp = buffer.getLong();
+                    final byte[] metaBytes = new byte[buffer.remaining()];
+                    buffer.get(metaBytes);
+                    metadata = ProcessorMetadata.deserialize(metaBytes, partition);
+                    break;
+                default:
+                    log.warn("Unsupported offset metadata version found. Supported version <= {}. Found version {}.",
+                            LATEST_MAGIC_BYTE, version);
+            }
+        } catch (final Exception exception) {
+            log.warn("Unsupported offset metadata found");
+        }
+
+        return KeyValue.pair(timestamp, metadata);
     }
 
     long decodeTimestamp(final String encryptedString) {
@@ -1110,6 +1162,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
             final byte version = buffer.get();
             switch (version) {
+                case (byte) 1:
                 case LATEST_MAGIC_BYTE:
                     return buffer.getLong();
                 default:
