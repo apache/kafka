@@ -792,66 +792,72 @@ public class NamedTopologyIntegrationTest {
 
     @Test
     public void shouldBackOffTaskAndEmitDataWithinSameTopology() throws Exception {
-        final AtomicInteger noOutputExpected = new AtomicInteger(0);
-        final AtomicInteger outputExpected = new AtomicInteger(0);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L);
-        props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        CLUSTER.createTopic(DELAYED_INPUT_STREAM_1, 2, 1);
 
-        streams = new KafkaStreamsNamedTopologyWrapper(props);
-        streams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
+        try {
+            final AtomicInteger noOutputExpected = new AtomicInteger(0);
+            final AtomicInteger outputExpected = new AtomicInteger(0);
+            props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+            props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L);
+            props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
+            props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+            props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
-        final NamedTopologyBuilder builder = streams.newNamedTopologyBuilder("topology_A");
-        builder.stream(DELAYED_INPUT_STREAM_1).peek((k, v) -> outputExpected.incrementAndGet()).to(OUTPUT_STREAM_1);
-        builder.stream(DELAYED_INPUT_STREAM_2)
-            .peek((k, v) -> {
-                throw new RuntimeException("Kaboom");
-            })
-            .peek((k, v) -> noOutputExpected.incrementAndGet())
-            .to(OUTPUT_STREAM_2);
+            streams = new KafkaStreamsNamedTopologyWrapper(props);
+            streams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
 
-        streams.addNamedTopology(builder.build());
+            final NamedTopologyBuilder builder = streams.newNamedTopologyBuilder("topology_A");
+            builder.stream(DELAYED_INPUT_STREAM_1).peek((k, v) -> outputExpected.incrementAndGet()).to(OUTPUT_STREAM_1);
+            builder.stream(DELAYED_INPUT_STREAM_2)
+                .peek((k, v) -> {
+                    throw new RuntimeException("Kaboom");
+                })
+                .peek((k, v) -> noOutputExpected.incrementAndGet())
+                .to(OUTPUT_STREAM_2);
 
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(streams);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            DELAYED_INPUT_STREAM_2,
-            Arrays.asList(
-                new KeyValue<>(1, "A")
-            ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            0L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            DELAYED_INPUT_STREAM_1,
-            Arrays.asList(
-                new KeyValue<>(1, "A"),
-                new KeyValue<>(1, "B")
-            ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            0L);
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerDeserializer.class,
-                StringDeserializer.class
-            ),
-            OUTPUT_STREAM_1,
-            Arrays.asList(
-                new KeyValue<>(1, "A"),
-                new KeyValue<>(1, "B")
-            )
-        );
-        assertThat(noOutputExpected.get(), equalTo(0));
-        assertThat(outputExpected.get(), equalTo(2));
+            streams.addNamedTopology(builder.build());
+
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(streams);
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                DELAYED_INPUT_STREAM_2,
+                Arrays.asList(
+                    new KeyValue<>(1, "A")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                0L);
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                DELAYED_INPUT_STREAM_1,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                0L);
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerDeserializer.class,
+                    StringDeserializer.class
+                ),
+                OUTPUT_STREAM_1,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                )
+            );
+            assertThat(noOutputExpected.get(), equalTo(0));
+            assertThat(outputExpected.get(), equalTo(2));
+        } finally {
+            CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1);
+        }
     }
 
     /**
