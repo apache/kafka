@@ -553,34 +553,34 @@ public class NamedTopologyIntegrationTest {
         CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_1, 2, 1);
 
-      try {
-          // Build up named topology with two stateful subtopologies
-          final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
-          inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
-          inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-          streams.start(singletonList(topology1Builder.build()));
-          waitForApplicationState(singletonList(streams), State.RUNNING, STARTUP_TIMEOUT);
+        try {
+            // Build up named topology with two stateful subtopologies
+            final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
+            inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
+            inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+            streams.start(singletonList(topology1Builder.build()));
+            waitForApplicationState(singletonList(streams), State.RUNNING, STARTUP_TIMEOUT);
 
-          assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
-          assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-          streams.removeNamedTopology(TOPOLOGY_1).all().get();
-          streams.cleanUpNamedTopology(TOPOLOGY_1);
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+            streams.removeNamedTopology(TOPOLOGY_1).all().get();
+            streams.cleanUpNamedTopology(TOPOLOGY_1);
 
-          // Prepare a new named topology with the same name but an incompatible topology (stateful subtopologies swap order)
-          final NamedTopologyBuilder topology1Builder2 = streams.newNamedTopologyBuilder(TOPOLOGY_1);
-          final KStream<String, Long> inputStream2 = topology1Builder2.stream(DELAYED_INPUT_STREAM_1);
-          inputStream2.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-          inputStream2.groupByKey().count().toStream().to(COUNT_OUTPUT);
+            // Prepare a new named topology with the same name but an incompatible topology (stateful subtopologies swap order)
+            final NamedTopologyBuilder topology1Builder2 = streams.newNamedTopologyBuilder(TOPOLOGY_1);
+            final KStream<String, Long> inputStream2 = topology1Builder2.stream(DELAYED_INPUT_STREAM_1);
+            inputStream2.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+            inputStream2.groupByKey().count().toStream().to(COUNT_OUTPUT);
 
-          produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
-          streams.addNamedTopology(topology1Builder2.build()).all().get();
+            produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
+            streams.addNamedTopology(topology1Builder2.build()).all().get();
 
-          assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
-          assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-      } finally {
-          CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
-          CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1);
-      }
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        } finally {
+            CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
+            CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1);
+        }
     }
     
     @Test
