@@ -800,7 +800,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
           } else {
             "n/a"
           }
-          println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: $value, adminConf: $adminValue")
+          println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: ${ server.config.get(propName) } serverOriginalsConf: $value, adminConf: $adminValue")
           assertEquals(newSize.toString, value)
         }
       }
