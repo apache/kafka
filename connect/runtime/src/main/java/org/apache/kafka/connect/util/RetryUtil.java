@@ -34,7 +34,7 @@ public class RetryUtil {
      * then the last exception is wrapped with a {@link org.apache.kafka.connect.errors.ConnectException} and thrown.
      *
      * <p>If {@code maxRetries} is set to 0, the task will be
-     * executed exactly once.  If {@code maxRetries} is set to ,{@code n} the callable will be executed at
+     * executed exactly once.  If {@code maxRetries} is set to {@code n}, the callable will be executed at
      * most {@code n + 1} times.
      *
      * <p>If {@code retryBackoffMs} is set to 0, no wait will happen in between the retries.
