@@ -25,13 +25,13 @@ import org.apache.kafka.connect.runtime.isolation.PluginType;
 
 import java.util.Objects;
 
-public class ConnectorPluginInfo {
+public class PluginInfo {
     private final String className;
     private final PluginType type;
     private final String version;
 
     @JsonCreator
-    public ConnectorPluginInfo(
+    public PluginInfo(
         @JsonProperty("class") String className,
         @JsonProperty("type") PluginType type,
         @JsonProperty("version") String version
@@ -41,7 +41,7 @@ public class ConnectorPluginInfo {
         this.version = version;
     }
 
-    public ConnectorPluginInfo(PluginDesc<?> plugin) {
+    public PluginInfo(PluginDesc<?> plugin) {
         this(plugin.className(), plugin.type(), plugin.version());
     }
 
@@ -69,7 +69,7 @@ public class ConnectorPluginInfo {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        ConnectorPluginInfo that = (ConnectorPluginInfo) o;
+        PluginInfo that = (PluginInfo) o;
         return Objects.equals(className, that.className) &&
                Objects.equals(type, that.type) &&
                Objects.equals(version, that.version);
@@ -82,7 +82,7 @@ public class ConnectorPluginInfo {
 
     @Override
     public String toString() {
-        return "ConnectorPluginInfo{" + "className='" + className + '\'' +
+        return "PluginInfo{" + "className='" + className + '\'' +
                 ", type=" + type.toString() +
                 ", version='" + version + '\'' +
                 '}';

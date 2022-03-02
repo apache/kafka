@@ -23,7 +23,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
+import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -63,7 +63,7 @@ public class ConnectorPluginsResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
-    private final List<ConnectorPluginInfo> connectorPlugins;
+    private final List<PluginInfo> connectorPlugins;
 
     static final List<Class<? extends SinkConnector>> SINK_CONNECTOR_EXCLUDES = Arrays.asList(
             VerifiableSinkConnector.class,
@@ -97,7 +97,7 @@ public class ConnectorPluginsResource {
     private <T> void addConnectorPlugins(Collection<PluginDesc<T>> plugins, Collection<Class<? extends T>> excludes) {
         plugins.stream()
                 .filter(p -> !excludes.contains(p.pluginClass()))
-                .map(ConnectorPluginInfo::new)
+                .map(PluginInfo::new)
                 .forEach(connectorPlugins::add);
     }
 
@@ -133,7 +133,7 @@ public class ConnectorPluginsResource {
 
     @GET
     @Path("/")
-    public List<ConnectorPluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
+    public List<PluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
         synchronized (this) {
             if (connectorsOnly) {
                 return Collections.unmodifiableList(connectorPlugins.stream()

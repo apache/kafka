@@ -42,7 +42,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
+import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.StringConverter;
@@ -341,20 +341,20 @@ public class ConnectorPluginsResourceTest {
         Set<Class<?>> excludes = Stream.of(ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES, ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES)
                 .flatMap(Collection::stream)
                 .collect(Collectors.toSet());
-        Set<ConnectorPluginInfo> expectedConnectorPlugins = Stream.of(SINK_CONNECTOR_PLUGINS, SOURCE_CONNECTOR_PLUGINS)
+        Set<PluginInfo> expectedConnectorPlugins = Stream.of(SINK_CONNECTOR_PLUGINS, SOURCE_CONNECTOR_PLUGINS)
                 .flatMap(Collection::stream)
                 .filter(p -> !excludes.contains(p.pluginClass()))
                 .map(ConnectorPluginsResourceTest::newInfo)
                 .collect(Collectors.toSet());
-        Set<ConnectorPluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(true));
+        Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(true));
         assertEquals(expectedConnectorPlugins, actualConnectorPlugins);
         verify(herder, atLeastOnce()).plugins();
     }
 
     @Test
     public void testConnectorPluginsIncludesClassTypeAndVersionInformation() throws Exception {
-        ConnectorPluginInfo sinkInfo = newInfo(SampleSinkConnector.class);
-        ConnectorPluginInfo sourceInfo = newInfo(SampleSourceConnector.class);
+        PluginInfo sinkInfo = newInfo(SampleSinkConnector.class);
+        PluginInfo sourceInfo = newInfo(SampleSourceConnector.class);
         assertEquals(PluginType.SINK.toString(), sinkInfo.type());
         assertEquals(PluginType.SOURCE.toString(), sourceInfo.type());
         assertEquals(SampleSinkConnector.VERSION, sinkInfo.version());
@@ -391,7 +391,7 @@ public class ConnectorPluginsResourceTest {
                         ConnectorPluginsResource.TRANSFORM_EXCLUDES
                 ).flatMap(Collection::stream)
                 .collect(Collectors.toSet());
-        Set<ConnectorPluginInfo> expectedConnectorPlugins = Stream.of(
+        Set<PluginInfo> expectedConnectorPlugins = Stream.of(
                         SINK_CONNECTOR_PLUGINS,
                         SOURCE_CONNECTOR_PLUGINS,
                         CONVERTER_PLUGINS,
@@ -402,7 +402,7 @@ public class ConnectorPluginsResourceTest {
                 .filter(p -> !excludes.contains(p.pluginClass()))
                 .map(ConnectorPluginsResourceTest::newInfo)
                 .collect(Collectors.toSet());
-        Set<ConnectorPluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(false));
+        Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(false));
         assertEquals(expectedConnectorPlugins, actualConnectorPlugins);
         verify(herder, atLeastOnce()).plugins();
     }
@@ -425,13 +425,13 @@ public class ConnectorPluginsResourceTest {
         }
     }
 
-    protected static ConnectorPluginInfo newInfo(PluginDesc<?> pluginDesc) {
-        return new ConnectorPluginInfo(new MockConnectorPluginDesc<>(pluginDesc.pluginClass(), pluginDesc.version()));
+    protected static PluginInfo newInfo(PluginDesc<?> pluginDesc) {
+        return new PluginInfo(new MockConnectorPluginDesc<>(pluginDesc.pluginClass(), pluginDesc.version()));
     }
 
-    protected static ConnectorPluginInfo newInfo(Class<?> klass)
+    protected static PluginInfo newInfo(Class<?> klass)
             throws Exception {
-        return new ConnectorPluginInfo(new MockConnectorPluginDesc<>(klass));
+        return new PluginInfo(new MockConnectorPluginDesc<>(klass));
     }
 
     public static class MockPluginClassLoader extends PluginClassLoader {

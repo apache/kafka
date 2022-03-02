@@ -263,7 +263,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <!-- Suppress warning about missing reflexive and symmetric properties of equal.
              This equals method is used as a value filter for Jackson. -->
-        <Class name="org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo$NoVersionFilter"/>
+        <Class name="org.apache.kafka.connect.runtime.rest.entities.PluginInfo$NoVersionFilter"/>
         <Method name="equals"/>
         <Bug pattern="EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS"/>
     </Match>

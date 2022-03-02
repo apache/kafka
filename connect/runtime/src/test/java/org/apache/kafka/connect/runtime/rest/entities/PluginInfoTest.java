@@ -22,11 +22,11 @@ import org.junit.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ConnectorPluginInfoTest {
+public class PluginInfoTest {
 
     @Test
     public void testNoVersionFilter() {
-        ConnectorPluginInfo.NoVersionFilter filter = new ConnectorPluginInfo.NoVersionFilter();
+        PluginInfo.NoVersionFilter filter = new PluginInfo.NoVersionFilter();
         assertFalse(filter.equals("1.0"));
         assertFalse(filter.equals(new Object()));
         assertFalse(filter.equals(null));
