@@ -124,9 +124,6 @@ public class TopicAdmin implements AutoCloseable {
     public static final int NO_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
 
-    private static final String DEFAULT_ADMIN_CLIENT_RETRIES = "10";
-    private static final String DEFAULT_ADMIN_CLIENT_BACKOFF_MS = "100";
-
     private static final String CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_CONFIG;
     private static final String CLEANUP_POLICY_COMPACT = TopicConfig.CLEANUP_POLICY_COMPACT;
     private static final String MIN_INSYNC_REPLICAS_CONFIG = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
@@ -711,6 +708,7 @@ public class TopicAdmin implements AutoCloseable {
         try {
             return RetryUtil.retryUntilTimeout(
                     () -> endOffsets(partitions),
+                    () -> "list offsets",
                     timeoutDuration,
                     retryBackoffMs);
         } catch (Exception e) {

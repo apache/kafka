@@ -30,11 +30,13 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.time.Duration;
 import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 
 @RunWith(PowerMockRunner.class)
 public class RetryUtilTest {
 
     private Callable<String> mockCallable;
+    private final Supplier<String> testMsg = () -> "Test";
 
     @SuppressWarnings("unchecked")
     @Before
@@ -45,7 +47,7 @@ public class RetryUtilTest {
     @Test
     public void testSuccess() throws Exception {
         Mockito.when(mockCallable.call()).thenReturn("success");
-        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(100), 1));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(100), 1));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
 
@@ -53,7 +55,7 @@ public class RetryUtilTest {
     public void testExhaustingRetries() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException());
         ConnectException e = assertThrows(ConnectException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(50), 1));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 1));
         Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
     }
 
@@ -65,7 +67,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException())
                 .thenReturn("success");
 
-        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(100), 1));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(100), 1));
         Mockito.verify(mockCallable, Mockito.times(4)).call();
     }
 
@@ -79,7 +81,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException("timeout"))
                 .thenThrow(new NullPointerException("Non retriable"));
         NullPointerException e = assertThrows(NullPointerException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(100), 1));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(100), 0));
         assertEquals("Non retriable", e.getMessage());
         Mockito.verify(mockCallable, Mockito.times(6)).call();
     }
@@ -88,7 +90,7 @@ public class RetryUtilTest {
     public void noRetryAndSucceed() throws Exception {
         Mockito.when(mockCallable.call()).thenReturn("success");
 
-        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(0), 100));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(0), 100));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
 
@@ -97,7 +99,7 @@ public class RetryUtilTest {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
         TimeoutException e = assertThrows(TimeoutException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(0), 100));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(0), 100));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
         assertEquals("timeout exception", e.getMessage());
     }
@@ -110,7 +112,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException())
                 .thenReturn("success");
 
-        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(50), 0));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 0));
         Mockito.verify(mockCallable, Mockito.times(4)).call();
     }
 
@@ -119,7 +121,7 @@ public class RetryUtilTest {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
         ConnectException e = assertThrows(ConnectException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(80), 0));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(80), 0));
         Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
         assertTrue(e.getMessage().contains("Reason: timeout exception"));
     }
@@ -129,7 +131,32 @@ public class RetryUtilTest {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
         TimeoutException e = assertThrows(TimeoutException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, Duration.ofMillis(50), 100));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 100));
         Mockito.verify(mockCallable, Mockito.atMostOnce()).call();
+    }
+
+    @Test
+    public void testNullDurationShouldFail() throws Exception {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, null, 0));
+        assertEquals("timeoutDuration cannot be null", e.getMessage());
+    }
+
+    @Test
+    public void testSupplier() throws Exception {
+        Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
+
+        ConnectException e = assertThrows(ConnectException.class,
+                () -> RetryUtil.retryUntilTimeout(mockCallable, null, Duration.ofMillis(100), 10));
+        assertTrue(e.getMessage().startsWith("Fail to execute callable"));
+
+        e = assertThrows(ConnectException.class,
+                () -> RetryUtil.retryUntilTimeout(mockCallable, () -> null, Duration.ofMillis(100), 10));
+        assertTrue(e.getMessage().startsWith("Fail to execute callable"));
+
+        e = assertThrows(ConnectException.class,
+                () -> RetryUtil.retryUntilTimeout(mockCallable, () -> "bad service call", Duration.ofMillis(500), 10));
+        assertTrue(e.getMessage().startsWith("Fail to execute bad service call"));
+        Mockito.verify(mockCallable, Mockito.atLeast(3)).call();
     }
 }

@@ -24,7 +24,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 
 public class RetryUtil {
     private static final Logger log = LoggerFactory.getLogger(RetryUtil.class);
@@ -41,17 +43,27 @@ public class RetryUtil {
      * <p>If {@code retryBackoffMs} is set to 0, no wait will happen in between the retries.
      *
      * @param callable          the function to execute.
+     * @param description       supplier lambda that supplies custom message for logging purpose;if {@code description}
+     *                          is null, {@code callable} will be used as the default message
      * @param timeoutDuration   timeout duration; may not be null
      * @param retryBackoffMs    the number of milliseconds to delay upon receiving a
      *                          {@link org.apache.kafka.connect.errors.RetriableException} before retrying again;
      *                          must be 0 or more
      * @throws ConnectException If the task exhausted all the retries.
      */
+    public static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs) throws Exception {
+        if (timeoutDuration == null)
+            throw new IllegalArgumentException("timeoutDuration cannot be null");
 
-    public static <T> T retryUntilTimeout(Callable<T> callable, Duration timeoutDuration, long retryBackoffMs) throws Exception {
+        String descriptionStr = Optional.ofNullable(description)
+                .map(Supplier::get)
+                .orElse("callable");
+
         long timeoutMs = timeoutDuration.toMillis();
+
         if (retryBackoffMs >= timeoutMs) {
-            log.warn("retryBackoffMs, {}, needs to be less than timeoutMs, {}.  Callable will only execute once.", retryBackoffMs, timeoutMs);
+            log.warn("Call to {} will only execute once, since retryBackoffMs={} is larger than total timeoutMs={}",
+                    descriptionStr, retryBackoffMs, timeoutMs);
         }
 
         if (retryBackoffMs >= timeoutMs ||
@@ -68,8 +80,8 @@ public class RetryUtil {
             try {
                 return callable.call();
             } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
-                log.warn("RetriableException caught on attempt {}, retrying automatically. " +
-                        "Reason: {}", attempt, e.getMessage(), e);
+                log.warn("Attempt {} to execute {} resulted in RetriableException; retrying automatically. " +
+                        "Reason: {}", attempt, descriptionStr, e.getMessage(), e);
                 lastError = e;
             } catch (WakeupException e) {
                 lastError = e;
@@ -79,10 +91,10 @@ public class RetryUtil {
             // won't sleep if retryBackoffMs equals to 0
             long millisRemaining = Math.max(0, end - System.currentTimeMillis());
             if (millisRemaining > 0) {
-                Utils.sleep(millisRemaining)
+                Utils.sleep(retryBackoffMs);
             }
         }
 
-        throw new ConnectException("Fail to retry the task after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
+        throw new ConnectException("Fail to execute " + descriptionStr + " after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
     }
 }
