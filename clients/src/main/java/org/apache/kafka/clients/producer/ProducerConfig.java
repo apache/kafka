@@ -228,11 +228,10 @@ public class ProducerConfig extends AbstractConfig {
             + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
             + " retry behavior."
             + "<p>"
-            + "Allowing retries and disabling <code>enable.idempotence</code> but without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
+            + "Allowing retries while setting <code>enable.idempotence</code> to <code>false</code> and <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
             + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
             + " succeeds, then the records in the second batch may appear first."
-            + "<p>"
-            + "Enabling idempotence requires this config value to be greater than 0."
+            + " Note that enabling idempotence requires this config value to be greater than 0."
             + " If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled.";
 
     /** <code>key.serializer</code> */
