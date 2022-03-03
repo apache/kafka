@@ -139,6 +139,9 @@ public class RestClient {
                         Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
                         "Unexpected status code when handling forwarded request: " + responseCode);
             }
+        } catch (ConnectRestException e) {
+            log.error("Connect Rest error forwarding REST request: ", e);
+            throw e;
         } catch (IOException | InterruptedException | TimeoutException | ExecutionException e) {
             log.error("IO error forwarding REST request: ", e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
