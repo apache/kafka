@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
 import scala.annotation.nowarn
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 /**
@@ -197,11 +198,37 @@ object DynamicBrokerConfig {
 
 class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
 
+  class Foo extends ArrayBuffer[Reconfigurable] {
+    override def clear(): Unit = {
+      println("Reconfigurables: cleared")
+      super.clear()
+    }
+
+    override def addOne(elem: Reconfigurable): this.type = {
+      elem match {
+        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Adding data plane acceptor foe ${x.listenerName()}")
+        case _ =>
+      }
+
+      super.addOne(elem)
+    }
+
+    override def subtractOne(elem: Reconfigurable): Foo.this.type = {
+      elem match {
+        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Removing data plane acceptor foe ${x.listenerName()}")
+        case _ =>
+      }
+      super.subtractOne(elem)
+    }
+
+
+  }
+
   private[server] val staticBrokerConfigs = ConfigDef.convertToStringMapWithPasswordValues(kafkaConfig.originalsFromThisConfig).asScala
   private[server] val staticDefaultConfigs = ConfigDef.convertToStringMapWithPasswordValues(KafkaConfig.defaultValues.asJava).asScala
   private val dynamicBrokerConfigs = mutable.Map[String, String]()
   private val dynamicDefaultConfigs = mutable.Map[String, String]()
-  private val reconfigurables = mutable.Buffer[Reconfigurable]()
+  private val reconfigurables: mutable.Buffer[Reconfigurable] = new Foo()
   private val brokerReconfigurables = mutable.Buffer[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
   private var currentConfig: KafkaConfig = null
@@ -592,6 +619,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                     allNewConfigs: util.Map[String, _],
                                     newCustomConfigs: util.Map[String, Object],
                                     validateOnly: Boolean): Unit = {
+
+    reconfigurable match {
+      case reconfigurable1: ListenerReconfigurable =>
+        println(s"Processing listener reconfigurable for ${reconfigurable1.listenerName()}")
+      case _ =>
+    }
     val newConfigs = new util.HashMap[String, Object]
     allNewConfigs.forEach { (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
     newConfigs.putAll(newCustomConfigs)

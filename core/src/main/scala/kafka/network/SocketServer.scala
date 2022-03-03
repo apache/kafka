@@ -268,7 +268,7 @@ class SocketServer(val config: KafkaConfig,
       config.addReconfigurable(dataPlaneAcceptor)
       dataPlaneAcceptor.configure(parsedConfigs)
       dataPlaneAcceptors.put(endpoint, dataPlaneAcceptor)
-      info(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
+      println(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
     }
   }
 
@@ -556,20 +556,25 @@ class DataPlaneAcceptor(socketServer: SocketServer,
    *                         the AlterConfigs response.
    */
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    configs.forEach { (k, v) =>
-      if (reconfigurableConfigs.contains(k)) {
-        val newValue = v.asInstanceOf[Int]
-        val oldValue = processors.length
-        if (newValue != oldValue) {
-          val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
-          if (newValue <= 0)
-            throw new ConfigException(s"$errorMsg, value should be at least 1")
-          if (newValue < oldValue / 2)
-            throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
-          if (newValue > oldValue * 2)
-            throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
+    try {
+      configs.forEach { (k, v) =>
+        if (reconfigurableConfigs.contains(k)) {
+          val newValue = v.asInstanceOf[Int]
+          val oldValue = processors.length
+          if (newValue != oldValue) {
+            val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
+            if (newValue <= 0)
+              throw new ConfigException(s"$errorMsg, value should be at least 1")
+            if (newValue < oldValue / 2)
+              throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
+            if (newValue > oldValue * 2)
+              throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
+          }
         }
       }
+    }
+    catch {
+      case e: ConfigException => println(s"DataAcceptor invalidConf: $e"); throw e
     }
   }
 
@@ -583,16 +588,16 @@ class DataPlaneAcceptor(socketServer: SocketServer,
   override def reconfigure(configs: util.Map[String, _]): Unit = {
     val brokerId = configs.get(KafkaConfig.BrokerIdProp).asInstanceOf[Int]
     val newNumNetworkThreads = configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int]
-    println(s"SocketServer on $brokerId - newThreads: $newNumNetworkThreads, currentProcessors: ${processors.length}")
+    println(s"DataAcceptor $listenerName on $brokerId - newThreads: $newNumNetworkThreads, currentProcessors: ${processors.length}")
     if (newNumNetworkThreads != processors.length) {
-      println(s"SocketServer on $brokerId - Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
+      println(s"DataAcceptor $listenerName on $brokerId - Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
       if (newNumNetworkThreads > processors.length) {
         addProcessors(newNumNetworkThreads - processors.length, brokerId)
       } else if (newNumNetworkThreads < processors.length) {
         removeProcessors(processors.length - newNumNetworkThreads)
       }
     }
-    println(s"SocketServer on $brokerId reconfigure complete")
+    println(s"DataAcceptor $listenerName on $brokerId reconfigure complete")
   }
 
   /**
@@ -891,12 +896,12 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     val listenerName = endPoint.listenerName
     val securityProtocol = endPoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
-    println(s"SocketServer on $brokerId - addProcessors adding $toCreate")
+    println(s"DataAcceptor $listenerName on $brokerId - addProcessors adding $toCreate")
     for (_ <- 0 until toCreate) {
       val processor = newProcessor(socketServer.nextProcessorId(), listenerName, securityProtocol)
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
-      println(s"SocketServer on $brokerId - addProcessors added processor ${processor.id} for $listenerName")
+      println(s"DataAcceptor $listenerName on $brokerId - addProcessors added processor ${processor.id}")
     }
 
     processors ++= listenerProcessors
