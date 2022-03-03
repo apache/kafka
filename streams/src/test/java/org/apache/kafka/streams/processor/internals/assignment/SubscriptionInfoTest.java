@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Collections;
 import java.util.Map;
 
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -31,6 +30,7 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_1_0;
@@ -88,7 +88,6 @@ public class SubscriptionInfoTest {
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
     private static final byte IGNORED_UNIQUE_FIELD = (byte) 0;
     private static final int IGNORED_ERROR_CODE = 0;
-    private static final Map<String, String> IGNORED_CLIENT_TAGS = Collections.emptyMap();
 
     @Test
     public void shouldThrowForUnknownVersion1() {
@@ -100,7 +99,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            IGNORED_CLIENT_TAGS
+            EMPTY_CLIENT_TAGS
         ));
     }
 
@@ -114,7 +113,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            IGNORED_CLIENT_TAGS
+            EMPTY_CLIENT_TAGS
         ));
     }
 
@@ -128,7 +127,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            IGNORED_CLIENT_TAGS
+            EMPTY_CLIENT_TAGS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(1, decoded.version());
@@ -149,7 +148,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            IGNORED_CLIENT_TAGS
+            EMPTY_CLIENT_TAGS
         );
         final ByteBuffer buffer = info.encode();
 
@@ -193,7 +192,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            IGNORED_CLIENT_TAGS
+            EMPTY_CLIENT_TAGS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(2, decoded.version());
@@ -214,7 +213,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            IGNORED_CLIENT_TAGS
+            EMPTY_CLIENT_TAGS
         );
         final ByteBuffer buffer = info.encode();
 
@@ -259,7 +258,7 @@ public class SubscriptionInfoTest {
                 TASK_OFFSET_SUMS,
                 IGNORED_UNIQUE_FIELD,
                 IGNORED_ERROR_CODE,
-                IGNORED_CLIENT_TAGS
+                EMPTY_CLIENT_TAGS
             );
             final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
             assertEquals(version, decoded.version());
@@ -282,7 +281,7 @@ public class SubscriptionInfoTest {
                 TASK_OFFSET_SUMS,
                 IGNORED_UNIQUE_FIELD,
                 IGNORED_ERROR_CODE,
-                IGNORED_CLIENT_TAGS
+                EMPTY_CLIENT_TAGS
             );
             final ByteBuffer buffer = info.encode();
 
@@ -323,7 +322,7 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion5() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
@@ -340,23 +339,23 @@ public class SubscriptionInfoTest {
         final int latestSupportedVersion = LATEST_SUPPORTED_VERSION - 1;
 
         final SubscriptionInfo info =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         final SubscriptionInfo expectedInfo =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion7() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldConvertTaskOffsetSumMapToTaskSets() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info.prevTasks(), is(ACTIVE_TASKS));
         assertThat(info.standbyTasks(), is(STANDBY_TASKS));
     }
@@ -370,7 +369,7 @@ public class SubscriptionInfoTest {
                                  TASK_OFFSET_SUMS,
                                  IGNORED_UNIQUE_FIELD,
                                  IGNORED_ERROR_CODE,
-                                 IGNORED_CLIENT_TAGS).encode());
+                                 EMPTY_CLIENT_TAGS).encode());
         assertThat(info.taskOffsetSums(), is(TASK_OFFSET_SUMS));
     }
 
@@ -400,14 +399,14 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion8() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldNotErrorAccessingFutureVars() {
         final SubscriptionInfo info =
-                new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+                new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         try {
             info.errorCode();
         } catch (final Exception e) {
@@ -418,21 +417,21 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion9() {
         final SubscriptionInfo info =
-                new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+                new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion10() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion10WithNamedTopologies() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
@@ -440,7 +439,7 @@ public class SubscriptionInfoTest {
     public void shouldThrowIfAttemptingToUseNamedTopologiesWithOlderVersion() {
         assertThrows(
             TaskAssignmentException.class,
-            () -> new SubscriptionInfo(MIN_NAMED_TOPOLOGY_VERSION - 1, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS)
+            () -> new SubscriptionInfo(MIN_NAMED_TOPOLOGY_VERSION - 1, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS)
         );
     }
 
@@ -454,7 +453,7 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldReturnEncodeDecodeEmptyClientTagsOnVersion11() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(11, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, IGNORED_CLIENT_TAGS);
+            new SubscriptionInfo(11, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info.clientTags(), is(anEmptyMap()));
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
