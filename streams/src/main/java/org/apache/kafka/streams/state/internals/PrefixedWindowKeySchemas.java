@@ -16,14 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -34,8 +29,8 @@ import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindo
 public class PrefixedWindowKeySchemas {
 
     private static final int PREFIX_SIZE = 1;
-    private static final byte TIME_FIRST_PREFIX = 1;
-    private static final byte KEY_FIRST_PREFIX = 2;
+    private static final byte TIME_FIRST_PREFIX = 0;
+    private static final byte KEY_FIRST_PREFIX = 1;
     private static final int SEQNUM_SIZE = 4;
     private static final int SUFFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
@@ -156,15 +151,15 @@ public class PrefixedWindowKeySchemas {
 
         // for store serdes
         public static Bytes toTimeOrderedStoreKeyBinary(final Bytes key,
-            final long timestamp,
-            final int seqnum) {
+                                                        final long timestamp,
+                                                        final int seqnum) {
             final byte[] serializedKey = key.get();
             return toTimeOrderedStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
         static Bytes toTimeOrderedStoreKeyBinary(final byte[] serializedKey,
-            final long timestamp,
-            final int seqnum) {
+                                                 final long timestamp,
+                                                 final int seqnum) {
             final ByteBuffer buf = ByteBuffer.allocate(
                 PREFIX_SIZE + TIMESTAMP_SIZE + serializedKey.length + SEQNUM_SIZE);
             buf.put(TIME_FIRST_PREFIX);
@@ -176,54 +171,62 @@ public class PrefixedWindowKeySchemas {
         }
 
         public static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
-                                                    final long windowSize) {
+                                                        final long windowSize) {
             final Bytes key = Bytes.wrap(extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
         }
 
         static Window extractStoreWindow(final byte[] binaryKey,
-                                     final long windowSize) {
+                                         final long windowSize) {
             final long start = WindowKeySchema.extractStoreTimestamp(binaryKey);
             return timeWindowForSize(start, windowSize);
         }
     }
 
-    public static class KeyFirstWindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+    public static class KeyFirstWindowKeySchema extends WindowKeySchema {
+
+        private Bytes wrapPrefix(final Bytes noPrefixKey) {
+             final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE + noPrefixKey.get().length)
+                .put(KEY_FIRST_PREFIX)
+                .put(noPrefixKey.get())
+                .array();
+            return Bytes.wrap(ret);
+        }
+
         @Override
         public Bytes upperRange(final Bytes key, final long to) {
-            if (key == null) {
+            final Bytes noPrefixBytes = super.upperRange(key, to);
+            if (noPrefixBytes == null) {
                 return null;
             }
-            final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
-                .putLong(to)
-                .putInt(Integer.MAX_VALUE)
-                .array();
-
-            return OrderedBytes.upperRange(key, maxSuffix);
+            return wrapPrefix(noPrefixBytes);
         }
 
         @Override
         public Bytes lowerRange(final Bytes key, final long from) {
-            if (key == null) {
+            final Bytes noPrefixBytes = super.lowerRange(key, from);
+            if (noPrefixBytes == null) {
                 return null;
             }
-            return OrderedBytes.lowerRange(key, MIN_SUFFIX);
+            return wrapPrefix(noPrefixBytes);
         }
 
         @Override
         public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-            return WindowKeySchema.toStoreKeyBinary(key, Math.max(0, from), 0);
+            final Bytes noPrefixBytes = WindowKeySchema.toStoreKeyBinary(key, Math.max(0, from), 0);
+            return wrapPrefix(noPrefixBytes);
         }
 
         @Override
         public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-            return WindowKeySchema.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
+            final Bytes noPrefixBytes = WindowKeySchema.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
+            return wrapPrefix(noPrefixBytes);
         }
 
         @Override
         public long segmentTimestamp(final Bytes key) {
-            return WindowKeySchema.extractStoreTimestamp(key.get());
+            return KeyFirstWindowKeySchema.extractStoreTimestamp(key.get());
         }
 
         @Override
@@ -269,6 +272,7 @@ public class PrefixedWindowKeySchemas {
             return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
+        // package private for testing
         static Bytes toStoreKeyBinary(final byte[] serializedKey,
                                       final long timestamp,
                                       final int seqnum) {
@@ -304,7 +308,7 @@ public class PrefixedWindowKeySchemas {
 
         static Window extractStoreWindow(final byte[] binaryKey,
                                      final long windowSize) {
-            final long start = WindowKeySchema.extractStoreTimestamp(binaryKey);
+            final long start = KeyFirstWindowKeySchema.extractStoreTimestamp(binaryKey);
             return timeWindowForSize(start, windowSize);
         }
     }
