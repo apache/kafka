@@ -20,7 +20,7 @@
   // Version 1 adds PatternType.
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   // Version 2 enables flexible versions.
-  // Version 3 adds the user resource type.
+  // Version 3 adds user resource type.
   "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
