@@ -35,7 +35,7 @@ public abstract class SourceConnector extends Connector {
      * Signals whether the connector supports exactly-once delivery guarantees with a proposed configuration.
      * Connector authors can assume that worker-level exactly-once support is enabled when this method is invoked.
      *
-     * <p>For backwards compatibility, the default implementation will return {@code null}, but connector developers are
+     * <p>For backwards compatibility, the default implementation will return {@code null}, but connector authors are
      * strongly encouraged to override this method to return a non-null value such as
      * {@link ExactlyOnceSupport#SUPPORTED SUPPORTED} or {@link ExactlyOnceSupport#UNSUPPORTED UNSUPPORTED}.
      *
