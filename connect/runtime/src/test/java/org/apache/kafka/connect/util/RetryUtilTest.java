@@ -51,7 +51,8 @@ public class RetryUtilTest {
         Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
 
-    @Test(timeout = 150)
+    // timeout the test after 1000ms if unable to complete within a reasonable time frame
+    @Test(timeout = 1000)
     public void testExhaustingRetries() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException());
         ConnectException e = assertThrows(ConnectException.class,
