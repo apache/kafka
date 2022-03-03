@@ -706,8 +706,16 @@ public class TopicAdmin implements AutoCloseable {
     /**
      * Fetch the most recent offset for each of the supplied {@link TopicPartition} objects, and performs retry when
      * {@link org.apache.kafka.connect.errors.RetriableException} is thrown.
-     * 
-     * @see TopicAdmin#endOffsets(Set) 
+     *
+     * @param partitions        the topic partitions
+     * @param timeoutDuration   timeout duration; may not be null
+     * @param retryBackoffMs    the number of milliseconds to delay upon receiving a
+     *                          {@link org.apache.kafka.connect.errors.RetriableException} before retrying again;
+     *                          must be 0 or more
+     * @return                  the map of offset for each topic partition, or an empty map if the supplied partitions
+     *                          are null or empty
+     * @throws ConnectException if {@code timeoutDuration} is exhausted
+     * @see TopicAdmin#endOffsets(Set)
      */
     public Map<TopicPartition, Long> retryEndOffsets(Set<TopicPartition> partitions, Duration timeoutDuration, long retryBackoffMs) {
 
