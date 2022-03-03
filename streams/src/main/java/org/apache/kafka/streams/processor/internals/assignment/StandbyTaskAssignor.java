@@ -16,23 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
-
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.assertThrows;
-
-public class AssignorConfigurationTest {
-
-    @Test
-    public void configsShouldRejectZeroWarmups() {
-        final ConfigException exception = assertThrows(
-            ConfigException.class,
-            () -> new AssignorConfiguration.AssignmentConfigs(1L, 0, 1, 1L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
-        );
-
-        assertThat(exception.getMessage(), containsString("Invalid value 0 for configuration max.warmup.replicas"));
+interface StandbyTaskAssignor extends TaskAssignor {
+    default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
+        return true;
     }
 }

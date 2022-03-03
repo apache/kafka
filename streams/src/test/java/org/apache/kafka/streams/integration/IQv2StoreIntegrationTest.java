@@ -137,8 +137,6 @@ public class IQv2StoreIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private static final Position POSITION_0 =
         Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 1L)))));
-    private static final Position POSITION_BOTH =
-        Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 1L), mkEntry(1, 1L)))));
 
     public static class UnknownQuery implements Query<Void> { }
 
@@ -1128,8 +1126,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
-            assertThat(result.getPosition(), is(POSITION_BOTH));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
@@ -1183,8 +1181,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
-            assertThat(result.getPosition(), is(POSITION_BOTH));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
@@ -1233,8 +1231,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
-            assertThat(result.getPosition(), is(POSITION_BOTH));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
@@ -1280,8 +1278,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
-            assertThat(result.getPosition(), is(POSITION_BOTH));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 

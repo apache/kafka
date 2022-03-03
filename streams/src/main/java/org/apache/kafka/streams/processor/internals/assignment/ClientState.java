@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Map;
@@ -46,6 +47,7 @@ public class ClientState {
     private static final Logger LOG = LoggerFactory.getLogger(ClientState.class);
     public static final Comparator<TopicPartition> TOPIC_PARTITION_COMPARATOR = comparing(TopicPartition::topic).thenComparing(TopicPartition::partition);
 
+    private final Map<String, String> clientTags;
     private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
     private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
     private final Map<TopicPartition, String> ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
@@ -64,24 +66,30 @@ public class ClientState {
     }
 
     ClientState(final int capacity) {
+        this(capacity, Collections.emptyMap());
+    }
+
+    ClientState(final int capacity, final Map<String, String> clientTags) {
         previousStandbyTasks.taskIds(new TreeSet<>());
         previousActiveTasks.taskIds(new TreeSet<>());
-
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
+        this.clientTags = unmodifiableMap(clientTags);
     }
 
     // For testing only
     public ClientState(final Set<TaskId> previousActiveTasks,
                        final Set<TaskId> previousStandbyTasks,
                        final Map<TaskId, Long> taskLagTotals,
+                       final Map<String, String> clientTags,
                        final int capacity) {
         this.previousStandbyTasks.taskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
         this.previousActiveTasks.taskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
+        this.clientTags = unmodifiableMap(clientTags);
     }
 
     int capacity() {
@@ -264,6 +272,10 @@ public class ClientState {
     // May return null
     public String previousOwnerForPartition(final TopicPartition partition) {
         return ownedPartitions.get(partition);
+    }
+
+    public Map<String, String> clientTags() {
+        return clientTags;
     }
 
     public void addOwnedPartitions(final Collection<TopicPartition> ownedPartitions, final String consumer) {
