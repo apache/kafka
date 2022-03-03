@@ -187,7 +187,7 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
-    public void blockOnlyForRetryBackoffIfNoInflightRequests() {
+    public void blockOnlyForRetryBackoffIfNoInFlightRequests() {
         long retryBackoffMs = 100L;
 
         NetworkClient mockNetworkClient = mock(NetworkClient.class);

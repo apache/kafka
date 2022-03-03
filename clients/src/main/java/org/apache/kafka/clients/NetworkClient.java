@@ -672,7 +672,7 @@ public class NetworkClient implements KafkaClient {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         if (nodes.isEmpty())
             throw new IllegalStateException("There are no nodes in the Kafka cluster");
-        int inflight = Integer.MAX_VALUE;
+        int inFlight = Integer.MAX_VALUE;
 
         Node foundConnecting = null;
         Node foundCanConnect = null;
@@ -683,14 +683,14 @@ public class NetworkClient implements KafkaClient {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
             if (canSendRequest(node.idString(), now)) {
-                int currInflight = this.inFlightRequests.count(node.idString());
-                if (currInflight == 0) {
+                int currInFlight = this.inFlightRequests.count(node.idString());
+                if (currInFlight == 0) {
                     // if we find an established connection with no in-flight requests we can stop right away
                     log.trace("Found least loaded node {} connected with no in-flight requests", node);
                     return node;
-                } else if (currInflight < inflight) {
+                } else if (currInFlight < inFlight) {
                     // otherwise if this is the best we have found so far, record that
-                    inflight = currInflight;
+                    inFlight = currInFlight;
                     foundReady = node;
                 }
             } else if (connectionStates.isPreparingConnection(node.idString())) {
@@ -710,7 +710,7 @@ public class NetworkClient implements KafkaClient {
         // We prefer established connections if possible. Otherwise, we will wait for connections
         // which are being established before connecting to new nodes.
         if (foundReady != null) {
-            log.trace("Found least loaded node {} with {} inflight requests", foundReady, inflight);
+            log.trace("Found least loaded node {} with {} in-flight requests", foundReady, inFlight);
             return foundReady;
         } else if (foundConnecting != null) {
             log.trace("Found least loaded connecting node {}", foundConnecting);
@@ -783,7 +783,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Iterate over all the inflight requests and expire any requests that have exceeded the configured requestTimeout.
+     * Iterate over all the in-flight requests and expire any requests that have exceeded the configured requestTimeout.
      * The connection to the node associated with the request will be terminated and will be treated as a disconnection.
      *
      * @param responses The list of responses to update

@@ -2472,9 +2472,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         /**
          * Get the next expected offset, which might be larger than the last acked
-         * offset if there are inflight batches which have not been acked yet.
+         * offset if there are in-flight batches which have not been acked yet.
          * Note that when fetching from disk, we may not know the last offset of
-         * inflight data until it has been processed by the state machine. In this case,
+         * in-flight data until it has been processed by the state machine. In this case,
          * we delay sending additional data until the state machine has read to the
          * end and the last offset is determined.
          */

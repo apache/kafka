@@ -850,7 +850,7 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
                 "Failed awaiting next CreateTopics request");
 
-            // Advance time past the default api timeout to time out the inflight request
+            // Advance time past the default api timeout to time out the in-flight request
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(result.values().get("topic1").get());
@@ -1083,7 +1083,7 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
                 "Failed awaiting next DeleteTopics request");
 
-            // Advance time past the default api timeout to time out the inflight request
+            // Advance time past the default api timeout to time out the in-flight request
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(result.topicNameValues().get("topic1").get());
@@ -1120,7 +1120,7 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
                     "Failed awaiting next DeleteTopics request");
 
-            // Advance time past the default api timeout to time out the inflight request
+            // Advance time past the default api timeout to time out the in-flight request
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(resultIds.topicIdValues().get(topicId1).get());
@@ -1988,7 +1988,7 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
                 "Failed awaiting next CreatePartitions request");
 
-            // Advance time past the default api timeout to time out the inflight request
+            // Advance time past the default api timeout to time out the in-flight request
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(result.values().get("topic1").get());
@@ -5231,10 +5231,10 @@ public class KafkaAdminClientTest {
 
             // Since api timeout bound is not hit, AdminClient should retry
             TestUtils.waitForCondition(() -> {
-                boolean hasInflightRequests = env.kafkaClient().hasInFlightRequests();
-                if (!hasInflightRequests)
+                boolean hasInFlightRequests = env.kafkaClient().hasInFlightRequests();
+                if (!hasInFlightRequests)
                     time.sleep(retryBackoffMs);
-                return hasInflightRequests;
+                return hasInFlightRequests;
             }, "Timed out waiting for Metadata request to be sent");
             time.sleep(requestTimeoutMs + 1);
 
@@ -5469,7 +5469,7 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
                 "Failed awaiting request");
 
-            // Advance time past the default api timeout to time out the inflight request
+            // Advance time past the default api timeout to time out the in-flight request
             time.sleep(defaultApiTimeout + 1);
 
             TestUtils.assertFutureThrows(result.values().get(tpr1), ApiException.class);
@@ -5670,7 +5670,7 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
                 "Failed awaiting request");
 
-            // Advance time past the default api timeout to time out the inflight request
+            // Advance time past the default api timeout to time out the in-flight request
             time.sleep(defaultApiTimeout + 1);
 
             TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);

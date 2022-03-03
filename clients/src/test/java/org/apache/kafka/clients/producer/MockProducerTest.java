@@ -150,7 +150,7 @@ public class MockProducerTest {
     }
 
     @Test
-    public void shouldThrowOnBeginTransactionsIfTransactionInflight() {
+    public void shouldThrowOnBeginTransactionsIfTransactionInFlight() {
         buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();

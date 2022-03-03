@@ -183,9 +183,9 @@ public class TransactionalMessageCopier {
                 "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
-        // We set a small batch size to ensure that we have multiple inflight requests per transaction.
+        // We set a small batch size to ensure that we have multiple in-flight requests per transaction.
         // If it is left at the default, each transaction will have only one batch per partition, hence not testing
-        // the case with multiple inflights.
+        // the case with multiple in-flights.
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, "512");
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
         props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, parsedArgs.getInt("transactionTimeout"));

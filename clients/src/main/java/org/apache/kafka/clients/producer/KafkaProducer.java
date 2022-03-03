@@ -442,7 +442,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     // visible for testing
     Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-        int maxInflightRequests = producerConfig.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+        int maxInFlightRequests = producerConfig.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time, logContext);
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
@@ -452,7 +452,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         this.metrics, time, "producer", channelBuilder, logContext),
                 metadata,
                 clientId,
-                maxInflightRequests,
+                maxInFlightRequests,
                 producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                 producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                 producerConfig.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
@@ -471,7 +471,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 client,
                 metadata,
                 this.accumulator,
-                maxInflightRequests == 1,
+                maxInFlightRequests == 1,
                 producerConfig.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                 acks,
                 producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),

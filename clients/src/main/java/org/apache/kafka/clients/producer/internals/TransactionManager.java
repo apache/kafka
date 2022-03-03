@@ -178,7 +178,7 @@ public class TransactionManager {
         // we continue to order batches by the sequence numbers even when the responses come back out of order during
         // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
         // (either successfully or through a fatal failure).
-        private SortedSet<ProducerBatch> inflightBatchesBySequence;
+        private SortedSet<ProducerBatch> inFlightBatchesBySequence;
 
         // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
@@ -189,16 +189,16 @@ public class TransactionManager {
             this.nextSequence = 0;
             this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
             this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
-            this.inflightBatchesBySequence = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
+            this.inFlightBatchesBySequence = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
         }
 
         void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
-            TreeSet<ProducerBatch> newInflights = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
-            for (ProducerBatch inflightBatch : inflightBatchesBySequence) {
-                resetSequence.accept(inflightBatch);
-                newInflights.add(inflightBatch);
+            TreeSet<ProducerBatch> newInFlights = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
+            for (ProducerBatch inFlightBatch : inFlightBatchesBySequence) {
+                resetSequence.accept(inFlightBatch);
+                newInFlights.add(inFlightBatch);
             }
-            inflightBatchesBySequence = newInflights;
+            inFlightBatchesBySequence = newInFlights;
         }
     }
 
@@ -208,9 +208,9 @@ public class TransactionManager {
 
     // If a batch bound for a partition expired locally after being sent at least once, the partition has is considered
     // to have an unresolved state. We keep track fo such partitions here, and cannot assign any more sequence numbers
-    // for this partition until the unresolved state gets cleared. This may happen if other inflight batches returned
+    // for this partition until the unresolved state gets cleared. This may happen if other in-flight batches returned
     // successfully (indicating that the expired batch actually made it to the broker). If we don't get any successful
-    // responses for the partition once the inflight request count falls to zero, we reset the producer id and
+    // responses for the partition once the in-flight request count falls to zero, we reset the producer id and
     // consequently clear this data structure as well.
     // The value of the map is the sequence number of the batch following the expired one, computed by adding its
     // record count to its sequence number. This is used to tell if a subsequent batch is the one immediately following
@@ -529,7 +529,7 @@ public class TransactionManager {
     }
 
     synchronized public void maybeUpdateProducerIdAndEpoch(TopicPartition topicPartition) {
-        if (hasStaleProducerIdAndEpoch(topicPartition) && !hasInflightBatches(topicPartition)) {
+        if (hasStaleProducerIdAndEpoch(topicPartition) && !hasInFlightBatches(topicPartition)) {
             // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
             // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
             topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
@@ -633,35 +633,35 @@ public class TransactionManager {
     synchronized void addInFlightBatch(ProducerBatch batch) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
-        topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.add(batch);
+        topicPartitionBookkeeper.getPartition(batch.topicPartition).inFlightBatchesBySequence.add(batch);
     }
 
     /**
-     * Returns the first inflight sequence for a given partition. This is the base sequence of an inflight batch with
+     * Returns the first in-flight sequence for a given partition. This is the base sequence of an in-flight batch with
      * the lowest sequence number.
-     * @return the lowest inflight sequence if the transaction manager is tracking inflight requests for this partition.
-     *         If there are no inflight requests being tracked for this partition, this method will return
+     * @return the lowest in-flight sequence if the transaction manager is tracking in-flight requests for this partition.
+     *         If there are no in-flight requests being tracked for this partition, this method will return
      *         RecordBatch.NO_SEQUENCE.
      */
     synchronized int firstInFlightSequence(TopicPartition topicPartition) {
-        if (!hasInflightBatches(topicPartition))
+        if (!hasInFlightBatches(topicPartition))
             return RecordBatch.NO_SEQUENCE;
 
-        SortedSet<ProducerBatch> inflightBatches = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
-        if (inflightBatches.isEmpty())
+        SortedSet<ProducerBatch> inFlightBatches = topicPartitionBookkeeper.getPartition(topicPartition).inFlightBatchesBySequence;
+        if (inFlightBatches.isEmpty())
             return RecordBatch.NO_SEQUENCE;
         else
-            return inflightBatches.first().baseSequence();
+            return inFlightBatches.first().baseSequence();
     }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
-        SortedSet<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
+        SortedSet<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(topicPartition).inFlightBatchesBySequence;
         return queue.isEmpty() ? null : queue.first();
     }
 
     synchronized void removeInFlightBatch(ProducerBatch batch) {
-        if (hasInflightBatches(batch.topicPartition)) {
-            topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.remove(batch);
+        if (hasInFlightBatches(batch.topicPartition)) {
+            topicPartitionBookkeeper.getPartition(batch.topicPartition).inFlightBatchesBySequence.remove(batch);
         }
     }
 
@@ -747,7 +747,7 @@ public class TransactionManager {
         } else if (exception instanceof UnknownProducerIdException) {
             // If we get an UnknownProducerId for a partition, then the broker has no state for that producer. It will
             // therefore accept a write with sequence number 0. We reset the sequence number for the partition here so
-            // that the producer can continue after aborting the transaction. All inflight-requests to this partition
+            // that the producer can continue after aborting the transaction. All in-flight requests to this partition
             // will also fail with an UnknownProducerId error, so the sequence will remain at 0. Note that if the
             // broker supports bumping the epoch, we will later reset all sequence numbers after calling InitProducerId
             resetSequenceForPartition(batch.topicPartition);
@@ -795,8 +795,9 @@ public class TransactionManager {
         });
     }
 
-    synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
-        return !topicPartitionBookkeeper.getOrCreatePartition(topicPartition).inflightBatchesBySequence.isEmpty();
+    synchronized boolean hasInFlightBatches(TopicPartition topicPartition) {
+        return !topicPartitionBookkeeper.getOrCreatePartition(topicPartition).inFlightBatchesBySequence
+            .isEmpty();
     }
 
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
@@ -824,7 +825,7 @@ public class TransactionManager {
     synchronized void maybeResolveSequences() {
         for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.keySet().iterator(); iter.hasNext(); ) {
             TopicPartition topicPartition = iter.next();
-            if (!hasInflightBatches(topicPartition)) {
+            if (!hasInFlightBatches(topicPartition)) {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be one less than
                 // next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
                 // reset the sequence number if necessary.
@@ -848,7 +849,7 @@ public class TransactionManager {
                         }
                     } else {
                         // For the idempotent producer, bump the epoch
-                        log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
+                        log.info("No in-flight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
                                         "Going to bump epoch and reset sequence numbers.", topicPartition,
                                 lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER), sequenceNumber(topicPartition));
                         requestEpochBumpForPartition(topicPartition);
@@ -1006,15 +1007,15 @@ public class TransactionManager {
             }
 
             if (batch.sequenceHasBeenReset()) {
-                // When the first inflight batch fails due to the truncation case, then the sequences of all the other
-                // in flight batches would have been restarted from the beginning. However, when those responses
+                // When the first in-flight batch fails due to the truncation case, then the sequences of all the other
+                // in-flight batches would have been restarted from the beginning. However, when those responses
                 // come back from the broker, they would also come with an UNKNOWN_PRODUCER_ID error. In this case, we should not
                 // reset the sequence numbers to the beginning.
                 return true;
             } else if (lastAckedOffset(batch.topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER) < response.logStartOffset) {
                 // The head of the log has been removed, probably due to the retention time elapsing. In this case,
                 // we expect to lose the producer state. For the transactional producer, reset the sequences of all
-                // inflight batches to be from the beginning and retry them, so that the transaction does not need to
+                // in-flight batches to be from the beginning and retry them, so that the transaction does not need to
                 // be aborted. For the idempotent producer, bump the epoch to avoid reusing (sequence, epoch) pairs
                 if (isTransactional()) {
                     topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);

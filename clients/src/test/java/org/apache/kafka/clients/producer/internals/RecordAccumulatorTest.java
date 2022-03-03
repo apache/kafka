@@ -887,7 +887,7 @@ public class RecordAccumulatorTest {
         assertTrue(drained.isEmpty());
         //assertTrue(accum.soonToExpireInFlightBatches().isEmpty());
 
-        // advanced clock and send one batch out but it should not be included in soon to expire inflight
+        // advanced clock and send one batch out but it should not be included in soon to expire in-flight
         // batches because batch's expiry is quite far.
         time.sleep(lingerMs + 1);
         readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;

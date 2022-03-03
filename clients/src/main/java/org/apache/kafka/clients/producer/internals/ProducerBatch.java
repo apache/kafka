@@ -201,7 +201,7 @@ public final class ProducerBatch {
     /**
      * Finalize the state of a batch. Final state, once set, is immutable. This function may be called
      * once or twice on a batch. It may be called twice if
-     * 1. An inflight batch expires before a response from the broker is received. The batch's final
+     * 1. An in-flight batch expires before a response from the broker is received. The batch's final
      * state is set to FAILED. But it could succeed on the broker and second time around batch.done() may
      * try to set SUCCEEDED final state.
      * 2. If a transaction abortion happens or if the producer is closed forcefully, the final state is

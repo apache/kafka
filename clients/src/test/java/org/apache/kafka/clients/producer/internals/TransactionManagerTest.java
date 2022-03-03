@@ -597,7 +597,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testBatchFailureAfterProducerReset() {
-        // This tests a scenario where the producerId is reset while pending requests are still inflight.
+        // This tests a scenario where the producerId is reset while pending requests are still in-flight.
         // The partition(s) that triggered the reset will have their sequence number reset, while any others will not
         final short epoch = Short.MAX_VALUE;
 
@@ -2609,7 +2609,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testBumpEpochAfterTimeoutWithoutPendingInflightRequests() {
+    public void testBumpEpochAfterTimeoutWithoutPendingInFlightRequests() {
         initializeTransactionManager(Optional.empty());
         long producerId = 15L;
         short epoch = 5;
@@ -2629,7 +2629,7 @@ public class TransactionManagerTest {
                 Errors.NONE, 500L, time.milliseconds(), 0L));
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
-        // Marking sequence numbers unresolved without inflight requests is basically a no-op.
+        // Marking sequence numbers unresolved without in-flight requests is basically a no-op.
         transactionManager.markSequenceUnresolved(b1);
         transactionManager.maybeResolveSequences();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
@@ -2642,7 +2642,7 @@ public class TransactionManagerTest {
         transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
-        // We only had one inflight batch, so we should be able to clear the unresolved status
+        // We only had one in-flight batch, so we should be able to clear the unresolved status
         // and bump the epoch
         transactionManager.maybeResolveSequences();
         assertFalse(transactionManager.hasUnresolvedSequences());
@@ -2692,7 +2692,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testEpochBumpAfterLastInflightBatchFails() {
+    public void testEpochBumpAfterLastInFlightBatchFails() {
         initializeTransactionManager(Optional.empty());
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
         initializeIdempotentProducerId(producerId, epoch);
@@ -2715,7 +2715,7 @@ public class TransactionManagerTest {
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertTrue(transactionManager.hasUnresolvedSequences());
 
-        // When the last inflight batch fails, we have to bump the epoch
+        // When the last in-flight batch fails, we have to bump the epoch
         transactionManager.handleFailedBatch(b3, new TimeoutException(), false);
 
         // Run sender loop to trigger epoch bump
@@ -3065,7 +3065,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testHealthyPartitionRetriesDuringEpochBump() throws InterruptedException {
-        // Use a custom Sender to allow multiple inflight requests
+        // Use a custom Sender to allow multiple in-flight requests
         initializeTransactionManager(Optional.empty());
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
@@ -3138,11 +3138,11 @@ public class TransactionManagerTest {
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
-        assertFalse(transactionManager.hasInflightBatches(tp1));
+        assertFalse(transactionManager.hasInFlightBatches(tp1));
         assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
 
         // The last batch should now be drained and sent
-        runUntil(() -> transactionManager.hasInflightBatches(tp1));
+        runUntil(() -> transactionManager.hasInFlightBatches(tp1));
         assertTrue(accumulator.batches().get(tp1).isEmpty());
         ProducerBatch tp1b3 = transactionManager.nextBatchBySequence(tp1);
         assertEquals(epoch + 1, tp1b3.producerEpoch());
@@ -3153,7 +3153,7 @@ public class TransactionManagerTest {
         transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
-        assertFalse(transactionManager.hasInflightBatches(tp1));
+        assertFalse(transactionManager.hasInFlightBatches(tp1));
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
 
@@ -3188,8 +3188,8 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testFailedInflightBatchAfterEpochBump() throws InterruptedException {
-        // Use a custom Sender to allow multiple inflight requests
+    public void testFailedInFlightBatchAfterEpochBump() throws InterruptedException {
+        // Use a custom Sender to allow multiple in-flight requests
         initializeTransactionManager(Optional.empty());
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
@@ -3262,11 +3262,11 @@ public class TransactionManagerTest {
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
-        assertFalse(transactionManager.hasInflightBatches(tp1));
+        assertFalse(transactionManager.hasInFlightBatches(tp1));
         assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
 
         // The last batch should now be drained and sent
-        runUntil(() -> transactionManager.hasInflightBatches(tp1));
+        runUntil(() -> transactionManager.hasInFlightBatches(tp1));
         assertTrue(accumulator.batches().get(tp1).isEmpty());
         ProducerBatch tp1b3 = transactionManager.nextBatchBySequence(tp1);
         assertEquals(epoch + 1, tp1b3.producerEpoch());
@@ -3276,7 +3276,7 @@ public class TransactionManagerTest {
         tp1b3.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
 
-        assertFalse(transactionManager.hasInflightBatches(tp1));
+        assertFalse(transactionManager.hasInFlightBatches(tp1));
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
 

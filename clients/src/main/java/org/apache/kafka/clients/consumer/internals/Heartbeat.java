@@ -64,7 +64,7 @@ public final class Heartbeat {
         pollTimer.reset(maxPollIntervalMs);
     }
 
-    boolean hasInflight() {
+    boolean hasInFlight() {
         return heartbeatInFlight;
     }
 

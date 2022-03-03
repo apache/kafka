@@ -147,7 +147,7 @@ sealed trait IsrState {
   def maximalIsr: Set[Int]
 
   /**
-   * Indicates if we have an AlterIsr request inflight.
+   * Indicates if we have an AlterIsr request in-flight.
    */
   def isInflight: Boolean
 }
@@ -1400,7 +1400,7 @@ class Partition(val topicPartition: TopicPartition,
       case Errors.OPERATION_NOT_ATTEMPTED =>
         // Since the operation was not attempted, it is safe to reset back to the committed state.
         isrState = CommittedIsr(proposedIsrState.isr)
-        debug(s"Failed to update ISR to $proposedIsrState since there is a pending ISR update still inflight. " +
+        debug(s"Failed to update ISR to $proposedIsrState since there is a pending ISR update still in-flight. " +
           s"ISR state has been reset to the latest committed state $isrState")
         false
       case Errors.UNKNOWN_TOPIC_OR_PARTITION =>

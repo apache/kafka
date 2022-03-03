@@ -100,7 +100,7 @@ public class Sender implements Runnable {
     /* true while the sender thread is still running */
     private volatile boolean running;
 
-    /* true when the caller wants to ignore all unsent/inflight messages and force close.  */
+    /* true when the caller wants to ignore all unsent/inFlight messages and force close.  */
     private volatile boolean forceClose;
 
     /* metrics */
@@ -157,7 +157,7 @@ public class Sender implements Runnable {
         return inFlightBatches.containsKey(tp) ? inFlightBatches.get(tp) : new ArrayList<>();
     }
 
-    private void maybeRemoveFromInflightBatches(ProducerBatch batch) {
+    private void maybeRemoveFromInFlightBatches(ProducerBatch batch) {
         List<ProducerBatch> batches = inFlightBatches.get(batch.topicPartition);
         if (batches != null) {
             batches.remove(batch);
@@ -168,14 +168,14 @@ public class Sender implements Runnable {
     }
 
     private void maybeRemoveAndDeallocateBatch(ProducerBatch batch) {
-        maybeRemoveFromInflightBatches(batch);
+        maybeRemoveFromInFlightBatches(batch);
         this.accumulator.deallocate(batch);
     }
 
     /**
      *  Get the in-flight batches that has reached delivery timeout.
      */
-    private List<ProducerBatch> getExpiredInflightBatches(long now) {
+    private List<ProducerBatch> getExpiredInFlightBatches(long now) {
         List<ProducerBatch> expiredBatches = new ArrayList<>();
 
         for (Iterator<Map.Entry<TopicPartition, List<ProducerBatch>>> batchIt = inFlightBatches.entrySet().iterator(); batchIt.hasNext();) {
@@ -209,20 +209,20 @@ public class Sender implements Runnable {
         return expiredBatches;
     }
 
-    private void addToInflightBatches(List<ProducerBatch> batches) {
+    private void addToInFlightBatches(List<ProducerBatch> batches) {
         for (ProducerBatch batch : batches) {
-            List<ProducerBatch> inflightBatchList = inFlightBatches.get(batch.topicPartition);
-            if (inflightBatchList == null) {
-                inflightBatchList = new ArrayList<>();
-                inFlightBatches.put(batch.topicPartition, inflightBatchList);
+            List<ProducerBatch> inFlightBatchList = inFlightBatches.get(batch.topicPartition);
+            if (inFlightBatchList == null) {
+                inFlightBatchList = new ArrayList<>();
+                inFlightBatches.put(batch.topicPartition, inFlightBatchList);
             }
-            inflightBatchList.add(batch);
+            inFlightBatchList.add(batch);
         }
     }
 
-    public void addToInflightBatches(Map<Integer, List<ProducerBatch>> batches) {
+    public void addToInFlightBatches(Map<Integer, List<ProducerBatch>> batches) {
         for (List<ProducerBatch> batchList : batches.values()) {
-            addToInflightBatches(batchList);
+            addToInFlightBatches(batchList);
         }
     }
 
@@ -359,7 +359,7 @@ public class Sender implements Runnable {
 
         // create produce requests
         Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster, result.readyNodes, this.maxRequestSize, now);
-        addToInflightBatches(batches);
+        addToInFlightBatches(batches);
         if (guaranteeMessageOrder) {
             // Mute all the partitions drained
             for (List<ProducerBatch> batchList : batches.values()) {
@@ -369,9 +369,9 @@ public class Sender implements Runnable {
         }
 
         accumulator.resetNextBatchExpiryTime();
-        List<ProducerBatch> expiredInflightBatches = getExpiredInflightBatches(now);
+        List<ProducerBatch> expiredInFlightBatches = getExpiredInFlightBatches(now);
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
-        expiredBatches.addAll(expiredInflightBatches);
+        expiredBatches.addAll(expiredInFlightBatches);
 
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
@@ -666,7 +666,7 @@ public class Sender implements Runnable {
 
     private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {
         this.accumulator.reenqueue(batch, currentTimeMs);
-        maybeRemoveFromInflightBatches(batch);
+        maybeRemoveFromInFlightBatches(batch);
         this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
     }
 

@@ -4433,7 +4433,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testOffsetValidationHandlesSeekWithInflightOffsetForLeaderRequest() {
+    public void testOffsetValidationHandlesSeekWithInFlightOffsetForLeaderRequest() {
         buildFetcher();
         assignFromUser(singleton(tp0));
 

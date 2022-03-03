@@ -392,8 +392,8 @@ public final class RecordAccumulator {
             // The incoming batch can't be inserted at the front of the queue without violating the sequence ordering.
             // This means that the incoming batch should be placed somewhere further back.
             // We need to find the right place for the incoming batch and insert it there.
-            // We will only enter this branch if we have multiple inflights sent to different brokers and we need to retry
-            // the inflight batches.
+            // We will only enter this branch if we have multiple in-flights sent to different brokers and we need to retry
+            // the in-flight batches.
             //
             // Since we reenqueue exactly one batch a time and ensure that the queue is ordered by sequence always, it
             // is a simple linear scan of a subset of the in flight batches to find the right place in the queue each time.
@@ -514,7 +514,7 @@ public final class RecordAccumulator {
                 return true;
 
             if (!first.hasSequence()) {
-                if (transactionManager.hasInflightBatches(tp) && transactionManager.hasStaleProducerIdAndEpoch(tp)) {
+                if (transactionManager.hasInFlightBatches(tp) && transactionManager.hasStaleProducerIdAndEpoch(tp)) {
                     // Don't drain any new batches while the partition has in-flight batches with a different epoch
                     // and/or producer ID. Otherwise, a batch with a new epoch and sequence number
                     // 0 could be written before earlier batches complete, which would cause out of sequence errors

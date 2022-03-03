@@ -152,7 +152,7 @@ class DefaultAutoTopicCreationManager(
 
       creatableTopicResponses
     } finally {
-      clearInflightRequests(creatableTopics)
+      clearInFlightRequests(creatableTopics)
     }
   }
 
@@ -171,12 +171,12 @@ class DefaultAutoTopicCreationManager(
 
     val requestCompletionHandler = new ControllerRequestCompletionHandler {
       override def onTimeout(): Unit = {
-        clearInflightRequests(creatableTopics)
+        clearInFlightRequests(creatableTopics)
         debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
       }
 
       override def onComplete(response: ClientResponse): Unit = {
-        clearInflightRequests(creatableTopics)
+        clearInFlightRequests(creatableTopics)
         if (response.authenticationException() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
         } else if (response.versionMismatch() != null) {
@@ -225,9 +225,9 @@ class DefaultAutoTopicCreationManager(
     creatableTopicResponses
   }
 
-  private def clearInflightRequests(creatableTopics: Map[String, CreatableTopic]): Unit = {
+  private def clearInFlightRequests(creatableTopics: Map[String, CreatableTopic]): Unit = {
     creatableTopics.keySet.foreach(inflightTopics.remove)
-    debug(s"Cleared inflight topic creation state for $creatableTopics")
+    debug(s"Cleared in-flight topic creation state for $creatableTopics")
   }
 
   private def creatableTopic(topic: String): CreatableTopic = {

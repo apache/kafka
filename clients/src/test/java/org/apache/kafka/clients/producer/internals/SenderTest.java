@@ -490,7 +490,7 @@ public class SenderTest {
         Node clusterNode = metadata.fetch().nodes().get(0);
         Map<Integer, List<ProducerBatch>> drainedBatches =
             accumulator.drain(metadata.fetch(), Collections.singleton(clusterNode), Integer.MAX_VALUE, time.milliseconds());
-        sender.addToInflightBatches(drainedBatches);
+        sender.addToInFlightBatches(drainedBatches);
 
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
@@ -684,7 +684,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testIdempotenceWithMultipleInflights() throws Exception {
+    public void testIdempotenceWithMultipleInFlights() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
@@ -733,7 +733,7 @@ public class SenderTest {
 
 
     @Test
-    public void testIdempotenceWithMultipleInflightsRetriedInOrder() throws Exception {
+    public void testIdempotenceWithMultipleInFlightsRetriedInOrder() throws Exception {
         // Send multiple in flight requests, retry them all one at a time, in the correct order.
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
@@ -834,7 +834,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testIdempotenceWithMultipleInflightsWhereFirstFailsFatallyAndSequenceOfFutureBatchesIsAdjusted() throws Exception {
+    public void testIdempotenceWithMultipleInFlightsWhereFirstFailsFatallyAndSequenceOfFutureBatchesIsAdjusted() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
@@ -1223,7 +1223,7 @@ public class SenderTest {
 
         sender.runOnce(); // send request 0
         assertEquals(1, client.inFlightRequestCount());
-        sender.runOnce(); // don't do anything, only one inflight allowed once we are retrying.
+        sender.runOnce(); // don't do anything, only one in-flight allowed once we are retrying.
 
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -2429,7 +2429,7 @@ public class SenderTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void testInflightBatchesExpireOnDeliveryTimeout() throws InterruptedException {
+    public void testInFlightBatchesExpireOnDeliveryTimeout() throws InterruptedException {
         long deliveryTimeoutMs = 1500L;
         setupWithTransactionState(null, true, null);
 
@@ -2749,7 +2749,7 @@ public class SenderTest {
             runUntil(sender, () -> client.requests().size() == 1);
             assertFalse(accumulator.hasUndrained());
             assertTrue(client.hasInFlightRequests());
-            assertTrue(txnManager.hasInflightBatches(tp0));
+            assertTrue(txnManager.hasInFlightBatches(tp0));
 
             // Enqueue another record and then commit the transaction. We expect the unsent record to
             // get sent before the transaction can be completed.
@@ -2759,7 +2759,7 @@ public class SenderTest {
 
             assertTrue(txnManager.isCompleting());
             assertFalse(txnManager.hasInFlightRequest());
-            assertTrue(txnManager.hasInflightBatches(tp0));
+            assertTrue(txnManager.hasInFlightBatches(tp0));
 
             // Now respond to the pending Produce requests.
             respondToProduce(tp0, Errors.NONE, 0L);

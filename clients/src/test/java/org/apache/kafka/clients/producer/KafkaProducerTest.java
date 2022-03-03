@@ -361,7 +361,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testInflightRequestsAndIdempotenceForIdempotentProducers() {
+    public void testInFlightRequestsAndIdempotenceForIdempotentProducers() {
         Properties baseProps = new Properties() {{
                 setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
                 setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
@@ -982,7 +982,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testFlushCompleteSendOfInflightBatches() {
+    public void testFlushCompleteSendOfInFlightBatches() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         // only test in idempotence disabled producer for simplicity

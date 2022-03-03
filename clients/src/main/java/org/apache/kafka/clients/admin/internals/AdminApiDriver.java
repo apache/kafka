@@ -209,7 +209,7 @@ public class AdminApiDriver<K, V> {
         AbstractResponse response,
         Node node
     ) {
-        clearInflightRequest(currentTimeMs, spec);
+        clearInFlightRequest(currentTimeMs, spec);
 
         if (spec.scope instanceof FulfillmentScope) {
             AdminApiHandler.ApiResult<K, V> result = handler.handleResponse(
@@ -240,7 +240,7 @@ public class AdminApiDriver<K, V> {
         RequestSpec<K> spec,
         Throwable t
     ) {
-        clearInflightRequest(currentTimeMs, spec);
+        clearInFlightRequest(currentTimeMs, spec);
         if (t instanceof DisconnectException) {
             log.debug("Node disconnected before response could be received for request {}. " +
                 "Will attempt retry", spec.request);
@@ -273,14 +273,14 @@ public class AdminApiDriver<K, V> {
         }
     }
 
-    private void clearInflightRequest(long currentTimeMs, RequestSpec<K> spec) {
+    private void clearInFlightRequest(long currentTimeMs, RequestSpec<K> spec) {
         RequestState requestState = requestStates.get(spec.scope);
         if (requestState != null) {
             // Only apply backoff if it's not a retry of a lookup request
             if (spec.scope instanceof FulfillmentScope) {
-                requestState.clearInflight(currentTimeMs + retryBackoffMs);
+                requestState.clearInFlight(currentTimeMs + retryBackoffMs);
             } else {
-                requestState.clearInflight(currentTimeMs);
+                requestState.clearInFlight(currentTimeMs);
             }
         }
     }
@@ -299,7 +299,7 @@ public class AdminApiDriver<K, V> {
             }
 
             RequestState requestState = requestStates.computeIfAbsent(scope, c -> new RequestState());
-            if (requestState.hasInflight()) {
+            if (requestState.hasInFlight()) {
                 continue;
             }
 
@@ -324,7 +324,7 @@ public class AdminApiDriver<K, V> {
                 requestState.tries
             );
 
-            requestState.setInflight(spec);
+            requestState.setInFlight(spec);
             requests.add(spec);
         }
     }
@@ -393,25 +393,25 @@ public class AdminApiDriver<K, V> {
 
     /**
      * Helper class used to track the request state within each request scope.
-     * This class enforces a maximum number of inflight request and keeps track
+     * This class enforces a maximum number of in-flight request and keeps track
      * of backoff/retry state.
      */
     private class RequestState {
-        private Optional<RequestSpec<K>> inflightRequest = Optional.empty();
+        private Optional<RequestSpec<K>> inFlightRequest = Optional.empty();
         private int tries = 0;
         private long nextAllowedRetryMs = 0;
 
-        boolean hasInflight() {
-            return inflightRequest.isPresent();
+        boolean hasInFlight() {
+            return inFlightRequest.isPresent();
         }
 
-        public void clearInflight(long nextAllowedRetryMs) {
-            this.inflightRequest = Optional.empty();
+        public void clearInFlight(long nextAllowedRetryMs) {
+            this.inFlightRequest = Optional.empty();
             this.nextAllowedRetryMs = nextAllowedRetryMs;
         }
 
-        public void setInflight(RequestSpec<K> spec) {
-            this.inflightRequest = Optional.of(spec);
+        public void setInFlight(RequestSpec<K> spec) {
+            this.inFlightRequest = Optional.of(spec);
             this.tries++;
         }
     }

@@ -831,7 +831,7 @@ public class AbstractCoordinatorTest {
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
         TestUtils.waitForCondition(() -> !mockClient.requests().isEmpty(), 2000,
                 "The heartbeat request was not sent");
-        assertTrue(coordinator.heartbeat().hasInflight());
+        assertTrue(coordinator.heartbeat().hasInFlight());
 
         mockClient.respond(heartbeatResponse(Errors.REBALANCE_IN_PROGRESS));
         assertEquals(currGen, coordinator.generation());
@@ -849,7 +849,7 @@ public class AbstractCoordinatorTest {
 
         TestUtils.waitForCondition(() -> !mockClient.requests().isEmpty(), 2000,
             "The heartbeat request was not sent");
-        assertTrue(coordinator.heartbeat().hasInflight());
+        assertTrue(coordinator.heartbeat().hasInFlight());
 
         // change the generation
         final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
@@ -863,7 +863,7 @@ public class AbstractCoordinatorTest {
         // the heartbeat error code should be ignored
         TestUtils.waitForCondition(() -> {
             coordinator.pollHeartbeat(mockTime.milliseconds());
-            return !coordinator.heartbeat().hasInflight();
+            return !coordinator.heartbeat().hasInFlight();
         }, 2000,
             "The heartbeat response was not received");
 
@@ -883,7 +883,7 @@ public class AbstractCoordinatorTest {
 
         TestUtils.waitForCondition(() -> !mockClient.requests().isEmpty(), 2000,
             "The heartbeat request was not sent");
-        assertTrue(coordinator.heartbeat().hasInflight());
+        assertTrue(coordinator.heartbeat().hasInFlight());
 
         // change the generation
         final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
@@ -897,7 +897,7 @@ public class AbstractCoordinatorTest {
         // the heartbeat error code should be ignored
         TestUtils.waitForCondition(() -> {
             coordinator.pollHeartbeat(mockTime.milliseconds());
-            return !coordinator.heartbeat().hasInflight();
+            return !coordinator.heartbeat().hasInFlight();
         }, 2000,
             "The heartbeat response was not received");
 
@@ -918,7 +918,7 @@ public class AbstractCoordinatorTest {
         TestUtils.waitForCondition(() -> !mockClient.requests().isEmpty(), 2000,
             "The heartbeat request was not sent");
 
-        assertTrue(coordinator.heartbeat().hasInflight());
+        assertTrue(coordinator.heartbeat().hasInFlight());
 
         mockClient.respond(heartbeatResponse(Errors.REBALANCE_IN_PROGRESS));
 
@@ -926,7 +926,7 @@ public class AbstractCoordinatorTest {
 
         TestUtils.waitForCondition(() -> {
             coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));
-            return !coordinator.heartbeat().hasInflight();
+            return !coordinator.heartbeat().hasInFlight();
         },
             2000,
             "The heartbeat response was not received");
@@ -953,7 +953,7 @@ public class AbstractCoordinatorTest {
 
         TestUtils.waitForCondition(() -> !mockClient.requests().isEmpty(), 2000,
             "The heartbeat request was not sent");
-        assertTrue(coordinator.heartbeat().hasInflight());
+        assertTrue(coordinator.heartbeat().hasInFlight());
 
         // change the generation
         final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
@@ -967,7 +967,7 @@ public class AbstractCoordinatorTest {
         // the heartbeat error code should be ignored
         TestUtils.waitForCondition(() -> {
             coordinator.pollHeartbeat(mockTime.milliseconds());
-            return !coordinator.heartbeat().hasInflight();
+            return !coordinator.heartbeat().hasInFlight();
         }, 2000,
             "The heartbeat response was not received");
 
