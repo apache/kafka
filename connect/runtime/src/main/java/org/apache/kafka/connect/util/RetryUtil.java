@@ -67,7 +67,7 @@ public class RetryUtil {
         long timeoutMs = timeoutDuration.toMillis();
 
         if (retryBackoffMs >= timeoutMs) {
-            log.warn("Call to {} will only execute once, since retryBackoffMs={} is larger than total timeoutMs={}",
+            log.warn("Executing {} only once, since retryBackoffMs={} is larger than total timeoutMs={}",
                     descriptionStr, retryBackoffMs, timeoutMs);
         }
 
@@ -85,7 +85,7 @@ public class RetryUtil {
             try {
                 return callable.call();
             } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
-                log.warn("Attempt {} to execute {} resulted in RetriableException; retrying automatically. " +
+                log.warn("Attempt {} to {} resulted in RetriableException; retrying automatically. " +
                         "Reason: {}", attempt, descriptionStr, e.getMessage(), e);
                 lastError = e;
             } catch (WakeupException e) {
@@ -96,10 +96,10 @@ public class RetryUtil {
             // won't sleep if retryBackoffMs equals to 0
             long millisRemaining = Math.max(0, end - System.currentTimeMillis());
             if (millisRemaining > 0) {
-                Utils.sleep(retryBackoffMs);
+                Utils.sleep(Math.min(retryBackoffMs, millisRemaining));
             }
         }
 
-        throw new ConnectException("Fail to execute " + descriptionStr + " after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
+        throw new ConnectException("Fail to " + descriptionStr + " after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
     }
 }

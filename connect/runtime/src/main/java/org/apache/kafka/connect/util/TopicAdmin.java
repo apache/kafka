@@ -708,11 +708,11 @@ public class TopicAdmin implements AutoCloseable {
         try {
             return RetryUtil.retryUntilTimeout(
                     () -> endOffsets(partitions),
-                    () -> "list offsets",
+                    () -> "list offsets for topic partitions",
                     timeoutDuration,
                     retryBackoffMs);
         } catch (Exception e) {
-            throw new ConnectException("Failed to read offsets for topic partitions.", e);
+            throw new ConnectException("Failed to list offsets for topic partitions.", e);
         }
     }
 
