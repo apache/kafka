@@ -51,11 +51,10 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 
 
 public class ConfigurationControlManager {
-    final static Consumer<ConfigResource> NO_OP_EXISTENCE_CHECKER = __ -> { };
-
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
     private final KafkaConfigSchema configSchema;
+    private final Consumer<ConfigResource> existenceChecker;
     private final Optional<AlterConfigPolicy> alterConfigPolicy;
     private final ConfigurationValidator validator;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
@@ -63,11 +62,13 @@ public class ConfigurationControlManager {
     ConfigurationControlManager(LogContext logContext,
                                 SnapshotRegistry snapshotRegistry,
                                 KafkaConfigSchema configSchema,
+                                Consumer<ConfigResource> existenceChecker,
                                 Optional<AlterConfigPolicy> alterConfigPolicy,
                                 ConfigurationValidator validator) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configSchema = configSchema;
+        this.existenceChecker = existenceChecker;
         this.alterConfigPolicy = alterConfigPolicy;
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -88,14 +89,14 @@ public class ConfigurationControlManager {
      */
     ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
             Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
-            Consumer<ConfigResource> existenceChecker) {
+            boolean newlyCreatedResource) {
         List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<OpType, String>>> resourceEntry :
                 configChanges.entrySet()) {
             incrementalAlterConfigResource(resourceEntry.getKey(),
                 resourceEntry.getValue(),
-                existenceChecker,
+                newlyCreatedResource,
                 outputRecords,
                 outputResults);
         }
@@ -104,7 +105,7 @@ public class ConfigurationControlManager {
 
     private void incrementalAlterConfigResource(ConfigResource configResource,
                                                 Map<String, Entry<OpType, String>> keysToOps,
-                                                Consumer<ConfigResource> existenceChecker,
+                                                boolean newlyCreatedResource,
                                                 List<ApiMessageAndVersion> outputRecords,
                                                 Map<ConfigResource, ApiError> outputResults) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
@@ -153,7 +154,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, existenceChecker);
+        ApiError error = validateAlterConfig(configResource, newRecords, newlyCreatedResource);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
@@ -164,7 +165,7 @@ public class ConfigurationControlManager {
 
     private ApiError validateAlterConfig(ConfigResource configResource,
                                          List<ApiMessageAndVersion> newRecords,
-                                         Consumer<ConfigResource> existenceChecker) {
+                                         boolean newlyCreatedResource) {
         Map<String, String> newConfigs = new HashMap<>();
         TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
         if (existingConfigs != null) newConfigs.putAll(existingConfigs);
@@ -178,7 +179,9 @@ public class ConfigurationControlManager {
         }
         try {
             validator.validate(configResource, newConfigs);
-            existenceChecker.accept(configResource);
+            if (!newlyCreatedResource) {
+                existenceChecker.accept(configResource);
+            }
             if (alterConfigPolicy.isPresent()) {
                 alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
             }
@@ -201,7 +204,7 @@ public class ConfigurationControlManager {
      */
     ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         Map<ConfigResource, Map<String, String>> newConfigs,
-        Consumer<ConfigResource> existenceChecker
+        boolean newlyCreatedResource
     ) {
         List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
@@ -209,7 +212,7 @@ public class ConfigurationControlManager {
             newConfigs.entrySet()) {
             legacyAlterConfigResource(resourceEntry.getKey(),
                 resourceEntry.getValue(),
-                existenceChecker,
+                newlyCreatedResource,
                 outputRecords,
                 outputResults);
         }
@@ -218,7 +221,7 @@ public class ConfigurationControlManager {
 
     private void legacyAlterConfigResource(ConfigResource configResource,
                                            Map<String, String> newConfigs,
-                                           Consumer<ConfigResource> existenceChecker,
+                                           boolean newlyCreatedResource,
                                            List<ApiMessageAndVersion> outputRecords,
                                            Map<ConfigResource, ApiError> outputResults) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
@@ -247,7 +250,7 @@ public class ConfigurationControlManager {
                     setValue(null), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, existenceChecker);
+        ApiError error = validateAlterConfig(configResource, newRecords, newlyCreatedResource);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
