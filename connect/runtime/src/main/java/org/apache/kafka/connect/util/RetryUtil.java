@@ -41,7 +41,7 @@ public class RetryUtil {
      * <p>If {@code retryBackoffMs} is set to 0, no wait will happen in between the retries.
      *
      * @param callable          the function to execute.
-     * @param timeoutDuration   timeout duration
+     * @param timeoutDuration   timeout duration; may not be null
      * @param retryBackoffMs    the number of milliseconds to delay upon receiving a
      *                          {@link org.apache.kafka.connect.errors.RetriableException} before retrying again;
      *                          must be 0 or more
@@ -77,8 +77,9 @@ public class RetryUtil {
 
             // if current time is less than the ending time, no more retry is necessary
             // won't sleep if retryBackoffMs equals to 0
-            if (retryBackoffMs > 0 && System.currentTimeMillis() < end) {
-                Utils.sleep(retryBackoffMs);
+            long millisRemaining = Math.max(0, end - System.currentTimeMillis());
+            if (millisRemaining > 0) {
+                Utils.sleep(millisRemaining)
             }
         }
 

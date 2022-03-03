@@ -491,7 +491,7 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void endOffsetsShouldRetryWhenTopicNotFound() {
+    public void retryEndOffsetsShouldRetryWhenTopicNotFound() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);

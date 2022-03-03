@@ -79,7 +79,7 @@ public class KafkaBasedLog<K, V> {
     // 15min of admin retry duration to ensure successful metadata propagation.  10 seconds of backoff
     // in between retries
     private static final Duration ADMIN_CLIENT_RETRY_DURATION = Duration.ofMinutes(15);
-    private static final long ADMIN_CLIENT_RETRY_BACKOFF_MS = 10 * 1000;
+    private static final long ADMIN_CLIENT_RETRY_BACKOFF_MS = TimeUnit.SECONDS.toMillis(10);
 
     private Time time;
     private final String topic;
