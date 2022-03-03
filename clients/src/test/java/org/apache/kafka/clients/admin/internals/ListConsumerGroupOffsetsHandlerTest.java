@@ -56,7 +56,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     @Test
     public void testBuildRequest() {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupId, tps, logContext);
-        OffsetFetchRequest request = handler.buildRequest(1, singleton(CoordinatorKey.byGroupId(groupId))).build();
+        OffsetFetchRequest request = handler.buildBatchedRequest(1, singleton(CoordinatorKey.byGroupId(groupId))).build();
         assertEquals(groupId, request.data().groups().get(0).groupId());
         assertEquals(2, request.data().groups().get(0).topics().size());
         assertEquals(2, request.data().groups().get(0).topics().get(0).partitionIndexes().size());
