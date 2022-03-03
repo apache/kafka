@@ -54,12 +54,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected final Optional<KeySchema> indexKeySchema;
 
 
-    private ProcessorContext context;
+    protected ProcessorContext context;
     private StateStoreContext stateStoreContext;
     private Sensor expiredRecordSensor;
-    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
-    private boolean consistencyEnabled = false;
-    private Position position;
+    protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+    protected boolean consistencyEnabled = false;
+    protected Position position;
     protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
@@ -156,7 +156,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
                 metrics
         );
 
-        openSegments(this.context);
+        segments.openExisting(context, observedStreamTime);
 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -175,10 +175,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
-    }
-
-    public void openSegments(final ProcessorContext context) {
-        segments.openExisting(context, observedStreamTime);
     }
 
     @Override

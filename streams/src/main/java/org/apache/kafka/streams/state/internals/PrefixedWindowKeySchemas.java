@@ -76,7 +76,6 @@ public class PrefixedWindowKeySchemas {
                 .put(TIME_FIRST_PREFIX)
                 .putLong(from)
                 .put(key.get())
-                .putInt(0)
                 .array());
         }
 

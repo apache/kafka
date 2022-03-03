@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -24,9 +25,12 @@ import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
+import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -135,9 +139,47 @@ public class RocksDBTimeOrderedSegmentedBytesStore extends AbstractDualSchemaRoc
     @Override
     Map<KeyValueSegment, WriteBatch> getWriteBatches(
         final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        // TODO:
-        return null;
+        // advance stream time to the max timestamp in the batch
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final long timestamp = baseKeySchema.segmentTimestamp(Bytes.wrap(record.key()));
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+        }
+
+        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final long timestamp = baseKeySchema.segmentTimestamp(Bytes.wrap(record.key()));
+            final long segmentId = segments.segmentId(timestamp);
+            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+            if (segment != null) {
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                    record,
+                    consistencyEnabled,
+                    position
+                );
+                try {
+                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
+                    segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);
+
+                    // Assuming changelog record is serialized using WindowKeySchema
+                    // from ChangeLoggingTimestampedWindowBytesStore. Reconstruct key/value to restore
+                    final byte[] key = WindowKeySchema.extractStoreKeyBytes(record.key());
+                    final long ts = WindowKeySchema.extractStoreTimestamp(record.key());
+                    final int seqNum = WindowKeySchema.extractStoreSequence(record.key());
+                    if (hasIndex()) {
+                        final byte[] indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, ts, seqNum).get();
+                        segment.addToBatch(new KeyValue<>(indexKey, new byte[0]), batch);
+                    }
+
+                    final byte[] baseKey = TimeFirstWindowKeySchema.toTimeOrderedStoreKeyBinary(key, ts, seqNum).get();
+                    segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
+                } catch (final RocksDBException e) {
+                    throw new ProcessorStateException("Error restoring batch to store " + name(), e);
+                }
+            }
+        }
+        return writeBatchMap;
     }
+
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                                  final long from,
