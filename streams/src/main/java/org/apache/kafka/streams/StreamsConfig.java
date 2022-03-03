@@ -213,6 +213,15 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
 
     /**
+     * Prefix used to add arbitrary tags to a Kafka Stream's instance as key-value pairs.
+     * Example:
+     * client.tag.zone=zone1
+     * client.tag.cluster=cluster1
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String CLIENT_TAG_PREFIX = "client.tag.";
+
+    /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
      */
     public static final String NO_OPTIMIZATION = "none";
