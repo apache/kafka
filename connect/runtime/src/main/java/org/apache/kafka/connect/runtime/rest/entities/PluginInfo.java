@@ -17,21 +17,23 @@
 package org.apache.kafka.connect.runtime.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 
 import java.util.Objects;
 
-public class ConnectorPluginInfo {
+public class PluginInfo {
     private final String className;
-    private final ConnectorType type;
+    private final PluginType type;
     private final String version;
 
     @JsonCreator
-    public ConnectorPluginInfo(
+    public PluginInfo(
         @JsonProperty("class") String className,
-        @JsonProperty("type") ConnectorType type,
+        @JsonProperty("type") PluginType type,
         @JsonProperty("version") String version
     ) {
         this.className = className;
@@ -39,8 +41,8 @@ public class ConnectorPluginInfo {
         this.version = version;
     }
 
-    public ConnectorPluginInfo(PluginDesc<Connector> plugin) {
-        this(plugin.className(), ConnectorType.from(plugin.pluginClass()), plugin.version());
+    public PluginInfo(PluginDesc<?> plugin) {
+        this(plugin.className(), plugin.type(), plugin.version());
     }
 
     @JsonProperty("class")
@@ -49,11 +51,12 @@ public class ConnectorPluginInfo {
     }
 
     @JsonProperty("type")
-    public ConnectorType type() {
-        return type;
+    public String type() {
+        return type.toString();
     }
 
     @JsonProperty("version")
+    @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = NoVersionFilter.class)
     public String version() {
         return version;
     }
@@ -66,9 +69,9 @@ public class ConnectorPluginInfo {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        ConnectorPluginInfo that = (ConnectorPluginInfo) o;
+        PluginInfo that = (PluginInfo) o;
         return Objects.equals(className, that.className) &&
-               type == that.type &&
+               Objects.equals(type, that.type) &&
                Objects.equals(version, that.version);
     }
 
@@ -79,11 +82,22 @@ public class ConnectorPluginInfo {
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("ConnectorPluginInfo{");
-        sb.append("className='").append(className).append('\'');
-        sb.append(", type=").append(type);
-        sb.append(", version='").append(version).append('\'');
-        sb.append('}');
-        return sb.toString();
+        return "PluginInfo{" + "className='" + className + '\'' +
+                ", type=" + type.toString() +
+                ", version='" + version + '\'' +
+                '}';
+    }
+
+    public static final class NoVersionFilter {
+        // This method is used by Jackson to filter the version field for plugins that don't have a version
+        public boolean equals(Object obj) {
+            return DelegatingClassLoader.UNDEFINED_VERSION.equals(obj);
+        }
+
+        // Dummy hashCode method to not fail compilation because of equals() method
+        @Override
+        public int hashCode() {
+            return super.hashCode();
+        }
     }
 }
