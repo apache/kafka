@@ -68,11 +68,11 @@ object CoreUtils {
       action
     } catch {
       case e: Throwable => logLevel match {
-        case Level.ERROR => logger.error(e.getMessage, e)
-        case Level.WARN => logger.warn(e.getMessage, e)
-        case Level.INFO => logger.info(e.getMessage, e)
-        case Level.DEBUG => logger.debug(e.getMessage, e)
-        case Level.TRACE => logger.trace(e.getMessage, e)
+        case Level.ERROR => logging.error(e.getMessage, e)
+        case Level.WARN => logging.warn(e.getMessage, e)
+        case Level.INFO => logging.info(e.getMessage, e)
+        case Level.DEBUG => logging.debug(e.getMessage, e)
+        case Level.TRACE => logging.trace(e.getMessage, e)
       }
     }
   }
