@@ -149,15 +149,15 @@ public class RetryUtilTest {
 
         ConnectException e = assertThrows(ConnectException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, null, Duration.ofMillis(100), 10));
-        assertTrue(e.getMessage().startsWith("Fail to execute callable"));
+        assertTrue(e.getMessage().startsWith("Fail to callable"));
 
         e = assertThrows(ConnectException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, () -> null, Duration.ofMillis(100), 10));
-        assertTrue(e.getMessage().startsWith("Fail to execute callable"));
+        assertTrue(e.getMessage().startsWith("Fail to callable"));
 
         e = assertThrows(ConnectException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, () -> "bad service call", Duration.ofMillis(500), 10));
-        assertTrue(e.getMessage().startsWith("Fail to execute bad service call"));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, () -> "execute lambda", Duration.ofMillis(500), 10));
+        assertTrue(e.getMessage().startsWith("Fail to execute lambda"));
         Mockito.verify(mockCallable, Mockito.atLeast(3)).call();
     }
 }
