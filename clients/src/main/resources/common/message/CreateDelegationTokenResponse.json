@@ -21,7 +21,7 @@
   //
   // Version 2 is the first flexible version.
   //
-  // Version 3 adds the token requester details
+  // Version 3 adds token requester details
   "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [

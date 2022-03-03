@@ -22,7 +22,7 @@
   //
   // Version 2 is the first flexible version.
   //
-  // Version 3 adds the owner principal
+  // Version 3 adds owner principal
   "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [

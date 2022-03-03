@@ -19,7 +19,7 @@
   "name": "DescribeDelegationTokenResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   // Version 2 adds flexible version support
-  // Version 3 adds the token requester details
+  // Version 3 adds token requester details
   "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
