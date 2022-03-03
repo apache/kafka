@@ -55,7 +55,7 @@ public class RetryUtilTest {
     public void testExhaustingRetries() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException());
         ConnectException e = assertThrows(ConnectException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 1));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 10));
         Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
     }
 
