@@ -36,6 +36,10 @@ public class RetryUtil {
      * {@link org.apache.kafka.connect.errors.RetriableException} is being thrown.  If timeout is exhausted,
      * then the last exception is wrapped with a {@link org.apache.kafka.connect.errors.ConnectException} and thrown.
      *
+     * <p>{@code description} supplies the message that indicates the purpose of the callable since the message will
+     * be used for logging.  For example, "list offsets". If the supplier is null or the supplied string is
+     * null, {@call callable} will be used as the default string.
+     *
      * <p>If {@code timeoutDuration} is set to 0, the task will be
      * executed exactly once.  If {@code timeoutDuration} is less than {@code retryBackoffMs}, the callable will be
      * executed only once.
@@ -43,8 +47,7 @@ public class RetryUtil {
      * <p>If {@code retryBackoffMs} is set to 0, no wait will happen in between the retries.
      *
      * @param callable          the function to execute.
-     * @param description       supplier lambda that supplies custom message for logging purpose;if {@code description}
-     *                          is null, {@code callable} will be used as the default message
+     * @param description       supplier that provides custom message for logging purpose
      * @param timeoutDuration   timeout duration; may not be null
      * @param retryBackoffMs    the number of milliseconds to delay upon receiving a
      *                          {@link org.apache.kafka.connect.errors.RetriableException} before retrying again;
@@ -52,9 +55,11 @@ public class RetryUtil {
      * @throws ConnectException If the task exhausted all the retries.
      */
     public static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs) throws Exception {
-        if (timeoutDuration == null)
+        if (timeoutDuration == null) {
             throw new IllegalArgumentException("timeoutDuration cannot be null");
+        }
 
+        // if null supplier or string is provided, the message will be default to "callabe"
         String descriptionStr = Optional.ofNullable(description)
                 .map(Supplier::get)
                 .orElse("callable");
