@@ -64,12 +64,12 @@ public class RetryUtil {
                 .orElse(0L);
 
         if (retryBackoffMs >= timeoutMs) {
-            log.warn("Executing {} only once, since retryBackoffMs={} is larger than total timeoutMs={}",
+            log.debug("Executing {} only once, since retryBackoffMs={} is larger than total timeoutMs={}",
                     descriptionStr, retryBackoffMs, timeoutMs);
         }
 
         if (retryBackoffMs < 0) {
-            log.warn("Invalid retryBackoffMs, must be non-negative but got {}. 0 will be used instead",
+            log.debug("Invalid retryBackoffMs, must be non-negative but got {}. 0 will be used instead",
                     retryBackoffMs);
             retryBackoffMs = 0;
         }
