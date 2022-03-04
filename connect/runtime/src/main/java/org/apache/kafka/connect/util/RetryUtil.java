@@ -38,7 +38,7 @@ public class RetryUtil {
      *
      * <p>{@code description} supplies the message that indicates the purpose of the callable since the message will
      * be used for logging.  For example, "list offsets". If the supplier is null or the supplied string is
-     * null, {@call callable} will be used as the default string.
+     * null, {@code callable} will be used as the default string.
      *
      * <p>If {@code timeoutDuration} is set to 0, the task will be
      * executed exactly once.  If {@code timeoutDuration} is less than {@code retryBackoffMs}, the callable will be
@@ -46,33 +46,37 @@ public class RetryUtil {
      *
      * <p>If {@code retryBackoffMs} is set to 0, no wait will happen in between the retries.
      *
-     * @param callable          the function to execute.
+     * @param callable          the function to execute
      * @param description       supplier that provides custom message for logging purpose
-     * @param timeoutDuration   timeout duration; may not be null
+     * @param timeoutDuration   timeout duration; must not be null or negative
      * @param retryBackoffMs    the number of milliseconds to delay upon receiving a
      *                          {@link org.apache.kafka.connect.errors.RetriableException} before retrying again;
      *                          must be 0 or more
-     * @throws ConnectException If the task exhausted all the retries.
+     * @throws ConnectException If the task exhausted all the retries
      */
     public static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs) throws Exception {
-        if (timeoutDuration == null) {
-            throw new IllegalArgumentException("timeoutDuration cannot be null");
-        }
-
         // if null supplier or string is provided, the message will be default to "callabe"
         String descriptionStr = Optional.ofNullable(description)
                 .map(Supplier::get)
                 .orElse("callable");
 
-        long timeoutMs = timeoutDuration.toMillis();
+        // handling null duration
+        long timeoutMs = Optional.ofNullable(timeoutDuration)
+                .map(Duration::toMillis)
+                .orElse(0L);
 
         if (retryBackoffMs >= timeoutMs) {
             log.warn("Executing {} only once, since retryBackoffMs={} is larger than total timeoutMs={}",
                     descriptionStr, retryBackoffMs, timeoutMs);
         }
 
-        if (retryBackoffMs >= timeoutMs ||
-                timeoutMs <= 0) {
+        if (retryBackoffMs < 0) {
+            log.warn("Invalid retryBackoffMs, must be non-negative but got {}. 0 will be used instead",
+                    retryBackoffMs);
+            retryBackoffMs = 0;
+        }
+
+        if (timeoutMs <= 0 || retryBackoffMs >= timeoutMs) {
             // no retry
             return callable.call();
         }
@@ -93,10 +97,10 @@ public class RetryUtil {
             }
 
             // if current time is less than the ending time, no more retry is necessary
-            // won't sleep if retryBackoffMs equals to 0
             long millisRemaining = Math.max(0, end - System.currentTimeMillis());
-            if (millisRemaining > 0) {
-                Utils.sleep(Math.min(retryBackoffMs, millisRemaining));
+            long sleepMs = Math.min(retryBackoffMs, millisRemaining);
+            if (sleepMs > 0) {  // won't sleep if retryBackoffMs is less or equals to 0
+                Utils.sleep(sleepMs);
             }
         }
 

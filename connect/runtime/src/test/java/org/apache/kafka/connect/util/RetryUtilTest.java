@@ -137,10 +137,21 @@ public class RetryUtilTest {
     }
 
     @Test
-    public void testNullDurationShouldFail() throws Exception {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, null, 0));
-        assertEquals("timeoutDuration cannot be null", e.getMessage());
+    public void testInvalidTimeDuration() throws Exception {
+        Mockito.when(mockCallable.call()).thenReturn("success");
+
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, null, 10));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(-1), 10));
+        Mockito.verify(mockCallable, Mockito.times(2)).call();
+    }
+
+    @Test
+    public void testInvalidRetryTimeout() throws Exception {
+        Mockito.when(mockCallable.call())
+                .thenThrow(new TimeoutException("timeout"))
+                .thenReturn("success");
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(100), -1));
+        Mockito.verify(mockCallable, Mockito.times(2)).call();
     }
 
     @Test
