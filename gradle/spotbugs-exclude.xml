@@ -49,6 +49,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
              some categories of bug reports when using Scala, since spotbugs generates huge
              numbers of false positives in some of these categories when examining Scala code.
 
+            SA_FIELD_SELF_COMPARISON: This method compares a field with itself, and may indicate a typo or a logic error.
             NP_LOAD_OF_KNOWN_NULL_VALUE: The variable referenced at this point is known to be null
             due to an earlier check against null.
             NP_NULL_PARAM_DEREF: Method call passes null for non-null parameter.
