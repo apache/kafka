@@ -21,6 +21,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Before;
 import org.junit.Test;
@@ -170,5 +171,14 @@ public class RetryUtilTest {
                 () -> RetryUtil.retryUntilTimeout(mockCallable, () -> "execute lambda", Duration.ofMillis(500), 10));
         assertTrue(e.getMessage().startsWith("Fail to execute lambda"));
         Mockito.verify(mockCallable, Mockito.atLeast(3)).call();
+    }
+
+    @Test
+    public void testWakeupException() throws Exception {
+        Mockito.when(mockCallable.call()).thenThrow(new WakeupException());
+
+        ConnectException e = assertThrows(ConnectException.class,
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 10));
+        Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
     }
 }

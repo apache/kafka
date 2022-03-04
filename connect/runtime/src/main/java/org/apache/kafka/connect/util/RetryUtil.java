@@ -54,24 +54,23 @@ public class RetryUtil {
      */
     public static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs) throws Exception {
         // if null supplier or string is provided, the message will be default to "callabe"
-        String descriptionStr = Optional.ofNullable(description)
+        final String descriptionStr = Optional.ofNullable(description)
                 .map(Supplier::get)
                 .orElse("callable");
 
         // handling null duration
-        long timeoutMs = Optional.ofNullable(timeoutDuration)
+        final long timeoutMs = Optional.ofNullable(timeoutDuration)
                 .map(Duration::toMillis)
                 .orElse(0L);
 
-        if (retryBackoffMs >= timeoutMs) {
-            log.debug("Executing {} only once, since retryBackoffMs={} is larger than total timeoutMs={}",
-                    descriptionStr, retryBackoffMs, timeoutMs);
+        if (retryBackoffMs < 0) {
+            log.debug("Assuming no retry backoff since retryBackoffMs={} is negative", retryBackoffMs);
+            retryBackoffMs = 0;
         }
 
-        if (retryBackoffMs < 0) {
-            log.debug("Invalid retryBackoffMs, must be non-negative but got {}. 0 will be used instead",
-                    retryBackoffMs);
-            retryBackoffMs = 0;
+        if (retryBackoffMs >= timeoutMs) {
+            log.debug("Executing {} only once, since retryBackoffMs={} is equal to or larger than total timeoutDurationMs={}",
+                    descriptionStr, retryBackoffMs, timeoutMs);
         }
 
         if (timeoutMs <= 0 || retryBackoffMs >= timeoutMs) {
@@ -79,7 +78,7 @@ public class RetryUtil {
             return callable.call();
         }
 
-        long end = System.currentTimeMillis() + timeoutMs;
+        final long end = System.currentTimeMillis() + timeoutMs;
         int attempt = 0;
         Throwable lastError = null;
         do {
@@ -94,12 +93,12 @@ public class RetryUtil {
                 lastError = e;
             }
 
-            // if current time is less than the ending time, no more retry is necessary
             long millisRemaining = Math.max(0, end - System.currentTimeMillis());
-            long sleepMs = Math.min(retryBackoffMs, millisRemaining);
-            if (sleepMs > 0) {  // won't sleep if retryBackoffMs is less or equals to 0
-                Utils.sleep(sleepMs);
+            if (millisRemaining < retryBackoffMs) {
+                // exit when the time remaining is less than retryBackoffMs
+                break;
             }
+            Utils.sleep(retryBackoffMs);
         } while (System.currentTimeMillis() < end);
 
         throw new ConnectException("Fail to " + descriptionStr + " after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
