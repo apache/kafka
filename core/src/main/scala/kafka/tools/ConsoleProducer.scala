@@ -111,8 +111,6 @@ object ConsoleProducer {
     CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.BUFFER_MEMORY_CONFIG, config.options, config.maxMemoryBytesOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.BATCH_SIZE_CONFIG, config.options, config.maxPartitionMemoryBytesOpt)
-    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.METADATA_MAX_AGE_CONFIG, config.options, config.metadataExpiryMsOpt)
     CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.MAX_BLOCK_MS_CONFIG, config.options, config.maxBlockMsOpt)
@@ -140,11 +138,6 @@ object ConsoleProducer {
                                     .withOptionalArg()
                                     .describedAs("compression-codec")
                                     .ofType(classOf[String])
-    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously.")
-      .withRequiredArg
-      .describedAs("size")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(200)
     val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, " +
       "and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message. " +
       "This is the option to control `retries` in producer configs.")
@@ -267,7 +260,6 @@ object ConsoleProducer {
                                DefaultCompressionCodec.name
                              else compressionCodecOptionValue
                            else NoCompressionCodec.name
-    val batchSize = options.valueOf(batchSizeOpt)
     val readerClass = options.valueOf(messageReaderOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
