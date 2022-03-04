@@ -179,7 +179,7 @@ pipeline {
           }
         }
 
-        stage('ppc64le') {
+        stage('PowerPC') {
           agent { label 'ppc64le' }
           options {
             timeout(time: 2, unit: 'HOURS')
@@ -193,7 +193,7 @@ pipeline {
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
               doTest(env, 'unitTest')
             }
-            echo 'Skipping Kafka Streams archetype test for ppc64le build'
+            echo 'Skipping Kafka Streams archetype test for PowerPC build'
           }
         }
         
