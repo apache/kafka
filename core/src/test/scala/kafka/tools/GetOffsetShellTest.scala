@@ -145,9 +145,9 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   @ValueSource(strings = Array("-3", "max-timestamp"))
   def testGetOffsetsByMaxTimestamp(time: String): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions", "topic.*", "--time", time))
-    offsets.foreach{ offset =>
+    offsets.foreach{  case (topic, _, timestampOpt) =>
       // We can't know the exact offsets with max timestamp
-      assertTrue(offset._3.get >= 0 && offset._3.get <= offset._1.replace("topic", "").toInt)
+      assertTrue(timestampOpt.get >= 0 && timestampOpt.get <= topic.replace("topic", "").toInt)
     }
   }
 
@@ -164,6 +164,12 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
       ),
       offsets
     )
+  }
+
+  @Test
+  def testTopicPartitionsArgWithInternalIncluded(): Unit = {
+    val offsets = executeAndParse(Array("--topic-partitions", "__.*:0"))
+    assertEquals(List(("__consumer_offsets", 0, Some(0))), offsets)
   }
 
   @Test

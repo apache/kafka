@@ -143,7 +143,8 @@ object GetOffsetShell {
               case _: LeaderNotAvailableException =>
                 System.err.println(s"Error: topic-partition ${tp.topic}:${tp.partition} does not have a leader. Skip getting offsets")
               case _ =>
-                System.err.println(s"Error while getting end offsets for topic-partition ${tp.topic}:${tp.partition}")
+                System.err.println(s"Error while getting offset for topic-partition ${tp.topic}:${tp.partition}")
+                e.printStackTrace()
             }
             None
         }
@@ -221,6 +222,9 @@ object GetOffsetShell {
     )
   }
 
+  /**
+   * Creates a topic-partition filter based on a topic pattern and a set of partition ids.
+   */
   def createTopicPartitionFilterWithTopicAndPartitionPattern(
     topicOpt: Option[String],
     partitionIds: String
