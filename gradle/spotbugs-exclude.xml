@@ -71,6 +71,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor -->
         <Source name="~.*\.scala" />
         <Or>
+            <Bug pattern="SA_FIELD_SELF_COMPARISON"/>
             <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
             <Bug pattern="NP_NULL_ON_SOME_PATH"/>
             <Bug pattern="NP_NULL_PARAM_DEREF"/>
