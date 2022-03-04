@@ -446,14 +446,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Allows to limit the batches on the file record in bytes
-     */
-    public static FileRecords open(File file, int end) throws IOException {
-        FileChannel channel = openChannel(file, false, false, 0, false);
-        return new FileRecords(file, channel, 0, end, false);
-    }
-
-    /**
      * Open a channel for the given file
      * For windows NTFS and some old LINUX file system, set preallocate to true and initFileSize
      * with one value (for example 512 * 1025 *1024 ) can improve the kafka produce performance.

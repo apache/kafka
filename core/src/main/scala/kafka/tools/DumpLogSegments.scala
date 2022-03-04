@@ -250,7 +250,7 @@ object DumpLogSegments {
                       maxBatchesSize: Int): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val fileRecords = FileRecords.open(file, maxBatchesSize)
+    val fileRecords = FileRecords.open(file, false).slice(startOffset, maxMessageSize)
     try {
       var validBytes = 0L
       var lastOffset = -1L
