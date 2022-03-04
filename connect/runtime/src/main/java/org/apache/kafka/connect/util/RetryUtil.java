@@ -82,7 +82,7 @@ public class RetryUtil {
         long end = System.currentTimeMillis() + timeoutMs;
         int attempt = 0;
         Throwable lastError = null;
-        while (System.currentTimeMillis() <= end) {
+        do {
             attempt++;
             try {
                 return callable.call();
@@ -100,7 +100,7 @@ public class RetryUtil {
             if (sleepMs > 0) {  // won't sleep if retryBackoffMs is less or equals to 0
                 Utils.sleep(sleepMs);
             }
-        }
+        } while (System.currentTimeMillis() < end);
 
         throw new ConnectException("Fail to " + descriptionStr + " after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
     }

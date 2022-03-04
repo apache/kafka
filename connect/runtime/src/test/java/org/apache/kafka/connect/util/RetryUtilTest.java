@@ -128,12 +128,12 @@ public class RetryUtilTest {
     }
 
     @Test
-    public void testBackoffLessThanTimeout() throws Exception {
+    public void testBackoffMoreThanTimeoutWillOnlyExecuteOnce() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
         TimeoutException e = assertThrows(TimeoutException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 100));
-        Mockito.verify(mockCallable, Mockito.atMostOnce()).call();
+        Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
 
     @Test
