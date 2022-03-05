@@ -1126,6 +1126,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         try {
             this.accumulator.awaitFlushCompletion();
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new InterruptException("Flush interrupted.", e);
         } finally {
             producerMetrics.recordFlush(time.nanoseconds() - start);
