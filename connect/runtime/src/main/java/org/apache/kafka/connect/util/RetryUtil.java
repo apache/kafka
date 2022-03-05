@@ -67,14 +67,9 @@ public class RetryUtil {
             log.debug("Assuming no retry backoff since retryBackoffMs={} is negative", retryBackoffMs);
             retryBackoffMs = 0;
         }
-
-        if (retryBackoffMs >= timeoutMs) {
-            log.debug("Executing {} only once, since retryBackoffMs={} is equal to or larger than total timeoutDurationMs={}",
-                    descriptionStr, retryBackoffMs, timeoutMs);
-        }
-
         if (timeoutMs <= 0 || retryBackoffMs >= timeoutMs) {
-            // no retry
+            log.debug("Executing {} only once, since timeoutMs={} is not larger than retryBackoffMs={}",
+                    descriptionStr, timeoutMs, retryBackoffMs);
             return callable.call();
         }
 
