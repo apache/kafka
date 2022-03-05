@@ -31,7 +31,12 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -57,7 +62,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -131,25 +136,38 @@ public class ConsistencyVectorIntegrationTest {
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
 
         // Assert that both active and standby have the same position bound
-        TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, true, queryableStoreType);
-            return store1.get(key) == batch1NumMessages - 1;
-        }, "store1 cannot find results for key");
-        TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store2 = getStore(TABLE_NAME, kafkaStreams2, true, queryableStoreType);
-            return store2.get(key) == batch1NumMessages - 1;
-        }, "store2 cannot find results for key");
+        final StateQueryRequest<Integer> request =
+            StateQueryRequest
+                .inStore(TABLE_NAME)
+                .withQuery(KeyQuery.<Integer, Integer>withKey(key))
+                .withPositionBound(PositionBound.unbounded());
 
-        final AtomicInteger count = new AtomicInteger();
-        for (final TestingRocksDBStore store : supplier.stores) {
-            if (store.getDbDir() != null) {
-                assertThat(store.getDbDir().toString().contains("/0_0/"), is(true));
-                assertThat(store.getPosition().getPartitionPositions(INPUT_TOPIC_NAME), notNullValue());
-                assertThat(store.getPosition().getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 99L));
-                count.incrementAndGet();
+        checkPosition(batch1NumMessages, request, kafkaStreams1);
+        checkPosition(batch1NumMessages, request, kafkaStreams2);
+    }
+
+    private void checkPosition(final int batch1NumMessages,
+                               final StateQueryRequest<Integer> request,
+                               final KafkaStreams kafkaStreams1) throws InterruptedException {
+        final AtomicReference<QueryResult<Integer>> result = new AtomicReference<>();
+        TestUtils.waitForCondition(() -> {
+            final StateQueryResult<Integer> stateQueryResult = IntegrationTestUtils.iqv2WaitForResult(
+                kafkaStreams1,
+                request
+            );
+            final QueryResult<Integer> queryResult = stateQueryResult.getPartitionResults().get(0);
+            if (queryResult.isSuccess() && queryResult.getResult() == batch1NumMessages - 1) {
+                result.set(queryResult);
+                return true;
+            } else {
+                return false;
             }
-        }
-        assertThat(count.get(), is(2));
+        }, "store1 cannot find results for key");
+        assertThat(
+            "Result:" + result,
+            result.get().getPosition(),
+            is(Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, batch1NumMessages - 1))
+        );
     }
 
     public class TestingRocksDBStore extends RocksDBStore {
