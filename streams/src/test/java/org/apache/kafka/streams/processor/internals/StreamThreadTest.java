@@ -1398,7 +1398,7 @@ public class StreamThreadTest {
         final AtomicBoolean processed = new AtomicBoolean(false);
         internalTopologyBuilder.addProcessor(
             "proc",
-            () -> record -> {
+            (ProcessorSupplier<Object, Object, Object, Object>) () -> record -> {
                 if (shouldThrow.get()) {
                     throw new TaskCorruptedException(singleton(task1));
                 } else {

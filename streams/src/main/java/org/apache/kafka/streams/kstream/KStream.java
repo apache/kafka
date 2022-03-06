@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -4936,4 +4937,8 @@ public interface KStream<K, V> {
     void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);
+
+    <VOut> KStream<K, VOut> processValues(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+                       final Named named,
+                       final String... stateStoreNames);
 }

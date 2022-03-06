@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
 import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 
@@ -37,6 +38,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier;
     private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
+    private final FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier;
     private final String processorName;
 
     @SuppressWarnings("deprecation") // Old PAPI compatibility.
@@ -44,6 +46,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
                                final String processorName) {
         oldProcessorSupplier = processorSupplier;
         this.processorSupplier = () -> ProcessorAdapter.adapt(processorSupplier.get());
+        fixedKeyProcessorSupplier = null;
         this.processorName = processorName;
     }
 
@@ -51,11 +54,24 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
                                final String processorName) {
         oldProcessorSupplier = null;
         this.processorSupplier = processorSupplier;
+        fixedKeyProcessorSupplier = null;
+        this.processorName = processorName;
+    }
+
+    public ProcessorParameters(final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier,
+                               final String processorName) {
+        oldProcessorSupplier = null;
+        this.processorSupplier = null;
+        fixedKeyProcessorSupplier = processorSupplier;
         this.processorName = processorName;
     }
 
     public ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
         return processorSupplier;
+    }
+
+    public FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier() {
+        return fixedKeyProcessorSupplier;
     }
 
     @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.

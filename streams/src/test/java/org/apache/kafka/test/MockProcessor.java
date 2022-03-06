@@ -53,6 +53,10 @@ public class MockProcessor<K, V> extends org.apache.kafka.streams.processor.Abst
         delegate.process(new Record<>(key, value, context.timestamp(), context.headers()));
     }
 
+    public void process(final Record<K, V> record) {
+        process(record.key(), record.value());
+    }
+
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
         delegate.checkAndClearProcessResult(expected);
     }
