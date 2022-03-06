@@ -143,7 +143,6 @@ class DumpLogSegmentsTest {
       def isBatch(index: Int): Boolean = {
         var i = 0
         batches.zipWithIndex.foreach { case (batch, _) =>
-          println(batch)
           if (i == index)
             return true
 
@@ -348,7 +347,7 @@ class DumpLogSegmentsTest {
       if (line.startsWith("baseOffset")) {
         line match {
           case sizePattern(size) => batchesSize += size.toInt
-          case _ => throw new IllegalStateException(s"Failed to parse and find size value for batch line:" + line)
+          case _ => throw new IllegalStateException(s"Failed to parse and find size value for batch line: $line")
         }
         batchesCounter += 1
       }
