@@ -109,6 +109,7 @@ import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
@@ -167,6 +168,8 @@ import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -6278,6 +6281,47 @@ public class KafkaAdminClientTest {
                 "Timed out waiting for retry");
             env.kafkaClient().respond(prepareMetadataResponse(cluster, Errors.NONE));
             assertEquals(0, result.listings().get().size());
+        }
+    }
+
+    @Test
+    public void testFenceProducers() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            String transactionalId = "copyCat";
+            Node transactionCoordinator = env.cluster().nodes().iterator().next();
+
+            // fail to find the coordinator at first with a retriable error
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, transactionalId, transactionCoordinator));
+            // and then succeed in the attempt to find the transaction coordinator
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, transactionalId, transactionCoordinator));
+            // unfortunately, a coordinator load is in progress and we need to retry our init PID request
+            env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof InitProducerIdRequest,
+                    new InitProducerIdResponse(new InitProducerIdResponseData().setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())),
+                    transactionCoordinator
+            );
+            // then find out that the coordinator has changed since then
+            env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof InitProducerIdRequest,
+                    new InitProducerIdResponse(new InitProducerIdResponseData().setErrorCode(Errors.NOT_COORDINATOR.code())),
+                    transactionCoordinator
+            );
+            // and as a result, try once more to locate the coordinator (this time succeeding on the first try)
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, transactionalId, transactionCoordinator));
+            // and finally, complete the init PID request
+            InitProducerIdResponseData initProducerIdResponseData = new InitProducerIdResponseData()
+                    .setProducerId(4761)
+                    .setProducerEpoch((short) 489);
+            env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof InitProducerIdRequest,
+                    new InitProducerIdResponse(initProducerIdResponseData),
+                    transactionCoordinator
+            );
+
+            FenceProducersResult result = env.adminClient().fenceProducers(Collections.singleton(transactionalId));
+            assertNull(result.all().get());
+            assertEquals(4761, result.producerId(transactionalId).get());
+            assertEquals((short) 489, result.epochId(transactionalId).get());
         }
     }
 

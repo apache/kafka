@@ -18,7 +18,10 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -26,10 +29,12 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
@@ -83,35 +88,28 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     public static void closeCluster() {
         CLUSTER.stop();
     }
+
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
-
-    @Rule
-    public TestName testName = new TestName();
-
-    private static String inputTopic;
-    private static StreamsBuilder builder;
-    private static Properties properties;
-    private static List<String> processorValueCollector;
-    private static String appId = "";
     private static final AtomicBoolean THROW_ERROR = new AtomicBoolean(true);
     private static final AtomicBoolean THROW_ILLEGAL_STATE_EXCEPTION = new AtomicBoolean(false);
     private static final AtomicBoolean THROW_ILLEGAL_ARGUMENT_EXCEPTION = new AtomicBoolean(false);
 
-    @Before
-    public void setup() {
-        final String testId = safeUniqueTestName(getClass(), testName);
-        appId = "appId_" + testId;
-        inputTopic = "input" + testId;
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
+    @Rule
+    public final TestName testName = new TestName();
 
-        builder  = new StreamsBuilder();
+    private final String testId = safeUniqueTestName(getClass(), testName);
+    private final String appId = "appId_" + testId;
+    private final String inputTopic = "input" + testId;
+    private final String inputTopic2 = "input2" + testId;
+    private final String outputTopic = "output" + testId;
+    private final String outputTopic2 = "output2" + testId;
+    private final StreamsBuilder builder = new StreamsBuilder();
+    private final List<String> processorValueCollector = new ArrayList<>();
 
-        processorValueCollector = new ArrayList<>();
+    private final Properties properties = basicProps();
 
-        final KStream<String, String> stream = builder.stream(inputTopic);
-        stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
-
-        properties  = mkObjectProperties(
+    private Properties basicProps() {
+        return mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
@@ -122,6 +120,13 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10000)
             )
         );
+    }
+
+    @Before
+    public void setup() {
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, inputTopic2, outputTopic, outputTopic2);
+        final KStream<String, String> stream = builder.stream(inputTopic);
+        stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
     }
 
     @After
@@ -228,7 +233,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @Test
     public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread() throws InterruptedException {
-        builder  = new StreamsBuilder();
         builder.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.persistentKeyValueStore("globalStore"),
@@ -236,7 +240,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 Serdes.String(),
                 CLUSTER.time
             ),
-            inputTopic,
+            inputTopic2,
             Consumed.with(Serdes.String(), Serdes.String()),
             () -> new ShutdownProcessor(processorValueCollector)
         );
@@ -248,12 +252,92 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
-            produceMessages(0L, inputTopic, "A");
+            produceMessages(0L, inputTopic2, "A");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
 
+    }
+
+    @Test
+    public void shouldEmitSameRecordAfterFailover() throws Exception {
+        properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L);
+        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
+
+        final AtomicBoolean shouldThrow = new AtomicBoolean(true);
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(inputTopic, Materialized.as("test-store"))
+            .toStream()
+            .map((key, value) -> {
+                if (shouldThrow.compareAndSet(true, false)) {
+                    throw new RuntimeException("Kaboom");
+                } else {
+                    return new KeyValue<>(key, value);
+                }
+            })
+            .to(outputTopic);
+        builder.stream(inputTopic2).to(outputTopic2);
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                0L);
+
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                inputTopic2,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                0L);
+
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerDeserializer.class,
+                    StringDeserializer.class
+                ),
+                outputTopic,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                )
+            );
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerDeserializer.class,
+                    StringDeserializer.class
+                ),
+                outputTopic2,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                )
+            );
+        }
     }
 
     private void produceMessages(final long timestamp, final String streamOneInput, final String msg) {
