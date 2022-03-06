@@ -1790,7 +1790,7 @@ public class WorkerSinkTaskTest {
     @Test
     public void testHeadersWithCustomConverter() throws Exception {
         StringConverter stringConverter = new StringConverter();
-        TestConverterWithHeaders testConverter = new TestConverterWithHeaders();
+        SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
         createTask(initialState, stringConverter, testConverter, stringConverter);
 

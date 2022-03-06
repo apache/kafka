@@ -429,7 +429,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
-            config.logUnused();
+            config.logUnusedAndUnknown();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka producer started");
         } catch (Throwable t) {
@@ -514,7 +514,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                                          LogContext logContext) {
         TransactionManager transactionManager = null;
 
-        if (config.idempotenceEnabled()) {
+        if (config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);

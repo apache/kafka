@@ -43,7 +43,7 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     Range(1, topicCount + 1).foreach(i => createTopic(topicName(i), i))
 
     val props = new Properties()
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
 
@@ -201,7 +201,7 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   }
 
   private def addBootstrapServer(args: Array[String]): Array[String] = {
-    args ++ Array("--bootstrap-server", brokerList)
+    args ++ Array("--bootstrap-server", bootstrapServers())
   }
 }
 

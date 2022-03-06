@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<CoordinatorKey, Map<MemberIdentity, Errors>> {
+public class RemoveMembersFromConsumerGroupHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<MemberIdentity, Errors>> {
 
     private final CoordinatorKey groupId;
     private final List<MemberIdentity> members;
@@ -79,7 +79,7 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
     }
 
     @Override
-    public LeaveGroupRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+    public LeaveGroupRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
         validateKeys(groupIds);
         return new LeaveGroupRequest.Builder(groupId.idValue, members);
     }
