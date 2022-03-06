@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -62,7 +61,6 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -2556,46 +2554,56 @@ public class KStreamImplTest {
         final String input = "input";
         final String output = "output";
 
-        builder.stream(input, consumed).processValues(new FixedKeyProcessorSupplier<String, String, Integer>() {
-            @Override
-            public FixedKeyProcessor<String, String, Integer> get() {
-                return new FixedKeyProcessor<String, String, Integer>() {
-                    private FixedKeyProcessorContext<String, Integer> context;
+        builder.stream(input, consumed)
+               .processValues(new FixedKeyProcessorSupplier<String, String, Integer>() {
+                   @Override
+                   public FixedKeyProcessor<String, String, Integer> get() {
+                       return new FixedKeyProcessor<String, String, Integer>() {
+                           private FixedKeyProcessorContext<String, Integer> context;
 
-                    @Override
-                    public void init(final FixedKeyProcessorContext<String, Integer> context) {
-                        FixedKeyProcessor.super.init(context);
-                        this.context = context;
-                    }
+                           @Override
+                           public void init(final FixedKeyProcessorContext<String, Integer> context) {
+                               FixedKeyProcessor.super.init(context);
+                               this.context = context;
+                           }
 
-                    @Override
-                    public void process(final FixedKeyRecord<String, String> record) {
-                        context.forward(record.withValue(record.value().length()));
-                    }
-                };
-            }
-        },Named.as("fkp")).to(output,Produced.valueSerde(Serdes.Integer()));
+                           @Override
+                           public void process(final FixedKeyRecord<String, String> record) {
+                               context.forward(record.withValue(record.value().length()));
+                           }
+                       };
+                   }
+               }, Named.as("fkp"))
+               .to(output, Produced.valueSerde(Serdes.Integer()));
 
         final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
             topologyDescription,
             equalTo("Topologies:\n" +
-                "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> fkp\n" +
-                "    Processor: fkp (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000001\n" +
-                "      <-- KSTREAM-SOURCE-0000000000\n" +
-                "    Sink: KSTREAM-SINK-0000000001 (topic: output)\n" +
-                "      <-- fkp\n\n")
+                        "   Sub-topology: 0\n" +
+                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+                        "      --> fkp\n" +
+                        "    Processor: fkp (stores: [])\n" +
+                        "      --> KSTREAM-SINK-0000000001\n" +
+                        "      <-- KSTREAM-SOURCE-0000000000\n" +
+                        "    Sink: KSTREAM-SINK-0000000001 (topic: output)\n" +
+                        "      <-- fkp\n\n")
         );
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, Serdes.String().serializer(), Serdes.String().serializer());
+                driver.createInputTopic(
+                    input,
+                    Serdes.String().serializer(),
+                    Serdes.String().serializer()
+                );
             final TestOutputTopic<String, Integer> outputTopic =
-                driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.Integer().deserializer());
+                driver.createOutputTopic(
+                    output,
+                    Serdes.String().deserializer(),
+                    Serdes.Integer().deserializer()
+                );
 
             inputTopic.pipeInput("A", "0", 5L);
             inputTopic.pipeInput("B", "00", 100L);
