@@ -16,20 +16,6 @@
  */
 package org.apache.kafka.streams.processor.api;
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TimestampExtractor;
-
-import java.io.File;
-import java.time.Duration;
-import java.util.Map;
-import java.util.Optional;
-
 /**
  * Processor context interface.
  *

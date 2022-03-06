@@ -107,7 +107,9 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 processor.init(context);
             }
             if (fixedKeyProcessor != null) {
-                fixedKeyProcessor.init((FixedKeyProcessorContext<KIn, VOut>) context);
+                @SuppressWarnings("unchecked") final FixedKeyProcessorContext<KIn, VOut> fixedKeyProcessorContext =
+                    (FixedKeyProcessorContext<KIn, VOut>) context;
+                fixedKeyProcessor.init(fixedKeyProcessorContext);
             }
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
