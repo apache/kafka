@@ -58,10 +58,14 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode.UnoptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.kstream.ForeachProcessor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -1520,4 +1524,36 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         builder.addGraphNode(graphNode, processNode);
     }
+
+    @Override
+    public <VOut> KStream<K, VOut> processValues(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+                        final Named named,
+                        final String... stateStoreNames) {
+        Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
+        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
+        ApiUtils.checkSupplier(processorSupplier);
+        for (final String stateStoreName : stateStoreNames) {
+            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
+        }
+
+        final String name = new NamedInternal(named).name();
+        final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
+            name,
+            new ProcessorParameters<>(processorSupplier, name),
+            stateStoreNames);
+
+        builder.addGraphNode(graphNode, processNode);
+        // cannot inherit value serde
+        return new KStreamImpl<>(
+            name,
+            keySerde,
+            null,
+            subTopologySourceNodes,
+            repartitionRequired,
+            processNode,
+            builder);
+    }
+
+
 }
