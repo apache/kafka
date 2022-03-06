@@ -122,11 +122,11 @@ class CachingWindowStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (rawNewValue != null || rawOldValue != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
 
                 final ProcessorRecordContext current = context.recordContext();
-                context.setRecordContext(entry.entry().context());
                 try {
+                    context.setRecordContext(entry.entry().context());
+                    wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
                     flushListener.apply(
                         new Record<>(
                             binaryWindowKey,
@@ -138,7 +138,13 @@ class CachingWindowStore
                 }
             }
         } else {
-            wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(entry.entry().context());
+                wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
+            } finally {
+                context.setRecordContext(current);
+            }
         }
     }
 
