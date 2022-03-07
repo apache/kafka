@@ -420,7 +420,7 @@ public class FetchSessionHandler {
      * @param topicPartitions  The topicPartitions from the FetchResponse.
      * @param ids              The topic IDs from the FetchResponse.
      * @param version          The version of the FetchResponse.
-     * @return                 null if the fetch response partitions are valid; human-readable problem description otherwise.
+     * @return                 null if the full fetch response partitions are valid; human-readable problem description otherwise.
      */
     String verifyFullFetchResponsePartitions(Set<TopicPartition> topicPartitions, Set<Uuid> ids, short version) {
         StringBuilder bld = new StringBuilder();
@@ -464,9 +464,9 @@ public class FetchSessionHandler {
         Set<TopicPartition> extra =
             findMissing(topicPartitions, sessionPartitions.keySet());
         StringBuilder bld = new StringBuilder();
-        if (extra.isEmpty())
+        if (!extra.isEmpty())
             bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
-        if (extraIds.isEmpty())
+        if (!extraIds.isEmpty())
             bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
         if ((!extra.isEmpty()) || (!extraIds.isEmpty())) {
             bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
