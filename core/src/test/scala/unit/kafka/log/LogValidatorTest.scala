@@ -25,7 +25,7 @@ import kafka.message._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
-import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
@@ -1352,7 +1352,7 @@ class LogValidatorTest {
         requestLocal = RequestLocal.withThreadConfinedCaching)
     )
 
-    assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertTrue(e.recordErrors.nonEmpty)
     assertEquals(e.recordErrors.size, 3)
   }
@@ -1397,8 +1397,9 @@ class LogValidatorTest {
         RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
     )
     // if there is a mix of both regular InvalidRecordException and InvalidTimestampException,
-    // InvalidTimestampException takes precedence
-    assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+    // InvalidTimestampException is no longer takes precedence. The type of invalidException
+    // is unified as InvalidRecordException
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertTrue(e.recordErrors.nonEmpty)
     assertEquals(6, e.recordErrors.size)
   }

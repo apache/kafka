@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
@@ -68,6 +67,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
+import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
@@ -140,7 +140,7 @@ public final class QuorumController implements Controller {
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
         private LogContext logContext = null;
-        private Map<ConfigResource.Type, ConfigDef> configDefs = Collections.emptyMap();
+        private KafkaConfigSchema configSchema = new KafkaConfigSchema(Collections.emptyMap());
         private RaftClient<ApiMessageAndVersion> raftClient = null;
         private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
         private short defaultReplicationFactor = 3;
@@ -174,8 +174,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setConfigDefs(Map<ConfigResource.Type, ConfigDef> configDefs) {
-            this.configDefs = configDefs;
+        public Builder setConfigSchema(KafkaConfigSchema configSchema) {
+            this.configSchema = configSchema;
             return this;
         }
 
@@ -258,7 +258,7 @@ public final class QuorumController implements Controller {
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, clusterId, queue, time,
-                    configDefs, raftClient, supportedFeatures, defaultReplicationFactor,
+                    configSchema, raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
                     sessionTimeoutNs, controllerMetrics, createTopicPolicy,
                     alterConfigPolicy, configurationValidator, authorizer);
@@ -1202,7 +1202,7 @@ public final class QuorumController implements Controller {
                              String clusterId,
                              KafkaEventQueue queue,
                              Time time,
-                             Map<ConfigResource.Type, ConfigDef> configDefs,
+                             KafkaConfigSchema configSchema,
                              RaftClient<ApiMessageAndVersion> raftClient,
                              Map<String, VersionRange> supportedFeatures,
                              short defaultReplicationFactor,
@@ -1226,7 +1226,7 @@ public final class QuorumController implements Controller {
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager(logContext,
-            snapshotRegistry, configDefs, alterConfigPolicy, configurationValidator);
+            snapshotRegistry, configSchema, alterConfigPolicy, configurationValidator);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
