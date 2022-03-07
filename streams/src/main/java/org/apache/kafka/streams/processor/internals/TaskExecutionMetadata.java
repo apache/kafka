@@ -31,6 +31,9 @@ import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNA
  * shared between all StreamThreads.
  */
 public class TaskExecutionMetadata {
+    // TODO: implement exponential backoff, for now we just wait 5s
+    private static final long CONSTANT_BACKOFF_MS = 5_000L;
+
     private final boolean hasNamedTopologies;
     // map of topologies experiencing errors/currently under backoff
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
@@ -58,7 +61,7 @@ public class TaskExecutionMetadata {
         }
     }
 
-    class NamedTopologyMetadata {
+    private class NamedTopologyMetadata {
         private final Logger log;
         private final Map<TaskId, Long> tasksToErrorTime = new ConcurrentHashMap<>();
 
@@ -73,11 +76,10 @@ public class TaskExecutionMetadata {
         }
 
         public boolean canProcessTask(final Task task, final long now) {
-            // TODO: implement exponential backoff, for now we just wait 15s
             final Long errorTime = tasksToErrorTime.get(task.id());
             if (errorTime == null) {
                 return true;
-            } else if (now - errorTime > 15000L) {
+            } else if (now - errorTime > CONSTANT_BACKOFF_MS) {
                 log.info("End backoff for task {} at t={}", task.id(), now);
                 tasksToErrorTime.remove(task.id());
                 if (tasksToErrorTime.isEmpty()) {

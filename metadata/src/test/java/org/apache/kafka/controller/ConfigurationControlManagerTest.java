@@ -24,6 +24,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
@@ -52,8 +53,6 @@ import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManager.NO_OP_EXISTENCE_CHECKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -71,6 +70,8 @@ public class ConfigurationControlManagerTest {
             define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def").
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi"));
     }
+
+    static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS);
 
     static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
     static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
@@ -92,7 +93,7 @@ public class ConfigurationControlManagerTest {
     public void testReplay() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, SCHEMA,
                 Optional.empty(), ConfigurationValidator.NO_OP);
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
@@ -126,7 +127,7 @@ public class ConfigurationControlManagerTest {
     public void testIncrementalAlterConfigs() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, SCHEMA,
                 Optional.empty(), ConfigurationValidator.NO_OP);
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
@@ -195,7 +196,7 @@ public class ConfigurationControlManagerTest {
             new RequestMetadata(BROKER0, toMap(entry("foo.bar", "123"),
                 entry("quux", "456")))));
         ConfigurationControlManager manager = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, CONFIGS, Optional.of(policy),
+            new LogContext(), snapshotRegistry, SCHEMA, Optional.of(policy),
             ConfigurationValidator.NO_OP);
 
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
@@ -218,35 +219,10 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
-    public void testIsSplittable() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty(), ConfigurationValidator.NO_OP);
-        assertTrue(manager.isSplittable(BROKER, "foo.bar"));
-        assertFalse(manager.isSplittable(BROKER, "baz"));
-        assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
-        assertFalse(manager.isSplittable(TOPIC, "baz"));
-        assertTrue(manager.isSplittable(TOPIC, "abc"));
-    }
-
-    @Test
-    public void testGetConfigValueDefault() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty(), ConfigurationValidator.NO_OP);
-        assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
-        assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
-        assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
-        assertEquals("true", manager.getConfigValueDefault(TOPIC, "ghi"));
-    }
-
-    @Test
     public void testLegacyAlterConfigs() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, SCHEMA,
                 Optional.empty(), ConfigurationValidator.NO_OP);
         List<ApiMessageAndVersion> expectedRecords1 = asList(
             new ApiMessageAndVersion(new ConfigRecord().

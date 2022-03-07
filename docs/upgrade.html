@@ -21,7 +21,7 @@
 
 <h5><a id="upgrade_320_notable" href="#upgrade_320_notable">Notable changes in 3.2.0</a></h5>
     <ul>
-        <li>Idempotence for the producer is enabled by default. In 3.0.0 and 3.1.0, a bug prevented this default from being applied,
+        <li>Idempotence for the producer is enabled by default if no conflicting configurations are set. In 3.0.0 and 3.1.0, a bug prevented this default from being applied,
             which meant that idempotence remained disabled unless the user had explicitly set <code>enable.idempotence</code> to true
             (See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details).
             This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
@@ -71,7 +71,8 @@
 
 <h5><a id="upgrade_311_notable" href="#upgrade_311_notable">Notable changes in 3.1.1</a></h5>
 <ul>
-    <li>A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
+    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set.
+        A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
 	<code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details.
         This issue was fixed and the default is properly applied.</li>
 </ul>
@@ -141,7 +142,8 @@
 
 <h5><a id="upgrade_301_notable" href="#upgrade_301_notable">Notable changes in 3.0.1</a></h5>
 <ul>
-    <li>A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
+    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set.
+        A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
 	<code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details.
         This issue was fixed and the default is properly applied.</li>
 </ul>

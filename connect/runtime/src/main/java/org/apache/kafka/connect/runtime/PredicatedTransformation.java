@@ -30,7 +30,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
  * {@link Predicate} is true (or false, according to {@code negate}).
  * @param <R>
  */
-class PredicatedTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
+public class PredicatedTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";

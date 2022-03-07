@@ -996,7 +996,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Test
     public void testHeadersWithCustomConverter() throws Exception {
         StringConverter stringConverter = new StringConverter();
-        TestConverterWithHeaders testConverter = new TestConverterWithHeaders();
+        SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
         createWorkerTask(TargetState.STARTED, stringConverter, testConverter, stringConverter);
 

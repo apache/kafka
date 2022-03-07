@@ -125,6 +125,17 @@ public class NamedTopologyTest {
     }
 
     @Test
+    public void shouldAllowAddingAndRemovingNamedTopologyAndReturnBeforeCallingStart() throws Exception {
+        builder1.stream("stream-1").selectKey((k, v) -> v).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store")));
+        builder2.stream("stream-2").selectKey((k, v) -> v).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store")));
+
+        streams.addNamedTopology(builder1.build()).all().get();
+        streams.addNamedTopology(builder2.build()).all().get();
+
+        streams.removeNamedTopology("topology-2").all().get();
+    }
+
+    @Test
     public void shouldThrowTopologyExceptionWhenMultipleNamedTopologiesCreateStreamFromSameInputTopic() {
         builder1.stream("stream");
         builder2.stream("stream");
@@ -138,12 +149,27 @@ public class NamedTopologyTest {
     }
 
     @Test
-    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopic() {
+    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopicAfterStart() {
         builder1.stream("stream");
         builder2.stream("stream");
 
         streams.start();
 
+        streams.addNamedTopology(builder1.build());
+
+        final ExecutionException exception = assertThrows(
+            ExecutionException.class,
+            () -> streams.addNamedTopology(builder2.build()).all().get()
+        );
+
+        assertThat(exception.getCause().getClass(), equalTo(TopologyException.class));
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopicBeforeStart() {
+        builder1.stream("stream");
+        builder2.stream("stream");
+        
         streams.addNamedTopology(builder1.build());
 
         final ExecutionException exception = assertThrows(

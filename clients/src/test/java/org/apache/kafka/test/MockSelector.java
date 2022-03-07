@@ -83,6 +83,7 @@ public class MockSelector implements Selectable {
 
         removeSendsForNode(id, completedSends);
         removeSendsForNode(id, initiatedSends);
+        ready.remove(id);
 
         for (int i = 0; i < this.connected.size(); i++) {
             if (this.connected.get(i).equals(id)) {
