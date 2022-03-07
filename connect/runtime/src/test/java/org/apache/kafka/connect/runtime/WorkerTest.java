@@ -82,7 +82,6 @@ import java.lang.management.ManagementFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -299,7 +298,7 @@ public class WorkerTest extends ThreadedTest {
 
         // Wait for the connector to actually start
         assertEquals(TargetState.STARTED, onFirstStart.get(1000, TimeUnit.MILLISECONDS));
-        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR_ID)), worker.connectorNames());
+        assertEquals(Collections.singleton(CONNECTOR_ID), worker.connectorNames());
 
 
         FutureCallback<TargetState> onSecondStart = new FutureCallback<>();
@@ -347,8 +346,8 @@ public class WorkerTest extends ThreadedTest {
         MockFileConfigProvider mockFileConfigProvider = new MockFileConfigProvider();
         mockFileConfigProvider.configure(Collections.singletonMap("testId", mockFileProviderTestId));
         when(plugins.newConfigProvider(any(AbstractConfig.class),
-                                               eq("config.providers.file"),
-                                               any(ClassLoaderUsage.class)))
+                                       eq("config.providers.file"),
+                                       any(ClassLoaderUsage.class)))
                .thenReturn(mockFileConfigProvider);
     }
 
@@ -431,7 +430,7 @@ public class WorkerTest extends ThreadedTest {
         worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onStart);
         // Wait for the connector to actually start
         assertEquals(TargetState.STARTED, onStart.get(1000, TimeUnit.MILLISECONDS));
-        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR_ID)), worker.connectorNames());
+        assertEquals(Collections.singleton(CONNECTOR_ID), worker.connectorNames());
         assertStatistics(worker, 1, 0);
         assertStartupStatistics(worker, 1, 0, 0, 0);
 
@@ -485,7 +484,7 @@ public class WorkerTest extends ThreadedTest {
         worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onStart);
         // Wait for the connector to actually start
         assertEquals(TargetState.STARTED, onStart.get(1000, TimeUnit.MILLISECONDS));
-        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR_ID)), worker.connectorNames());
+        assertEquals(Collections.singleton(CONNECTOR_ID), worker.connectorNames());
         assertStatistics(worker, 1, 0);
 
         worker.stopAndAwaitConnector(CONNECTOR_ID);
@@ -555,7 +554,7 @@ public class WorkerTest extends ThreadedTest {
         // Wait for the connector to actually start
         assertEquals(TargetState.STARTED, onFirstStart.get(1000, TimeUnit.MILLISECONDS));
         assertStatistics(worker, 1, 0);
-        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR_ID)), worker.connectorNames());
+        assertEquals(Collections.singleton(CONNECTOR_ID), worker.connectorNames());
 
         FutureCallback<TargetState> onSecondStart = new FutureCallback<>();
         worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onSecondStart);
@@ -621,8 +620,7 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
-        Map<String, String> origProps = new HashMap<>();
-        origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+        Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                 noneConnectorClientConfigOverridePolicy);
@@ -633,7 +631,7 @@ public class WorkerTest extends ThreadedTest {
         assertEquals(Collections.emptySet(), worker.taskIds());
         worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
-        assertEquals(new HashSet<>(Collections.singletonList(TASK_ID)), worker.taskIds());
+        assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -669,8 +667,7 @@ public class WorkerTest extends ThreadedTest {
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
 
-        Map<String, String> origProps = new HashMap<>();
-        origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+        Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         TaskConfig taskConfig = new TaskConfig(origProps);
 
@@ -797,8 +794,7 @@ public class WorkerTest extends ThreadedTest {
         mockInternalConverters();
         mockFileConfigProvider();
 
-        Map<String, String> origProps = new HashMap<>();
-        origProps.put(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
+        Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
@@ -855,8 +851,7 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
-        Map<String, String> origProps = new HashMap<>();
-        origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+        Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         TaskConfig taskConfig = new TaskConfig(origProps);
 
@@ -898,9 +893,7 @@ public class WorkerTest extends ThreadedTest {
         mockFileConfigProvider();
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
-        Map<String, String> origProps = new HashMap<>();
-        origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-
+        Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
         TaskConfig taskConfig = new TaskConfig(origProps);
 
         when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
@@ -940,7 +933,7 @@ public class WorkerTest extends ThreadedTest {
         connProps.put("value.converter.extra.config", "bar");
         worker.startTask(TASK_ID, ClusterConfigState.EMPTY, connProps, origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
-        assertEquals(new HashSet<>(Collections.singletonList(TASK_ID)), worker.taskIds());
+        assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -958,7 +951,6 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
         verify(plugins).connectorClass(WorkerTestConnector.class.getName());
-
 
         // Remove
         verify(instantiatedTask).stop();
@@ -980,7 +972,6 @@ public class WorkerTest extends ThreadedTest {
 
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX);
     }
-
 
     @Test
     public void testProducerConfigsWithOverrides() {
@@ -1064,7 +1055,6 @@ public class WorkerTest extends ThreadedTest {
             null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX);
-
     }
 
     @Test
@@ -1121,14 +1111,12 @@ public class WorkerTest extends ThreadedTest {
         props.put("consumer.bootstrap.servers", "localhost:4761");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
-        Map<String, Object> connConfig = new HashMap<>();
-        connConfig.put("metadata.max.age.ms", "10000");
-
+        Map<String, Object> connConfig = Collections.singletonMap("metadata.max.age.ms", "10000");
         Map<String, String> expectedConfigs = new HashMap<>(workerProps);
-
         expectedConfigs.put("bootstrap.servers", "localhost:9092");
         expectedConfigs.put("client.id", "testid");
         expectedConfigs.put("metadata.max.age.ms", "10000");
+
         //we added a config on the fly
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
@@ -1146,8 +1134,7 @@ public class WorkerTest extends ThreadedTest {
         props.put("admin.metadata.max.age.ms", "5000");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
-        Map<String, Object> connConfig = new HashMap<>();
-        connConfig.put("metadata.max.age.ms", "10000");
+        Map<String, Object> connConfig = Collections.singletonMap("metadata.max.age.ms", "10000");
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX)).thenReturn(connConfig);
         assertThrows(ConnectException.class, () -> Worker.adminConfigs(new ConnectorTaskId("test", 1),
