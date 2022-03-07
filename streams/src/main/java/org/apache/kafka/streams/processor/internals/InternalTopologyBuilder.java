@@ -1259,8 +1259,7 @@ public class InternalTopologyBuilder {
         } else if (maybeDecorateInternalSourceTopics(latestResetTopics).contains(topic) ||
             latestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
             return LATEST;
-        } else if (fullSourceTopicNames().contains(topic)
-                || (usesPatternSubscription() && Pattern.compile(sourceTopicPatternString()).matcher(topic).matches())) {
+        } else if (containsTopic(topic)) {
             return NONE;
         } else {
             throw new IllegalStateException(String.format(
@@ -1427,8 +1426,10 @@ public class InternalTopologyBuilder {
         return sourceTopicPatternString;
     }
 
-    public boolean containsSourceTopic(final String topic) {
-        return fullSourceTopicNames().contains(topic) || Pattern.compile(sourceTopicPatternString()).matcher(topic).matches();
+    public boolean containsTopic(final String topic) {
+        return fullSourceTopicNames().contains(topic)
+            || (usesPatternSubscription() && Pattern.compile(sourceTopicPatternString()).matcher(topic).matches())
+            || changelogTopicToStore.containsKey(topic);
     }
 
     public boolean hasNoLocalTopology() {

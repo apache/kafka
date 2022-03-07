@@ -102,6 +102,7 @@ public class TopologyMetadata {
         this.version = new TopologyVersion();
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
+        this.log = LoggerFactory.getLogger(getClass());
 
         builders = new ConcurrentSkipListMap<>();
         if (builder.hasNamedTopology()) {
@@ -382,7 +383,7 @@ public class TopologyMetadata {
 
     public OffsetResetStrategy offsetResetStrategy(final String topic) {
         for (final InternalTopologyBuilder builder : builders.values()) {
-            if (builder.containsSourceTopic(topic)) {
+            if (builder.containsTopic(topic)) {
                 return builder.offsetResetStrategy(topic);
             }
         }
