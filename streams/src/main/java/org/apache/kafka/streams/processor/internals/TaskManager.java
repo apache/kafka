@@ -1133,6 +1133,13 @@ public class TaskManager {
 
         tasks.maybeCreateTasksFromNewTopologies(currentNamedTopologies);
         maybeCloseTasksFromRemovedTopologies(currentNamedTopologies);
+
+        if (topologyMetadata.isEmpty()) {
+            log.info("Proactively unsubscribing from all topics due to empty topology");
+            mainConsumer.unsubscribe();
+        }
+
+        topologyMetadata.maybeNotifyTopologyVersionListeners();
     }
 
     void maybeCloseTasksFromRemovedTopologies(final Set<String> currentNamedTopologies) {

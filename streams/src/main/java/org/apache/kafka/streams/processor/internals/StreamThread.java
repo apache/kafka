@@ -885,13 +885,6 @@ public class StreamThread extends Thread {
 
             taskManager.handleTopologyUpdates();
 
-            if (topologyMetadata.isEmpty()) {
-                log.info("Proactively unsubscribing from all topics due to empty topology");
-                mainConsumer.unsubscribe();
-            }
-
-            topologyMetadata.maybeNotifyTopologyVersionListeners();
-
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             // We don't need to manually trigger a rebalance to pick up tasks from the new topology, as
