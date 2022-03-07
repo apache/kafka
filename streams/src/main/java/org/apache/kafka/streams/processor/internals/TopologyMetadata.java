@@ -172,10 +172,10 @@ public class TopologyMetadata {
         try {
             version.topologyLock.lock();
             threadVersions.put(threadName, topologyVersion());
+            return namedTopologiesView();
         } finally {
             version.topologyLock.unlock();
         }
-        return namedTopologiesView();
     }
 
     public void maybeNotifyTopologyVersionListeners() {
