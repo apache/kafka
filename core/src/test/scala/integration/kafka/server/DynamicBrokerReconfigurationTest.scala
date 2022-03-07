@@ -782,6 +782,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       val props = new Properties()
       props.put(propName, newSize.toString)
 
+
       // Very temporary copy and paste hack to observe behaviour in CI via the magic println for this test only
       alterConfigs(servers, adminClients.head, props, perBrokerConfig = false).all().get()
 

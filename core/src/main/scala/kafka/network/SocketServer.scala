@@ -589,16 +589,18 @@ class DataPlaneAcceptor(socketServer: SocketServer,
   override def reconfigure(configs: util.Map[String, _]): Unit = {
     val brokerId = configs.get(KafkaConfig.BrokerIdProp).asInstanceOf[Int]
     val newNumNetworkThreads = configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int]
-    println(s"DataAcceptor $listenerName on $brokerId - newThreads: $newNumNetworkThreads, currentProcessors: ${processors.length}")
+    val printf = newNumNetworkThreads == 2
+
+    if (printf)  println(s"DataAcceptor $listenerName on $brokerId - newThreads: $newNumNetworkThreads, currentProcessors: ${processors.length}, thread: ${Thread.currentThread()}")
     if (newNumNetworkThreads != processors.length) {
-      println(s"DataAcceptor $listenerName on $brokerId - Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
+      if (printf) println(s"DataAcceptor $listenerName on $brokerId - Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
       if (newNumNetworkThreads > processors.length) {
-        addProcessors(newNumNetworkThreads - processors.length, brokerId)
+        addProcessors(newNumNetworkThreads - processors.length, brokerId, printf)
       } else if (newNumNetworkThreads < processors.length) {
         removeProcessors(processors.length - newNumNetworkThreads)
       }
     }
-    println(s"DataAcceptor $listenerName on $brokerId reconfigure complete")
+    if (printf) println(s"DataAcceptor $listenerName on $brokerId reconfigure complete")
   }
 
   /**
@@ -893,18 +895,19 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   @Override
   def wakeup(): Unit = nioSelector.wakeup()
 
-  def addProcessors(toCreate: Int, brokerId: Int = -1): Unit = {
+  def addProcessors(toCreate: Int, brokerId: Int = -1, printf: Boolean = false): Unit = {
     val listenerName = endPoint.listenerName
     val securityProtocol = endPoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
-    println(s"DataAcceptor $listenerName on $brokerId - addProcessors adding $toCreate")
+    if (printf) println(s"DataAcceptor $listenerName on $brokerId - addProcessors adding $toCreate")
     for (_ <- 0 until toCreate) {
       val processor = newProcessor(socketServer.nextProcessorId(), listenerName, securityProtocol)
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
-      println(s"DataAcceptor $listenerName on $brokerId - addProcessors added processor ${processor.id}")
+      if (printf) println(s"DataAcceptor $listenerName on $brokerId - addProcessors added processor ${processor.id}")
     }
 
+    if (printf) println(listenerProcessors)
     processors ++= listenerProcessors
     if (processorsStarted.get)
       startProcessors(listenerProcessors)
