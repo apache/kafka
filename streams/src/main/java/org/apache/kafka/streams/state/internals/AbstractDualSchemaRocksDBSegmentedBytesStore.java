@@ -224,37 +224,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         }
     }
 
-    // Visible for testing
     abstract Map<S, WriteBatch> getWriteBatches(final Collection<ConsumerRecord<byte[], byte[]>> records);
-
-    /*{
-        // advance stream time to the max timestamp in the batch
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long timestamp = baseKeySchema.segmentTimestamp(Bytes.wrap(record.key()));
-            observedStreamTime = Math.max(observedStreamTime, timestamp);
-        }
-
-        final Map<S, WriteBatch> writeBatchMap = new HashMap<>();
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long timestamp = baseKeySchema.segmentTimestamp(Bytes.wrap(record.key()));
-            final long segmentId = segments.segmentId(timestamp);
-            final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
-            if (segment != null) {
-                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                    record,
-                    consistencyEnabled,
-                    position
-                );
-                try {
-                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
-                    segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);
-                } catch (final RocksDBException e) {
-                    throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
-                }
-            }
-        }
-        return writeBatchMap;
-    }*/
 
     @Override
     public Position getPosition() {
