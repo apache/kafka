@@ -31,7 +31,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
@@ -272,7 +271,7 @@ public class WorkerTest extends ThreadedTest {
     @Test
     public void testStartAndStopConnector() throws Throwable {
 
-        final String connectorClass = WorkerTestConnector.class.getName();
+        final String connectorClass = SampleSourceConnector.class.getName();
         connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass);
 
         // Create
@@ -404,7 +403,7 @@ public class WorkerTest extends ThreadedTest {
     @Test
     public void testAddConnectorByAlias() throws Throwable {
 
-        final String connectorAlias = "WorkerTestConnector";
+        final String connectorAlias = "SampleSourceConnector";
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
@@ -522,7 +521,7 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testReconfigureConnectorTasks() throws Throwable {
-        final String connectorClass = WorkerTestConnector.class.getName();
+        final String connectorClass = SampleSourceConnector.class.getName();
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
@@ -608,7 +607,7 @@ public class WorkerTest extends ThreadedTest {
     public void testAddRemoveTask() {
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
-        when(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName())).thenReturn(pluginLoader);
+        when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
 
         when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
         when(task.version()).thenReturn("1.0");
@@ -616,7 +615,7 @@ public class WorkerTest extends ThreadedTest {
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
         mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
         when(executorService.submit(any(WorkerSourceTask.class))).thenReturn(null);
-        doReturn(WorkerTestConnector.class).when(plugins).connectorClass(WorkerTestConnector.class.getName());
+        doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName());
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
@@ -648,8 +647,8 @@ public class WorkerTest extends ThreadedTest {
 
         verify(executorService).submit(any(WorkerSourceTask.class));
         verify(plugins).delegatingLoader();
-        verify(delegatingLoader).connectorLoader(WorkerTestConnector.class.getName());
-        verify(plugins).connectorClass(WorkerTestConnector.class.getName());
+        verify(delegatingLoader).connectorLoader(SampleSourceConnector.class.getName());
+        verify(plugins).connectorClass(SampleSourceConnector.class.getName());
 
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
@@ -684,11 +683,11 @@ public class WorkerTest extends ThreadedTest {
 
         when(executorService.submit(any(WorkerSourceTask.class))).thenReturn(null);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
-        when(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName())).thenReturn(pluginLoader);
+        when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
-        doReturn(WorkerTestConnector.class).when(plugins).connectorClass(WorkerTestConnector.class.getName());
+        doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName());
 
 
 
@@ -740,11 +739,11 @@ public class WorkerTest extends ThreadedTest {
         verify(instantiatedTask).initialize(taskConfig);
         verify(herder, times(5)).taskStatus(TASK_ID);
         verify(plugins).delegatingLoader();
-        verify(delegatingLoader).connectorLoader(WorkerTestConnector.class.getName());
+        verify(delegatingLoader).connectorLoader(SampleSourceConnector.class.getName());
         verify(executorService).submit(instantiatedTask);
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        verify(plugins).connectorClass(WorkerTestConnector.class.getName());
+        verify(plugins).connectorClass(SampleSourceConnector.class.getName());
         verify(instantiatedTask, atLeastOnce()).id();
         verify(instantiatedTask).awaitStop(anyLong());
         verify(instantiatedTask).removeMetrics();
@@ -798,7 +797,7 @@ public class WorkerTest extends ThreadedTest {
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
-        when(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName())).thenReturn(pluginLoader);
+        when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
 
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
@@ -845,8 +844,8 @@ public class WorkerTest extends ThreadedTest {
         when(executorService.submit(any(WorkerSourceTask.class))).thenReturn(null);
 
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
-        when(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName())).thenReturn(pluginLoader);
-        doReturn(WorkerTestConnector.class).when(plugins).connectorClass(WorkerTestConnector.class.getName());
+        when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
+        doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName());
 
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
@@ -874,8 +873,8 @@ public class WorkerTest extends ThreadedTest {
         verify(plugins, times(2)).currentThreadLoader();
 
         verify(plugins).delegatingLoader();
-        verify(delegatingLoader).connectorLoader(WorkerTestConnector.class.getName());
-        verify(plugins).connectorClass(WorkerTestConnector.class.getName());
+        verify(delegatingLoader).connectorLoader(SampleSourceConnector.class.getName());
+        verify(plugins).connectorClass(SampleSourceConnector.class.getName());
         verify(constructedMockTask).initialize(taskConfig);
         verify(constructedMockTask).loader();
         verify(constructedMockTask).stop();
@@ -913,8 +912,8 @@ public class WorkerTest extends ThreadedTest {
         when(executorService.submit(any(WorkerSourceTask.class))).thenReturn(null);
 
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
-        when(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName())).thenReturn(pluginLoader);
-        doReturn(WorkerTestConnector.class).when(plugins).connectorClass(WorkerTestConnector.class.getName());
+        when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
+        doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName());
 
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
@@ -947,10 +946,10 @@ public class WorkerTest extends ThreadedTest {
         verify(instantiatedTask).initialize(taskConfig);
         verify(executorService).submit(any(WorkerSourceTask.class));
         verify(plugins).delegatingLoader();
-        verify(delegatingLoader).connectorLoader(WorkerTestConnector.class.getName());
+        verify(delegatingLoader).connectorLoader(SampleSourceConnector.class.getName());
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        verify(plugins).connectorClass(WorkerTestConnector.class.getName());
+        verify(plugins).connectorClass(SampleSourceConnector.class.getName());
 
         // Remove
         verify(instantiatedTask).stop();
@@ -1267,50 +1266,13 @@ public class WorkerTest extends ThreadedTest {
     private Map<String, String> anyConnectorConfigMap() {
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
     }
 
-
-    /* Name here needs to be unique as we are testing the aliasing mechanism */
-    public static class WorkerTestConnector extends SourceConnector {
-
-        private static final ConfigDef CONFIG_DEF  = new ConfigDef()
-            .define("configName", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configName.");
-
-        @Override
-        public String version() {
-            return "1.0";
-        }
-
-        @Override
-        public void start(Map<String, String> props) {
-
-        }
-
-        @Override
-        public Class<? extends Task> taskClass() {
-            return null;
-        }
-
-        @Override
-        public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return null;
-        }
-
-        @Override
-        public void stop() {
-
-        }
-
-        @Override
-        public ConfigDef config() {
-            return CONFIG_DEF;
-        }
-    }
 
     private static class TestSourceTask extends SourceTask {
         public TestSourceTask() {

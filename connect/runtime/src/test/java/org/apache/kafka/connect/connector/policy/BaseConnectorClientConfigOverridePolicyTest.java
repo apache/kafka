@@ -19,6 +19,7 @@ package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.health.ConnectorType;
+import org.apache.kafka.connect.runtime.SampleSourceConnector;
 import org.apache.kafka.connect.runtime.WorkerTest;
 import org.junit.Assert;
 
@@ -43,7 +44,7 @@ public abstract class BaseConnectorClientConfigOverridePolicyTest {
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             "test",
             ConnectorType.SOURCE,
-            WorkerTest.WorkerTestConnector.class,
+            SampleSourceConnector.class,
             clientConfig,
             ConnectorClientConfigRequest.ClientType.PRODUCER);
         return policyToTest().validate(connectorClientConfigRequest);
