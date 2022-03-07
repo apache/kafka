@@ -24,12 +24,10 @@ import kafka.api.KAFKA_2_7_IV1
 import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ZkIsrManager}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, ConfigEntry, DescribeLogDirsResult, NewTopic}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -39,7 +37,7 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 @Timeout(300)
-class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
+class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
   var cluster: ReassignPartitionsTestCluster = null
 
@@ -620,8 +618,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     def createTopics(): Unit = {
       TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
-      brokerList = TestUtils.bootstrapServers(servers,
-        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      brokerList = TestUtils.plaintextBootstrapServers(servers)
       adminClient = Admin.create(Map[String, Object](
         AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> brokerList
       ).asJava)

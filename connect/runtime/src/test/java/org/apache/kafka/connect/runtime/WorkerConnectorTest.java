@@ -80,7 +80,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
     }
 
     @Test
-    public void testInitializeFailure() throws InterruptedException {
+    public void testInitializeFailure() {
         RuntimeException exception = new RuntimeException();
         connector = sourceConnector;
 

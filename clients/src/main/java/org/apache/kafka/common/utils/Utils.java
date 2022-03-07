@@ -912,7 +912,7 @@ public final class Utils {
      * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
      * This function also flushes the parent directory to guarantee crash consistency.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail, or parent dir flush fails.
      */
     public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
         atomicMoveWithFallback(source, target, true);
@@ -924,7 +924,8 @@ public final class Utils {
      * when a sequence of atomicMoveWithFallback is called for the same directory and we don't want
      * to repeatedly flush the same parent directory.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail,
+     * or parent dir flush fails if needFlushParentDir is true.
      */
     public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
         try {
@@ -948,10 +949,12 @@ public final class Utils {
     /**
      * Flushes dirty directories to guarantee crash consistency.
      *
+     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
+     *
      * @throws IOException if flushing the directory fails.
      */
     public static void flushDir(Path path) throws IOException {
-        if (path != null) {
+        if (path != null && !OperatingSystem.IS_WINDOWS && !OperatingSystem.IS_ZOS) {
             try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }
@@ -1410,6 +1413,23 @@ public final class Utils {
         Map<K, V> res = new HashMap<>(keys.size());
         keys.forEach(key -> res.put(key, valueSupplier.get()));
         return res;
+    }
+
+    /**
+     * Get an array containing all of the {@link Object#toString string representations} of a given enumerable type.
+     * @param enumClass the enum class; may not be null
+     * @return an array with the names of every value for the enum class; never null, but may be empty
+     * if there are no values defined for the enum
+     */
+    public static String[] enumOptions(Class<? extends Enum<?>> enumClass) {
+        Objects.requireNonNull(enumClass);
+        if (!enumClass.isEnum()) {
+            throw new IllegalArgumentException("Class " + enumClass + " is not an enumerable type");
+        }
+
+        return Stream.of(enumClass.getEnumConstants())
+                .map(Object::toString)
+                .toArray(String[]::new);
     }
 
 }

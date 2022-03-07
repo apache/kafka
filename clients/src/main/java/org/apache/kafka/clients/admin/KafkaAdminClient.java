@@ -47,6 +47,7 @@ import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
+import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
@@ -234,6 +235,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -302,6 +304,11 @@ public class KafkaAdminClient extends AdminClient {
      * An invalid shutdown time which indicates that a shutdown has not yet been performed.
      */
     private static final long INVALID_SHUTDOWN_TIME = -1;
+
+    /**
+     * The base reason for a LeaveGroupRequest
+     */
+    static final String LEAVE_GROUP_REASON = "member was removed by an admin";
 
     /**
      * Thread name prefix for admin client network thread
@@ -585,7 +592,7 @@ public class KafkaAdminClient extends AdminClient {
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
-        config.logUnused();
+        config.logUnusedAndUnknown();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
         thread.start();
@@ -2681,8 +2688,11 @@ public class KafkaAdminClient extends AdminClient {
                     if (descriptions.size() > 0) {
                         future.complete(descriptions);
                     } else {
-                        // descriptions will be empty if and only if the user is not authorized to describe cluster resource.
-                        future.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+                        // Up to v3 DescribeLogDirsResponse did not have an error code field, hence it defaults to None
+                        Errors error = response.data().errorCode() == Errors.NONE.code()
+                                ? Errors.CLUSTER_AUTHORIZATION_FAILED
+                                : Errors.forCode(response.data().errorCode());
+                        future.completeExceptionally(error.exception());
                     }
                 }
                 @Override
@@ -3731,6 +3741,10 @@ public class KafkaAdminClient extends AdminClient {
         } else {
             members = options.members().stream().map(MemberToRemove::toMemberIdentity).collect(Collectors.toList());
         }
+        
+        String reason = options.reason() == null ? LEAVE_GROUP_REASON : LEAVE_GROUP_REASON + ": " + options.reason();
+        members.forEach(member -> member.setReason(reason));
+
         SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
                 RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
         RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
@@ -4376,6 +4390,15 @@ public class KafkaAdminClient extends AdminClient {
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListTransactionsResult(future.all());
+    }
+
+    @Override
+    public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
+        AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> future =
+            FenceProducersHandler.newFuture(transactionalIds);
+        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new FenceProducersResult(future.all());
     }
 
     private <K, V> void invokeDriver(

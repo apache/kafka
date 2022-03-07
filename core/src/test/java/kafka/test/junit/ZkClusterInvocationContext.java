@@ -23,6 +23,7 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
+import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
@@ -40,6 +41,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -204,6 +206,12 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             return clusterReference.get().listenerName();
         }
 
+
+        @Override
+        public Optional<ListenerName> controlPlaneListenerName() {
+            return OptionConverters.toJava(clusterReference.get().servers().head().config().controlPlaneListenerName());
+        }
+
         @Override
         public Collection<SocketServer> controllerSocketServers() {
             return servers()
@@ -246,13 +254,13 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            return clusterReference.get().createAdminClient(configOverrides);
+            return clusterReference.get().createAdminClient(clientListener(), configOverrides);
         }
 
         @Override
         public void start() {
             if (started.compareAndSet(false, true)) {
-                clusterReference.get().setUp();
+                clusterReference.get().setUp(new EmptyTestInfo());
             }
         }
 

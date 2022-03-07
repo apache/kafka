@@ -67,6 +67,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
@@ -132,12 +133,18 @@ public class ReplicationControlManagerTest {
         final LogContext logContext = new LogContext();
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
-        final ClusterControlManager clusterControl = new ClusterControlManager(
-            logContext, time, snapshotRegistry, TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
-            new StripedReplicaPlacer(random));
         final ControllerMetrics metrics = new MockControllerMetrics();
+        final String clusterId = Uuid.randomUuid().toString();
+        final ClusterControlManager clusterControl = new ClusterControlManager(logContext,
+            clusterId,
+            time,
+            snapshotRegistry,
+            TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
+            new StripedReplicaPlacer(random),
+            metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty());
+            new LogContext(), snapshotRegistry, KafkaConfigSchema.EMPTY, Optional.empty(),
+                (__, ___) -> { });
         final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
@@ -415,7 +422,7 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
         expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
-                setErrorMessage(Errors.TOPIC_ALREADY_EXISTS.exception().getMessage()));
+                setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse3, result3.response());
         Uuid fooId = result2.response().topics().find("foo").topicId();
         RecordTestUtils.assertBatchIteratorContains(asList(
@@ -427,6 +434,76 @@ public class ReplicationControlManagerTest {
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testBrokerCountMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        ctx.registerBrokers(0);
+
+        assertEquals(1, ctx.metrics.fencedBrokerCount());
+        assertEquals(0, ctx.metrics.activeBrokerCount());
+
+        ctx.unfenceBrokers(0);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(1);
+        ctx.unfenceBrokers(1);
+
+        assertEquals(2, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(2);
+        ctx.unfenceBrokers(2);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(3, ctx.metrics.activeBrokerCount());
+
+        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
+        ctx.replay(result.records());
+        result = replicationControl.unregisterBroker(2);
+        ctx.replay(result.records());
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
+    }
+
+    @Test
+    public void testCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 3));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreatableTopicResult topicResult = result.response().topics().find("foo");
+        assertEquals((short) 0, topicResult.errorCode());
+    }
+
+    @Test
+    public void testInvalidCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 4));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
+            setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
+            setErrorMessage("Unable to replicate the partition 4 time(s): The target " +
+                "replication factor of 4 cannot be reached because only 3 broker(s) " +
+                "are registered."));
+        assertEquals(expectedResponse, result.response());
     }
 
     @Test

@@ -30,7 +30,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.queue.EventQueue
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.{MockRawSnapshotWriter, SnapshotWriter}
+import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, SnapshotWriter}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -50,8 +50,12 @@ class BrokerMetadataSnapshotterTest {
                        committedEpoch: Int,
                        lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
       val offsetAndEpoch = new OffsetAndEpoch(committedOffset, committedEpoch)
-      SnapshotWriter.createWithHeader(
-        () => Optional.of(new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer)),
+      RecordsSnapshotWriter.createWithHeader(
+        () => {
+          Optional.of(
+            new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer(committedOffset, committedEpoch))
+          )
+        },
         1024,
         MemoryPool.NONE,
         Time.SYSTEM,
@@ -61,7 +65,7 @@ class BrokerMetadataSnapshotterTest {
       ).get();
     }
 
-    def consumeSnapshotBuffer(buffer: ByteBuffer): Unit = {
+    def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {
       val delta = new MetadataDelta(MetadataImage.EMPTY)
       val memoryRecords = MemoryRecords.readableRecords(buffer)
       val batchIterator = memoryRecords.batchIterator()
@@ -72,7 +76,7 @@ class BrokerMetadataSnapshotterTest {
             val recordBuffer = record.value().duplicate()
             val messageAndVersion = MetadataRecordSerde.INSTANCE.read(
               new ByteBufferAccessor(recordBuffer), recordBuffer.remaining())
-            delta.replay(messageAndVersion.message())
+            delta.replay(committedOffset, committedEpoch, messageAndVersion.message())
           })
         }
       }
@@ -92,8 +96,8 @@ class BrokerMetadataSnapshotterTest {
     try {
       val blockingEvent = new BlockingEvent()
       snapshotter.eventQueue.append(blockingEvent)
-      assertTrue(snapshotter.maybeStartSnapshot(123L, 12, 10000L, MetadataImageTest.IMAGE1))
-      assertFalse(snapshotter.maybeStartSnapshot(124L, 12, 11000L, MetadataImageTest.IMAGE2))
+      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1))
+      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2))
       blockingEvent.latch.countDown()
       assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
     } finally {

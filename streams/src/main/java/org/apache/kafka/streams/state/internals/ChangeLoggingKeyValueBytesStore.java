@@ -31,8 +31,8 @@ import java.util.List;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public class ChangeLoggingKeyValueBytesStore
-    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
-    implements KeyValueStore<Bytes, byte[]> {
+        extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
+        implements KeyValueStore<Bytes, byte[]> {
 
     InternalProcessorContext context;
 
@@ -138,8 +138,7 @@ public class ChangeLoggingKeyValueBytesStore
         return wrapped().reverseAll();
     }
 
-    void log(final Bytes key,
-             final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp());
+    void log(final Bytes key, final byte[] value) {
+        context.logChange(name(), key, value, context.timestamp(), wrapped().getPosition());
     }
 }

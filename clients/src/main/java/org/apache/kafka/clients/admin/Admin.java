@@ -1576,6 +1576,29 @@ public interface Admin extends AutoCloseable {
     ListTransactionsResult listTransactions(ListTransactionsOptions options);
 
     /**
+     * Fence out all active producers that use any of the provided transactional IDs, with the default options.
+     * <p>
+     * This is a convenience method for {@link #fenceProducers(Collection, FenceProducersOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param transactionalIds The IDs of the producers to fence.
+     * @return The FenceProducersResult.
+     */
+    default FenceProducersResult fenceProducers(Collection<String> transactionalIds) {
+        return fenceProducers(transactionalIds, new FenceProducersOptions());
+    }
+
+    /**
+     * Fence out all active producers that use any of the provided transactional IDs.
+     *
+     * @param transactionalIds The IDs of the producers to fence.
+     * @param options          The options to use when fencing the producers.
+     * @return The FenceProducersResult.
+     */
+    FenceProducersResult fenceProducers(Collection<String> transactionalIds,
+                                        FenceProducersOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();

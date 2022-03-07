@@ -19,6 +19,8 @@ package kafka.test;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
@@ -48,6 +50,8 @@ import org.apache.kafka.controller.ResultOrError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.server.authorizer.AclCreateResult;
+import org.apache.kafka.server.authorizer.AclDeleteResult;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -69,6 +73,16 @@ public class MockController implements Controller {
         new NotControllerException("This is not the correct controller for this cluster.");
 
     private final AtomicLong nextTopicId = new AtomicLong(1);
+
+    @Override
+    public CompletableFuture<List<AclCreateResult>> createAcls(List<AclBinding> aclBindings) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> aclBindingFilters) {
+        throw new UnsupportedOperationException();
+    }
 
     public static class Builder {
         private final Map<String, MockTopic> initialTopics = new HashMap<>();
@@ -154,6 +168,15 @@ public class MockController implements Controller {
             } else {
                 results.put(topicName, new ResultOrError<>(topicNameToId.get(topicName)));
             }
+        }
+        return CompletableFuture.completedFuture(results);
+    }
+
+    @Override
+    synchronized public CompletableFuture<Map<String, Uuid>> findAllTopicIds(long deadlineNs) {
+        Map<String, Uuid> results = new HashMap<>();
+        for (Entry<Uuid, MockTopic> entry : topics.entrySet()) {
+            results.put(entry.getValue().name, entry.getKey());
         }
         return CompletableFuture.completedFuture(results);
     }

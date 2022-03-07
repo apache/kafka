@@ -19,22 +19,22 @@ package kafka.server
 
 import scala.collection.Seq
 
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import kafka.zk.ZooKeeperTestHarness
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import kafka.server.QuorumTestHarness
 import kafka.utils.TestUtils
 import TestUtils._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
 
-class ReplicaFetchTest extends ZooKeeperTestHarness  {
+class ReplicaFetchTest extends QuorumTestHarness  {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val props = createBrokerConfigs(2, zkConnect)
     brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
   }
@@ -57,7 +57,7 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
     }
 
     // send test messages to leader
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
+    val producer = TestUtils.createProducer(TestUtils.plaintextBootstrapServers(brokers),
                                                keySerializer = new StringSerializer,
                                                valueSerializer = new StringSerializer)
     val records = testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++

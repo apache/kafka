@@ -19,13 +19,13 @@ package kafka.server
 
 import kafka.api.ApiVersion
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.security.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
 
-class KafkaServerTest extends ZooKeeperTestHarness {
+class KafkaServerTest extends QuorumTestHarness {
 
   @Test
   def testAlreadyRegisteredAdvertisedListeners(): Unit = {
@@ -39,6 +39,14 @@ class KafkaServerTest extends ZooKeeperTestHarness {
     val server2 = createServer(2, "myhost", TestUtils.RandomPort)
 
     TestUtils.shutdownServers(Seq(server1, server2))
+  }
+
+  @Test
+  def testCreatesProperZkConfigWhenSaslDisabled(): Unit = {
+    val props = new Properties
+    props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
+    val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    assertEquals("false", zkClientConfig.getProperty(JaasUtils.ZK_SASL_CLIENT))
   }
 
   @Test

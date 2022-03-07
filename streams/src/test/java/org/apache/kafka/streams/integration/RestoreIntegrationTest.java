@@ -40,9 +40,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingS
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -291,10 +293,8 @@ public class RestoreIntegrationTest {
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException {
-
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                                                            asList(KeyValue.pair(1, 1),
                                                                          KeyValue.pair(2, 2),
@@ -430,9 +430,7 @@ public class RestoreIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    public static class KeyValueStoreProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
-
+    public static class KeyValueStoreProcessor implements Processor<Integer, Integer, Void, Void> {
         private final String topic;
         private final CountDownLatch processorLatch;
 
@@ -443,22 +441,18 @@ public class RestoreIntegrationTest {
             this.processorLatch = processorLatch;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.store = (KeyValueStore<Integer, Integer>) context.getStateStore(topic);
+        public void init(final ProcessorContext<Void, Void> context) {
+            this.store = context.getStateStore(topic);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
-            if (key != null) {
-                store.put(key, value);
+        public void process(final Record<Integer, Integer> record) {
+            if (record.key() != null) {
+                store.put(record.key(), record.value());
                 processorLatch.countDown();
             }
         }
-
-        @Override
-        public void close() { }
     }
 
     private void createStateForRestoration(final String changelogTopic, final int startingOffset) {
@@ -499,5 +493,4 @@ public class RestoreIntegrationTest {
         consumer.commitSync();
         consumer.close();
     }
-
 }

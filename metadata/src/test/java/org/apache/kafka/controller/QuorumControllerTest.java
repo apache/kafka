@@ -35,6 +35,8 @@ import java.util.stream.StreamSupport;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -69,6 +71,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
+import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -77,16 +80,19 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static java.util.concurrent.TimeUnit.HOURS;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
-import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIGS;
+import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -121,8 +127,12 @@ public class QuorumControllerTest {
     public void testConfigurationOperations() throws Throwable {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
         }
     }
@@ -152,8 +162,12 @@ public class QuorumControllerTest {
     public void testDelayedConfigurationOperations() throws Throwable {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
         }
     }
@@ -170,7 +184,7 @@ public class QuorumControllerTest {
             new ResultOrError<>(Collections.emptyMap())),
             controller.describeConfigs(Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(1L));
+        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2L));
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE), future1.get());
     }
 
@@ -184,8 +198,9 @@ public class QuorumControllerTest {
 
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
-                logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeoutMillis));
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            }, Optional.of(sessionTimeoutMillis));
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -196,7 +211,7 @@ public class QuorumControllerTest {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
-                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setClusterId(active.clusterId()).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -260,8 +275,9 @@ public class QuorumControllerTest {
     @Test
     public void testUnregisterBroker() throws Throwable {
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })) {
                 ListenerCollection listeners = new ListenerCollection();
                 listeners.add(new Listener().setName("PLAINTEXT").
                     setHost("localhost").setPort(9092));
@@ -269,7 +285,7 @@ public class QuorumControllerTest {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                     new BrokerRegistrationRequestData().
                         setBrokerId(0).
-                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setClusterId(active.clusterId()).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                         setListeners(listeners));
                 assertEquals(0L, reply.get().epoch());
@@ -317,15 +333,16 @@ public class QuorumControllerTest {
         RawSnapshotReader reader = null;
         Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
                     BrokerRegistrationReply reply = active.registerBroker(
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -363,8 +380,9 @@ public class QuorumControllerTest {
         }
 
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.of(reader))) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })) {
                 QuorumController active = controlEnv.activeController();
                 long snapshotLogOffset = active.beginWritingSnapshot().get();
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
@@ -383,21 +401,17 @@ public class QuorumControllerTest {
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv,
-                    builder -> {
-                        builder
-                            .setConfigDefs(CONFIGS)
-                            .setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
-                    })
-            ) {
-
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+                b.setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
+            })) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
                     BrokerRegistrationReply reply = active.registerBroker(
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -442,17 +456,17 @@ public class QuorumControllerTest {
         final int maxNewRecordBytes = 1000;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv,
-                    builder -> builder.setConfigDefs(CONFIGS).
-                        setSnapshotMaxNewRecordBytes(maxNewRecordBytes))
-            ) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+                b.setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
+            })) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
                     BrokerRegistrationReply reply = active.registerBroker(
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -493,7 +507,7 @@ public class QuorumControllerTest {
     }
 
     private SnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
-        return SnapshotReader.of(
+        return RecordsSnapshotReader.of(
             reader,
             new MetadataRecordSerde(),
             BufferSupplier.create(),
@@ -555,7 +569,7 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).
-                setProducerIdsEnd(1000), (short) 0)
+                setNextProducerId(1000), (short) 0)
         );
     }
 
@@ -613,8 +627,9 @@ public class QuorumControllerTest {
     @Test
     public void testTimeouts() throws Throwable {
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })) {
                 QuorumController controller = controlEnv.activeController();
                 CountDownLatch countDownLatch = controller.pause();
                 CompletableFuture<CreateTopicsResponseData> createFuture =
@@ -669,8 +684,9 @@ public class QuorumControllerTest {
     @Test
     public void testEarlyControllerResults() throws Throwable {
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })) {
                 QuorumController controller = controlEnv.activeController();
                 CountDownLatch countDownLatch = controller.pause();
                 CompletableFuture<CreateTopicsResponseData> createFuture =
@@ -707,11 +723,10 @@ public class QuorumControllerTest {
         int numPartitions = 3;
         String topicName = "topic-name";
 
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
-            QuorumControllerTestEnv controlEnv =
-                new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
-        ) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })) {
             QuorumController controller = controlEnv.activeController();
 
             Map<Integer, Long> brokerEpochs = registerBrokers(controller, numBrokers);
@@ -817,7 +832,7 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData()
                     .setBrokerId(brokerId)
                     .setRack(null)
-                    .setClusterId("06B-K3N1TBCNYFgruEVP0Q")
+                    .setClusterId(controller.clusterId())
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
                     .setListeners(
                         new ListenerCollection(
@@ -865,4 +880,39 @@ public class QuorumControllerTest {
         }
     }
 
+    @Test
+    public void testConfigResourceExistenceChecker() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            })) {
+                QuorumController active = controlEnv.activeController();
+                registerBrokers(active, 5);
+                active.createTopics(new CreateTopicsRequestData().
+                    setTopics(new CreatableTopicCollection(Collections.singleton(
+                        new CreatableTopic().setName("foo").
+                            setReplicationFactor((short) 3).
+                            setNumPartitions(1)).iterator()))).get();
+                ConfigResourceExistenceChecker checker =
+                    active.new ConfigResourceExistenceChecker();
+                // A ConfigResource with type=BROKER and name=(empty string) represents
+                // the default broker resource. It is used to set cluster configs.
+                checker.accept(new ConfigResource(BROKER, ""));
+
+                // Broker 3 exists, so we can set a configuration for it.
+                checker.accept(new ConfigResource(BROKER, "3"));
+
+                // Broker 10 does not exist, so this should throw an exception.
+                assertThrows(BrokerIdNotRegisteredException.class,
+                    () -> checker.accept(new ConfigResource(BROKER, "10")));
+
+                // Topic foo exists, so we can set a configuration for it.
+                checker.accept(new ConfigResource(TOPIC, "foo"));
+
+                // Topic bar does not exist, so this should throw an exception.
+                assertThrows(UnknownTopicOrPartitionException.class,
+                    () -> checker.accept(new ConfigResource(TOPIC, "bar")));
+            }
+        }
+    }
 }

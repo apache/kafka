@@ -43,7 +43,7 @@ public class RemoteLogMetadataTopicPartitioner {
         // We do not want to depend upon hash code generation of Uuid as that may change.
         int hash = Objects.hash(topicIdPartition.topicId().getLeastSignificantBits(),
                                 topicIdPartition.topicId().getMostSignificantBits(),
-                                topicIdPartition.topicPartition().partition());
+                                topicIdPartition.partition());
 
         return toBytes(hash);
     }

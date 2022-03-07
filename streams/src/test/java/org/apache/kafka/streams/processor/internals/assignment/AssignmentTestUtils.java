@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -102,6 +104,8 @@ public final class AssignmentTestUtils {
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
+    public static final List<String> EMPTY_RACK_AWARE_ASSIGNMENT_TAGS = Collections.emptyList();
+    public static final Map<String, String> EMPTY_CLIENT_TAGS = Collections.emptyMap();
 
     private AssignmentTestUtils() {}
 

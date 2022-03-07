@@ -76,9 +76,13 @@ public final class SessionWindows {
 
     private final long graceMs;
 
-    private SessionWindows(final long gapMs, final long graceMs) {
+    // flag to check if the grace is already set via ofInactivityGapAndGrace or ofInactivityGapWithNoGrace
+    private final boolean hasSetGrace;
+
+    private SessionWindows(final long gapMs, final long graceMs, final boolean hasSetGrace) {
         this.gapMs = gapMs;
         this.graceMs = graceMs;
+        this.hasSetGrace = hasSetGrace;
 
         if (gapMs <= 0) {
             throw new IllegalArgumentException("Gap time cannot be zero or negative.");
@@ -123,7 +127,7 @@ public final class SessionWindows {
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return A SessionWindows object with the specified inactivity gap and grace period
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
-     *                                  if the {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     *                                  if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
      */
     public static SessionWindows ofInactivityGapAndGrace(final Duration inactivityGap, final Duration afterWindowEnd) {
         final String inactivityGapMsgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
@@ -132,7 +136,7 @@ public final class SessionWindows {
         final String afterWindowEndMsgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, afterWindowEndMsgPrefix);
 
-        return new SessionWindows(inactivityGapMs, afterWindowEndMs);
+        return new SessionWindows(inactivityGapMs, afterWindowEndMs, true);
     }
 
     /**
@@ -148,7 +152,7 @@ public final class SessionWindows {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
         final long inactivityGapMs = validateMillisecondDuration(inactivityGap, msgPrefix);
 
-        return new SessionWindows(inactivityGapMs, Math.max(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - inactivityGapMs, 0));
+        return new SessionWindows(inactivityGapMs, Math.max(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - inactivityGapMs, 0), false);
     }
 
     /**
@@ -162,15 +166,20 @@ public final class SessionWindows {
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     * @throws IllegalStateException if {@link #grace(Duration)} is called after {@link #ofInactivityGapAndGrace(Duration, Duration)} or {@link #ofInactivityGapWithNoGrace(Duration)}
      * @deprecated since 3.0. Use {@link #ofInactivityGapAndGrace(Duration, Duration)} instead
      */
     @Deprecated
     public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
-        //TODO KAFKA-13021: disallow calling grace() if it was already set via ofTimeDifferenceAndGrace/WithNoGrace()
+        if (this.hasSetGrace) {
+            throw new IllegalStateException(
+                "Cannot call grace() after setting grace value via ofInactivityGapAndGrace or ofInactivityGapWithNoGrace.");
+        }
+
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
 
-        return new SessionWindows(gapMs, afterWindowEndMs);
+        return new SessionWindows(gapMs, afterWindowEndMs, false);
     }
 
     public long gracePeriodMs() {

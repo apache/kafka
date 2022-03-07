@@ -119,7 +119,7 @@ public class Action {
     @Override
     public String toString() {
         return "Action(" +
-            ", resourcePattern='" + resourcePattern + '\'' +
+            "resourcePattern='" + resourcePattern + '\'' +
             ", operation='" + operation + '\'' +
             ", resourceReferenceCount='" + resourceReferenceCount + '\'' +
             ", logIfAllowed='" + logIfAllowed + '\'' +

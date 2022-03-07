@@ -343,8 +343,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         String otherClusterAlias = SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
                 ? targetClusterAlias()
                 : sourceClusterAlias();
-        // ".internal" suffix ensures this doesn't get replicated
-        return "mm2-offset-syncs." + otherClusterAlias + ".internal";
+        return replicationPolicy().offsetSyncsTopic(otherClusterAlias);
     }
 
     String offsetSyncsTopicLocation() {
@@ -370,18 +369,11 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     String heartbeatsTopic() {
-        return MirrorClientConfig.HEARTBEATS_TOPIC;
-    }
-
-    // e.g. source1.heartbeats
-    String targetHeartbeatsTopic() {
-        return replicationPolicy().formatRemoteTopic(sourceClusterAlias(), heartbeatsTopic());
+        return replicationPolicy().heartbeatsTopic();
     }
 
     String checkpointsTopic() {
-        // Checkpoint topics are not "remote topics", as they are not replicated, so we don't
-        // need to use ReplicationPolicy here.
-        return sourceClusterAlias() + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
+        return replicationPolicy().checkpointsTopic(sourceClusterAlias());
     }
 
     long maxOffsetLag() {

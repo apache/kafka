@@ -223,6 +223,14 @@ public class AbstractConfig {
     public Set<String> unused() {
         Set<String> keys = new HashSet<>(originals.keySet());
         keys.removeAll(used);
+        keys.removeAll(unknown());
+        return keys;
+    }
+
+    public Set<String> unknown() {
+        Set<String> keys = new HashSet<>(originals.keySet());
+        keys.removeAll(values.keySet());
+        keys.removeAll(used);
         return keys;
     }
 
@@ -376,11 +384,24 @@ public class AbstractConfig {
         log.info(b.toString());
     }
 
+    public void logUnusedAndUnknown() {
+        logUnused();
+        logUnknown();
+    }
+
     /**
-     * Log warnings for any unused configurations
+     * Log infos for any unused configurations to user, exclude unknown configurations
      */
-    public void logUnused() {
+    private void logUnused() {
         for (String key : unused())
+            log.info("The configuration '{}' was supplied but isn't a used config since the corresponding feature is not enabled.", key);
+    }
+
+    /**
+     * Log warnings for any unknown configurations
+     */
+    private void logUnknown() {
+        for (String key : unknown())
             log.warn("The configuration '{}' was supplied but isn't a known config.", key);
     }
 
@@ -561,7 +582,7 @@ public class AbstractConfig {
         Map<String, String> providerMap = new HashMap<>();
 
         for (String provider: configProviders.split(",")) {
-            String providerClass = CONFIG_PROVIDERS_CONFIG + "." + provider + ".class";
+            String providerClass = providerClassProperty(provider);
             if (indirectConfigs.containsKey(providerClass))
                 providerMap.put(provider, indirectConfigs.get(providerClass));
 
@@ -576,12 +597,16 @@ public class AbstractConfig {
                 provider.configure(configProperties);
                 configProviderInstances.put(entry.getKey(), provider);
             } catch (ClassNotFoundException e) {
-                log.error("ClassNotFoundException exception occurred: " + entry.getValue());
-                throw new ConfigException("Invalid config:" + entry.getValue() + " ClassNotFoundException exception occurred", e);
+                log.error("Could not load config provider class " + entry.getValue(), e);
+                throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
             }
         }
 
         return configProviderInstances;
+    }
+
+    private static String providerClassProperty(String providerName) {
+        return String.format("%s.%s.class", CONFIG_PROVIDERS_CONFIG, providerName);
     }
 
     @Override

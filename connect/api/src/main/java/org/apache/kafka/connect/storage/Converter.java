@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -85,5 +86,13 @@ public interface Converter {
      */
     default SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
         return toConnectData(topic, value);
+    }
+
+    /**
+     * Configuration specification for this converter.
+     * @return the configuration specification; may not be null
+     */
+    default ConfigDef config() {
+        return new ConfigDef();
     }
 }
