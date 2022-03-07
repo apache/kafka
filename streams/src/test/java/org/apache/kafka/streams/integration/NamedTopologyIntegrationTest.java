@@ -213,9 +213,9 @@ public class NamedTopologyIntegrationTest {
     @Before
     public void setup() throws Exception {
         appId = safeUniqueTestName(NamedTopologyIntegrationTest.class, testName);
-        changelog1 = TOPIC_PREFIX + "-" + TOPOLOGY_1 + "-store-changelog";
-        changelog2 = TOPIC_PREFIX + "-" + TOPOLOGY_2 + "-store-changelog";
-        changelog3 = TOPIC_PREFIX + "-" + TOPOLOGY_3 + "-store-changelog";
+        changelog1 = TOPIC_PREFIX + TOPOLOGY_1 + "-store-changelog";
+        changelog2 = TOPIC_PREFIX + TOPOLOGY_2 + "-store-changelog";
+        changelog3 = TOPIC_PREFIX + TOPOLOGY_3 + "-store-changelog";
         props = configProps(appId, "host1");
         streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
 
@@ -289,8 +289,8 @@ public class NamedTopologyIntegrationTest {
         streams.start(asList(fkjBuilder.build(), countBuilder.build()));
         waitForApplicationState(singletonList(streams), State.RUNNING, Duration.ofSeconds(60));
 
-        final String countTopicPrefix = TOPIC_PREFIX + "-" + countTopologyName;
-        final String fkjTopicPrefix = TOPIC_PREFIX + "-" + fkjTopologyName;
+        final String countTopicPrefix = TOPIC_PREFIX + countTopologyName;
+        final String fkjTopicPrefix = TOPIC_PREFIX + fkjTopologyName;
         final  Set<String> internalTopics = CLUSTER
             .getAllTopicsInCluster().stream()
             .filter(t -> t.contains(TOPIC_PREFIX))
@@ -320,8 +320,8 @@ public class NamedTopologyIntegrationTest {
         assertThat(results, equalTo(COUNT_OUTPUT_DATA));
 
         final Set<String> allTopics = CLUSTER.getAllTopicsInCluster();
-        assertThat(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-changelog"), is(true));
-        assertThat(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-repartition"), is(true));
+        assertThat(allTopics.contains(TOPIC_PREFIX + "topology-1" + "-store-changelog"), is(true));
+        assertThat(allTopics.contains(TOPIC_PREFIX + "topology-1" + "-store-repartition"), is(true));
     }
 
     @Test

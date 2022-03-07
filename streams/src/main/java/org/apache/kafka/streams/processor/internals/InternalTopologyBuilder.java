@@ -1351,7 +1351,7 @@ public class InternalTopologyBuilder {
                                             + "setApplicationId first");
         }
         if (hasNamedTopology()) {
-            return getPrefix() + "-" + topologyName + "-" + topic;
+            return getPrefix() + topologyName + "-" + topic;
         } else {
             return getPrefix() + "-" + topic;
         }

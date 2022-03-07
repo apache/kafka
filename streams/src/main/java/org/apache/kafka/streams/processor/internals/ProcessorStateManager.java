@@ -173,7 +173,7 @@ public class ProcessorStateManager implements StateManager {
         if (namedTopology == null) {
             return prefix + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
         } else {
-            return prefix + "-" + namedTopology + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+            return prefix + namedTopology + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
         }
     }
 
