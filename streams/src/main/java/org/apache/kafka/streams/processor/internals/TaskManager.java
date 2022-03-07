@@ -1133,7 +1133,6 @@ public class TaskManager {
 
         tasks.maybeCreateTasksFromNewTopologies(currentNamedTopologies);
         maybeCloseTasksFromRemovedTopologies(currentNamedTopologies);
-        topologyMetadata.maybeNotifyTopologyVersionListeners();
     }
 
     void maybeCloseTasksFromRemovedTopologies(final Set<String> currentNamedTopologies) {

@@ -890,6 +890,8 @@ public class StreamThread extends Thread {
                 mainConsumer.unsubscribe();
             }
 
+            topologyMetadata.maybeNotifyTopologyVersionListeners();
+
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             // We don't need to manually trigger a rebalance to pick up tasks from the new topology, as
