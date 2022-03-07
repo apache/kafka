@@ -33,8 +33,8 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
@@ -55,8 +55,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         assignStandbyReplicaTasks(
             clientStates,
+            allTaskIds,
             statefulTasks,
-            configs.numStandbyReplicas
+            configs
         );
 
         final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas);
@@ -93,10 +94,10 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final boolean probingRebalanceNeeded = neededActiveTaskMovements + neededStandbyTaskMovements > 0;
 
         log.info("Decided on assignment: " +
-                     clientStates +
-                     " with" +
-                     (probingRebalanceNeeded ? "" : " no") +
-                     " followup probing rebalance.");
+                 clientStates +
+                 " with" +
+                 (probingRebalanceNeeded ? "" : " no") +
+                 " followup probing rebalance.");
 
         return probingRebalanceNeeded;
     }
@@ -115,55 +116,46 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             clientStates,
             ClientState::activeTasks,
             ClientState::unassignActive,
-            ClientState::assignActive
+            ClientState::assignActive,
+            (source, destination) -> true
         );
     }
 
-    private static void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
-                                                  final Set<TaskId> statefulTasks,
-                                                  final int numStandbyReplicas) {
-        final Map<TaskId, Integer> tasksToRemainingStandbys =
-            statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> numStandbyReplicas));
-
-        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
-            (client, task) -> !clientStates.get(client).hasAssignedTask(task),
-            client -> clientStates.get(client).assignedTaskLoad()
-        );
-        standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
-
-        for (final TaskId task : statefulTasks) {
-            int numRemainingStandbys = tasksToRemainingStandbys.get(task);
-            while (numRemainingStandbys > 0) {
-                final UUID client = standbyTaskClientsByTaskLoad.poll(task);
-                if (client == null) {
-                    break;
-                }
-                clientStates.get(client).assignStandby(task);
-                numRemainingStandbys--;
-                standbyTaskClientsByTaskLoad.offer(client);
-            }
-
-            if (numRemainingStandbys > 0) {
-                log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                             "There is not enough available capacity. You should " +
-                             "increase the number of application instances " +
-                             "to maintain the requested number of standby replicas.",
-                         numRemainingStandbys, numStandbyReplicas, task);
-            }
+    private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
+                                           final Set<TaskId> allTaskIds,
+                                           final Set<TaskId> statefulTasks,
+                                           final AssignmentConfigs configs) {
+        if (configs.numStandbyReplicas == 0) {
+            return;
         }
+
+        final StandbyTaskAssignor standbyTaskAssignor = createStandbyTaskAssignor(configs);
+
+        standbyTaskAssignor.assign(clientStates, allTaskIds, statefulTasks, configs);
 
         balanceTasksOverThreads(
             clientStates,
             ClientState::standbyTasks,
             ClientState::unassignStandby,
-            ClientState::assignStandby
+            ClientState::assignStandby,
+            standbyTaskAssignor::isAllowedTaskMovement
         );
+    }
+
+    // Visible for testing
+    static StandbyTaskAssignor createStandbyTaskAssignor(final AssignmentConfigs configs) {
+        if (!configs.rackAwareAssignmentTags.isEmpty()) {
+            return new ClientTagAwareStandbyTaskAssignor();
+        } else {
+            return new DefaultStandbyTaskAssignor();
+        }
     }
 
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
                                                 final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
                                                 final BiConsumer<ClientState, TaskId> taskUnassignor,
-                                                final BiConsumer<ClientState, TaskId> taskAssignor) {
+                                                final BiConsumer<ClientState, TaskId> taskAssignor,
+                                                final BiPredicate<ClientState, ClientState> taskMovementAttemptPredicate) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
@@ -182,7 +174,10 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                     final Iterator<TaskId> sourceIterator = sourceTasks.iterator();
                     while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
-                        final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove);
+                        final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove)
+                                                // When ClientTagAwareStandbyTaskAssignor is used, we need to make sure that
+                                                // sourceClient tags matches destinationClient tags.
+                                                && taskMovementAttemptPredicate.test(sourceClientState, destinationClientState);
                         if (canMove) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
                             taskAssignor.accept(destinationClientState, taskToMove);

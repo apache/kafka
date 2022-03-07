@@ -16,37 +16,45 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.PredicatedTransformation;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
+import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.tools.MockConnector;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.tools.MockSinkConnector;
 import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.tools.SchemaSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
+import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.FutureCallback;
 
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
@@ -55,17 +63,42 @@ public class ConnectorPluginsResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
-    private final List<ConnectorPluginInfo> connectorPlugins;
+    private final List<PluginInfo> connectorPlugins;
 
-    private static final List<Class<? extends Connector>> CONNECTOR_EXCLUDES = Arrays.asList(
-            VerifiableSourceConnector.class, VerifiableSinkConnector.class,
-            MockConnector.class, MockSourceConnector.class, MockSinkConnector.class,
+    static final List<Class<? extends SinkConnector>> SINK_CONNECTOR_EXCLUDES = Arrays.asList(
+            VerifiableSinkConnector.class,
+            MockSinkConnector.class
+    );
+
+    static final List<Class<? extends SourceConnector>> SOURCE_CONNECTOR_EXCLUDES = Arrays.asList(
+            VerifiableSourceConnector.class,
+            MockSourceConnector.class,
             SchemaSourceConnector.class
+    );
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static final List<Class<? extends Transformation<?>>> TRANSFORM_EXCLUDES = Collections.singletonList(
+            (Class) PredicatedTransformation.class
     );
 
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
         this.connectorPlugins = new ArrayList<>();
+
+        // TODO: improve once plugins are allowed to be added/removed during runtime.
+        addConnectorPlugins(herder.plugins().sinkConnectors(), SINK_CONNECTOR_EXCLUDES);
+        addConnectorPlugins(herder.plugins().sourceConnectors(), SOURCE_CONNECTOR_EXCLUDES);
+        addConnectorPlugins(herder.plugins().transformations(), TRANSFORM_EXCLUDES);
+        addConnectorPlugins(herder.plugins().predicates(), Collections.emptySet());
+        addConnectorPlugins(herder.plugins().converters(), Collections.emptySet());
+        addConnectorPlugins(herder.plugins().headerConverters(), Collections.emptySet());
+    }
+
+    private <T> void addConnectorPlugins(Collection<PluginDesc<T>> plugins, Collection<Class<? extends T>> excludes) {
+        plugins.stream()
+                .filter(p -> !excludes.contains(p.pluginClass()))
+                .map(PluginInfo::new)
+                .forEach(connectorPlugins::add);
     }
 
     @PUT
@@ -100,21 +133,24 @@ public class ConnectorPluginsResource {
 
     @GET
     @Path("/")
-    public List<ConnectorPluginInfo> listConnectorPlugins() {
-        return getConnectorPlugins();
-    }
-
-    // TODO: improve once plugins are allowed to be added/removed during runtime.
-    private synchronized List<ConnectorPluginInfo> getConnectorPlugins() {
-        if (connectorPlugins.isEmpty()) {
-            for (PluginDesc<Connector> plugin : herder.plugins().connectors()) {
-                if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
-                    connectorPlugins.add(new ConnectorPluginInfo(plugin));
-                }
+    public List<PluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
+        synchronized (this) {
+            if (connectorsOnly) {
+                return Collections.unmodifiableList(connectorPlugins.stream()
+                        .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
+                        .collect(Collectors.toList()));
+            } else {
+                return Collections.unmodifiableList(connectorPlugins);
             }
         }
+    }
 
-        return Collections.unmodifiableList(connectorPlugins);
+    @GET
+    @Path("/{name}/config")
+    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("name") String pluginName) {
+        synchronized (this) {
+            return herder.connectorPluginConfig(pluginName);
+        }
     }
 
     private String normalizedPluginName(String pluginName) {
@@ -123,4 +159,5 @@ public class ConnectorPluginsResource {
             ? pluginName.substring(0, pluginName.length() - ALIAS_SUFFIX.length())
             : pluginName;
     }
+
 }
