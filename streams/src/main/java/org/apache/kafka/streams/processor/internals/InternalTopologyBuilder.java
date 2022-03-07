@@ -1421,7 +1421,7 @@ public class InternalTopologyBuilder {
     synchronized String sourceTopicPatternString() {
         // With a NamedTopology, it may be that this topology does not use pattern subscription but another one does
         // in which case we would need to initialize the pattern string where we would otherwise have not
-        if (sourceTopicPatternString == null && hasNamedTopology()) {
+        if (sourceTopicPatternString == null) {
             sourceTopicPatternString = buildSourceTopicsPatternString();
         }
         return sourceTopicPatternString;
