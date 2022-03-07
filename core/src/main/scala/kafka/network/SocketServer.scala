@@ -276,7 +276,8 @@ class SocketServer(val config: KafkaConfig,
     endpointOpt.foreach { endpoint =>
       connectionQuotas.addListener(config, endpoint.listenerName)
       val controlPlaneAcceptor = createControlPlaneAcceptor(endpoint, controlPlaneRequestChannelOpt.get)
-      controlPlaneAcceptor.addProcessors(1)
+      val brokerId = controlPlaneAcceptor.config.brokerId
+      controlPlaneAcceptor.addProcessors(1, brokerId)
       controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
       info(s"Created control-plane acceptor and processor for endpoint : ${endpoint.listenerName}")
     }

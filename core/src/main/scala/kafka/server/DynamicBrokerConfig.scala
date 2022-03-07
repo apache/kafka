@@ -604,11 +604,15 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                             validateOnly: Boolean,
                                             reloadOnly:  Boolean): Unit = {
     val listenerName = listenerReconfigurable.listenerName
+    val brokerId = newConfig.brokerId
+
+    println(s"processListenerReconfigurable brokerId, $brokerId, listenerName: $listenerName")
     val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
     val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
     val (changeMap, deletedKeys) = updatedConfigs(newValues, oldValues)
     val updatedKeys = changeMap.keySet
     val configsChanged = needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys, deletedKeys)
+    println(s"processListenerReconfigurable brokerId, $brokerId, listenerName: $listenerName, reloadOnly: $reloadOnly, configsChanged: $configsChanged")
     // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
     if (reloadOnly != configsChanged)
       processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
@@ -622,7 +626,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     reconfigurable match {
       case reconfigurable1: ListenerReconfigurable =>
-        println(s"Processing listener reconfigurable for ${reconfigurable1.listenerName()}")
+        println(s"processReconfigurable listenerReconfigurable: ${reconfigurable1.listenerName()}")
       case _ =>
     }
     val newConfigs = new util.HashMap[String, Object]
