@@ -168,7 +168,7 @@ pipeline {
             timestamps()
           }
           environment {
-            SCALA_VERSION=2.12
+            SCALA_VERSION=2.13
           }
           steps {
             doValidation()
@@ -186,7 +186,7 @@ pipeline {
             timestamps()
           }
           environment {
-            SCALA_VERSION=2.12
+            SCALA_VERSION=2.13
           }
           steps {
             doValidation()
