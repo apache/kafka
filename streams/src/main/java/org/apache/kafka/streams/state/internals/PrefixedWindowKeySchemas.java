@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Arrays;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
@@ -33,7 +36,6 @@ public class PrefixedWindowKeySchemas {
     private static final byte KEY_FIRST_PREFIX = 1;
     private static final int SEQNUM_SIZE = 4;
     private static final int SUFFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
-    private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
     private static byte extractPrefix(final byte[] binaryBytes) {
         return binaryBytes[0];
@@ -43,13 +45,18 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public Bytes upperRange(final Bytes key, final long to) {
-            if (to == Long.MAX_VALUE) {
-                return null;
+            if (key == null) {
+                // Put next prefix instead of null so that we can start from right prefix
+                // when scanning backwards
+                final byte nextPrefix = TIME_FIRST_PREFIX + 1;
+                return Bytes.wrap(ByteBuffer.allocate(PREFIX_SIZE).put(nextPrefix).array());
             }
-
-            return Bytes.wrap(ByteBuffer.allocate(PREFIX_SIZE + TIMESTAMP_SIZE)
+            byte[] maxKey = new byte[key.get().length];
+            Arrays.fill(maxKey, (byte) 0xFF);
+            return Bytes.wrap(ByteBuffer.allocate(PREFIX_SIZE + TIMESTAMP_SIZE + maxKey.length + SEQNUM_SIZE)
                 .put(TIME_FIRST_PREFIX)
-                .putLong(to + 1)
+                .putLong(to)
+                .put(maxKey).putInt(Integer.MAX_VALUE)
                 .array());
         }
 
@@ -72,7 +79,7 @@ public class PrefixedWindowKeySchemas {
              *         b. If k2 is a prefix of k1, since k2's seqnum is 0, after k1 appends seqnum,
              *            it will always be larger than (k1 + seqnum).
              */
-            return Bytes.wrap(ByteBuffer.allocate(PREFIX_SIZE + TIMESTAMP_SIZE + key.get().length + SEQNUM_SIZE)
+            return Bytes.wrap(ByteBuffer.allocate(PREFIX_SIZE + TIMESTAMP_SIZE + key.get().length)
                 .put(TIME_FIRST_PREFIX)
                 .putLong(from)
                 .put(key.get())
@@ -81,18 +88,54 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-            return TimeFirstWindowKeySchema.toTimeOrderedStoreKeyBinary(key, Math.max(0, from),
+            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, Math.max(0, from),
                 0);
         }
 
         @Override
         public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-            return TimeFirstWindowKeySchema.toTimeOrderedStoreKeyBinary(key, to, Integer.MAX_VALUE);
+            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
         }
 
         @Override
         public long segmentTimestamp(final Bytes key) {
-            return WindowKeySchema.extractStoreTimestamp(key.get());
+            return TimeFirstWindowKeySchema.extractStoreTimestamp(key.get());
+        }
+
+        @Override
+        public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
+            final Bytes binaryKeyTo, final long from, final long to, boolean forward) {
+            return iterator -> {
+                while (iterator.hasNext()) {
+                    final Bytes bytes = iterator.peekNextKey();
+                    final byte prefix = extractPrefix(bytes.get());
+
+                    if (prefix != TIME_FIRST_PREFIX) {
+                        return false;
+                    }
+
+                    final long time = TimeFirstWindowKeySchema.extractStoreTimestamp(bytes.get());
+
+                    // We can return false directly here since keys are sorted by time and if
+                    // we get time larger than `to`, there won't be time within range.
+                    if (forward && time > to) {
+                        return false;
+                    }
+                    if (!forward && time < from) {
+                        return false;
+                    }
+
+                    final Bytes keyBytes = Bytes.wrap(
+                        TimeFirstWindowKeySchema.extractStoreKeyBytes(bytes.get()));
+                    if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
+                        && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
+                        && time >= from && time <= to) {
+                        return true;
+                    }
+                    iterator.next();
+                }
+                return false;
+            };
         }
 
         @Override
@@ -111,17 +154,11 @@ public class PrefixedWindowKeySchemas {
 
                     final long time = TimeFirstWindowKeySchema.extractStoreTimestamp(bytes.get());
 
-                    // We can return false directly here since keys are sorted by time and if
-                    // we get time larger than `to`, there won't be time within range.
-                    if (time > to) {
-                        return false;
-                    }
-
-                     final Bytes keyBytes = Bytes.wrap(
+                    final Bytes keyBytes = Bytes.wrap(
                         TimeFirstWindowKeySchema.extractStoreKeyBytes(bytes.get()));
                     if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
                         && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
-                        && time >= from) {
+                        && time >= from && time <= to) {
                         return true;
                     }
                     iterator.next();
@@ -148,15 +185,35 @@ public class PrefixedWindowKeySchemas {
             return ByteBuffer.wrap(binaryKey).getLong(PREFIX_SIZE);
         }
 
-        // for store serdes
-        public static Bytes toTimeOrderedStoreKeyBinary(final Bytes key,
-                                                        final long timestamp,
-                                                        final int seqnum) {
-            final byte[] serializedKey = key.get();
-            return toTimeOrderedStoreKeyBinary(serializedKey, timestamp, seqnum);
+        public static Bytes toStoreKeyBinary(final Windowed<Bytes> timeKey,
+                                             final int seqnum) {
+            return toStoreKeyBinary(timeKey.key().get(), timeKey.window().start(), seqnum);
         }
 
-        static Bytes toTimeOrderedStoreKeyBinary(final byte[] serializedKey,
+        public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
+                                                   final long windowSize,
+                                                   final Deserializer<K> deserializer,
+                                                   final String topic) {
+            final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
+            final Window window = extractStoreWindow(binaryKey, windowSize);
+            return new Windowed<>(key, window);
+        }
+
+        public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(timeKey.key());
+            return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
+        }
+
+        // for store serdes
+        public static Bytes toStoreKeyBinary(final Bytes key,
+                                             final long timestamp,
+                                             final int seqnum) {
+            return toStoreKeyBinary(key.get(), timestamp, seqnum);
+        }
+
+        static Bytes toStoreKeyBinary(final byte[] serializedKey,
                                                  final long timestamp,
                                                  final int seqnum) {
             final ByteBuffer buf = ByteBuffer.allocate(
@@ -178,16 +235,31 @@ public class PrefixedWindowKeySchemas {
 
         static Window extractStoreWindow(final byte[] binaryKey,
                                          final long windowSize) {
-            final long start = WindowKeySchema.extractStoreTimestamp(binaryKey);
+            final long start = extractStoreTimestamp(binaryKey);
             return timeWindowForSize(start, windowSize);
+        }
+
+        static int extractStoreSequence(final byte[] binaryKey) {
+            return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
         }
     }
 
     public static class KeyFirstWindowKeySchema extends WindowKeySchema {
 
         private Bytes wrapPrefix(final Bytes noPrefixKey) {
-             final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE + noPrefixKey.get().length)
-                .put(KEY_FIRST_PREFIX)
+            return wrapPrefix(noPrefixKey, KEY_FIRST_PREFIX);
+        }
+
+        private Bytes wrapPrefix(final Bytes noPrefixKey, final byte prefix) {
+            // Need to scan from prefix even key is null
+            if (noPrefixKey == null) {
+                final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE)
+                    .put(prefix)
+                    .array();
+                return Bytes.wrap(ret);
+            }
+            final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE + noPrefixKey.get().length)
+                .put(prefix)
                 .put(noPrefixKey.get())
                 .array();
             return Bytes.wrap(ret);
@@ -197,7 +269,8 @@ public class PrefixedWindowKeySchemas {
         public Bytes upperRange(final Bytes key, final long to) {
             final Bytes noPrefixBytes = super.upperRange(key, to);
             if (noPrefixBytes == null) {
-                return null;
+                final byte nextPrefix = KEY_FIRST_PREFIX + 1;
+                return wrapPrefix(null, nextPrefix);
             }
             return wrapPrefix(noPrefixBytes);
         }
@@ -205,9 +278,7 @@ public class PrefixedWindowKeySchemas {
         @Override
         public Bytes lowerRange(final Bytes key, final long from) {
             final Bytes noPrefixBytes = super.lowerRange(key, from);
-            if (noPrefixBytes == null) {
-                return null;
-            }
+            // Wrap at least prefix even key is null
             return wrapPrefix(noPrefixBytes);
         }
 
@@ -264,15 +335,26 @@ public class PrefixedWindowKeySchemas {
             return segments.segments(from, to, forward);
         }
 
+        public static Bytes toStoreKeyBinary(final Windowed<Bytes> timeKey,
+                                             final int seqnum) {
+            return toStoreKeyBinary(timeKey.key().get(), timeKey.window().start(), seqnum);
+        }
+
+        public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(timeKey.key());
+            return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
+        }
+
         public static Bytes toStoreKeyBinary(final Bytes key,
                                              final long timestamp,
                                              final int seqnum) {
-            final byte[] serializedKey = key.get();
-            return toStoreKeyBinary(serializedKey, timestamp, seqnum);
+            return toStoreKeyBinary(key.get(), timestamp, seqnum);
         }
 
         // package private for testing
-        static Bytes toStoreKeyBinary(final byte[] serializedKey,
+        public static Bytes toStoreKeyBinary(final byte[] serializedKey,
                                       final long timestamp,
                                       final int seqnum) {
             final ByteBuffer buf = ByteBuffer.allocate(PREFIX_SIZE + serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
@@ -290,25 +372,34 @@ public class PrefixedWindowKeySchemas {
             return bytes;
         }
 
+        public static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
+                                                        final long windowSize) {
+            final Bytes key = Bytes.wrap(extractStoreKeyBytes(binaryKey));
+            final Window window = extractStoreWindow(binaryKey, windowSize);
+            return new Windowed<>(key, window);
+        }
+
         static long extractStoreTimestamp(final byte[] binaryKey) {
             return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
         }
 
-        static int extractStoreSeqnum(final byte[] binaryKey) {
+        static int extractStoreSequence(final byte[] binaryKey) {
             return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
-        }
-
-        public static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
-                                                    final long windowSize) {
-            final Bytes key = Bytes.wrap(extractStoreKeyBytes(binaryKey));
-            final Window window = extractStoreWindow(binaryKey, windowSize);
-            return new Windowed<>(key, window);
         }
 
         static Window extractStoreWindow(final byte[] binaryKey,
                                      final long windowSize) {
             final long start = KeyFirstWindowKeySchema.extractStoreTimestamp(binaryKey);
             return timeWindowForSize(start, windowSize);
+        }
+
+        public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
+                                                   final long windowSize,
+                                                   final Deserializer<K> deserializer,
+                                                   final String topic) {
+            final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
+            final Window window = extractStoreWindow(binaryKey, windowSize);
+            return new Windowed<>(key, window);
         }
     }
 }

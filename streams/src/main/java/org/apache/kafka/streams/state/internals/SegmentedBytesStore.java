@@ -215,6 +215,20 @@ public interface SegmentedBytesStore extends StateStore {
         HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to);
 
         /**
+         * Create an implementation of {@link HasNextCondition} that knows when
+         * to stop iterating over the KeyValueSegments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
+         * @param binaryKeyFrom the first key in the range
+         * @param binaryKeyTo   the last key in the range
+         * @param from          starting time range
+         * @param to            ending time range
+         * @param forward       forward or backward
+         * @return
+         */
+        default HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to, boolean forward) {
+            return hasNextCondition(binaryKeyFrom, binaryKeyTo, from, to);
+        }
+
+        /**
          * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations to determine
          * which segments should be scanned.
          * @param segments

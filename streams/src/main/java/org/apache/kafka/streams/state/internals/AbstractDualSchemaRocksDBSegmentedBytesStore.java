@@ -20,6 +20,7 @@ import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -78,51 +79,106 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         final List<S> searchSpace = segments.allSegments(true);
+        final Bytes from = baseKeySchema.lowerRange(null, 0);
+        final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
                 baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
-                null,
-                null,
+                from,
+                to,
                 true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
         final List<S> searchSpace = segments.allSegments(false);
+        final Bytes from = baseKeySchema.lowerRange(null, 0);
+        final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
                 baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
-                null,
-                null,
+                from,
+                to,
                 false);
     }
 
     @Override
-    public void remove(final Bytes rawKey) {
-        final long timestamp = baseKeySchema.segmentTimestamp(rawKey);
+    public void remove(final Bytes rawBaseKey) {
+        final long timestamp = baseKeySchema.segmentTimestamp(rawBaseKey);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
         final S segment = segments.getSegmentForTimestamp(timestamp);
         if (segment == null) {
             return;
         }
-        segment.delete(rawKey);
+        final KeyValue<Bytes, byte[]> kv = getIndexKeyValue(rawBaseKey, null);
+        segment.delete(rawBaseKey);
+        segment.delete(kv.key);
+    }
+
+    abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
+
+    // For testing
+    void putIndex(final Bytes indexKey, final byte[] value) {
+        if (!hasIndex()) {
+            throw new IllegalStateException("Index store doesn't exist");
+        }
+
+        final long timestamp = indexKeySchema.get().segmentTimestamp(indexKey);
+        final long segmentId = segments.segmentId(timestamp);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+
+        if (segment != null) {
+            segment.put(indexKey, value);
+        }
+    }
+
+    byte[] getIndex(final Bytes indexKey) {
+         if (!hasIndex()) {
+            throw new IllegalStateException("Index store doesn't exist");
+        }
+
+        final long timestamp = indexKeySchema.get().segmentTimestamp(indexKey);
+        final long segmentId = segments.segmentId(timestamp);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+
+        if (segment != null) {
+            return segment.get(indexKey);
+        }
+        return null;
+    }
+
+    void removeIndex(final Bytes indexKey) {
+        if (!hasIndex()) {
+            throw new IllegalStateException("Index store doesn't exist");
+        }
+
+        final long timestamp = indexKeySchema.get().segmentTimestamp(indexKey);
+        final long segmentId = segments.segmentId(timestamp);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+
+        if (segment != null) {
+            segment.delete(indexKey);
+        }
     }
 
     @Override
-    public void put(final Bytes rawKey,
+    public void put(final Bytes rawBaseKey,
                     final byte[] value) {
-        final long timestamp = baseKeySchema.segmentTimestamp(rawKey);
+        final long timestamp = baseKeySchema.segmentTimestamp(rawBaseKey);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
         final long segmentId = segments.segmentId(timestamp);
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+        final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
+
         if (segment == null) {
             expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
             LOG.warn("Skipping record for expired segment.");
         } else {
             StoreQueryUtils.updatePosition(position, stateStoreContext);
-            segment.put(rawKey, value);
+            segment.put(rawBaseKey, value);
+            segment.put(indexKeyValue.key, indexKeyValue.value);
         }
     }
 

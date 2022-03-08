@@ -33,26 +33,17 @@ public class RocksDBTimeOrderedWindowStore
 
     private final boolean retainDuplicates;
     private final long windowSize;
-    private final String name;
     private int seqnum = 0;
 
     RocksDBTimeOrderedWindowStore(
         final RocksDBTimeOrderedSegmentedBytesStore store,
-        final String name,
         final boolean retainDuplicates,
         final long windowSize
     ) {
         super(store);
         Objects.requireNonNull(store, "store is null");
-        Objects.requireNonNull(name, "name is null");
-        this.name = name;
         this.retainDuplicates = retainDuplicates;
         this.windowSize = windowSize;
-    }
-
-    @Override
-    public String name() {
-        return name;
     }
 
     @Override
