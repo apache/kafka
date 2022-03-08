@@ -18,14 +18,13 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
-import org.apache.kafka.common.config.ConfigDef.ConfigKey;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
@@ -56,19 +55,19 @@ public class ConfigurationControlManager {
 
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
-    private final Map<ConfigResource.Type, ConfigDef> configDefs;
+    private final KafkaConfigSchema configSchema;
     private final Optional<AlterConfigPolicy> alterConfigPolicy;
     private final ConfigurationValidator validator;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
 
     ConfigurationControlManager(LogContext logContext,
                                 SnapshotRegistry snapshotRegistry,
-                                Map<ConfigResource.Type, ConfigDef> configDefs,
+                                KafkaConfigSchema configSchema,
                                 Optional<AlterConfigPolicy> alterConfigPolicy,
                                 ConfigurationValidator validator) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
-        this.configDefs = configDefs;
+        this.configSchema = configSchema;
         this.alterConfigPolicy = alterConfigPolicy;
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -129,7 +128,7 @@ public class ConfigurationControlManager {
                     break;
                 case APPEND:
                 case SUBTRACT:
-                    if (!isSplittable(configResource.type(), key)) {
+                    if (!configSchema.isSplittable(configResource.type(), key)) {
                         outputResults.put(configResource, new ApiError(
                             INVALID_CONFIG, "Can't " + opType + " to " +
                             "key " + key + " because its type is not LIST."));
@@ -259,7 +258,7 @@ public class ConfigurationControlManager {
 
     private List<String> getParts(String value, String key, ConfigResource configResource) {
         if (value == null) {
-            value = getConfigValueDefault(configResource.type(), key);
+            value = configSchema.getDefault(configResource.type(), key);
         }
         List<String> parts = new ArrayList<>();
         if (value == null) {
@@ -272,30 +271,6 @@ public class ConfigurationControlManager {
             }
         }
         return parts;
-    }
-
-    boolean isSplittable(ConfigResource.Type type, String key) {
-        ConfigDef configDef = configDefs.get(type);
-        if (configDef == null) {
-            return false;
-        }
-        ConfigKey configKey = configDef.configKeys().get(key);
-        if (configKey == null) {
-            return false;
-        }
-        return configKey.type == ConfigDef.Type.LIST;
-    }
-
-    String getConfigValueDefault(ConfigResource.Type type, String key) {
-        ConfigDef configDef = configDefs.get(type);
-        if (configDef == null) {
-            return null;
-        }
-        ConfigKey configKey = configDef.configKeys().get(key);
-        if (configKey == null || !configKey.hasDefault()) {
-            return null;
-        }
-        return ConfigDef.convertToString(configKey.defaultValue, configKey.type);
     }
 
     /**

@@ -62,7 +62,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
     @Test
     public void testBuildRequest() {
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, partitions, logContext);
-        OffsetCommitRequest request = handler.buildRequest(-1, singleton(CoordinatorKey.byGroupId(groupId))).build();
+        OffsetCommitRequest request = handler.buildBatchedRequest(-1, singleton(CoordinatorKey.byGroupId(groupId))).build();
         assertEquals(groupId, request.data().groupId());
         assertEquals(2, request.data().topics().size());
         assertEquals(2, request.data().topics().get(0).partitions().size());

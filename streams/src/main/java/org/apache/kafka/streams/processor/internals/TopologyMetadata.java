@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,6 +53,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,6 +102,7 @@ public class TopologyMetadata {
         this.version = new TopologyVersion();
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
+        this.log = LoggerFactory.getLogger(getClass());
 
         builders = new ConcurrentSkipListMap<>();
         if (builder.hasNamedTopology()) {
@@ -380,13 +383,19 @@ public class TopologyMetadata {
 
     public OffsetResetStrategy offsetResetStrategy(final String topic) {
         for (final InternalTopologyBuilder builder : builders.values()) {
-            final OffsetResetStrategy resetStrategy = builder.offsetResetStrategy(topic);
-            if (resetStrategy != null) {
-                return resetStrategy;
+            if (builder.containsTopic(topic)) {
+                return builder.offsetResetStrategy(topic);
             }
         }
+        log.warn("Unable to look up offset reset strategy for topic {} " +
+            "as this topic does not appear in the sources of any of the current topologies: {}\n " +
+                "This may be due to natural race condition when removing a topology but it should not " +
+                "persist or appear frequently.",
+            topic, namedTopologiesView()
+        );
         return null;
     }
+
 
     public Collection<String> fullSourceTopicNamesForTopology(final String topologyName) {
         Objects.requireNonNull(topologyName, "topology name must not be null");
@@ -403,7 +412,7 @@ public class TopologyMetadata {
         final StringBuilder patternBuilder = new StringBuilder();
 
         applyToEachBuilder(b -> {
-            final String patternString = b.sourceTopicsPatternString();
+            final String patternString = b.sourceTopicPatternString();
             if (patternString.length() > 0) {
                 patternBuilder.append(patternString).append("|");
             }
@@ -549,6 +558,13 @@ public class TopologyMetadata {
         } else {
             return builder;
         }
+    }
+
+    public Collection<NamedTopology> getAllNamedTopologies() {
+        return builders.values()
+            .stream()
+            .map(InternalTopologyBuilder::namedTopology)
+            .collect(Collectors.toSet());
     }
 
 
