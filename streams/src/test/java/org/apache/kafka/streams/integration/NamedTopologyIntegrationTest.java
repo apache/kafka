@@ -485,7 +485,7 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldRemoveNamedTopologyToRunningApplicationWithMultipleNodesAndResetsOffsets() throws Exception {
+    public void shouldAllowRemovingAndAddingNamedTopologyToRunningApplicationWithMultipleNodesAndResetsOffsets() throws Exception {
         setupSecondKafkaStreams();
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
@@ -503,6 +503,9 @@ public class NamedTopologyIntegrationTest {
         assertThat(streams.getTopologyByName(TOPOLOGY_1), equalTo(Optional.empty()));
         assertThat(streams2.getTopologyByName(TOPOLOGY_1), equalTo(Optional.empty()));
 
+        assertThat(streams.getAllTopologies().isEmpty(), is(true));
+        assertThat(streams2.getAllTopologies().isEmpty(), is(true));
+
         streams.cleanUpNamedTopology(TOPOLOGY_1);
         streams2.cleanUpNamedTopology(TOPOLOGY_1);
 
@@ -517,9 +520,15 @@ public class NamedTopologyIntegrationTest {
         topology2Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
         topology2Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
 
-        final AddNamedTopologyResult result1 = streams.addNamedTopology(topology2Builder.build());
-        streams2.addNamedTopology(topology2Builder2.build()).all().get();
+        final NamedTopology topology2Client1 = topology2Builder.build();
+        final NamedTopology topology2Client2 = topology2Builder2.build();
+
+        final AddNamedTopologyResult result1 = streams.addNamedTopology(topology2Client1);
+        streams2.addNamedTopology(topology2Client2).all().get();
         result1.all().get();
+
+        assertThat(streams.getAllTopologies(), equalTo(singleton(topology2Client1)));
+        assertThat(streams2.getAllTopologies(), equalTo(singleton(topology2Client2)));
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
     }
