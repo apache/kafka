@@ -1258,6 +1258,6 @@ public class StreamsProducerTest {
         addMetric(producer, "txn-send-offsets-time-ns-total", txnSendOffsetsTime);
         addMetric(producer, "txn-commit-time-ns-total", txnCommitTime);
         addMetric(producer, "txn-abort-time-ns-total", txnAbortTime);
-        addMetric(producer, "metadata-wait-time-ms-total", metadataWaitTime);
+        addMetric(producer, "metadata-wait-time-ns-total", metadataWaitTime);
     }
 }
