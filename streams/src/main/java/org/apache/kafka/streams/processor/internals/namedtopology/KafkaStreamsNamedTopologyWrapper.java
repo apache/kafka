@@ -306,6 +306,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 }
                 offsetResult.complete(null);
             });
+        } else {
+            offsetResult.complete(null);
         }
         return new RemoveNamedTopologyResult(removeTopologyFuture, offsetResult);
     }
