@@ -271,7 +271,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         if (!partitionsToReset.isEmpty()) {
             removeTopologyFuture.whenComplete((v, throwable) -> {
                 if (throwable != null) {
-                    offsetResult.completeExceptionally(throwable);
+                    removeTopologyFuture.completeExceptionally(throwable);
                 }
                 DeleteConsumerGroupOffsetsResult deleteOffsetsResult = null;
                 while (deleteOffsetsResult == null) {
