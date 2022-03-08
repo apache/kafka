@@ -612,13 +612,16 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val (changeMap, deletedKeys) = updatedConfigs(newValues, oldValues)
     val updatedKeys = changeMap.keySet
     val configsChanged = needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys, deletedKeys)
-    if (printf) {
-      println(s"processListenerReconfigurable brokerId, $brokerId, listenerName: $listenerName, reloadOnly: $reloadOnly, configsChanged: $configsChanged, thread: ${Thread.currentThread()}")
-      println(s"Updated keys: $updatedKeys, ${changeMap.get("num.network.threads")}")
-    }
+
     // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
-    if (reloadOnly != configsChanged)
+    if (reloadOnly != configsChanged) {
+      if (printf) {
+        val stackTrace = util.Arrays.toString(Thread.currentThread().getStackTrace.asInstanceOf[Array[Object]])
+        println(s"processListenerReconfigurable brokerId, $brokerId, listenerName: $listenerName, thread: $stackTrace")
+        println(s"Updated keys: $updatedKeys, ${changeMap.get("num.network.threads")}")
+      }
       processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
+    }
   }
 
   private def processReconfigurable(reconfigurable: Reconfigurable,
