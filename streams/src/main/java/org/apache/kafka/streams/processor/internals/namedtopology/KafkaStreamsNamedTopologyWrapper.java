@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -266,10 +267,11 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     private RemoveNamedTopologyResult resetOffsets(final KafkaFutureImpl<Void> removeTopologyFuture,
                                                    final Set<TopicPartition> partitionsToReset) {
+        final KafkaFutureImpl<Void> offsetResult = new KafkaFutureImpl<>();
         if (!partitionsToReset.isEmpty()) {
             removeTopologyFuture.whenComplete((v, throwable) -> {
                 if (throwable != null) {
-                    removeTopologyFuture.completeExceptionally(throwable);
+                    offsetResult.completeExceptionally(throwable);
                 }
                 DeleteConsumerGroupOffsetsResult deleteOffsetsResult = null;
                 while (deleteOffsetsResult == null) {
@@ -292,7 +294,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                             log.debug("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
                             break;
                         } else {
-                            removeTopologyFuture.completeExceptionally(ex);
+                            offsetResult.completeExceptionally(ex);
                         }
                         deleteOffsetsResult = null;
                     }
@@ -302,10 +304,10 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                         ex.printStackTrace();
                     }
                 }
-                removeTopologyFuture.complete(null);
+                offsetResult.complete(null);
             });
         }
-        return new RemoveNamedTopologyResult(removeTopologyFuture, removeTopologyFuture);
+        return new RemoveNamedTopologyResult(removeTopologyFuture, offsetResult);
     }
 
     /**
