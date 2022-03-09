@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -47,21 +48,25 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import static org.junit.Assert.assertEquals;
@@ -502,6 +507,55 @@ public class TopicAdminTest {
     }
 
     @Test
+    public void retryEndOffsetsShouldThrowConnectException() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = 1000L;
+        Cluster cluster = createCluster(1, "myTopic", 1);
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+            Map<TopicPartition, Long> offsetMap = new HashMap<>();
+            offsetMap.put(tp1, offset);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE));
+            Map<String, Object> adminConfig = new HashMap<>();
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
+            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
+
+            assertThrows(ConnectException.class, () -> {
+                admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
+            });
+        }
+    }
+
+    @Test
+    public void retryEndOffsetsShouldRetryWhenTopicNotFound() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = 1000L;
+        Cluster cluster = createCluster(1, "myTopic", 1);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+            Map<TopicPartition, Long> offsetMap = new HashMap<>();
+            offsetMap.put(tp1, offset);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetResponse(tp1, offset));
+
+            Map<String, Object> adminConfig = new HashMap<>();
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
+            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
+            Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
+            assertNotNull(endoffsets);
+            assertTrue(endoffsets.containsKey(tp1));
+            assertEquals(1000L, endoffsets.get(tp1).longValue());
+        }
+    }
+
+    @Test
     public void endOffsetsShouldFailWithNonRetriableWhenAuthorizationFailureOccurs() throws Exception {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
@@ -642,14 +696,77 @@ public class TopicAdminTest {
     }
 
     private Cluster createCluster(int numNodes) {
+        return createCluster(numNodes, "unused", 0);
+    }
+
+    private Cluster createCluster(int numNodes, String topicName, int partitions) {
+        Node[] nodeArray = new Node[numNodes];
         HashMap<Integer, Node> nodes = new HashMap<>();
         for (int i = 0; i < numNodes; ++i) {
-            nodes.put(i, new Node(i, "localhost", 8121 + i));
+            nodeArray[i] = new Node(i, "localhost", 8121 + i);
+            nodes.put(i, nodeArray[i]);
         }
-        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-                Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+        Node leader = nodeArray[0];
+        List<PartitionInfo> pInfos = new ArrayList<>();
+        for (int i = 0; i < partitions; ++i) {
+            pInfos.add(new PartitionInfo(topicName, i, leader, nodeArray, nodeArray));
+        }
+        Cluster cluster = new Cluster(
+            "mockClusterId",
+            nodes.values(),
+            pInfos,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            leader);
         return cluster;
+    }
+
+    private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
+        return prepareMetadataResponse(cluster, error, error);
+    }
+
+    private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors topicError, Errors partitionError) {
+        List<MetadataResponseTopic> metadata = new ArrayList<>();
+        for (String topic : cluster.topics()) {
+            List<MetadataResponseData.MetadataResponsePartition> pms = new ArrayList<>();
+            for (PartitionInfo pInfo : cluster.availablePartitionsForTopic(topic)) {
+                MetadataResponseData.MetadataResponsePartition pm  = new MetadataResponseData.MetadataResponsePartition()
+                        .setErrorCode(partitionError.code())
+                        .setPartitionIndex(pInfo.partition())
+                        .setLeaderId(pInfo.leader().id())
+                        .setLeaderEpoch(234)
+                        .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()))
+                        .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()))
+                        .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).collect(Collectors.toList()));
+                pms.add(pm);
+            }
+            MetadataResponseTopic tm = new MetadataResponseTopic()
+                    .setErrorCode(topicError.code())
+                    .setName(topic)
+                    .setIsInternal(false)
+                    .setPartitions(pms);
+            metadata.add(tm);
+        }
+        return MetadataResponse.prepareResponse(
+                0,
+                metadata,
+                cluster.nodes(),
+                cluster.clusterResource().clusterId(),
+                cluster.controller().id(),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+    }
+
+    private ListOffsetResponse listOffsetResponse(TopicPartition tp, long offset) {
+        return listOffsetResponse(tp, Errors.NONE, 1L, offset, null);
+    }
+
+    private ListOffsetResponse listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset,
+        Integer leaderEpoch) {
+        ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(
+            error, timestamp, offset, Optional.ofNullable(leaderEpoch));
+        Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
+        allPartitionData.put(tp, partitionData);
+        return new ListOffsetResponse(allPartitionData);
     }
 
     private CreateTopicsResponse createTopicResponseWithUnsupportedVersion(NewTopic... topics) {
