@@ -61,6 +61,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -457,9 +458,44 @@ public class AbstractHerderTest {
     public void testConfigValidationEmptyConfig() {
         AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
 
-        assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), s -> null, false));
-        verify(transformer).transform(Collections.emptyMap());
-        assertEquals(worker.getPlugins(), plugins);
+        @SuppressWarnings("unchecked")
+        PluginDesc<Connector> mockPluginDesc = mock(PluginDesc.class);
+        when(mockPluginDesc.className()).thenReturn(SampleSourceConnector.class.getName());
+        when(plugins.connectors()).thenReturn(Collections.singleton(mockPluginDesc));
+
+        ConfigInfos result = herder.validateConnectorConfig(Collections.emptyMap(), s -> null, false);
+
+        assertEquals(1, result.errorCount());
+        assertEquals(1, result.values().size());
+        ConfigInfo configInfo = result.values().get(0);
+        assertEquals(ConnectorConfig.CONNECTOR_CLASS_CONFIG, configInfo.configKey().name());
+        assertEquals(Collections.singletonList(SampleSourceConnector.class.getName()),
+                configInfo.configValue().recommendedValues());
+    }
+
+    @Test
+    public void testConfigValidationInvalidClassConfig() {
+        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
+        @SuppressWarnings("unchecked")
+        PluginDesc<Connector> mockPluginDesc = mock(PluginDesc.class);
+        when(mockPluginDesc.className()).thenReturn(SampleSourceConnector.class.getName());
+        Mockito.reset(plugins);
+        when(plugins.newConnector("InvalidSourceConnector"))
+                .thenThrow(new ConnectException("Test: Invalid class"));
+        when(plugins.connectors()).thenReturn(Collections.singleton(mockPluginDesc));
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "InvalidSourceConnector");
+
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
+
+        assertEquals(1, result.errorCount());
+        assertEquals(1, result.values().size());
+        ConfigInfo configInfo = result.values().get(0);
+        assertEquals(ConnectorConfig.CONNECTOR_CLASS_CONFIG, configInfo.configKey().name());
+        assertEquals(Collections.singletonList(SampleSourceConnector.class.getName()),
+                configInfo.configValue().recommendedValues());
+        verify(transformer).transform(Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "InvalidSourceConnector"));
     }
 
     @Test
