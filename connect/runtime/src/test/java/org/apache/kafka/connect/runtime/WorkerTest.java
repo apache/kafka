@@ -20,10 +20,8 @@ import java.util.Collection;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -34,11 +32,8 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
@@ -926,10 +921,8 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
         Map<String, String> connProps = anyConnectorConfigMap();
-        connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
-        connProps.put("key.converter.extra.config", "foo");
-        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConfigurableConverter.class.getName());
-        connProps.put("value.converter.extra.config", "bar");
+        connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, SampleConverterWithHeaders.class.getName());
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, SampleConverterWithHeaders.class.getName());
         worker.startTask(TASK_ID, ClusterConfigState.EMPTY, connProps, origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
@@ -1297,51 +1290,5 @@ public class WorkerTest extends ThreadedTest {
         }
     }
 
-    public static class TestConverter implements Converter {
-        public Map<String, ?> configs;
 
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            this.configs = configs;
-        }
-
-        @Override
-        public byte[] fromConnectData(String topic, Schema schema, Object value) {
-            return new byte[0];
-        }
-
-        @Override
-        public SchemaAndValue toConnectData(String topic, byte[] value) {
-            return null;
-        }
-    }
-
-    public static class TestConfigurableConverter implements Converter, Configurable {
-        public Map<String, ?> configs;
-
-        public ConfigDef config() {
-            return JsonConverterConfig.configDef();
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
-            this.configs = configs;
-            new JsonConverterConfig(configs); // requires the `converter.type` config be set
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            this.configs = configs;
-        }
-
-        @Override
-        public byte[] fromConnectData(String topic, Schema schema, Object value) {
-            return new byte[0];
-        }
-
-        @Override
-        public SchemaAndValue toConnectData(String topic, byte[] value) {
-            return null;
-        }
-    }
 }
