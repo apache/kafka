@@ -36,6 +36,8 @@ import java.util.function.Supplier;
 @RunWith(PowerMockRunner.class)
 public class RetryUtilTest {
 
+    private static final Duration TIMEOUT = Duration.ofSeconds(10);
+
     private Callable<String> mockCallable;
     private final Supplier<String> testMsg = () -> "Test";
 
@@ -69,7 +71,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException())
                 .thenReturn("success");
 
-        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(100), 1));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, TIMEOUT, 1));
         Mockito.verify(mockCallable, Mockito.times(4)).call();
     }
 
@@ -83,7 +85,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException("timeout"))
                 .thenThrow(new NullPointerException("Non retriable"));
         NullPointerException e = assertThrows(NullPointerException.class,
-                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(100), 0));
+                () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, TIMEOUT, 0));
         assertEquals("Non retriable", e.getMessage());
         Mockito.verify(mockCallable, Mockito.times(6)).call();
     }
@@ -114,7 +116,7 @@ public class RetryUtilTest {
                 .thenThrow(new TimeoutException())
                 .thenReturn("success");
 
-        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 0));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, TIMEOUT, 0));
         Mockito.verify(mockCallable, Mockito.times(4)).call();
     }
 
@@ -151,7 +153,7 @@ public class RetryUtilTest {
         Mockito.when(mockCallable.call())
                 .thenThrow(new TimeoutException("timeout"))
                 .thenReturn("success");
-        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(100), -1));
+        assertEquals("success", RetryUtil.retryUntilTimeout(mockCallable, testMsg, TIMEOUT, -1));
         Mockito.verify(mockCallable, Mockito.times(2)).call();
     }
 
