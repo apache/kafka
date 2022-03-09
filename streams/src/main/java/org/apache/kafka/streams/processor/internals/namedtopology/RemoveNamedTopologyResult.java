@@ -23,16 +23,18 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 public class RemoveNamedTopologyResult {
-    private final KafkaFuture<Void> removeTopologyFuture;
-    private final KafkaFuture<Void> deleteOffsetsResult;
+    private final KafkaFutureImpl<Void> removeTopologyFuture;
+    private final KafkaFutureImpl<Void> deleteOffsetsResult;
 
-    public RemoveNamedTopologyResult(final KafkaFuture<Void> removeTopologyFuture, final KafkaFuture<Void> deleteOffsetsResult) {
+    public RemoveNamedTopologyResult(final KafkaFutureImpl<Void> removeTopologyFuture, final KafkaFutureImpl<Void> deleteOffsetsResult) {
         this.removeTopologyFuture = removeTopologyFuture;
         this.deleteOffsetsResult = deleteOffsetsResult;
     }
 
-    public RemoveNamedTopologyResult(final KafkaFuture<Void> removeTopologyFuture) {
-        this(removeTopologyFuture, null);
+    public RemoveNamedTopologyResult(final KafkaFutureImpl<Void> removeTopologyFuture) {
+        // Go ahead and complete this future right away if the user didn't opt to reset offsets
+        this(removeTopologyFuture, new KafkaFutureImpl<>());
+        deleteOffsetsResult.complete(null);
         Objects.requireNonNull(removeTopologyFuture);
     }
 
@@ -52,34 +54,6 @@ public class RemoveNamedTopologyResult {
      * successfully completed their corresponding {@link KafkaFuture}.
      */
     public final KafkaFuture<Void> all() {
-        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-
-        removeTopologyFuture.whenComplete((ignore, throwable) -> {
-            if (throwable != null) {
-                result.completeExceptionally(throwable);
-            } else {
-                if (deleteOffsetsResult == null) {
-                    result.complete(null);
-                }
-            }
-        });
-
-        if (deleteOffsetsResult != null) {
-            deleteOffsetsResult.whenComplete((ignore, throwable) -> {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else {
-                    try {
-                        removeTopologyFuture.get();
-                    } catch (final InterruptedException | ExecutionException e) {
-                        result.completeExceptionally(e);
-                    }
-                    result.complete(null);
-                }
-            });
-        }
-
-
-        return result;
+        return KafkaFuture.allOf(removeTopologyFuture, deleteOffsetsResult);
     }
 }
