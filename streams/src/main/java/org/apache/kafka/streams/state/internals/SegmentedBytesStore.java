@@ -135,12 +135,6 @@ public interface SegmentedBytesStore extends StateStore {
      */
     byte[] get(Bytes key);
 
-    /**
-     * Gets the last observed stream time for the given Store.
-     * @return
-     */
-    long getObservedStreamTime();
-
     interface KeySchema {
 
         /**

@@ -75,7 +75,6 @@ public class MeteredTimestampedWindowStoreTest {
     private MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
         innerStoreMock,
         WINDOW_SIZE_MS, // any size
-        RETENTION_PERIOD,
         STORE_TYPE,
         new MockTime(),
         Serdes.String(),
@@ -111,7 +110,6 @@ public class MeteredTimestampedWindowStoreTest {
         final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
             inner,
             WINDOW_SIZE_MS, // any size
-            RETENTION_PERIOD,
             STORE_TYPE,
             new MockTime(),
             Serdes.String(),
@@ -131,7 +129,6 @@ public class MeteredTimestampedWindowStoreTest {
         final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
             inner,
             WINDOW_SIZE_MS, // any size
-            RETENTION_PERIOD,
             STORE_TYPE,
             new MockTime(),
             Serdes.String(),
@@ -175,7 +172,6 @@ public class MeteredTimestampedWindowStoreTest {
         store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
             WINDOW_SIZE_MS,
-            RETENTION_PERIOD,
             STORE_TYPE,
             new MockTime(),
             keySerde,
@@ -216,7 +212,6 @@ public class MeteredTimestampedWindowStoreTest {
         final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
             10L, // any size
-            RETENTION_PERIOD,
             "scope",
             new MockTime(),
             null,
@@ -241,7 +236,6 @@ public class MeteredTimestampedWindowStoreTest {
         final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
             10L, // any size
-            RETENTION_PERIOD,
             "scope",
             new MockTime(),
             Serdes.String(),
