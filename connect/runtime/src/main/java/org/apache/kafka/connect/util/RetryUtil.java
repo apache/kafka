@@ -96,7 +96,6 @@ public class RetryUtil {
                 }
                 Utils.sleep(retryBackoffMs);
             }
-            Utils.sleep(retryBackoffMs);
         } while (System.currentTimeMillis() < end);
 
         throw new ConnectException("Fail to " + descriptionStr + " after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
