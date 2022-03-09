@@ -131,7 +131,6 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             .setJwsAlgorithmConstraints(DISALLOW_NONE)
             .setRequireExpirationTime()
             .setRequireIssuedAt()
-            .setRequireSubject()
             .setVerificationKeyResolver(verificationKeyResolver)
             .build();
         this.scopeClaimName = scopeClaimName;
