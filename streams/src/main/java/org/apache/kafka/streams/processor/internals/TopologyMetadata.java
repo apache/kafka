@@ -84,14 +84,14 @@ public class TopologyMetadata {
         public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
         public ReentrantLock topologyLock = new ReentrantLock();
         public Condition topologyCV = topologyLock.newCondition();
-        public List<TopologyVersionWaiters> activeTopologyWaiters = new LinkedList<>();
+        public List<TopologyVersionListener> activeTopologyUpdateListeners = new LinkedList<>();
     }
 
-    public static class TopologyVersionWaiters {
+    public static class TopologyVersionListener {
         final long topologyVersion; // the (minimum) version to wait for these threads to cross
         final KafkaFutureImpl<Void> future; // the future waiting on all threads to be updated
 
-        public TopologyVersionWaiters(final long topologyVersion, final KafkaFutureImpl<Void> future) {
+        public TopologyVersionListener(final long topologyVersion, final KafkaFutureImpl<Void> future) {
             this.topologyVersion = topologyVersion;
             this.future = future;
         }
@@ -162,33 +162,45 @@ public class TopologyMetadata {
 
     public void unregisterThread(final String threadName) {
         threadVersions.remove(threadName);
-        maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(threadName);
+        maybeNotifyTopologyVersionListeners();
     }
 
     public TaskExecutionMetadata taskExecutionMetadata() {
         return taskExecutionMetadata;
     }
 
-    public void maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(final String threadName) {
+    public Set<String> updateThreadTopologyVersion(final String threadName) {
+        try {
+            version.topologyLock.lock();
+            threadVersions.put(threadName, topologyVersion());
+            return namedTopologiesView();
+        } finally {
+            version.topologyLock.unlock();
+        }
+    }
+
+    public void maybeNotifyTopologyVersionListeners() {
         try {
             lock();
-            final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();
-            TopologyVersionWaiters topologyVersionWaiters;
-            threadVersions.put(threadName, topologyVersion());
+            final long minThreadVersion = getMinimumThreadVersion();
+            final Iterator<TopologyVersionListener> iterator = version.activeTopologyUpdateListeners.listIterator();
+            TopologyVersionListener topologyVersionListener;
             while (iterator.hasNext()) {
-                topologyVersionWaiters = iterator.next();
-                final long topologyVersionWaitersVersion = topologyVersionWaiters.topologyVersion;
-                if (topologyVersionWaitersVersion <= threadVersions.get(threadName)) {
-                    if (threadVersions.values().stream().allMatch(t -> t >= topologyVersionWaitersVersion)) {
-                        topologyVersionWaiters.future.complete(null);
-                        iterator.remove();
-                        log.info("All threads are now on topology version {}", topologyVersionWaiters.topologyVersion);
-                    }
+                topologyVersionListener = iterator.next();
+                final long topologyVersionWaitersVersion = topologyVersionListener.topologyVersion;
+                if (minThreadVersion >= topologyVersionWaitersVersion) {
+                    topologyVersionListener.future.complete(null);
+                    iterator.remove();
+                    log.info("All threads are now on topology version {}", topologyVersionListener.topologyVersion);
                 }
             }
         } finally {
             unlock();
         }
+    }
+
+    private long getMinimumThreadVersion() {
+        return threadVersions.values().stream().min(Long::compare).get();
     }
 
     public void wakeupThreads() {
@@ -225,9 +237,9 @@ public class TopologyMetadata {
         try {
             lock();
             buildAndVerifyTopology(newTopologyBuilder);
-            log.info("New NamedTopology passed validation and will be added {}, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+            log.info("New NamedTopology {} passed validation and will be added, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
+            version.activeTopologyUpdateListeners.add(new TopologyVersionListener(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
             wakeupThreads();
             log.info("Added NamedTopology {} and updated topology version to {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
@@ -248,7 +260,7 @@ public class TopologyMetadata {
             lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), removeTopologyFuture));
+            version.activeTopologyUpdateListeners.add(new TopologyVersionListener(topologyVersion(), removeTopologyFuture));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);

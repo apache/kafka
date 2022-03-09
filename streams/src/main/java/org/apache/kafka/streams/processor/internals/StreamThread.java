@@ -882,17 +882,15 @@ public class StreamThread extends Thread {
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
         if (topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) {
+            log.info("StreamThread has detected an update to the topology");
+
             taskManager.handleTopologyUpdates();
-            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
-            if (topologyMetadata.isEmpty()) {
-                mainConsumer.unsubscribe();
-            }
-            topologyMetadata.maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(getName());
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             // We don't need to manually trigger a rebalance to pick up tasks from the new topology, as
             // a rebalance will always occur when the metadata is updated after a change in subscription
+            log.info("Updating consumer subscription following topology update");
             subscribeConsumer();
         }
     }
