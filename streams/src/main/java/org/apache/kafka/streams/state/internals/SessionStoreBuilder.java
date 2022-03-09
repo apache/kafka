@@ -42,7 +42,6 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
     public SessionStore<K, V> build() {
         return new MeteredSessionStore<>(
             maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-            storeSupplier.retentionPeriod(),
             storeSupplier.metricsScope(),
             keySerde,
             valueSerde,

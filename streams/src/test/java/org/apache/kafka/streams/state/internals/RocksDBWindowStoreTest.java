@@ -189,13 +189,15 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         );
 
         assertEquals(
+            // expired record
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 0,
                 ofEpochMilli(startTime - WINDOW_SIZE),
                 ofEpochMilli(startTime + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.singletonList("one")),
+            // expired record
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 1,
                 ofEpochMilli(startTime + increment - WINDOW_SIZE),
@@ -248,7 +250,8 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 ofEpochMilli(startTime + increment - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.singletonList("two")),
+            // expired record
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
@@ -301,7 +304,8 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 ofEpochMilli(startTime + increment - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.singletonList("two")),
+            // expired record
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
@@ -372,7 +376,8 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.singletonList("four")),
+            // expired record
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 4,
                 ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
@@ -651,6 +656,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         assertEquals(
+            // expired record
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 4,

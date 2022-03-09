@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -34,12 +33,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -48,6 +45,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -55,26 +53,23 @@ import java.util.stream.Collectors;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.createNiceMock;
+import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.createNiceMock;
-import static org.easymock.EasyMock.createMockBuilder;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.eq;
-
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class MeteredWindowStoreTest {
 
@@ -97,37 +92,16 @@ public class MeteredWindowStoreTest {
     private MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
         WINDOW_SIZE_MS, // any size
-        RETENTION_PERIOD,
         STORE_TYPE,
         new MockTime(),
         Serdes.String(),
         new SerdeThatDoesntHandleNull()
     );
-
-    private final SegmentedBytesStore innerSegmentedStoreMock = createNiceMock(RocksDBSegmentedBytesStore.class);
-
-    private final WindowStore<Bytes, byte[]> innerPersistentWindowStoreMock = createMockBuilder(RocksDBWindowStore.class)
-        .withConstructor(SegmentedBytesStore.class, boolean.class, long.class)
-        .withArgs(innerSegmentedStoreMock, false, (long) WINDOW_SIZE_MS)
-        .createNiceMock();
-
-    private final MeteredWindowStore<String, String> persistentWindowStore = new MeteredWindowStore<>(
-        innerPersistentWindowStoreMock,
-        WINDOW_SIZE_MS, // any size
-        RETENTION_PERIOD,
-        STORE_TYPE,
-        new MockTime(),
-        Serdes.String(),
-        new SerdeThatDoesntHandleNull()
-    );
-
-
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private Map<String, String> tags;
 
     {
         expect(innerStoreMock.name()).andReturn(STORE_NAME).anyTimes();
-        expect(innerPersistentWindowStoreMock.name()).andReturn(STORE_NAME).anyTimes();
     }
 
     @Before
@@ -158,7 +132,6 @@ public class MeteredWindowStoreTest {
         final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
             inner,
             WINDOW_SIZE_MS, // any size
-            RETENTION_PERIOD,
             STORE_TYPE,
             new MockTime(),
             Serdes.String(),
@@ -178,7 +151,6 @@ public class MeteredWindowStoreTest {
         final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
             inner,
             WINDOW_SIZE_MS, // any size
-            RETENTION_PERIOD,
             STORE_TYPE,
             new MockTime(),
             Serdes.String(),
@@ -222,7 +194,6 @@ public class MeteredWindowStoreTest {
         store = new MeteredWindowStore<>(
             innerStoreMock,
             WINDOW_SIZE_MS,
-            RETENTION_PERIOD,
             STORE_TYPE,
             new MockTime(),
             keySerde,
@@ -302,84 +273,15 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldFetchFromInnerPersistentStoreAndRecordFetchMetrics() {
-        expect(persistentWindowStore.wrapped().persistent())
-            .andReturn(true);
-        expect(innerPersistentWindowStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1))
-            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
+    public void shouldReturnNoRecordWhenFetchedKeyHasExpired() {
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1 + RETENTION_PERIOD))
+                .andReturn(KeyValueIterators.emptyWindowStoreIterator());
+        replay(innerStoreMock);
 
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        persistentWindowStore.fetch("a", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+        store.init((StateStoreContext) context, store);
+        store.fetch("a", ofEpochMilli(1), ofEpochMilli(1).plus(RETENTION_PERIOD, ChronoUnit.MILLIS)).close(); // recorded on close;
 
-        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
-        // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("fetch-rate");
-        assertThat((Double) metric.metricValue(), greaterThan(0.0));
-        verify(innerPersistentWindowStoreMock);
-    }
-
-    @Test
-    public void shouldReturnNoRecordForPersistentInnerStoreWhenFetchedKeyHasExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final String expiredKeyValue = persistentWindowStore.fetch("a", systemTime - 2 * RETENTION_PERIOD);
-        assertNull(expiredKeyValue);
-    }
-
-    @Test
-    public void shouldReturnRecordForPersistentInnerStoreWhenFetchedKeyHasNotExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().fetch(Bytes.wrap("a".getBytes()), systemTime - 10)).andReturn("value".getBytes());
-        expect(persistentWindowStore.wrapped().fetch(Bytes.wrap("b".getBytes()), systemTime - RETENTION_PERIOD)).andReturn("value".getBytes());
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final String fetched = persistentWindowStore.fetch("a", systemTime - 10);
-        final String fetchedSecond = persistentWindowStore.fetch("b", systemTime - RETENTION_PERIOD);
-        assertEquals("value", fetched);
-        assertEquals("value", fetchedSecond);
-    }
-
-    @Test
-    public void shouldReturnNullForPersistentInnerStoreWhenFetchedKeyHasNotExpiredAndValueIsNull() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().fetch(Bytes.wrap("a".getBytes()), systemTime - 10)).andReturn(null);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final String expiredKeyValue = persistentWindowStore.fetch("a", systemTime - 10);
-        assertNull(expiredKeyValue);
-    }
-
-    @Test
-    public void shouldPassThroughInnerStoreIteratorOutputForPersistentStoreWhenObservedStreamTimeIsInvalidForwardAll() {
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(ConsumerRecord.NO_TIMESTAMP);
-        expect(persistentWindowStore.wrapped().fetchAll(0, Long.MAX_VALUE))
-            .andReturn(KeyValueIterators.emptyIterator());
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> expiredKeyValueIterator = persistentWindowStore.all();
-        assertFalse(expiredKeyValueIterator.hasNext());
+        verify(innerStoreMock);
     }
 
     @Test
@@ -516,7 +418,6 @@ public class MeteredWindowStoreTest {
         final MeteredWindowStore<String, String> metered = new MeteredWindowStore<>(
             cachedWindowStore,
             10L, // any size
-            RETENTION_PERIOD,
             STORE_TYPE,
             new MockTime(),
             Serdes.String(),

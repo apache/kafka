@@ -20,6 +20,7 @@ import java.util.Collection;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -40,8 +41,10 @@ import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @RunWith(Parameterized.class)
 public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
@@ -105,6 +108,45 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
         }
     }
 
+
+    @Test
+    public void shouldNotFetchExpiredSessions() {
+        final long systemTime = Time.SYSTEM.milliseconds();
+        sessionStore.put(new Windowed<>("p", new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)), 1L);
+        sessionStore.put(new Windowed<>("q", new SessionWindow(systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)), 4L);
+        sessionStore.put(new Windowed<>("r", new SessionWindow(systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)), 3L);
+        sessionStore.put(new Windowed<>("p", new SessionWindow(systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)), 2L);
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
+        ) {
+            assertEquals(mkSet(2L), valuesToSet(iterator));
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.backwardFindSessions("p", systemTime - 5 * RETENTION_PERIOD, systemTime - 4 * RETENTION_PERIOD)
+        ) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", "r", systemTime - 5 * RETENTION_PERIOD, systemTime - 4 * RETENTION_PERIOD)
+        ) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", "r", systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)
+        ) {
+            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
+        ) {
+            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.backwardFindSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
+        ) {
+            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+        }
+    }
 
     @Test
     public void shouldRemoveExpired() {

@@ -75,7 +75,6 @@ public class TimestampedWindowStoreBuilder<K, V>
         return new MeteredTimestampedWindowStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),
             storeSupplier.windowSize(),
-            storeSupplier.retentionPeriod(),
             storeSupplier.metricsScope(),
             time,
             keySerde,

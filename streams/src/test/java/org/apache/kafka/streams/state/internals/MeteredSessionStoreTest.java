@@ -56,28 +56,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.aryEq;
+import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.createNiceMock;
-import static org.easymock.EasyMock.createMockBuilder;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.aryEq;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class MeteredSessionStoreTest {
 
@@ -110,37 +107,17 @@ public class MeteredSessionStoreTest {
     private InternalProcessorContext context;
 
     private Map<String, String> tags;
-
-    private final SegmentedBytesStore innerSegmentedStoreMock = createNiceMock(RocksDBSegmentedBytesStore.class);
-
-    private final SessionStore<Bytes, byte[]> innerPersistentSessionStoreMock = createMockBuilder(RocksDBSessionStore.class)
-        .withConstructor(SegmentedBytesStore.class)
-        .withArgs(innerSegmentedStoreMock)
-        .createNiceMock();
-
-    private MeteredSessionStore<String, String> persistentSessionStore;
     
     @Before
     public void before() {
         final Time mockTime = new MockTime();
         store = new MeteredSessionStore<>(
             innerStore,
-            RETENTION_PERIOD,
             STORE_TYPE,
             Serdes.String(),
             Serdes.String(),
             mockTime
         );
-
-        persistentSessionStore = new MeteredSessionStore<>(
-            innerPersistentSessionStoreMock,
-            RETENTION_PERIOD,
-            STORE_TYPE,
-            Serdes.String(),
-            Serdes.String(),
-            mockTime
-        );
-
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         expect(context.applicationId()).andStubReturn(APPLICATION_ID);
         expect(context.metrics())
@@ -148,7 +125,6 @@ public class MeteredSessionStoreTest {
         expect(context.taskId()).andStubReturn(taskId);
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expect(innerStore.name()).andStubReturn(STORE_NAME);
-        expect(innerPersistentSessionStoreMock.name()).andStubReturn(STORE_NAME);
         tags = mkMap(
             mkEntry(THREAD_ID_TAG_KEY, threadId),
             mkEntry("task-id", taskId.toString()),
@@ -167,7 +143,6 @@ public class MeteredSessionStoreTest {
         final SessionStore<Bytes, byte[]> inner = mock(SessionStore.class);
         final MeteredSessionStore<String, String> outer = new MeteredSessionStore<>(
             inner,
-            RETENTION_PERIOD,
             STORE_TYPE,
             Serdes.String(),
             Serdes.String(),
@@ -186,7 +161,6 @@ public class MeteredSessionStoreTest {
         final SessionStore<Bytes, byte[]> inner = mock(SessionStore.class);
         final MeteredSessionStore<String, String> outer = new MeteredSessionStore<>(
             inner,
-            RETENTION_PERIOD,
             STORE_TYPE,
             Serdes.String(),
             Serdes.String(),
@@ -229,7 +203,6 @@ public class MeteredSessionStoreTest {
         replay(innerStore, context, keySerializer, keySerde, valueDeserializer, valueSerializer, valueSerde);
         store = new MeteredSessionStore<>(
             innerStore,
-            RETENTION_PERIOD,
             STORE_TYPE,
             keySerde,
             valueSerde,
@@ -458,52 +431,51 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
-    public void shouldReturnNoRecordForPersistentInnerStoreWhenFetchedKeyHasExpired() {
+    public void shouldReturnNoSessionsWhenFetchedKeyHasExpired() {
         final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final String expiredKeyValue = persistentSessionStore.fetchSession("a", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD);
-        assertNull(expiredKeyValue);
+        expect(innerStore.findSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
     }
 
     @Test
-    public void shouldReturnRecordForPersistentInnerStoreWhenFetchedKeyHasNotExpired() {
+    public void shouldReturnNoSessionsInBackwardOrderWhenFetchedKeyHasExpired() {
         final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime - 20);
-        expect(persistentSessionStore.wrapped().fetchSession(Bytes.wrap("a".getBytes()), systemTime - RETENTION_PERIOD, systemTime - 10))
-            .andReturn("value".getBytes());
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final String fetched = persistentSessionStore.fetchSession("a", systemTime - RETENTION_PERIOD, systemTime - 10);
-        assertEquals("value", fetched);
+        expect(innerStore.backwardFindSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
     }
 
     @Test
-    public void shouldReturnNullForPersistentInnerStoreWhenFetchedKeyHasNotExpiredAndValueIsNull() {
+    public void shouldNotFindExpiredSessionRangeFromStore() {
         final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime - 20);
-        expect(persistentSessionStore.wrapped().fetchSession(Bytes.wrap("a".getBytes()), systemTime - RETENTION_PERIOD, systemTime - 10))
-            .andReturn(null);
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final String fetched = persistentSessionStore.fetchSession("a", systemTime - RETENTION_PERIOD, systemTime - 10);
-        assertNull(fetched);
+        expect(innerStore.findSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldNotFindExpiredSessionRangeInBackwardOrderFromStore() {
+        final long systemTime = Time.SYSTEM.milliseconds();
+        expect(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
     }
 
     @Test
@@ -631,7 +603,6 @@ public class MeteredSessionStoreTest {
 
         store = new MeteredSessionStore<>(
             cachedSessionStore,
-            RETENTION_PERIOD,
             STORE_TYPE,
             Serdes.String(),
             Serdes.String(),
