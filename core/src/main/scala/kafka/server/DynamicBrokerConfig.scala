@@ -616,7 +616,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
     if (reloadOnly != configsChanged) {
       if (printf) {
-        val stackTrace = util.Arrays.toString(Thread.currentThread().getStackTrace.asInstanceOf[Array[Object]])
+        val stackTrace = "nop" //util.Arrays.toString(Thread.currentThread().getStackTrace.asInstanceOf[Array[Object]])
         println(s"processListenerReconfigurable brokerId, $brokerId, listenerName: $listenerName, thread: ${Thread.currentThread()}, stack: $stackTrace")
         println(s"Updated keys: $updatedKeys, ${changeMap.get("num.network.threads")}")
       }
@@ -630,16 +630,23 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                     newCustomConfigs: util.Map[String, Object],
                                     validateOnly: Boolean): Unit = {
 
+    var lr: ListenerReconfigurable = null
     val printf = reconfigurable match {
       case _: ListenerReconfigurable =>
         allNewConfigs.get("num.network.threads").asInstanceOf[Int] == 2
       case _ => false
     }
+
+    if (printf) lr = reconfigurable.asInstanceOf[ListenerReconfigurable]
+    if (lr != null) println(s"processReconfigurable for ${lr.listenerName()}")
+
     val newConfigs = new util.HashMap[String, Object]
     allNewConfigs.forEach { (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
     newConfigs.putAll(newCustomConfigs)
     try {
+      if (lr != null) println(s"validateReconfig for ${lr.listenerName()}")
       reconfigurable.validateReconfiguration(newConfigs)
+      if (lr != null) println(s"validateReconfig success for ${lr.listenerName()}")
     } catch {
       case e: ConfigException => throw e
       case _: Exception =>
@@ -648,7 +655,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     if (!validateOnly) {
       if (printf) {
-        println(s"Reconfiguring $reconfigurable, updated configs: $updatedConfigNames " +
+        println(s"Reconfiguring ${lr.listenerName()}, updated configs: $updatedConfigNames " +
           s"custom configs: ${ConfigUtils.configMapToRedactedString(newCustomConfigs, KafkaConfig.configDef)}")
       }
       reconfigurable.reconfigure(newConfigs)
