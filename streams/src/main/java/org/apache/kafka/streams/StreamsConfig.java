@@ -1539,17 +1539,20 @@ public class StreamsConfig extends AbstractConfig {
     public long getTotalCacheSize() {
         // both deprecated and new config set. Warn and use the new one.
         if (originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG) && originals().containsKey(STATESTORE_CACHE_MAX_BYTES_CONFIG)) {
-            log.warn("Use of deprecated config {} noticed.", CACHE_MAX_BYTES_BUFFERING_CONFIG);
             if (!getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG).equals(getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG))) {
-                log.warn("Config {} and {} have been set to different values. {} would be considered as total cache size",
+                log.warn("Both deprecated config {} and the new config {} are set, hence {} is ignored and {} is used instead.",
                         CACHE_MAX_BYTES_BUFFERING_CONFIG,
                         STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
                         STATESTORE_CACHE_MAX_BYTES_CONFIG);
             }
             return getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
         } else if (originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG)) {
             // only deprecated config set.
-            log.warn("Use of deprecated config {} noticed.", CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            log.warn("Deprecated config {} is set, and will be used; we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
+                    CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                    CACHE_MAX_BYTES_BUFFERING_CONFIG);
             return getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
         }
         // only new or no config set. Use default or user specified value.
