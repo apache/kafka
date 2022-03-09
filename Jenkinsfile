@@ -103,7 +103,7 @@ pipeline {
     stage('Build') {
       parallel {
 
-        stage('JDK 8 and Scala 2.12') {
+        stage('x86_64: JDK 8 and Scala 2.12') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_1.8_latest'
@@ -123,7 +123,7 @@ pipeline {
           }
         }
 
-        stage('JDK 11 and Scala 2.13') {
+        stage('x86_64: JDK 11 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_11_latest'
@@ -142,7 +142,7 @@ pipeline {
           }
         }
 
-        stage('JDK 17 and Scala 2.13') {
+        stage('x86_64: JDK 17 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_17_latest'
@@ -161,7 +161,7 @@ pipeline {
           }
         }
 
-        stage('ARM') {
+        stage('AArch64: JDK 8 and Scala 2.13') {
           agent { label 'arm4' }
           options {
             timeout(time: 2, unit: 'HOURS') 
@@ -173,13 +173,13 @@ pipeline {
           steps {
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest(env, 'unitTest')
+              doTest(env)
             }
             echo 'Skipping Kafka Streams archetype test for ARM build'
           }
         }
 
-        stage('PowerPC') {
+        stage('ppc64le: JDK 11 and Scala 2.13') {
           agent { label 'ppc64le' }
           options {
             timeout(time: 2, unit: 'HOURS')
@@ -191,7 +191,7 @@ pipeline {
           steps {
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest(env, 'unitTest')
+              doTest(env)
             }
             echo 'Skipping Kafka Streams archetype test for PowerPC build'
           }
@@ -202,7 +202,7 @@ pipeline {
         // are pushed to trunk and/or release branches. We achieve this via
         // the `when` clause.
         
-        stage('JDK 8 and Scala 2.13') {
+        stage('x86_64: JDK 8 and Scala 2.13') {
           when {
             not { changeRequest() }
             beforeAgent true
@@ -226,7 +226,7 @@ pipeline {
           }
         }
 
-        stage('JDK 11 and Scala 2.12') {
+        stage('x86_64: JDK 11 and Scala 2.12') {
           when {
             not { changeRequest() }
             beforeAgent true
@@ -249,7 +249,7 @@ pipeline {
           }
         }
 
-        stage('JDK 17 and Scala 2.12') {
+        stage('x86_64: JDK 17 and Scala 2.12') {
           when {
             not { changeRequest() }
             beforeAgent true
