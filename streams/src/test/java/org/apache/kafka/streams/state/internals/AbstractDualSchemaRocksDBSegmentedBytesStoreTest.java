@@ -289,8 +289,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final String keyB = "b";
         if (getIndexSchema() == null) {
             assertThrows(
-            IllegalStateException.class,
-            () -> bytesStore.putIndex(Bytes.wrap(keyA.getBytes()), new byte[0]));
+                IllegalStateException.class,
+                () -> bytesStore.putIndex(Bytes.wrap(keyA.getBytes()), new byte[0])
+            );
         } else {
             // Only put to index
             final Bytes serializedKey1 = serializeKeyForIndex(new Windowed<>(keyA, windows[1]));

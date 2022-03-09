@@ -135,7 +135,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     byte[] getIndex(final Bytes indexKey) {
-         if (!hasIndex()) {
+        if (!hasIndex()) {
             throw new IllegalStateException("Index store doesn't exist");
         }
 

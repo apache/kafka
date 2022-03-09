@@ -79,10 +79,10 @@ public class RocksDBTimeOrderedSegmentedBytesStore extends AbstractDualSchemaRoc
 
         @Override
         public Bytes peekNextKey() {
-        if (!hasNext()) {
-            throw new NoSuchElementException();
-        }
-        return getBaseKey(indexIterator.peekNextKey());
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return getBaseKey(indexIterator.peekNextKey());
         }
 
         @Override

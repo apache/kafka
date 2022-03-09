@@ -35,7 +35,6 @@ public class PrefixedWindowKeySchemas {
     private static final byte TIME_FIRST_PREFIX = 0;
     private static final byte KEY_FIRST_PREFIX = 1;
     private static final int SEQNUM_SIZE = 4;
-    private static final int SUFFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
 
     private static byte extractPrefix(final byte[] binaryBytes) {
         return binaryBytes[0];
@@ -51,7 +50,7 @@ public class PrefixedWindowKeySchemas {
                 final byte nextPrefix = TIME_FIRST_PREFIX + 1;
                 return Bytes.wrap(ByteBuffer.allocate(PREFIX_SIZE).put(nextPrefix).array());
             }
-            byte[] maxKey = new byte[key.get().length];
+            final byte[] maxKey = new byte[key.get().length];
             Arrays.fill(maxKey, (byte) 0xFF);
             return Bytes.wrap(ByteBuffer.allocate(PREFIX_SIZE + TIMESTAMP_SIZE + maxKey.length + SEQNUM_SIZE)
                 .put(TIME_FIRST_PREFIX)
@@ -104,7 +103,7 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
-            final Bytes binaryKeyTo, final long from, final long to, boolean forward) {
+            final Bytes binaryKeyTo, final long from, final long to, final boolean forward) {
             return iterator -> {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();

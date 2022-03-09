@@ -99,7 +99,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                     valueSerde)
                 .build();
         } else if (storeType == StoreType.RocksDBTimeOrderedWindowStoreWithIndex) {
-            final long defaultSegmentInterval = Math.max(retentionPeriod/ 2, 60_000L);
+            final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
             return Stores.windowStoreBuilder(
                 new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
                     retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates, true),
@@ -107,7 +107,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 valueSerde
             ).build();
         } else {
-            final long defaultSegmentInterval = Math.max(retentionPeriod/ 2, 60_000L);
+            final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
             return Stores.windowStoreBuilder(
                 new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
                     retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates, false),

@@ -90,7 +90,7 @@ public class WindowKeySchemaTest {
     }
 
     @FunctionalInterface
-    interface TriFunction<A,B,C,R> {
+    interface TriFunction<A, B, C, R> {
         R apply(A a, B b, C c);
     }
 
@@ -189,7 +189,7 @@ public class WindowKeySchemaTest {
 
     @Test
     public void testHasNextConditionUsingNullKeys() {
-        BiFunction<Windowed<Bytes>, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryWindowParam();
+        final BiFunction<Windowed<Bytes>, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryWindowParam();
         final List<KeyValue<Bytes, Integer>> keys = asList(
             KeyValue.pair(toStoreKeyBinary.apply(new Windowed<>(Bytes.wrap(new byte[] {0, 0}), new TimeWindow(0, 1)), 0), 1),
             KeyValue.pair(toStoreKeyBinary.apply(new Windowed<>(Bytes.wrap(new byte[] {0}), new TimeWindow(0, 1)), 0), 2),
@@ -468,7 +468,7 @@ public class WindowKeySchemaTest {
             result = TimeFirstWindowKeySchema.fromStoreKey(serialized.get(),
                 endTime - startTime, stateSerdes.keyDeserializer(), stateSerdes.topic());
         } else {
-             result = KeyFirstWindowKeySchema.fromStoreKey(serialized.get(),
+            result = KeyFirstWindowKeySchema.fromStoreKey(serialized.get(),
                 endTime - startTime, stateSerdes.keyDeserializer(), stateSerdes.topic());
         }
         assertEquals(windowedKey, result);
