@@ -88,10 +88,13 @@ public class RetryUtil {
                 lastError = e;
             }
 
-            long millisRemaining = Math.max(0, end - System.currentTimeMillis());
-            if (millisRemaining < retryBackoffMs) {
-                // exit when the time remaining is less than retryBackoffMs
-                break;
+            if (retryBackoffMs > 0) {
+                long millisRemaining = Math.max(0, end - System.currentTimeMillis());
+                if (millisRemaining < retryBackoffMs) {
+                    // exit when the time remaining is less than retryBackoffMs
+                    break;
+                }
+                Utils.sleep(retryBackoffMs);
             }
             Utils.sleep(retryBackoffMs);
         } while (System.currentTimeMillis() < end);
