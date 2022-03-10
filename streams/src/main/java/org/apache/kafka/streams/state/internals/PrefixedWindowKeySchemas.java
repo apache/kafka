@@ -138,35 +138,6 @@ public class PrefixedWindowKeySchemas {
         }
 
         @Override
-        public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
-            final Bytes binaryKeyTo,
-            final long from,
-            final long to) {
-            return iterator -> {
-                while (iterator.hasNext()) {
-                    final Bytes bytes = iterator.peekNextKey();
-                    final byte prefix = extractPrefix(bytes.get());
-
-                    if (prefix != TIME_FIRST_PREFIX) {
-                        return false;
-                    }
-
-                    final long time = TimeFirstWindowKeySchema.extractStoreTimestamp(bytes.get());
-
-                    final Bytes keyBytes = Bytes.wrap(
-                        TimeFirstWindowKeySchema.extractStoreKeyBytes(bytes.get()));
-                    if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
-                        && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
-                        && time >= from && time <= to) {
-                        return true;
-                    }
-                    iterator.next();
-                }
-                return false;
-            };
-        }
-
-        @Override
         public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
             final long from,
             final long to,
@@ -291,7 +262,8 @@ public class PrefixedWindowKeySchemas {
         public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
                                                  final Bytes binaryKeyTo,
                                                  final long from,
-                                                 final long to) {
+                                                 final long to,
+                                                 final boolean forward) {
             return iterator -> {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();

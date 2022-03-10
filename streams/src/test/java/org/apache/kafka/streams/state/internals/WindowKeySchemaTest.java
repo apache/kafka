@@ -196,7 +196,7 @@ public class WindowKeySchemaTest {
             KeyValue.pair(toStoreKeyBinary.apply(new Windowed<>(Bytes.wrap(new byte[] {0, 0, 0}), new TimeWindow(10, 20)), 6), 6));
         try (final DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()))) {
 
-            final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
+            final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true);
             final List<Integer> results = new ArrayList<>();
             while (hasNextCondition.hasNext(iterator)) {
                 results.add(iterator.next().value);

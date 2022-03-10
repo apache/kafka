@@ -219,7 +219,7 @@ public class RocksDBTimeOrderedSegmentedBytesStore extends AbstractDualSchemaRoc
 
             return new IndexToBaseStoreIterator(new SegmentIterator<>(
                 searchSpace.iterator(),
-                indexKeySchema.get().hasNextCondition(key, key, from, to),
+                indexKeySchema.get().hasNextCondition(key, key, from, to, forward),
                 binaryFrom,
                 binaryTo,
                 forward));
@@ -277,7 +277,7 @@ public class RocksDBTimeOrderedSegmentedBytesStore extends AbstractDualSchemaRoc
 
             return new IndexToBaseStoreIterator(new SegmentIterator<>(
                 searchSpace.iterator(),
-                indexKeySchema.get().hasNextCondition(keyFrom, keyTo, from, to),
+                indexKeySchema.get().hasNextCondition(keyFrom, keyTo, from, to, forward),
                 binaryFrom,
                 binaryTo,
                 forward));

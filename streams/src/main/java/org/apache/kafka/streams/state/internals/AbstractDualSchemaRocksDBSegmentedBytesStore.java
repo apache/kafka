@@ -84,7 +84,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true),
                 from,
                 to,
                 true);
@@ -98,7 +98,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, false),
                 from,
                 to,
                 false);

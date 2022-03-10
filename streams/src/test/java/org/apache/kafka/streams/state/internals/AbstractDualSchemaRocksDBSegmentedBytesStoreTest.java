@@ -76,7 +76,6 @@ import java.util.Set;
 import java.util.SimpleTimeZone;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.max;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
@@ -292,7 +291,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final String keyB = "aa";
         final String keyC = "aaa";
 
-        final Window maxWindow = new TimeWindow(Long.MAX_VALUE -1 , Long.MAX_VALUE);
+        final Window maxWindow = new TimeWindow(Long.MAX_VALUE - 1, Long.MAX_VALUE);
         final Bytes serializedKeyA = serializeKey(new Windowed<>(keyA, maxWindow), false, Integer.MAX_VALUE);
         final Bytes serializedKeyB = serializeKey(new Windowed<>(keyB, maxWindow), false, Integer.MAX_VALUE);
         final Bytes serializedKeyC = serializeKey(new Windowed<>(keyC, maxWindow), false, Integer.MAX_VALUE);
@@ -370,7 +369,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final String keyB = "aa";
         final String keyC = "aaa";
 
-        final Window maxWindow = new TimeWindow(Long.MAX_VALUE -1 , Long.MAX_VALUE);
+        final Window maxWindow = new TimeWindow(Long.MAX_VALUE - 1, Long.MAX_VALUE);
         final Bytes serializedKeyA = serializeKey(new Windowed<>(keyA, maxWindow), false, Integer.MAX_VALUE);
         final Bytes serializedKeyB = serializeKey(new Windowed<>(keyB, maxWindow), false, Integer.MAX_VALUE);
         final Bytes serializedKeyC = serializeKey(new Windowed<>(keyC, maxWindow), false, Integer.MAX_VALUE);
