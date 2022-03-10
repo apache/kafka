@@ -29,14 +29,13 @@ import org.slf4j.Logger;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RemoveNamedTopologyResult {
     private final Logger log;
 
     private final KafkaFutureImpl<Void> removeTopologyFuture;
     private final KafkaFutureImpl<Void> resetOffsetsFuture;
-
-
 
     public RemoveNamedTopologyResult(final String removedTopology,
                                      final KafkaFutureImpl<Void> removeTopologyFuture) {
@@ -46,10 +45,7 @@ public class RemoveNamedTopologyResult {
         Objects.requireNonNull(removeTopologyFuture);
         this.removeTopologyFuture = removeTopologyFuture;
 
-        // Go ahead and complete this future right away if the user didn't opt to reset offsets
-        final KafkaFutureImpl<Void> resetOffsetsFuture = new KafkaFutureImpl<>();
-        resetOffsetsFuture.complete(null);
-        this.resetOffsetsFuture = resetOffsetsFuture;
+        this.resetOffsetsFuture = null;
     }
 
     public RemoveNamedTopologyResult(final String removedTopology,
@@ -70,7 +66,7 @@ public class RemoveNamedTopologyResult {
         return removeTopologyFuture;
     }
 
-    public KafkaFuture<Void> deleteOffsetsResult() {
+    public KafkaFuture<Void> resetOffsetsFuture() {
         return resetOffsetsFuture;
     }
 
@@ -82,7 +78,11 @@ public class RemoveNamedTopologyResult {
      * successfully completed their corresponding {@link KafkaFuture}.
      */
     public final KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(removeTopologyFuture, resetOffsetsFuture);
+        if (resetOffsetsFuture == null) {
+            return removeTopologyFuture;
+        } else {
+            return resetOffsetsFuture;
+        }
     }
 
     private class ResetOffsetsFuture extends KafkaFutureImpl<Void> {
@@ -97,21 +97,28 @@ public class RemoveNamedTopologyResult {
         }
 
         @Override
-        public Void get() {
+        public Void get() throws ExecutionException {
+            final AtomicReference<Throwable> firstError = new AtomicReference<>(null);
             try {
                 removeTopologyFuture.get();
             } catch (final InterruptedException | ExecutionException e) {
                 final Throwable error = e.getCause() != null ? e.getCause() : e;
                 log.error("Removing named topology failed Offset reset will still be attempted.", error);
+                firstError.compareAndSet(e, null);
             }
             try {
                 resetOffsets(partitionsToReset, applicationId, adminClient);
             } catch (final Throwable e) {
                 log.error("Failed to reset offsets, you should do so manually if you want to add new topologies"
                               + "in the future that consume from the same input topics");
+                firstError.compareAndSet(e, null);
             }
 
-            return null;
+            if (firstError.get() != null) {
+                throw new ExecutionException(firstError.get());
+            } else {
+                return null;
+            }
         }
 
         private void resetOffsets(final Set<TopicPartition> partitionsToReset,
@@ -124,7 +131,7 @@ public class RemoveNamedTopologyResult {
                     final DeleteConsumerGroupOffsetsResult deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(applicationId, partitionsToReset);
                     deleteOffsetsResult.all().get();
                     log.info("Successfully completed resetting offsets.");
-                    return;
+                    break;
                 } catch (final InterruptedException error) {
                     error.printStackTrace();
                     log.error("Offset reset failed.", error);
@@ -138,7 +145,7 @@ public class RemoveNamedTopologyResult {
                         log.debug("Offset reset failed, there may be other nodes which have not yet finished removing this topology", error);
                     } else if (error instanceof GroupIdNotFoundException) {
                         log.info("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
-                        return;
+                        break;
                     } else {
                         if (--retries > 0) {
                             log.error("Offset reset failed, retries remaining: " + retries, error);
