@@ -1129,10 +1129,10 @@ public class TaskManager {
      * added NamedTopology and create them if so, then close any tasks whose named topology no longer exists
      */
     void handleTopologyUpdates() {
-        final Set<String> currentNamedTopologies = topologyMetadata.updateThreadTopologyVersion(Thread.currentThread().getName());
-
-        tasks.maybeCreateTasksFromNewTopologies(currentNamedTopologies);
-        maybeCloseTasksFromRemovedTopologies(currentNamedTopologies);
+        topologyMetadata.executeTopologyUpdatesAndBumpThreadVersion(
+            tasks::maybeCreateTasksFromNewTopologies,
+            this::maybeCloseTasksFromRemovedTopologies
+        );
 
         if (topologyMetadata.isEmpty()) {
             log.info("Proactively unsubscribing from all topics due to empty topology");

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -53,6 +54,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -466,6 +468,55 @@ public class TopicAdminTest {
     }
 
     @Test
+    public void retryEndOffsetsShouldThrowConnectException() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = 1000L;
+        Cluster cluster = createCluster(1, "myTopic", 1);
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+            Map<TopicPartition, Long> offsetMap = new HashMap<>();
+            offsetMap.put(tp1, offset);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE));
+            Map<String, Object> adminConfig = new HashMap<>();
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
+            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
+
+            assertThrows(ConnectException.class, () -> {
+                admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
+            });
+        }
+    }
+
+    @Test
+    public void retryEndOffsetsShouldRetryWhenTopicNotFound() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = 1000L;
+        Cluster cluster = createCluster(1, "myTopic", 1);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(10), cluster)) {
+            Map<TopicPartition, Long> offsetMap = new HashMap<>();
+            offsetMap.put(tp1, offset);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResult(tp1, offset));
+
+            Map<String, Object> adminConfig = new HashMap<>();
+            adminConfig.put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0");
+            TopicAdmin admin = new TopicAdmin(adminConfig, env.adminClient());
+            Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
+            assertNotNull(endoffsets);
+            assertTrue(endoffsets.containsKey(tp1));
+            assertEquals(1000L, endoffsets.get(tp1).longValue());
+        }
+    }
+
+    @Test
     public void endOffsetsShouldFailWithNonRetriableWhenAuthorizationFailureOccurs() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
@@ -625,12 +676,16 @@ public class TopicAdminTest {
     }
 
     private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
+        return prepareMetadataResponse(cluster, error, error);
+    }
+
+    private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors topicError, Errors partitionError) {
         List<MetadataResponseTopic> metadata = new ArrayList<>();
         for (String topic : cluster.topics()) {
             List<MetadataResponseData.MetadataResponsePartition> pms = new ArrayList<>();
             for (PartitionInfo pInfo : cluster.availablePartitionsForTopic(topic)) {
                 MetadataResponseData.MetadataResponsePartition pm  = new MetadataResponseData.MetadataResponsePartition()
-                        .setErrorCode(error.code())
+                        .setErrorCode(partitionError.code())
                         .setPartitionIndex(pInfo.partition())
                         .setLeaderId(pInfo.leader().id())
                         .setLeaderEpoch(234)
@@ -640,7 +695,7 @@ public class TopicAdminTest {
                 pms.add(pm);
             }
             MetadataResponseTopic tm = new MetadataResponseTopic()
-                    .setErrorCode(error.code())
+                    .setErrorCode(topicError.code())
                     .setName(topic)
                     .setIsInternal(false)
                     .setPartitions(pms);
