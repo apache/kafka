@@ -20,7 +20,6 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 
 public class RemoveNamedTopologyResult {
     private final KafkaFutureImpl<Void> removeTopologyFuture;
