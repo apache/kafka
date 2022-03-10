@@ -170,11 +170,14 @@ public class TopologyMetadata {
         return taskExecutionMetadata;
     }
 
-    public Set<String> updateThreadTopologyVersion(final String threadName) {
+    public void executeTopologyUpdatesAndBumpThreadVersion(final Consumer<Set<String>> handleTopologyAdditions,
+                                                           final Consumer<Set<String>> handleTopologyRemovals) {
         try {
             version.topologyLock.lock();
-            threadVersions.put(threadName, topologyVersion());
-            return namedTopologiesView();
+            final long latestTopologyVersion = topologyVersion();
+            handleTopologyAdditions.accept(namedTopologiesView());
+            handleTopologyRemovals.accept(namedTopologiesView());
+            threadVersions.put(Thread.currentThread().getName(), latestTopologyVersion);
         } finally {
             version.topologyLock.unlock();
         }

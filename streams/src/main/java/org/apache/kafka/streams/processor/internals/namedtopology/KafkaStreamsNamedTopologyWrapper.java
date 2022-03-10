@@ -20,8 +20,8 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -56,7 +56,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-
 
 /**
  * This is currently an internal and experimental feature for enabling certain kinds of topology upgrades. Use at
@@ -239,12 +238,16 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         final boolean skipResetForUnstartedApplication =
             maybeCompleteFutureIfStillInCREATED(removeTopologyFuture, "removing topology " + topologyToRemove);
 
-        if (resetOffsets && !skipResetForUnstartedApplication) {
+        if (resetOffsets && !skipResetForUnstartedApplication && !partitionsToReset.isEmpty()) {
             log.info("Resetting offsets for the following partitions of {} removed NamedTopology {}: {}",
                      removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully" : "successfully",
                      topologyToRemove, partitionsToReset
             );
-            return resetOffsets(removeTopologyFuture, partitionsToReset);
+            return new RemoveNamedTopologyResult(
+                removeTopologyFuture,
+                topologyToRemove,
+                () -> resetOffsets(partitionsToReset)
+            );
         } else {
             return new RemoveNamedTopologyResult(removeTopologyFuture);
         }
@@ -264,48 +267,46 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         }
     }
 
-    private RemoveNamedTopologyResult resetOffsets(final KafkaFutureImpl<Void> removeTopologyFuture,
-                                                   final Set<TopicPartition> partitionsToReset) {
-        if (!partitionsToReset.isEmpty()) {
-            removeTopologyFuture.whenComplete((v, throwable) -> {
-                if (throwable != null) {
-                    removeTopologyFuture.completeExceptionally(throwable);
-                }
-                DeleteConsumerGroupOffsetsResult deleteOffsetsResult = null;
-                while (deleteOffsetsResult == null) {
-                    try {
-                        deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
-                            applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
-                        deleteOffsetsResult.all().get();
-                    } catch (final InterruptedException ex) {
-                        ex.printStackTrace();
-                        break;
-                    } catch (final ExecutionException ex) {
-                        if (ex.getCause() != null &&
-                            ex.getCause() instanceof GroupSubscribedToTopicException &&
-                            ex.getCause()
-                                .getMessage()
-                                .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
-                            ex.printStackTrace();
-                        } else if (ex.getCause() != null &&
-                            ex.getCause() instanceof GroupIdNotFoundException) {
-                            log.debug("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
-                            break;
-                        } else {
-                            removeTopologyFuture.completeExceptionally(ex);
-                        }
-                        deleteOffsetsResult = null;
-                    }
-                    try {
-                        Thread.sleep(100);
-                    } catch (final InterruptedException ex) {
-                        ex.printStackTrace();
+    private void resetOffsets(final Set<TopicPartition> partitionsToReset) throws StreamsException {
+        // The number of times to retry upon failure
+        int retries = 100;
+        while (true) {
+            try {
+                final DeleteConsumerGroupOffsetsResult deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
+                    applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+                    partitionsToReset);
+                deleteOffsetsResult.all().get();
+                log.info("Successfully completed resetting offsets.");
+                break;
+            } catch (final InterruptedException ex) {
+                ex.printStackTrace();
+                log.error("Offset reset failed.", ex);
+                throw new StreamsException(ex);
+            } catch (final ExecutionException ex) {
+                final Throwable error = ex.getCause() != null ? ex.getCause() : ex;
+
+                if (error instanceof GroupSubscribedToTopicException &&
+                    error.getMessage()
+                        .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
+                    log.debug("Offset reset failed, there may be other nodes which have not yet finished removing this topology", error);
+                } else if (error instanceof GroupIdNotFoundException) {
+                    log.info("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
+                    break;
+                } else {
+                    if (--retries > 0) {
+                        log.error("Offset reset failed, retries remaining: " + retries, error);
+                    } else {
+                        log.error("Offset reset failed, no retries remaining.", error);
+                        throw new StreamsException(error);
                     }
                 }
-                removeTopologyFuture.complete(null);
-            });
+            }
+            try {
+                Thread.sleep(100);
+            } catch (final InterruptedException ex) {
+                ex.printStackTrace();
+            }
         }
-        return new RemoveNamedTopologyResult(removeTopologyFuture, removeTopologyFuture);
     }
 
     /**
