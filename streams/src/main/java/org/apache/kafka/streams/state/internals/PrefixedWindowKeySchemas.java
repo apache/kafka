@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.nio.ByteBuffer;
 import java.util.List;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
@@ -87,18 +88,17 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, Math.max(0, from),
-                0);
+            return toStoreKeyBinary(key, Math.max(0, from), 0);
         }
 
         @Override
         public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
+            return toStoreKeyBinary(key, to, Integer.MAX_VALUE);
         }
 
         @Override
         public long segmentTimestamp(final Bytes key) {
-            return TimeFirstWindowKeySchema.extractStoreTimestamp(key.get());
+            return extractStoreTimestamp(key.get());
         }
 
         @Override
@@ -213,8 +213,8 @@ public class PrefixedWindowKeySchemas {
         }
 
         static Bytes toStoreKeyBinary(final byte[] serializedKey,
-                                                 final long timestamp,
-                                                 final int seqnum) {
+                                      final long timestamp,
+                                      final int seqnum) {
             final ByteBuffer buf = ByteBuffer.allocate(
                 PREFIX_SIZE + TIMESTAMP_SIZE + serializedKey.length + SEQNUM_SIZE);
             buf.put(TIME_FIRST_PREFIX);
@@ -241,56 +241,45 @@ public class PrefixedWindowKeySchemas {
         static int extractStoreSequence(final byte[] binaryKey) {
             return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
         }
+
+        public static byte[] fromNonPrefixWindowKey(final byte[] binaryKey) {
+            final ByteBuffer buffer = ByteBuffer.allocate(PREFIX_SIZE + binaryKey.length).put(TIME_FIRST_PREFIX);
+            // Put timestamp
+            buffer.put(binaryKey, binaryKey.length - SEQNUM_SIZE - TIMESTAMP_SIZE, TIMESTAMP_SIZE);
+            buffer.put(binaryKey, 0, binaryKey.length - SEQNUM_SIZE - TIMESTAMP_SIZE);
+            buffer.put(binaryKey, binaryKey.length - SEQNUM_SIZE, SEQNUM_SIZE);
+
+            return buffer.array();
+        }
     }
 
-    public static class KeyFirstWindowKeySchema extends WindowKeySchema {
+    public static class KeyFirstWindowKeySchema implements KeySchema {
 
-        private Bytes wrapPrefix(final Bytes noPrefixKey) {
-            return wrapPrefix(noPrefixKey, KEY_FIRST_PREFIX);
-        }
 
-        private Bytes wrapPrefix(final Bytes noPrefixKey, final byte prefix) {
-            // Need to scan from prefix even key is null
-            if (noPrefixKey == null) {
-                final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE)
-                    .put(prefix)
-                    .array();
-                return Bytes.wrap(ret);
-            }
-            final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE + noPrefixKey.get().length)
-                .put(prefix)
-                .put(noPrefixKey.get())
-                .array();
-            return Bytes.wrap(ret);
-        }
 
         @Override
         public Bytes upperRange(final Bytes key, final long to) {
-            final Bytes noPrefixBytes = super.upperRange(key, to);
-            if (noPrefixBytes == null) {
-                final byte nextPrefix = KEY_FIRST_PREFIX + 1;
-                return wrapPrefix(null, nextPrefix);
-            }
-            return wrapPrefix(noPrefixBytes);
+            final Bytes noPrefixBytes = new WindowKeySchema().upperRange(key, to);
+            return wrapPrefix(noPrefixBytes, true);
         }
 
         @Override
         public Bytes lowerRange(final Bytes key, final long from) {
-            final Bytes noPrefixBytes = super.lowerRange(key, from);
+            final Bytes noPrefixBytes = new WindowKeySchema().lowerRange(key, from);
             // Wrap at least prefix even key is null
-            return wrapPrefix(noPrefixBytes);
+            return wrapPrefix(noPrefixBytes, false);
         }
 
         @Override
         public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
             final Bytes noPrefixBytes = WindowKeySchema.toStoreKeyBinary(key, Math.max(0, from), 0);
-            return wrapPrefix(noPrefixBytes);
+            return wrapPrefix(noPrefixBytes, false);
         }
 
         @Override
         public Bytes upperRangeFixedSize(final Bytes key, final long to) {
             final Bytes noPrefixBytes = WindowKeySchema.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
-            return wrapPrefix(noPrefixBytes);
+            return wrapPrefix(noPrefixBytes, true);
         }
 
         @Override
@@ -399,6 +388,26 @@ public class PrefixedWindowKeySchemas {
             final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
+        }
+
+        private static Bytes wrapPrefix(final Bytes noPrefixKey, final boolean upperRange) {
+            // Need to scan from prefix even key is null
+            if (noPrefixKey == null) {
+                final byte prefix = upperRange ? KEY_FIRST_PREFIX + 1 : KEY_FIRST_PREFIX;
+                final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE)
+                    .put(prefix)
+                    .array();
+                return Bytes.wrap(ret);
+            }
+            final byte[] ret = ByteBuffer.allocate(PREFIX_SIZE + noPrefixKey.get().length)
+                .put(KEY_FIRST_PREFIX)
+                .put(noPrefixKey.get())
+                .array();
+            return Bytes.wrap(ret);
+        }
+
+        public static byte[] fromNonPrefixWindowKey(final byte[] binaryKey) {
+            return wrapPrefix(Bytes.wrap(binaryKey), false).get();
         }
     }
 }

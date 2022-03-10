@@ -175,16 +175,14 @@ public class RocksDBTimeOrderedSegmentedBytesStore extends AbstractDualSchemaRoc
 
                     // Assuming changelog record is serialized using WindowKeySchema
                     // from ChangeLoggingTimestampedWindowBytesStore. Reconstruct key/value to restore
-                    final byte[] key = WindowKeySchema.extractStoreKeyBytes(record.key());
-                    final int seqNum = WindowKeySchema.extractStoreSequence(record.key());
                     if (hasIndex()) {
-                        final byte[] indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, timestamp, seqNum).get();
+                        final byte[] indexKey = KeyFirstWindowKeySchema.fromNonPrefixWindowKey(record.key());
                         // Take care of tombstone
                         final byte[] value = record.value() == null ? null : new byte[0];
                         segment.addToBatch(new KeyValue<>(indexKey, value), batch);
                     }
 
-                    final byte[] baseKey = TimeFirstWindowKeySchema.toStoreKeyBinary(key, timestamp, seqNum).get();
+                    final byte[] baseKey = TimeFirstWindowKeySchema.fromNonPrefixWindowKey(record.key());
                     segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error restoring batch to store " + name(), e);

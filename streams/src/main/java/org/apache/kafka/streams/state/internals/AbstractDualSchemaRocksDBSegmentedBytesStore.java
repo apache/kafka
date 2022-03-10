@@ -112,9 +112,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         if (segment == null) {
             return;
         }
-        final KeyValue<Bytes, byte[]> kv = getIndexKeyValue(rawBaseKey, null);
         segment.delete(rawBaseKey);
-        segment.delete(kv.key);
+
+        if (hasIndex()) {
+            final KeyValue<Bytes, byte[]> kv = getIndexKeyValue(rawBaseKey, null);
+            segment.delete(kv.key);
+        }
     }
 
     abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
@@ -170,7 +173,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         observedStreamTime = Math.max(observedStreamTime, timestamp);
         final long segmentId = segments.segmentId(timestamp);
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
-        final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
 
         if (segment == null) {
             expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
@@ -178,7 +180,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         } else {
             StoreQueryUtils.updatePosition(position, stateStoreContext);
             segment.put(rawBaseKey, value);
-            segment.put(indexKeyValue.key, indexKeyValue.value);
+
+            if (hasIndex()) {
+                final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
+                segment.put(indexKeyValue.key, indexKeyValue.value);
+            }
         }
     }
 
@@ -207,9 +213,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final String taskName = context.taskId().toString();
 
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                threadId,
-                taskName,
-                metrics
+            threadId,
+            taskName,
+            metrics
         );
 
         segments.openExisting(context, observedStreamTime);
@@ -228,9 +234,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         open = true;
 
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false);
+            context.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false
+        );
     }
 
     @Override
