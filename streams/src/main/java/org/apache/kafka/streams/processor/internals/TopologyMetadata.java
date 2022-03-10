@@ -42,6 +42,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -199,8 +200,10 @@ public class TopologyMetadata {
         }
     }
 
+    // Return the minimum version across all live threads, or Long.MAX_VALUE if there are no threads running
     private long getMinimumThreadVersion() {
-        return threadVersions.values().stream().min(Long::compare).get();
+        final Optional<Long> minVersion = threadVersions.values().stream().min(Long::compare);
+        return minVersion.orElse(Long.MAX_VALUE);
     }
 
     public void wakeupThreads() {
