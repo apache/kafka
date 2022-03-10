@@ -18,14 +18,14 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.sink.SinkConnector;
 
 import java.util.List;
 import java.util.Map;
 
-public class TestSourceConnector extends SourceConnector {
+public class SampleSinkConnector extends SinkConnector {
 
-    public static final String VERSION = "an entirely different version";
+    public static final String VERSION = "some great version";
 
     @Override
     public String version() {

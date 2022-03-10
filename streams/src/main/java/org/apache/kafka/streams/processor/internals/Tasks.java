@@ -93,8 +93,7 @@ class Tasks {
         createTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
-    void maybeCreateTasksFromNewTopologies() {
-        final Set<String> currentNamedTopologies = topologyMetadata.namedTopologiesView();
+    void maybeCreateTasksFromNewTopologies(final Set<String> currentNamedTopologies) {
         createTasks(
             activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
             standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)

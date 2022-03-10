@@ -1349,6 +1349,7 @@ public class StreamThreadTest {
                 ),
                 "proc"
         );
+        internalTopologyBuilder.buildTopology();
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());

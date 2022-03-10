@@ -329,8 +329,10 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code acceptable.recovery.lag} */
     public static final String ACCEPTABLE_RECOVERY_LAG_CONFIG = "acceptable.recovery.lag";
-    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up for an active task." +
-                                                                  "Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
+    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough" +
+                                                                  " to receive an active task assignment. Upon assignment, it will still restore the rest of the changelog" +
+                                                                  " before processing. To avoid a pause in processing during rebalances, this config" +
+                                                                  " should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
 
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")

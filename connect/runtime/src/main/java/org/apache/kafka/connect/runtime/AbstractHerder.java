@@ -29,6 +29,7 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -41,7 +42,11 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -613,7 +618,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
-    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+    public static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
         return convertConfigKey(configKey, "");
     }
 
@@ -748,6 +753,43 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
         }
         return keys;
+    }
+
+    @Override
+    public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
+        List<ConfigKeyInfo> results = new ArrayList<>();
+        ConfigDef configDefs;
+        try {
+            Plugins p = plugins();
+            Object plugin = p.newPlugin(pluginName);
+            PluginType pluginType = PluginType.from(plugin.getClass());
+            switch (pluginType) {
+                case SINK:
+                case SOURCE:
+                    configDefs = ((Connector) plugin).config();
+                    break;
+                case CONVERTER:
+                    configDefs = ((Converter) plugin).config();
+                    break;
+                case HEADER_CONVERTER:
+                    configDefs = ((HeaderConverter) plugin).config();
+                    break;
+                case TRANSFORMATION:
+                    configDefs = ((Transformation<?>) plugin).config();
+                    break;
+                case PREDICATE:
+                    configDefs = ((Predicate<?>) plugin).config();
+                    break;
+                default:
+                    throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
+            }
+        } catch (ClassNotFoundException cnfe) {
+            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+        }
+        for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
+            results.add(AbstractHerder.convertConfigKey(configKey));
+        }
+        return results;
     }
 
 }

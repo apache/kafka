@@ -16,12 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Map;
-
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.apache.kafka.connect.transforms.Transformation;
-import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Test;
 
 import static java.util.Collections.singletonMap;
@@ -43,75 +38,9 @@ public class PredicatedTransformationTest {
 
     private void applyAndAssert(boolean predicateResult, boolean negate,
                                 SourceRecord expectedResult) {
-        class TestTransformation implements Transformation<SourceRecord> {
 
-            private boolean closed = false;
-            private SourceRecord transformedRecord;
-
-            private TestTransformation(SourceRecord transformedRecord) {
-                this.transformedRecord = transformedRecord;
-            }
-
-            @Override
-            public SourceRecord apply(SourceRecord record) {
-                return transformedRecord;
-            }
-
-            @Override
-            public ConfigDef config() {
-                return null;
-            }
-
-            @Override
-            public void close() {
-                closed = true;
-            }
-
-            @Override
-            public void configure(Map<String, ?> configs) {
-
-            }
-
-            private void assertClosed() {
-                assertTrue("Transformer should be closed", closed);
-            }
-        }
-
-        class TestPredicate implements Predicate<SourceRecord> {
-
-            private boolean testResult;
-            private boolean closed = false;
-
-            private TestPredicate(boolean testResult) {
-                this.testResult = testResult;
-            }
-
-            @Override
-            public ConfigDef config() {
-                return null;
-            }
-
-            @Override
-            public boolean test(SourceRecord record) {
-                return testResult;
-            }
-
-            @Override
-            public void close() {
-                closed = true;
-            }
-
-            @Override
-            public void configure(Map<String, ?> configs) {
-
-            }
-
-            private void assertClosed() {
-                assertTrue("Predicate should be closed", closed);
-            }
-        }
-        TestPredicate predicate = new TestPredicate(predicateResult);
-        TestTransformation predicatedTransform = new TestTransformation(transformed);
+        SamplePredicate predicate = new SamplePredicate(predicateResult);
+        SampleTransformation<SourceRecord> predicatedTransform = new SampleTransformation<>(transformed);
         PredicatedTransformation<SourceRecord> pt = new PredicatedTransformation<>(
                 predicate,
                 negate,
@@ -120,7 +49,7 @@ public class PredicatedTransformationTest {
         assertEquals(expectedResult, pt.apply(initial));
 
         pt.close();
-        predicate.assertClosed();
-        predicatedTransform.assertClosed();
+        assertTrue(predicate.closed);
+        assertTrue(predicatedTransform.closed);
     }
 }

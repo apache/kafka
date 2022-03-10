@@ -18,7 +18,6 @@ import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
-
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
@@ -66,9 +65,10 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
-import java.util.Collections.singletonList
 
+import java.util.Collections.singletonList
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
+import org.junit.jupiter.api.function.Executable
 
 import scala.annotation.nowarn
 import scala.collection.mutable
@@ -2481,6 +2481,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     } finally {
       socket.close()
     }
+  }
+
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateAndCloseConsumerWithNoAccess(quorum: String): Unit = {
+    val consumer = createConsumer()
+    val closeConsumer: Executable = () => consumer.close()
+    // Close consumer without consuming anything. close() call should pass successfully and throw no exception.
+    assertDoesNotThrow(closeConsumer, "Exception not expected on closing consumer")
   }
 
   private def testDescribeClusterClusterAuthorizedOperations(
