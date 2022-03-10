@@ -47,23 +47,27 @@ public class CertStores {
 
     private final Map<String, Object> sslConfig;
 
-    public CertStores(boolean server, String hostName) throws Exception {
-        this(server, hostName, new TestSslUtils.CertificateBuilder());
+    public CertStores(boolean server, String hostName, TestSslUtils.SSLProvider provider) throws Exception {
+        this(server, hostName, new TestSslUtils.CertificateBuilder(), provider);
     }
 
     public CertStores(boolean server, String commonName, String sanHostName) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsNames(sanHostName));
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsNames(sanHostName), TestSslUtils.SSLProvider.DEFAULT);
     }
 
-    public CertStores(boolean server, String commonName, InetAddress hostAddress) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanIpAddress(hostAddress));
+    public CertStores(boolean server, String commonName, String sanHostName, TestSslUtils.SSLProvider provider) throws Exception {
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsNames(sanHostName), provider);
     }
 
-    private CertStores(boolean server, String commonName, TestSslUtils.CertificateBuilder certBuilder) throws Exception {
-        this(server, commonName, "RSA", certBuilder, false);
+    public CertStores(boolean server, String commonName, InetAddress hostAddress, TestSslUtils.SSLProvider provider) throws Exception {
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanIpAddress(hostAddress), provider);
     }
 
-    private CertStores(boolean server, String commonName, String keyAlgorithm, TestSslUtils.CertificateBuilder certBuilder, boolean usePem) throws Exception {
+    private CertStores(boolean server, String commonName, TestSslUtils.CertificateBuilder certBuilder, TestSslUtils.SSLProvider provider) throws Exception {
+        this(server, commonName, "RSA", certBuilder, false, provider);
+    }
+
+    private CertStores(boolean server, String commonName, String keyAlgorithm, TestSslUtils.CertificateBuilder certBuilder, boolean usePem, TestSslUtils.SSLProvider provider) throws Exception {
         String name = server ? "server" : "client";
         Mode mode = server ? Mode.SERVER : Mode.CLIENT;
         File truststoreFile = usePem ? null : File.createTempFile(name + "TS", ".jks");
@@ -75,6 +79,7 @@ public class CertStores {
                 .certBuilder(certBuilder)
                 .algorithm(keyAlgorithm)
                 .usePem(usePem)
+                .provider(provider)
                 .build();
     }
 
@@ -114,11 +119,13 @@ public class CertStores {
         private InetAddress sanIp;
         private String keyAlgorithm;
         private boolean usePem;
+        private TestSslUtils.SSLProvider provider;
 
         public Builder(boolean isServer) {
             this.isServer = isServer;
             this.sanDns = new ArrayList<>();
             this.keyAlgorithm = "RSA";
+            this.provider = TestSslUtils.SSLProvider.DEFAULT;
         }
 
         public Builder cn(String cn) {
@@ -146,12 +153,17 @@ public class CertStores {
             return this;
         }
 
+        public Builder provider(TestSslUtils.SSLProvider provider) {
+            this.provider = provider;
+            return this;
+        }
+
         public CertStores build() throws Exception {
             TestSslUtils.CertificateBuilder certBuilder = new TestSslUtils.CertificateBuilder()
                 .sanDnsNames(sanDns.toArray(new String[0]));
             if (sanIp != null)
                 certBuilder = certBuilder.sanIpAddress(sanIp);
-            return new CertStores(isServer, cn, keyAlgorithm, certBuilder, usePem);
+            return new CertStores(isServer, cn, keyAlgorithm, certBuilder, usePem, provider);
         }
     }
 }

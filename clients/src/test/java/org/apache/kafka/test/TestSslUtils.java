@@ -76,6 +76,10 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
+
+import org.apache.kafka.common.security.ssl.BoringSslContextProvider;
+import org.apache.kafka.common.security.ssl.SimpleSslContextProvider;
+
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -94,6 +98,9 @@ public class TestSslUtils {
 
     public static final String TRUST_STORE_PASSWORD = "TrustStorePassword";
     public static final String DEFAULT_TLS_PROTOCOL_FOR_TESTS = SslConfigs.DEFAULT_SSL_PROTOCOL;
+    public enum SSLProvider {
+        DEFAULT, OPENSSL
+    }
 
     /**
      * Create a self-signed X.509 Certificate.
@@ -176,7 +183,7 @@ public class TestSslUtils {
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
-
+        sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
         return sslConfigs;
     }
 
@@ -188,17 +195,18 @@ public class TestSslUtils {
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
             Mode mode, File trustStoreFile, String certAlias, String cn)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder(), SSLProvider.DEFAULT);
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean createTrustStore,
-            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder)
+            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder, SSLProvider sslProvider)
             throws IOException, GeneralSecurityException {
         SslConfigsBuilder builder = new SslConfigsBuilder(mode)
                 .useClientCert(useClientCert)
                 .certAlias(certAlias)
                 .cn(cn)
-                .certBuilder(certBuilder);
+                .certBuilder(certBuilder)
+                .provider(sslProvider);
         if (createTrustStore)
             builder = builder.createNewTrustStore(trustStoreFile);
         else
@@ -431,6 +439,7 @@ public class TestSslUtils {
         String algorithm;
         CertificateBuilder certBuilder;
         boolean usePem;
+        SSLProvider provider;
 
         public SslConfigsBuilder(Mode mode) {
             this.mode = mode;
@@ -443,6 +452,7 @@ public class TestSslUtils {
             this.certAlias = mode.name().toLowerCase(Locale.ROOT);
             this.algorithm = "RSA";
             this.createTrustStore = true;
+            this.provider = SSLProvider.DEFAULT;
         }
 
         public SslConfigsBuilder tlsProtocol(String tlsProtocol) {
@@ -489,6 +499,11 @@ public class TestSslUtils {
 
         public SslConfigsBuilder usePem(boolean usePem) {
             this.usePem = usePem;
+            return this;
+        }
+
+        public SslConfigsBuilder provider(SSLProvider provider) {
+            this.provider = provider;
             return this;
         }
 
@@ -544,6 +559,11 @@ public class TestSslUtils {
             enabledProtocols.add(tlsProtocol);
             sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
+            if (provider.equals(SSLProvider.OPENSSL)) {
+                sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, BoringSslContextProvider.class.getName());
+            } else {
+                sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SimpleSslContextProvider.class.getName());
+            }
             return sslConfigs;
         }
 

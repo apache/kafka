@@ -1241,6 +1241,7 @@ project(':clients') {
     implementation libs.lz4
     implementation libs.snappy
     implementation libs.slf4jApi
+    implementation libs.conscrypt
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes

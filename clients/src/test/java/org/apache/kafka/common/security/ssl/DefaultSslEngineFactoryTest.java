@@ -203,6 +203,7 @@ public class DefaultSslEngineFactoryTest {
     public void setUp() {
         factory = new DefaultSslEngineFactory();
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
+        configs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
     }
 
     @Test

@@ -61,6 +61,7 @@ versions += [
   bcpkix: "1.66",
   checkstyle: "8.36.2",
   commonsCli: "1.4",
+  conscrypt: "2.1.0",
   dropwizardMetrics: "4.1.12.1",
   gradle: "7.1.1",
   grgit: "4.1.1",
@@ -196,5 +197,6 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
+  conscrypt: "org.conscrypt:conscrypt-openjdk-uber:2.2.1"
 ]

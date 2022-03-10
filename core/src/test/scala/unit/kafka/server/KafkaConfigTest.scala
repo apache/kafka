@@ -739,6 +739,7 @@ class KafkaConfigTest {
         case KafkaConfig.ConnectionsMaxReauthMsProp =>
         case KafkaConfig.SslProtocolProp => // ignore string
         case KafkaConfig.SslProviderProp => // ignore string
+        case KafkaConfig.SslContextProviderClassProp => // ignore string
         case KafkaConfig.SslEnabledProtocolsProp =>
         case KafkaConfig.SslKeystoreTypeProp => // ignore string
         case KafkaConfig.SslKeystoreLocationProp => // ignore string

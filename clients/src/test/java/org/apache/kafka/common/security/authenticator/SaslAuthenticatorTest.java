@@ -96,6 +96,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -148,7 +149,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Tests for the Sasl authenticator. These use a test harness that runs a simple socket server that echos back responses.
  */
-public class SaslAuthenticatorTest {
+public abstract class SaslAuthenticatorTest {
+    private final TestSslUtils.SSLProvider provider;
 
     private static final long CONNECTIONS_MAX_REAUTH_MS_VALUE = 100L;
     private static final int BUFFER_SIZE = 4 * 1024;
@@ -164,12 +166,16 @@ public class SaslAuthenticatorTest {
     private CredentialCache credentialCache;
     private int nextCorrelationId;
 
+    protected SaslAuthenticatorTest(TestSslUtils.SSLProvider provider) {
+        this.provider = provider;
+    }
+
     @BeforeEach
     public void setup() throws Exception {
         LoginManager.closeAll();
         time = Time.SYSTEM;
-        serverCertStores = new CertStores(true, "localhost");
-        clientCertStores = new CertStores(false, "localhost");
+        serverCertStores = new CertStores(true, "localhost", provider);
+        clientCertStores = new CertStores(false, "localhost", provider);
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
@@ -412,7 +418,7 @@ public class SaslAuthenticatorTest {
             selector.connect(node3, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
             NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
             server.verifyAuthenticationMetrics(3, 0);
-            
+
             /*
              * Now re-authenticate the connections. First we have to sleep long enough so
              * that the next write will cause re-authentication, which we expect to succeed.
@@ -425,7 +431,7 @@ public class SaslAuthenticatorTest {
 
             NetworkTestUtils.checkClientConnection(selector3, node3, 100, 10);
             server.verifyReauthenticationMetrics(2, 0);
-            
+
         } finally {
             if (selector2 != null)
                 selector2.close();
@@ -842,7 +848,7 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
         SaslHandshakeRequest request = buildSaslHandshakeRequest("PLAIN", ApiKeys.SASL_HANDSHAKE.latestVersion());
         RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE, Short.MAX_VALUE, "someclient", 2);
-        
+
         selector.send(new NetworkSend(node1, request.toSend(header)));
         // This test uses a non-SASL PLAINTEXT client in order to do manual handshake.
         // So the channel is in READY state.
@@ -1532,7 +1538,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnection(securityProtocol, node);
     }
-    
+
     /**
      * Re-authentication must fail if principal changes
      */
@@ -1611,7 +1617,7 @@ public class SaslAuthenticatorTest {
         final RequestHeader header1 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", 1);
         assertThrows(IllegalStateException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header1));
     }
-    
+
     /**
      * Re-authentication must fail if mechanism changes
      */
@@ -1731,7 +1737,7 @@ public class SaslAuthenticatorTest {
         }
         server.verifyReauthenticationMetrics(desiredNumReauthentications, 0);
     }
-    
+
     /**
      * Tests OAUTHBEARER client channels without tokens for the server.
      */
@@ -1838,7 +1844,7 @@ public class SaslAuthenticatorTest {
         }
 
         // Client configures untrusted key store
-        CertStores newStore = new CertStores(false, "localhost");
+        CertStores newStore = new CertStores(false, "localhost", provider);
         newStore.keyStoreProps().forEach((k, v) -> saslClientConfigs.put(k, v));
         if (expectedClientAuth == SslClientAuth.NONE) {
             createAndCheckClientConnectionAndPrincipal(securityProtocol, "2", principalWithOneWayTls);
@@ -2146,7 +2152,7 @@ public class SaslAuthenticatorTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
-    
+
     private void checkClientConnection(String node) throws Exception {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }

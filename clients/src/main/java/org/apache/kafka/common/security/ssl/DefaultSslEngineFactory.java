@@ -75,8 +75,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     public static final String PEM_TYPE = "PEM";
 
     private Map<String, ?> configs;
-    private String protocol;
-    private String provider;
+    private SslContextProvider sslContextProvider;
     private String kmfAlgorithm;
     private String tmfAlgorithm;
     private SecurityStore keystore;
@@ -131,8 +130,13 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     @Override
     public void configure(Map<String, ?> configs) {
         this.configs = Collections.unmodifiableMap(configs);
-        this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
-        this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
+        try {
+            String sslContextProvider = (String) configs.get(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG);
+            this.sslContextProvider = (SslContextProvider) Class.forName(sslContextProvider).newInstance();
+        } catch (Exception e) {
+            throw new KafkaException(e);
+        }
+        this.sslContextProvider.configure(configs);
         SecurityUtils.addConfiguredSecurityProviders(this.configs);
 
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
@@ -236,11 +240,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
 
     private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
         try {
-            SSLContext sslContext;
-            if (provider != null)
-                sslContext = SSLContext.getInstance(protocol, provider);
-            else
-                sslContext = SSLContext.getInstance(protocol);
+            SSLContext sslContext = sslContextProvider.getSSLContext();
 
             KeyManager[] keyManagers = null;
             if (keystore != null || kmfAlgorithm != null) {

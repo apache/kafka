@@ -84,18 +84,21 @@ public class SslTransportLayerTest {
     private static class Args {
         private final String tlsProtocol;
         private final boolean useInlinePem;
+        private final TestSslUtils.SSLProvider provider;
         private CertStores serverCertStores;
         private CertStores clientCertStores;
         private Map<String, Object> sslClientConfigs;
         private Map<String, Object> sslServerConfigs;
         private Map<String, Object> sslConfigOverrides;
 
-        public Args(String tlsProtocol, boolean useInlinePem) throws Exception {
+        public Args(String tlsProtocol, boolean useInlinePem, TestSslUtils.SSLProvider provider) throws Exception {
             this.tlsProtocol = tlsProtocol;
             this.useInlinePem = useInlinePem;
+            this.provider = provider;
             sslConfigOverrides = new HashMap<>();
             sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
             sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
+            sslConfigOverrides.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
             init();
         }
 
@@ -107,8 +110,8 @@ public class SslTransportLayerTest {
 
         private void init() throws Exception {
             // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
-            serverCertStores = certBuilder(true, "server", useInlinePem).addHostName("localhost").build();
-            clientCertStores = certBuilder(false, "client", useInlinePem).addHostName("localhost").build();
+            serverCertStores = certBuilder(true, "server", useInlinePem, provider).addHostName("localhost").build();
+            clientCertStores = certBuilder(false, "client", useInlinePem, provider).addHostName("localhost").build();
             sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
             sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
             sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, DefaultSslEngineFactory.class);
@@ -127,10 +130,13 @@ public class SslTransportLayerTest {
         @Override
         public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
             List<Arguments> parameters = new ArrayList<>();
-            parameters.add(Arguments.of(new Args("TLSv1.2", false)));
-            parameters.add(Arguments.of(new Args("TLSv1.2", true)));
+            parameters.add(Arguments.of(new Args("TLSv1.2", false, TestSslUtils.SSLProvider.DEFAULT)));
+            parameters.add(Arguments.of(new Args("TLSv1.2", false, TestSslUtils.SSLProvider.OPENSSL)));
+            parameters.add(Arguments.of(new Args("TLSv1.2", true, TestSslUtils.SSLProvider.DEFAULT)));
+            parameters.add(Arguments.of(new Args("TLSv1.2", true, TestSslUtils.SSLProvider.OPENSSL)));
             if (Java.IS_JAVA11_COMPATIBLE) {
-                parameters.add(Arguments.of(new Args("TLSv1.3", false)));
+                parameters.add(Arguments.of(new Args("TLSv1.3", false, TestSslUtils.SSLProvider.DEFAULT)));
+                parameters.add(Arguments.of(new Args("TLSv1.3", false, TestSslUtils.SSLProvider.OPENSSL)));
             }
             return parameters.stream();
         }
@@ -174,8 +180,8 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testValidEndpointIdentificationSanIp(Args args) throws Exception {
         String node = "0";
-        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).hostAddress(InetAddress.getByName("127.0.0.1")).build();
-        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).hostAddress(InetAddress.getByName("127.0.0.1")).build();
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem, args.provider).hostAddress(InetAddress.getByName("127.0.0.1")).build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem, args.provider).hostAddress(InetAddress.getByName("127.0.0.1")).build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
         server = createEchoServer(args, SecurityProtocol.SSL);
@@ -194,8 +200,8 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testValidEndpointIdentificationCN(Args args) throws Exception {
-        args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem).build();
-        args.clientCertStores = certBuilder(false, "localhost", args.useInlinePem).build();
+        args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem, args.provider).build();
+        args.clientCertStores = certBuilder(false, "localhost", args.useInlinePem, args.provider).build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
         args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
@@ -241,8 +247,8 @@ public class SslTransportLayerTest {
         String node = "0";
 
         // Create client certificate with an invalid hostname
-        args.clientCertStores = certBuilder(false, "non-existent.com", args.useInlinePem).build();
-        args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem).build();
+        args.clientCertStores = certBuilder(false, "non-existent.com", args.useInlinePem, args.provider).build();
+        args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem, args.provider).build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
 
@@ -276,8 +282,8 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testInvalidEndpointIdentification(Args args) throws Exception {
-        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("notahost").build();
-        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).addHostName("localhost").build();
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem, args.provider).addHostName("notahost").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem, args.provider).addHostName("localhost").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
         args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
@@ -291,8 +297,8 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testEndpointIdentificationDisabled(Args args) throws Exception {
-        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("notahost").build();
-        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).addHostName("localhost").build();
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem, args.provider).addHostName("notahost").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem, args.provider).addHostName("localhost").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
 
@@ -455,8 +461,8 @@ public class SslTransportLayerTest {
     public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
         assumeTrue(args.tlsProtocol.equals("TLSv1.2"));
-        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
-        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem, args.provider).keyAlgorithm("DSA").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem, args.provider).keyAlgorithm("DSA").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
         args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
@@ -469,8 +475,8 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testECKeyPair(Args args) throws Exception {
-        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("EC").build();
-        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("EC").build();
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem, args.provider).keyAlgorithm("EC").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem, args.provider).keyAlgorithm("EC").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
         args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
@@ -598,6 +604,7 @@ public class SslTransportLayerTest {
     public void testTlsDefaults(Args args) throws Exception {
         args.sslServerConfigs = args.serverCertStores.getTrustingConfig(args.clientCertStores);
         args.sslClientConfigs = args.clientCertStores.getTrustingConfig(args.serverCertStores);
+        args.sslClientConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
 
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
@@ -1054,7 +1061,7 @@ public class SslTransportLayerTest {
         oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
 
-        CertStores newServerCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("localhost").build();
+        CertStores newServerCertStores = certBuilder(true, "server", args.useInlinePem, args.provider).addHostName("localhost").build();
         Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
         assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
@@ -1075,7 +1082,7 @@ public class SslTransportLayerTest {
         // Verify that old client continues to work
         NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
 
-        CertStores invalidCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("127.0.0.1").build();
+        CertStores invalidCertStores = certBuilder(true, "server", args.useInlinePem, args.provider).addHostName("127.0.0.1").build();
         Map<String, Object>  invalidConfigs = args.getTrustingConfig(invalidCertStores, args.clientCertStores);
         verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "keystore with different SubjectAltName");
 
@@ -1177,7 +1184,7 @@ public class SslTransportLayerTest {
         oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
 
-        CertStores newClientCertStores = certBuilder(true, "client", args.useInlinePem).addHostName("localhost").build();
+        CertStores newClientCertStores = certBuilder(true, "client", args.useInlinePem, args.provider).addHostName("localhost").build();
         args.sslClientConfigs = args.getTrustingConfig(newClientCertStores, args.serverCertStores);
         Map<String, Object> newTruststoreConfigs = newClientCertStores.trustStoreProps();
         assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
@@ -1308,10 +1315,11 @@ public class SslTransportLayerTest {
         server.verifyAuthenticationMetrics(0, 1);
     }
 
-    private static CertStores.Builder certBuilder(boolean isServer, String cn, boolean useInlinePem) {
+    private static CertStores.Builder certBuilder(boolean isServer, String cn, boolean useInlinePem, TestSslUtils.SSLProvider provider) {
         return new CertStores.Builder(isServer)
                 .cn(cn)
-                .usePem(useInlinePem);
+                .usePem(useInlinePem)
+                .provider(provider);
     }
 
     @FunctionalInterface
