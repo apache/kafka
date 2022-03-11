@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.emptySortedSet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -259,7 +260,7 @@ public class TaskMovementTest {
                 lags.put(task, 10000L);
             }
         }
-        final ClientState client1 = new ClientState(activeTasks, emptySet(), lags, 1);
+        final ClientState client1 = new ClientState(activeTasks, emptySet(), lags, emptyMap(), 1);
         client1.assignActiveTasks(activeTasks);
         return client1;
     }

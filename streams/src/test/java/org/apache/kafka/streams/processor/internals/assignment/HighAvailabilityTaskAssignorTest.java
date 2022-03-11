@@ -427,9 +427,9 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignToMostCaughtUpIfActiveTasksWasNotOnCaughtUpClient() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
-        final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), 1);
-        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 1000L), 1);
-        final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), 1);
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), EMPTY_CLIENT_TAGS, 1);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 1000L), EMPTY_CLIENT_TAGS, 1);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1);
         final Map<UUID, ClientState> clientStates = mkMap(
                 mkEntry(UUID_1, client1),
                 mkEntry(UUID_2, client2),
