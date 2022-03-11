@@ -36,7 +36,10 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
  * {@link ThreadCache}
  */
 public interface InternalProcessorContext<KOut, VOut>
-    extends ProcessorContext, org.apache.kafka.streams.processor.api.ProcessorContext<KOut, VOut>, StateStoreContext {
+    extends ProcessorContext,
+    org.apache.kafka.streams.processor.api.ProcessorContext<KOut, VOut>,
+    org.apache.kafka.streams.processor.api.FixedKeyProcessorContext<KOut, VOut>,
+    StateStoreContext {
 
     BytesSerializer BYTES_KEY_SERIALIZER = new BytesSerializer();
     ByteArraySerializer BYTEARRAY_VALUE_SERIALIZER = new ByteArraySerializer();

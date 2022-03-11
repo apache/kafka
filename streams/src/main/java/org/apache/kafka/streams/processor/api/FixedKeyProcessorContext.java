@@ -22,7 +22,8 @@ package org.apache.kafka.streams.processor.api;
  * @param <KForward> a bound on the types of keys that may be forwarded
  * @param <VForward> a bound on the types of values that may be forwarded
  */
-public interface ProcessorContext<KForward, VForward> extends ProcessingContext {
+public interface FixedKeyProcessorContext<KForward, VForward> extends ProcessingContext {
+
     /**
      * Forward a record to all child processors.
      * <p>
@@ -79,15 +80,15 @@ public interface ProcessorContext<KForward, VForward> extends ProcessingContext 
      * </code>
      * @param record The record to forward to all children
      */
-    <K extends KForward, V extends VForward> void forward(Record<K, V> record);
+    <K extends KForward, V extends VForward> void forward(FixedKeyRecord<K, V> record);
 
     /**
      * Forward a record to the specified child processor.
-     * See {@link ProcessorContext#forward(Record)} for considerations.
+     * See {@link FixedKeyProcessorContext#forward(Record)} for considerations.
      *
      * @param record The record to forward
      * @param childName The name of the child processor to receive the record
-     * @see ProcessorContext#forward(Record)
+     * @see FixedKeyProcessorContext#forward(Record)
      */
-    <K extends KForward, V extends VForward> void forward(Record<K, V> record, final String childName);
+    <K extends KForward, V extends VForward> void forward(FixedKeyRecord<K, V> record, final String childName);
 }

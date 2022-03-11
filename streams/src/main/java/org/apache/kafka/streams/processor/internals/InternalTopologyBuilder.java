@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
@@ -238,6 +239,32 @@ public class InternalTopologyBuilder {
 
         @Override
         public ProcessorNode<KIn, VIn, KOut, VOut> build() {
+            return new ProcessorNode<>(name, supplier.get(), stateStoreNames);
+        }
+
+        @Override
+        Processor describe() {
+            return new Processor(name, new HashSet<>(stateStoreNames));
+        }
+    }
+
+    private static class FixedKeyProcessorNodeFactory<KIn, VIn, VOut> extends ProcessorNodeFactory<KIn, VIn, KIn, VOut> {
+        private final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier;
+        private final Set<String> stateStoreNames = new HashSet<>();
+
+        FixedKeyProcessorNodeFactory(final String name,
+                             final String[] predecessors,
+                             final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier) {
+            super(name, predecessors.clone(), null);
+            this.supplier = supplier;
+        }
+
+        public void addStateStore(final String stateStoreName) {
+            stateStoreNames.add(stateStoreName);
+        }
+
+        @Override
+        public ProcessorNode<KIn, VIn, KIn, VOut> build() {
             return new ProcessorNode<>(name, supplier.get(), stateStoreNames);
         }
 
@@ -539,6 +566,36 @@ public class InternalTopologyBuilder {
         }
 
         nodeFactories.put(name, new ProcessorNodeFactory<>(name, predecessorNames, supplier));
+        nodeGrouper.add(name);
+        nodeGrouper.unite(name, predecessorNames);
+        nodeGroups = null;
+    }
+
+    public final <KIn, VIn, VOut> void addProcessor(final String name,
+                                                    final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier,
+                                                    final String... predecessorNames) {
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(supplier, "supplier must not be null");
+        Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
+        ApiUtils.checkSupplier(supplier);
+        if (nodeFactories.containsKey(name)) {
+            throw new TopologyException("Processor " + name + " is already added.");
+        }
+        if (predecessorNames.length == 0) {
+            throw new TopologyException("Processor " + name + " must have at least one parent");
+        }
+
+        for (final String predecessor : predecessorNames) {
+            Objects.requireNonNull(predecessor, "predecessor name must not be null");
+            if (predecessor.equals(name)) {
+                throw new TopologyException("Processor " + name + " cannot be a predecessor of itself.");
+            }
+            if (!nodeFactories.containsKey(predecessor)) {
+                throw new TopologyException("Predecessor processor " + predecessor + " is not added yet for " + name);
+            }
+        }
+
+        nodeFactories.put(name, new FixedKeyProcessorNodeFactory<>(name, predecessorNames, supplier));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, predecessorNames);
         nodeGroups = null;

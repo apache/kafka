@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
@@ -748,12 +749,16 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowNullNameWhenAddingProcessor() {
-        assertThrows(NullPointerException.class, () -> builder.addProcessor(null, () -> null));
+        assertThrows(NullPointerException.class, () -> builder.addProcessor(null,
+                                                                            (ProcessorSupplier<Object, Object, Object, Object>) () -> null
+        ));
     }
 
     @Test
     public void shouldNotAllowNullProcessorSupplier() {
-        assertThrows(NullPointerException.class, () -> builder.addProcessor("name", null));
+        assertThrows(NullPointerException.class, () -> builder.addProcessor("name",
+                                                                            (ProcessorSupplier<Object, Object, Object, Object>) null
+        ));
     }
 
     @Test
