@@ -43,6 +43,8 @@
               files="AbstractRequest.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="AbstractResponse.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="NoOpAdminClient.java"/>
 
     <suppress checks="MethodLength"
               files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor).java"/>
