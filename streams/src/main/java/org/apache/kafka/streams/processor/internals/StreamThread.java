@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -67,6 +68,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
@@ -389,8 +391,7 @@ public class StreamThread extends Thread {
             standbyTaskCreator,
             topologyMetadata,
             adminClient,
-            stateDirectory,
-            processingMode(config)
+            stateDirectory
         );
         referenceContainer.taskManager = taskManager;
 
@@ -432,44 +433,6 @@ public class StreamThread extends Thread {
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
-    }
-
-    public enum ProcessingMode {
-        AT_LEAST_ONCE("AT_LEAST_ONCE"),
-
-        EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
-
-        EXACTLY_ONCE_V2("EXACTLY_ONCE_V2");
-
-        public final String name;
-
-        ProcessingMode(final String name) {
-            this.name = name;
-        }
-    }
-
-    // Note: the below two methods are static methods here instead of methods on StreamsConfig because it's a public API
-
-    @SuppressWarnings("deprecation")
-    public static ProcessingMode processingMode(final StreamsConfig config) {
-        if (StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
-        } else if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
-        } else {
-            return StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
-    }
-
-    public static boolean eosEnabled(final StreamsConfig config) {
-        return eosEnabled(processingMode(config));
-    }
-
-    public static boolean eosEnabled(final ProcessingMode processingMode) {
-        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
     public StreamThread(final Time time,
@@ -584,7 +547,9 @@ public class StreamThread extends Thread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            this.streamsUncaughtExceptionHandler.accept(e, false);
+            requestLeaveGroupDuringShutdown();
+            streamsUncaughtExceptionHandler.accept(e, false);
+            // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
             completeShutdown(cleanRun);
         }
@@ -917,17 +882,15 @@ public class StreamThread extends Thread {
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
         if (topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) {
+            log.info("StreamThread has detected an update to the topology");
+
             taskManager.handleTopologyUpdates();
-            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
-            if (topologyMetadata.isEmpty()) {
-                mainConsumer.unsubscribe();
-            }
-            topologyMetadata.maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(getName());
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             // We don't need to manually trigger a rebalance to pick up tasks from the new topology, as
             // a rebalance will always occur when the metadata is updated after a change in subscription
+            log.info("Updating consumer subscription following topology update");
             subscribeConsumer();
         }
     }
@@ -970,7 +933,8 @@ public class StreamThread extends Thread {
                 .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
         }
 
-        log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+        log.debug("Main Consumer poll completed in {} ms and fetched {} records from partitions {}",
+            pollLatency, numRecords, records.partitions());
 
         pollSensor.record(pollLatency, now);
 
@@ -1013,24 +977,30 @@ public class StreamThread extends Thread {
         final Set<TopicPartition> notReset = new HashSet<>();
 
         for (final TopicPartition partition : partitions) {
-            switch (topologyMetadata.offsetResetStrategy(partition.topic())) {
-                case EARLIEST:
-                    addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
-                    break;
-                case LATEST:
-                    addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
-                    break;
-                case NONE:
-                    if ("earliest".equals(originalReset)) {
-                        addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                    } else if ("latest".equals(originalReset)) {
-                        addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
-                    } else {
-                        notReset.add(partition);
-                    }
-                    break;
-                default:
-                    throw new IllegalStateException("Unable to locate topic " + partition.topic() + " in the topology");
+            final OffsetResetStrategy offsetResetStrategy = topologyMetadata.offsetResetStrategy(partition.topic());
+
+            // This may be null if the task we are currently processing was apart of a named topology that was just removed.
+            // TODO KAFKA-13713: keep the StreamThreads and TopologyMetadata view of named topologies in sync until final thread has acked
+            if (offsetResetStrategy != null) {
+                switch (offsetResetStrategy) {
+                    case EARLIEST:
+                        addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
+                        break;
+                    case LATEST:
+                        addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
+                        break;
+                    case NONE:
+                        if ("earliest".equals(originalReset)) {
+                            addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
+                        } else if ("latest".equals(originalReset)) {
+                            addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
+                        } else {
+                            notReset.add(partition);
+                        }
+                        break;
+                    default:
+                        throw new IllegalStateException("Unable to locate topic " + partition.topic() + " in the topology");
+                }
             }
         }
 
@@ -1152,14 +1122,14 @@ public class StreamThread extends Thread {
         log.info("Shutting down");
 
         try {
-            topologyMetadata.unregisterThread(threadMetadata.threadName());
-        } catch (final Throwable e) {
-            log.error("Failed to unregister thread due to the following error:", e);
-        }
-        try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
             log.error("Failed to close task manager due to the following error:", e);
+        }
+        try {
+            topologyMetadata.unregisterThread(threadMetadata.threadName());
+        } catch (final Throwable e) {
+            log.error("Failed to unregister thread due to the following error:", e);
         }
         try {
             changelogReader.clear();
@@ -1286,7 +1256,7 @@ public class StreamThread extends Thread {
     }
 
     public void requestLeaveGroupDuringShutdown() {
-        this.leaveGroupRequested.set(true);
+        leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {

@@ -41,6 +41,8 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
@@ -50,9 +52,9 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Future;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 /**
  * {@code StreamsProducer} manages the producers within a Kafka Streams application.
@@ -68,7 +70,7 @@ public class StreamsProducer {
 
     private final Map<String, Object> eosV2ProducerConfigs;
     private final KafkaClientSupplier clientSupplier;
-    private final StreamThread.ProcessingMode processingMode;
+    private final ProcessingMode processingMode;
     private final Time time;
 
     private Producer<byte[], byte[]> producer;
@@ -90,7 +92,7 @@ public class StreamsProducer {
         logPrefix = logContext.logPrefix().trim();
         this.time = Objects.requireNonNull(time, "time");
 
-        processingMode = StreamThread.processingMode(config);
+        processingMode = StreamsConfigUtils.processingMode(config);
 
         final Map<String, Object> producerConfigs;
         switch (processingMode) {
@@ -141,7 +143,7 @@ public class StreamsProducer {
     }
 
     boolean eosEnabled() {
-        return StreamThread.eosEnabled(processingMode);
+        return StreamsConfigUtils.eosEnabled(processingMode);
     }
 
     /**

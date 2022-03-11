@@ -188,9 +188,9 @@ public class RestClient {
     }
 
     public static class HttpResponse<T> {
-        private int status;
-        private Map<String, String> headers;
-        private T body;
+        private final int status;
+        private final Map<String, String> headers;
+        private final T body;
 
         public HttpResponse(int status, Map<String, String> headers, T body) {
             this.status = status;

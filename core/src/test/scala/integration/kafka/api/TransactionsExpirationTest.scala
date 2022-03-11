@@ -52,7 +52,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
 
     producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
-    consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(brokers),
+    consumer = TestUtils.createConsumer(bootstrapServers(),
       enableAutoCommit = false,
       readCommitted = true)
 

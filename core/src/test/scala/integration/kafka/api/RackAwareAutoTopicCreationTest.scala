@@ -44,7 +44,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
 
   @Test
   def testAutoCreateTopic(): Unit = {
-    val producer = TestUtils.createProducer(brokerList)
+    val producer = TestUtils.createProducer(bootstrapServers())
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)

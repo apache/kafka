@@ -153,9 +153,9 @@ public class WorkerCoordinatorTest {
                 1L,
                 null,
                 Collections.singletonMap(connectorId1, 1),
-                Collections.singletonMap(connectorId1, new HashMap<String, String>()),
+                Collections.singletonMap(connectorId1, new HashMap<>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
-                Collections.singletonMap(taskId1x0, new HashMap<String, String>()),
+                Collections.singletonMap(taskId1x0, new HashMap<>()),
                 Collections.emptySet()
         );
 
@@ -384,7 +384,7 @@ public class WorkerCoordinatorTest {
     }
 
     @Test
-    public void testLeaderPerformAssignment1() throws Exception {
+    public void testLeaderPerformAssignment1() {
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -409,14 +409,14 @@ public class WorkerCoordinatorTest {
 
         // configState1 has 1 connector, 1 task
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
-        assertEquals(false, leaderAssignment.failed());
+        assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
         assertEquals(Collections.emptyList(), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
-        assertEquals(false, memberAssignment.failed());
+        assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.emptyList(), memberAssignment.connectors());
@@ -426,7 +426,7 @@ public class WorkerCoordinatorTest {
     }
 
     @Test
-    public void testLeaderPerformAssignment2() throws Exception {
+    public void testLeaderPerformAssignment2() {
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -452,14 +452,14 @@ public class WorkerCoordinatorTest {
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
-        assertEquals(false, leaderAssignment.failed());
+        assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
         assertEquals(Arrays.asList(taskId1x0, taskId2x0), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
-        assertEquals(false, memberAssignment.failed());
+        assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
@@ -469,7 +469,7 @@ public class WorkerCoordinatorTest {
     }
 
     @Test
-    public void testLeaderPerformAssignmentSingleTaskConnectors() throws Exception {
+    public void testLeaderPerformAssignmentSingleTaskConnectors() {
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -496,14 +496,14 @@ public class WorkerCoordinatorTest {
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
-        assertEquals(false, leaderAssignment.failed());
+        assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
         assertEquals(Arrays.asList(taskId2x0), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
-        assertEquals(false, memberAssignment.failed());
+        assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
