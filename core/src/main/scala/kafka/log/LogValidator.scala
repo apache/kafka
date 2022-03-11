@@ -576,7 +576,8 @@ private[log] object LogValidator extends Logging {
           "One or more records have been rejected due to invalid timestamp"), errors)
       } else {
         throw new RecordValidationException(new InvalidRecordException(
-          "One or more records have been rejected"), errors)
+          "One or more records have been rejected due to " + errors.size + " record errors " +
+            "in total, and only showing the first three errors at most: " + errors.asJava.subList(0, math.min(errors.size, 3))), errors)
       }
     }
   }

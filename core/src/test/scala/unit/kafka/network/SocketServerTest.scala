@@ -1508,7 +1508,9 @@ class SocketServerTest {
         // Step 3: Process the first request. Verify that the channel is not removed since the channel
         // should be retained to process buffered data.
         processRequestNoOpResponse(testableServer.dataPlaneRequestChannel, request1)
-        assertSame(channel, openOrClosingChannel(request1, testableServer).getOrElse(throw new IllegalStateException("Channel closed too early")))
+        if (numComplete > 0) {
+          assertSame(channel, openOrClosingChannel(request1, testableServer).getOrElse(throw new IllegalStateException("Channel closed too early")))
+        }
 
         // Step 4: Process buffered data. if `responseRequiredIndex>=0`, the channel should be failed and removed when
         // attempting to send response. Otherwise, the channel should be removed when all completed buffers are processed.

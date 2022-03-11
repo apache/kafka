@@ -47,6 +47,7 @@ import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
+import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
@@ -234,6 +235,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -4388,6 +4390,15 @@ public class KafkaAdminClient extends AdminClient {
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListTransactionsResult(future.all());
+    }
+
+    @Override
+    public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
+        AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> future =
+            FenceProducersHandler.newFuture(transactionalIds);
+        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new FenceProducersResult(future.all());
     }
 
     private <K, V> void invokeDriver(
