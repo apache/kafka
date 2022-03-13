@@ -363,7 +363,7 @@ object TopicPartitionStateZNode {
     )
 
     if (leaderAndIsr.leaderRecoveryState != LeaderRecoveryState.RECOVERED) {
-      partitionState = partitionState.concat(Seq("leader_recovery_state" -> leaderAndIsr.leaderRecoveryState.value.toInt))
+      partitionState = partitionState ++ Seq("leader_recovery_state" -> leaderAndIsr.leaderRecoveryState.value.toInt)
     }
 
     Json.encodeAsBytes(partitionState.asJava)
