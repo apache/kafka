@@ -485,7 +485,7 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldRemoveNamedTopologyToRunningApplicationWithMultipleNodesAndResetsOffsets() throws Exception {
+    public void shouldAllowRemovingAndAddingNamedTopologyToRunningApplicationWithMultipleNodesAndResetsOffsets() throws Exception {
         setupSecondKafkaStreams();
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
@@ -503,6 +503,9 @@ public class NamedTopologyIntegrationTest {
         assertThat(streams.getTopologyByName(TOPOLOGY_1), equalTo(Optional.empty()));
         assertThat(streams2.getTopologyByName(TOPOLOGY_1), equalTo(Optional.empty()));
 
+        assertThat(streams.getAllTopologies().isEmpty(), is(true));
+        assertThat(streams2.getAllTopologies().isEmpty(), is(true));
+
         streams.cleanUpNamedTopology(TOPOLOGY_1);
         streams2.cleanUpNamedTopology(TOPOLOGY_1);
 
@@ -517,9 +520,15 @@ public class NamedTopologyIntegrationTest {
         topology2Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
         topology2Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
 
-        final AddNamedTopologyResult result1 = streams.addNamedTopology(topology2Builder.build());
-        streams2.addNamedTopology(topology2Builder2.build()).all().get();
+        final NamedTopology topology2Client1 = topology2Builder.build();
+        final NamedTopology topology2Client2 = topology2Builder2.build();
+
+        final AddNamedTopologyResult result1 = streams.addNamedTopology(topology2Client1);
+        streams2.addNamedTopology(topology2Client2).all().get();
         result1.all().get();
+
+        assertThat(streams.getAllTopologies(), equalTo(singleton(topology2Client1)));
+        assertThat(streams2.getAllTopologies(), equalTo(singleton(topology2Client2)));
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
     }
@@ -612,38 +621,40 @@ public class NamedTopologyIntegrationTest {
     @Test
     public void shouldAddToEmptyInitialTopologyRemoveResetOffsetsThenAddSameNamedTopology() throws Exception {
         CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
-        // Build up named topology with two stateful subtopologies
-        final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
-        inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
-        inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-        streams.start();
-        final NamedTopology namedTopology = topology1Builder.build();
-        streams.addNamedTopology(namedTopology).all().get();
+        try {
+            // Build up named topology with two stateful subtopologies
+            final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
+            inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
+            inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+            streams.start();
+            final NamedTopology namedTopology = topology1Builder.build();
+            streams.addNamedTopology(namedTopology).all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-        streams.removeNamedTopology("topology-1", true).all().get();
-        streams.cleanUpNamedTopology("topology-1");
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+            streams.removeNamedTopology("topology-1", true).all().get();
+            streams.cleanUpNamedTopology("topology-1");
 
-        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("changelog")).forEach(t -> {
-            try {
-                CLUSTER.deleteTopicAndWait(t);
-            } catch (final InterruptedException e) {
-                e.printStackTrace();
-            }
-        });
+            CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("changelog")).forEach(t -> {
+                try {
+                    CLUSTER.deleteTopicAndWait(t);
+                } catch (final InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
 
-        final KStream<String, Long> inputStream = topology1BuilderDup.stream(INPUT_STREAM_1);
-        inputStream.groupByKey().count().toStream().to(COUNT_OUTPUT);
-        inputStream.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+            final KStream<String, Long> inputStream = topology1BuilderDup.stream(INPUT_STREAM_1);
+            inputStream.groupByKey().count().toStream().to(COUNT_OUTPUT);
+            inputStream.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
 
-        final NamedTopology namedTopologyDup = topology1BuilderDup.build();
-        streams.addNamedTopology(namedTopologyDup).all().get();
+            final NamedTopology namedTopologyDup = topology1BuilderDup.build();
+            streams.addNamedTopology(namedTopologyDup).all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-
-        CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        } finally {
+            CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
+        }
     }
 
     @Test

@@ -42,6 +42,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -84,14 +85,14 @@ public class TopologyMetadata {
         public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
         public ReentrantLock topologyLock = new ReentrantLock();
         public Condition topologyCV = topologyLock.newCondition();
-        public List<TopologyVersionWaiters> activeTopologyWaiters = new LinkedList<>();
+        public List<TopologyVersionListener> activeTopologyUpdateListeners = new LinkedList<>();
     }
 
-    public static class TopologyVersionWaiters {
+    public static class TopologyVersionListener {
         final long topologyVersion; // the (minimum) version to wait for these threads to cross
         final KafkaFutureImpl<Void> future; // the future waiting on all threads to be updated
 
-        public TopologyVersionWaiters(final long topologyVersion, final KafkaFutureImpl<Void> future) {
+        public TopologyVersionListener(final long topologyVersion, final KafkaFutureImpl<Void> future) {
             this.topologyVersion = topologyVersion;
             this.future = future;
         }
@@ -102,6 +103,7 @@ public class TopologyMetadata {
         this.version = new TopologyVersion();
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
+        this.log = LoggerFactory.getLogger(getClass());
 
         builders = new ConcurrentSkipListMap<>();
         if (builder.hasNamedTopology()) {
@@ -161,33 +163,50 @@ public class TopologyMetadata {
 
     public void unregisterThread(final String threadName) {
         threadVersions.remove(threadName);
-        maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(threadName);
+        maybeNotifyTopologyVersionListeners();
     }
 
     public TaskExecutionMetadata taskExecutionMetadata() {
         return taskExecutionMetadata;
     }
 
-    public void maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(final String threadName) {
+    public void executeTopologyUpdatesAndBumpThreadVersion(final Consumer<Set<String>> handleTopologyAdditions,
+                                                           final Consumer<Set<String>> handleTopologyRemovals) {
+        try {
+            version.topologyLock.lock();
+            final long latestTopologyVersion = topologyVersion();
+            handleTopologyAdditions.accept(namedTopologiesView());
+            handleTopologyRemovals.accept(namedTopologiesView());
+            threadVersions.put(Thread.currentThread().getName(), latestTopologyVersion);
+        } finally {
+            version.topologyLock.unlock();
+        }
+    }
+
+    public void maybeNotifyTopologyVersionListeners() {
         try {
             lock();
-            final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();
-            TopologyVersionWaiters topologyVersionWaiters;
-            threadVersions.put(threadName, topologyVersion());
+            final long minThreadVersion = getMinimumThreadVersion();
+            final Iterator<TopologyVersionListener> iterator = version.activeTopologyUpdateListeners.listIterator();
+            TopologyVersionListener topologyVersionListener;
             while (iterator.hasNext()) {
-                topologyVersionWaiters = iterator.next();
-                final long topologyVersionWaitersVersion = topologyVersionWaiters.topologyVersion;
-                if (topologyVersionWaitersVersion <= threadVersions.get(threadName)) {
-                    if (threadVersions.values().stream().allMatch(t -> t >= topologyVersionWaitersVersion)) {
-                        topologyVersionWaiters.future.complete(null);
-                        iterator.remove();
-                        log.info("All threads are now on topology version {}", topologyVersionWaiters.topologyVersion);
-                    }
+                topologyVersionListener = iterator.next();
+                final long topologyVersionWaitersVersion = topologyVersionListener.topologyVersion;
+                if (minThreadVersion >= topologyVersionWaitersVersion) {
+                    topologyVersionListener.future.complete(null);
+                    iterator.remove();
+                    log.info("All threads are now on topology version {}", topologyVersionListener.topologyVersion);
                 }
             }
         } finally {
             unlock();
         }
+    }
+
+    // Return the minimum version across all live threads, or Long.MAX_VALUE if there are no threads running
+    private long getMinimumThreadVersion() {
+        final Optional<Long> minVersion = threadVersions.values().stream().min(Long::compare);
+        return minVersion.orElse(Long.MAX_VALUE);
     }
 
     public void wakeupThreads() {
@@ -224,9 +243,9 @@ public class TopologyMetadata {
         try {
             lock();
             buildAndVerifyTopology(newTopologyBuilder);
-            log.info("New NamedTopology passed validation and will be added {}, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+            log.info("New NamedTopology {} passed validation and will be added, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
+            version.activeTopologyUpdateListeners.add(new TopologyVersionListener(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
             wakeupThreads();
             log.info("Added NamedTopology {} and updated topology version to {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
@@ -247,7 +266,7 @@ public class TopologyMetadata {
             lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), removeTopologyFuture));
+            version.activeTopologyUpdateListeners.add(new TopologyVersionListener(topologyVersion(), removeTopologyFuture));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);
@@ -382,13 +401,19 @@ public class TopologyMetadata {
 
     public OffsetResetStrategy offsetResetStrategy(final String topic) {
         for (final InternalTopologyBuilder builder : builders.values()) {
-            final OffsetResetStrategy resetStrategy = builder.offsetResetStrategy(topic);
-            if (resetStrategy != null) {
-                return resetStrategy;
+            if (builder.containsTopic(topic)) {
+                return builder.offsetResetStrategy(topic);
             }
         }
+        log.warn("Unable to look up offset reset strategy for topic {} " +
+            "as this topic does not appear in the sources of any of the current topologies: {}\n " +
+                "This may be due to natural race condition when removing a topology but it should not " +
+                "persist or appear frequently.",
+            topic, namedTopologiesView()
+        );
         return null;
     }
+
 
     public Collection<String> fullSourceTopicNamesForTopology(final String topologyName) {
         Objects.requireNonNull(topologyName, "topology name must not be null");
@@ -405,7 +430,7 @@ public class TopologyMetadata {
         final StringBuilder patternBuilder = new StringBuilder();
 
         applyToEachBuilder(b -> {
-            final String patternString = b.sourceTopicsPatternString();
+            final String patternString = b.sourceTopicPatternString();
             if (patternString.length() > 0) {
                 patternBuilder.append(patternString).append("|");
             }

@@ -481,13 +481,10 @@ public class StreamThreadTest {
         expect(mockConsumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
         expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
         EasyMock.replay(consumerGroupMetadata);
-
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
+
         mockClientSupplier.setCluster(createCluster());
-
-        mockConsumer.enforceRebalance("Scheduled probing rebalance.");
         EasyMock.replay(mockConsumer);
-
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = StreamThread.create(
@@ -508,6 +505,7 @@ public class StreamThreadTest {
             null
         );
 
+        mockConsumer.enforceRebalance();
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
 
@@ -1349,6 +1347,7 @@ public class StreamThreadTest {
                 ),
                 "proc"
         );
+        internalTopologyBuilder.buildTopology();
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
@@ -2358,7 +2357,7 @@ public class StreamThreadTest {
         expect(task2.id()).andReturn(taskId2).anyTimes();
         expect(taskManager.handleCorruption(corruptedTasks)).andReturn(true);
 
-        consumer.enforceRebalance("Active tasks corrupted.");
+        consumer.enforceRebalance();
         expectLastCall();
 
         EasyMock.replay(task1, task2, taskManager, consumer);

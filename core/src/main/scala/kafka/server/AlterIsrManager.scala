@@ -29,7 +29,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OperationNotAttemptedException
-import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
+import org.apache.kafka.common.message.AlterPartitionRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
@@ -159,7 +159,7 @@ class DefaultAlterIsrManager(
     if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
       // Copy current unsent ISRs but don't remove from the map, they get cleared in the response handler
       val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
-      unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
+      unsentIsrUpdates.values.forEach(item => inflightAlterIsrItems.append(item))
       sendRequest(inflightAlterIsrItems.toSeq)
     }
   }
@@ -220,14 +220,12 @@ class DefaultAlterIsrManager(
     val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(brokerEpochSupplier.apply())
-      .setTopics(new util.ArrayList())
 
-    inflightAlterIsrItems.groupBy(_.topicPartition.topic).foreach(entry => {
-      val topicPart = new AlterPartitionRequestData.TopicData()
-        .setName(entry._1)
-        .setPartitions(new util.ArrayList())
-      message.topics().add(topicPart)
-      entry._2.foreach(item => {
+      inflightAlterIsrItems.groupBy(_.topicPartition.topic).foreach { case (topic, items) => 
+      val topicData = new AlterPartitionRequestData.TopicData()
+        .setName(topic)
+      message.topics.add(topicData)
+      items.foreach { item => 
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
@@ -238,9 +236,9 @@ class DefaultAlterIsrManager(
           partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
         }
 
-        topicPart.partitions().add(partitionData)
-      })
-    })
+        topicData.partitions.add(partitionData)
+      }
+    }
     message
   }
 
@@ -249,22 +247,23 @@ class DefaultAlterIsrManager(
     sentBrokerEpoch: Long,
     inflightAlterIsrItems: Seq[AlterIsrItem]
   ): Errors = {
-    val data: AlterPartitionResponseData = alterPartitionResp.data
+    val data = alterPartitionResp.data
 
     Errors.forCode(data.errorCode) match {
       case Errors.STALE_BROKER_EPOCH =>
         warn(s"Broker had a stale broker epoch ($sentBrokerEpoch), retrying.")
+
       case Errors.CLUSTER_AUTHORIZATION_FAILED =>
         error(s"Broker is not authorized to send AlterPartition to controller",
           Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"))
+
       case Errors.NONE =>
         // Collect partition-level responses to pass to the callbacks
-        val partitionResponses: mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] =
-          new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+        val partitionResponses = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
         data.topics.forEach { topic =>
-          topic.partitions().forEach { partition =>
+          topic.partitions.forEach { partition =>
             val tp = new TopicPartition(topic.name, partition.partitionIndex)
-            val apiError = Errors.forCode(partition.errorCode())
+            val apiError = Errors.forCode(partition.errorCode)
             debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
             if (apiError == Errors.NONE) {
               LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
@@ -310,7 +309,7 @@ class DefaultAlterIsrManager(
           }
         }
 
-      case e: Errors =>
+      case e =>
         warn(s"Controller returned an unexpected top-level error when handling AlterPartition request: $e")
     }
 
