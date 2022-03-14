@@ -110,51 +110,12 @@ final class TaskMovement {
         for (final TaskMovement movement : taskMovements) {
             // Attempt to find a caught up standby, otherwise find any caught up client, failing that use the most
             // caught up client.
-            final UUID caughtUpStandbySourceClient = caughtUpClientsByTaskLoad.poll(
-                movement.task,
-                c -> clientStates.get(c).hasStandbyTask(movement.task)
-            );
-            if (caughtUpStandbySourceClient != null) {
-                swapStandbyAndActive(
-                        movement.task,
-                        clientStates.get(caughtUpStandbySourceClient),
-                        clientStates.get(movement.destination)
-                );
-                caughtUpClientsByTaskLoad.offerAll(asList(caughtUpStandbySourceClient, movement.destination));
-            } else {
-                final UUID caughtUpSourceClient = caughtUpClientsByTaskLoad.poll(movement.task);
-                if (caughtUpSourceClient != null) {
-                    moveActiveAndTryToWarmUp(
-                            remainingWarmupReplicas,
-                            movement.task,
-                            clientStates.get(caughtUpSourceClient),
-                            clientStates.get(movement.destination),
-                            warmups.computeIfAbsent(movement.destination, x -> new TreeSet<>())
-                    );
-                    caughtUpClientsByTaskLoad.offerAll(asList(caughtUpSourceClient, movement.destination));
-                } else {
-                    final UUID mostCaughtUpSourceClient = mostCaughtUpEligibleClient(tasksToClientByLag, movement.task, movement.destination);
-                    if (mostCaughtUpSourceClient != null) {
-                        if (clientStates.get(mostCaughtUpSourceClient).hasStandbyTask(movement.task)) {
-                            swapStandbyAndActive(
-                                    movement.task,
-                                    clientStates.get(mostCaughtUpSourceClient),
-                                    clientStates.get(movement.destination)
-                            );
-                        } else {
-                            moveActiveAndTryToWarmUp(
-                                    remainingWarmupReplicas,
-                                    movement.task,
-                                    clientStates.get(mostCaughtUpSourceClient),
-                                    clientStates.get(movement.destination),
-                                    warmups.computeIfAbsent(movement.destination, x -> new TreeSet<>())
-                            );
-                        }
-                        caughtUpClientsByTaskLoad.offerAll(asList(mostCaughtUpSourceClient, movement.destination));
-                    } else {
-                        throw new IllegalStateException("Tried to move task to more caught-up client but none exist");
-                    }
-                }
+            final boolean moved = tryToSwapStandbyAndActiveOnCaughtUpClient(clientStates, caughtUpClientsByTaskLoad, movement) ||
+                    tryToMoveActiveToCaughtUpClientAndTryToWarmUp(clientStates, warmups, remainingWarmupReplicas, caughtUpClientsByTaskLoad, movement) ||
+                    tryToMoveActiveToMostCaughtUpClient(tasksToClientByLag, clientStates, warmups, remainingWarmupReplicas, caughtUpClientsByTaskLoad, movement);
+
+            if (!moved) {
+                throw new IllegalStateException("Tried to move task to more caught-up client but none exist");
             }
         }
 
@@ -224,6 +185,74 @@ final class TaskMovement {
         }
 
         return movementsNeeded;
+    }
+
+    private static boolean tryToSwapStandbyAndActiveOnCaughtUpClient(final Map<UUID, ClientState> clientStates,
+                                                                     final ConstrainedPrioritySet caughtUpClientsByTaskLoad,
+                                                                     final TaskMovement movement) {
+        final UUID caughtUpStandbySourceClient = caughtUpClientsByTaskLoad.poll(
+                movement.task,
+                c -> clientStates.get(c).hasStandbyTask(movement.task)
+        );
+        if (caughtUpStandbySourceClient != null) {
+            swapStandbyAndActive(
+                    movement.task,
+                    clientStates.get(caughtUpStandbySourceClient),
+                    clientStates.get(movement.destination)
+            );
+            caughtUpClientsByTaskLoad.offerAll(asList(caughtUpStandbySourceClient, movement.destination));
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean tryToMoveActiveToCaughtUpClientAndTryToWarmUp(final Map<UUID, ClientState> clientStates,
+                                                                         final Map<UUID, Set<TaskId>> warmups,
+                                                                         final AtomicInteger remainingWarmupReplicas,
+                                                                         final ConstrainedPrioritySet caughtUpClientsByTaskLoad,
+                                                                         final TaskMovement movement) {
+        final UUID caughtUpSourceClient = caughtUpClientsByTaskLoad.poll(movement.task);
+        if (caughtUpSourceClient != null) {
+            moveActiveAndTryToWarmUp(
+                    remainingWarmupReplicas,
+                    movement.task,
+                    clientStates.get(caughtUpSourceClient),
+                    clientStates.get(movement.destination),
+                    warmups.computeIfAbsent(movement.destination, x -> new TreeSet<>())
+            );
+            caughtUpClientsByTaskLoad.offerAll(asList(caughtUpSourceClient, movement.destination));
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean tryToMoveActiveToMostCaughtUpClient(final Map<TaskId, SortedSet<UUID>> tasksToClientByLag,
+                                                               final Map<UUID, ClientState> clientStates,
+                                                               final Map<UUID, Set<TaskId>> warmups,
+                                                               final AtomicInteger remainingWarmupReplicas,
+                                                               final ConstrainedPrioritySet caughtUpClientsByTaskLoad,
+                                                               final TaskMovement movement) {
+        final UUID mostCaughtUpSourceClient = mostCaughtUpEligibleClient(tasksToClientByLag, movement.task, movement.destination);
+        if (mostCaughtUpSourceClient != null) {
+            if (clientStates.get(mostCaughtUpSourceClient).hasStandbyTask(movement.task)) {
+                swapStandbyAndActive(
+                        movement.task,
+                        clientStates.get(mostCaughtUpSourceClient),
+                        clientStates.get(movement.destination)
+                );
+            } else {
+                moveActiveAndTryToWarmUp(
+                        remainingWarmupReplicas,
+                        movement.task,
+                        clientStates.get(mostCaughtUpSourceClient),
+                        clientStates.get(movement.destination),
+                        warmups.computeIfAbsent(movement.destination, x -> new TreeSet<>())
+                );
+            }
+            caughtUpClientsByTaskLoad.offerAll(asList(mostCaughtUpSourceClient, movement.destination));
+            return true;
+        }
+        return false;
     }
 
     private static void moveActiveAndTryToWarmUp(final AtomicInteger remainingWarmupReplicas,
