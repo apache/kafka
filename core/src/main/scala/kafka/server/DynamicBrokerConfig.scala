@@ -206,7 +206,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     override def addOne(elem: Reconfigurable): this.type = {
       elem match {
-        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Adding data plane acceptor foe ${x.listenerName()}")
+        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Broker ${x.config.brokerId}, Adding data plane acceptor for ${x.listenerName()}")
         case _ =>
       }
 
@@ -215,7 +215,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     override def subtractOne(elem: Reconfigurable): Foo.this.type = {
       elem match {
-        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Removing data plane acceptor foe ${x.listenerName()}")
+        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Broker ${x.config.brokerId}, Removing data plane acceptor for ${x.listenerName()}")
         case _ =>
       }
       super.subtractOne(elem)
@@ -644,7 +644,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     allNewConfigs.forEach { (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
     newConfigs.putAll(newCustomConfigs)
     try {
-      if (lr != null) println(s"validateReconfig for ${lr.listenerName()}")
+      if (lr != null) println(s"validateReconfig for ${lr.listenerName()}, validateOnly = $validateOnly")
       reconfigurable.validateReconfiguration(newConfigs)
       if (lr != null) println(s"validateReconfig success for ${lr.listenerName()}")
     } catch {
@@ -659,6 +659,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
           s"custom configs: ${ConfigUtils.configMapToRedactedString(newCustomConfigs, KafkaConfig.configDef)}")
       }
       reconfigurable.reconfigure(newConfigs)
+    } else {
+      println(s"${lr.listenerName()} was validatedOnly")
     }
   }
 }
