@@ -20,8 +20,11 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
+import org.mockito.MockedStatic;
 
 import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -36,6 +39,8 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
 public class DistributedConfigTest {
 
@@ -58,12 +63,50 @@ public class DistributedConfigTest {
     }
 
     @Test
+    public void shouldNotValidateDefaultKeyAlgorithms() {
+        final String fakeKeyGenerationAlgorithm = "FakeKeyGenerationAlgorithm";
+        final String fakeMacAlgorithm = "FakeMacAlgorithm";
+
+        final KeyGenerator fakeKeyGenerator = mock(KeyGenerator.class);
+        final Mac fakeMac = mock(Mac.class);
+
+        Map<String, String> configs = configs();
+        configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, fakeKeyGenerationAlgorithm);
+        configs.put(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, fakeMacAlgorithm);
+        configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, fakeMacAlgorithm);
+
+        try (
+                MockedStatic<KeyGenerator> keyGenerator = mockStatic(KeyGenerator.class);
+                MockedStatic<Mac> mac = mockStatic(Mac.class)
+        ) {
+            // Make it seem like the default key generation algorithm isn't available on this worker
+            keyGenerator.when(() -> KeyGenerator.getInstance(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT))
+                    .thenThrow(new NoSuchAlgorithmException());
+            // But the one specified in the worker config file is
+            keyGenerator.when(() -> KeyGenerator.getInstance(fakeKeyGenerationAlgorithm))
+                    .thenReturn(fakeKeyGenerator);
+
+            // And for the signature algorithm
+            mac.when(() -> Mac.getInstance(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT))
+                    .thenThrow(new NoSuchAlgorithmException());
+            // Likewise for key verification algorithms
+            DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT.forEach(verificationAlgorithm ->
+                keyGenerator.when(() -> Mac.getInstance(verificationAlgorithm))
+                        .thenThrow(new NoSuchAlgorithmException())
+            );
+            mac.when(() -> Mac.getInstance(fakeMacAlgorithm))
+                    .thenReturn(fakeMac);
+
+            new DistributedConfig(configs);
+        }
+    }
+
+    @Test
     public void shouldCreateKeyGeneratorWithSpecificSettings() {
         final String algorithm = "HmacSHA1";
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, algorithm);
         configs.put(DistributedConfig.INTER_WORKER_KEY_SIZE_CONFIG, "512");
-        configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, algorithm);
         DistributedConfig config = new DistributedConfig(configs);
         KeyGenerator keyGenerator = config.getInternalRequestKeyGenerator();
         assertNotNull(keyGenerator);
@@ -79,11 +122,20 @@ public class DistributedConfigTest {
     }
 
     @Test
-    public void shouldFailIfKeyAlgorithmNotInVerificationAlgorithmsList() {
+    public void shouldFailIfSignatureAlgorithmNotInVerificationAlgorithmsList() {
         Map<String, String> configs = configs();
-        configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, "HmacSHA1");
+        configs.put(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, "HmacSHA1");
         configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, "HmacSHA256");
         assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+    }
+
+    @Test
+    public void shouldNotFailIfKeyAlgorithmNotInVerificationAlgorithmsList() {
+        Map<String, String> configs = configs();
+        configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, "HmacSHA1");
+        configs.put(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, "HmacSHA256");
+        configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, "HmacSHA256");
+        new DistributedConfig(configs);
     }
 
     @Test
