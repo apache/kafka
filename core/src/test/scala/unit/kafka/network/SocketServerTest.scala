@@ -1389,6 +1389,7 @@ class SocketServerTest {
    * buffered receive.
    */
   @Test
+  @Disabled // TODO: re-enabled until KAFKA-13735 is fixed
   def remoteCloseWithoutBufferedReceives(): Unit = {
     verifyRemoteCloseWithBufferedReceives(numComplete = 0, hasIncomplete = false)
   }
