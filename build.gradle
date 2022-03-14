@@ -1294,6 +1294,7 @@ project(':clients') {
     implementation libs.zstd
     implementation libs.opentelemetryProto
     implementation libs.lz4
+    implementation libs.opentelemetryProto
     implementation libs.snappy
     implementation libs.slf4jApi
 

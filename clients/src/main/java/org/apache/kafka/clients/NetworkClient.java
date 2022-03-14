@@ -386,7 +386,6 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void close(String nodeId) {
         incrementConnectionErrorsTelemetry(ConnectionErrorReason.close);
-
         log.info("Client requested connection close from node {}", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
