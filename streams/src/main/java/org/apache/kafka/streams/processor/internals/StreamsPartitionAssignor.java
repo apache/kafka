@@ -1464,6 +1464,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return uniqueField;
     }
 
+    protected Map<String, String> clientTags() {
+        return clientTags;
+    }
+
     protected void handleRebalanceStart(final Set<String> topics) {
         taskManager.handleRebalanceStart(topics);
     }

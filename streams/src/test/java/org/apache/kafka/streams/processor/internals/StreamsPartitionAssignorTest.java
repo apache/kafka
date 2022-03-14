@@ -188,6 +188,8 @@ public class StreamsPartitionAssignorTest {
     private static final String USER_END_POINT = "localhost:8080";
     private static final String OTHER_END_POINT = "other:9090";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
+    private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("cluster", "cluster1"),
+                                                                 mkEntry("zone", "az1"));
 
     private TaskManager taskManager;
     private Admin adminClient;
@@ -210,6 +212,7 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
+        referenceContainer.clientTags = CLIENT_TAGS;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         return configurationMap;
@@ -2188,6 +2191,20 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         assertThat(AssignmentInfo.decode(assignments.get("consumer").userData()).errCode(),
                    equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
+    }
+
+    @Test
+    public void testClientTags() {
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+        final Set<String> topics = mkSet("input");
+        final Subscription subscription = new Subscription(new ArrayList<>(topics),
+                                                           partitionAssignor.subscriptionUserData(topics));
+        final SubscriptionInfo info = getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, uniqueField, CLIENT_TAGS);
+
+        assertEquals(singletonList("input"), subscription.topics());
+        assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
+        assertEquals(CLIENT_TAGS, partitionAssignor.clientTags());
     }
 
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {
