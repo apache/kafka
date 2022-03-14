@@ -729,7 +729,7 @@ public class ConfigDefTest {
         assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
                                                                          Type.LIST,
                                                                          asList("a", "b"),
-                                                                         ListSize.atMostOfLength(1),
+                                                                         ListSize.atMostOfSize(1),
                                                                          Importance.HIGH,
                                                                          "lst doc"));
     }
@@ -740,7 +740,7 @@ public class ConfigDefTest {
         new ConfigDef().define("lst",
                                Type.LIST,
                                lst,
-                               ListSize.atMostOfLength(lst.size()),
+                               ListSize.atMostOfSize(lst.size()),
                                Importance.HIGH,
                                "lst doc");
     }
@@ -750,7 +750,7 @@ public class ConfigDefTest {
         new ConfigDef().define("lst",
                                Type.LIST,
                                asList("a", "b"),
-                               ListSize.atMostOfLength(3),
+                               ListSize.atMostOfSize(3),
                                Importance.HIGH,
                                "lst doc");
     }
