@@ -148,7 +148,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
-    private static final short DEFAULT_MAX_CLIENT_TAG_KEY_VALUE_LENGTH = 40;
 
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
