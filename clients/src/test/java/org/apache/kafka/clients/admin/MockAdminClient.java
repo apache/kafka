@@ -1042,6 +1042,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public Optional<String> clientInstanceId(Duration timeout) {
+        return Optional.empty();
+    }
+
+    @Override
     synchronized public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
     }

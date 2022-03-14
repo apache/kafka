@@ -31,6 +31,9 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.telemetry.ClientTelemetry;
+import org.apache.kafka.clients.telemetry.ConsumerMetricRecorder;
+import org.apache.kafka.clients.telemetry.NoopClientTelemetry;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -2641,6 +2644,8 @@ public class KafkaConsumerTest {
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
 
+        ClientTelemetry clientTelemetry = new NoopClientTelemetry();
+        ConsumerMetricRecorder consumerMetricRecorder = clientTelemetry.consumerMetricRecorder();
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
                 rebalanceTimeoutMs,
                 heartbeatIntervalMs,
@@ -2656,6 +2661,7 @@ public class KafkaConsumerTest {
                 subscription,
                 metrics,
                 metricGroupPrefix,
+                consumerMetricRecorder,
                 time,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
@@ -2681,7 +2687,8 @@ public class KafkaConsumerTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
-                new ApiVersions());
+                new ApiVersions(),
+                consumerMetricRecorder);
 
         return new KafkaConsumer<>(
                 loggerFactory,
@@ -2700,7 +2707,8 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 assignors,
-                groupId);
+                groupId,
+                true);
     }
 
     private static class FetchInfo {

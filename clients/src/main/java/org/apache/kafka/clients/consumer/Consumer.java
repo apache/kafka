@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.Optional;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -172,6 +173,11 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#committed(Set, Duration)
      */
     Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, final Duration timeout);
+
+    /**
+     * See {@link KafkaConsumer#clientInstanceId(Duration)}}
+     */
+    Optional<String> clientInstanceId(Duration timeout);
 
     /**
      * @see KafkaConsumer#metrics()

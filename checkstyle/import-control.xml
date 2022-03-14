@@ -278,6 +278,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.clients.telemetry" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
@@ -293,6 +294,11 @@
       <allow pkg="org.apache.kafka.clients.consumer.internals" />
       <allow pkg="org.apache.kafka.clients.consumer" />
     </subpackage>
+
+    <subpackage name="telemetry">
+      <allow pkg="io.opentelemetry.proto.metrics" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="server">
