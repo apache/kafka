@@ -1128,7 +1128,7 @@ public class ConfigDef {
             this.maxSize = maxSize;
         }
 
-        public static ListSize max(final int maxSize) {
+        public static ListSize atMostOfLength(final int maxSize) {
             return new ListSize(maxSize);
         }
 

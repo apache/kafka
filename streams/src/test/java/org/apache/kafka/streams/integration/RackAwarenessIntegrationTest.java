@@ -46,13 +46,14 @@ import org.junit.rules.TestName;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Predicate;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
 @Category({IntegrationTest.class})
@@ -60,6 +61,13 @@ public class RackAwarenessIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    private static final String TAG_VALUE_K8_CLUSTER_1 = "k8s-cluster-1";
+    private static final String TAG_VALUE_K8_CLUSTER_2 = "k8s-cluster-2";
+    private static final String TAG_VALUE_K8_CLUSTER_3 = "k8s-cluster-3";
+    private static final String TAG_VALUE_EU_CENTRAL_1A = "eu-central-1a";
+    private static final String TAG_VALUE_EU_CENTRAL_1B = "eu-central-1b";
+    private static final String TAG_VALUE_EU_CENTRAL_1C = "eu-central-1c";
 
     @Rule
     public TestName testName = new TestName();
@@ -100,19 +108,19 @@ public class RackAwarenessIntegrationTest {
     }
 
     @Test
-    public void shouldDistributeStandbyReplicasBasedOnClientTags() throws Exception {
+    public void shouldDistributeStandbyReplicasWhenAllClientsAreLocatedOnASameClusterTag() throws Exception {
         final Topology topology = createStatefulTopology();
         final int numberOfStandbyReplicas = 1;
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
-        createAndStart(topology, buildClientTags("eu-central-1a", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1a", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1a", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
-        createAndStart(topology, buildClientTags("eu-central-1b", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1b", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1b", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-
-        waitUntilRackAwareTaskDistributionIsReached(TAG_ZONE);
+        waitUntilAllKafkaStreamsClientsAreRunning();
+        waitUntilIdealTaskDistributionIsReachedForTags(singletonList(TAG_ZONE));
     }
 
     @Test
@@ -120,59 +128,103 @@ public class RackAwarenessIntegrationTest {
         final Topology topology = createStatefulTopology();
         final int numberOfStandbyReplicas = 2;
 
-        createAndStart(topology, buildClientTags("eu-central-1a", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1b", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1c", "k8s-cluster-1"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
-        createAndStart(topology, buildClientTags("eu-central-1a", "k8s-cluster-2"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1b", "k8s-cluster-2"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1c", "k8s-cluster-2"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_2), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_2), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_2), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
-        createAndStart(topology, buildClientTags("eu-central-1a", "k8s-cluster-3"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1b", "k8s-cluster-3"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
-        createAndStart(topology, buildClientTags("eu-central-1c", "k8s-cluster-3"), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_3), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_3), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_3), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
-
-        waitUntilRackAwareTaskDistributionIsReached(TAG_ZONE, TAG_CLUSTER);
+        waitUntilAllKafkaStreamsClientsAreRunning();
+        waitUntilIdealTaskDistributionIsReachedForTags(asList(TAG_ZONE, TAG_CLUSTER));
     }
 
-    private void waitUntilRackAwareTaskDistributionIsReached(final String... tagsToCheck) throws Exception {
-        final TestCondition condition = () -> {
+    @Test
+    public void shouldDistributeStandbyReplicasWhenIdealDistributionCanNotBeAchieved() throws Exception {
+        final Topology topology = createStatefulTopology();
+        final int numberOfStandbyReplicas = 2;
 
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_2), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_2), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_2), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+
+        waitUntilAllKafkaStreamsClientsAreRunning();
+        waitUntilIdealTaskDistributionIsReachedForTags(singletonList(TAG_ZONE));
+        waitUntilPartialTaskDistributionIsReachedForTags(singletonList(TAG_CLUSTER));
+    }
+
+    private void waitUntilAllKafkaStreamsClientsAreRunning() throws Exception {
+        TestUtils.waitForCondition(
+            () -> kafkaStreamsInstances.stream().allMatch(it -> KafkaStreams.State.RUNNING == it.kafkaStreams.state()),
+            IntegrationTestUtils.DEFAULT_TIMEOUT,
+            String.format("Kafka Streams did not transit to state %s in %d milliseconds",
+                          KafkaStreams.State.RUNNING, IntegrationTestUtils.DEFAULT_TIMEOUT)
+        );
+    }
+
+    private void waitUntilPartialTaskDistributionIsReachedForTags(final List<String> tagsToCheck) throws Exception {
+        final Predicate<TaskClientTagDistribution> partialTaskClientTagDistributionTest = taskClientTagDistribution -> {
+            final Map<String, String> activeTaskClientTags = taskClientTagDistribution.activeTaskClientTags.clientTags;
+            return tagsAmongstActiveAndAtLeastOneStandbyTaskIsDifferent(taskClientTagDistribution.standbyTasksClientTags, activeTaskClientTags, tagsToCheck);
+        };
+
+        waitUntilAllTaskDistributionTestSucceeds(partialTaskClientTagDistributionTest,
+                                                 "Partial rack aware task distribution couldn't be reached on " +
+                                                 "client tags " + tagsToCheck + ".");
+    }
+
+    private void waitUntilIdealTaskDistributionIsReachedForTags(final List<String> tagsToCheck) throws Exception {
+        final Predicate<TaskClientTagDistribution> idealTaskClientTagDistributionTest = taskClientTagDistribution -> {
+            final Map<String, String> activeTaskClientTags = taskClientTagDistribution.activeTaskClientTags.clientTags;
+            return tagsAmongstStandbyTasksAreDifferent(taskClientTagDistribution.standbyTasksClientTags, tagsToCheck)
+                   && tagsAmongstActiveAndAllStandbyTasksAreDifferent(taskClientTagDistribution.standbyTasksClientTags,
+                                                                      activeTaskClientTags,
+                                                                      tagsToCheck);
+        };
+
+        waitUntilAllTaskDistributionTestSucceeds(idealTaskClientTagDistributionTest,
+                                                 "Ideal rack aware task distribution couldn't be reached on " +
+                                                 "client tags " + tagsToCheck + ".");
+    }
+
+    private void waitUntilAllTaskDistributionTestSucceeds(final Predicate<TaskClientTagDistribution> taskClientTagDistributionPredicate,
+                                                          final String failureMessage) throws Exception {
+        final TestCondition condition = () -> {
             final List<TaskClientTagDistribution> tasksClientTagDistributions = getTasksClientTagDistributions();
 
             if (tasksClientTagDistributions.isEmpty()) {
                 return false;
             }
 
-            return tasksClientTagDistributions.stream().allMatch(taskClientTagDistribution -> {
-                final Map<String, String> activeTaskClientTags = taskClientTagDistribution.activeTaskClientTags.clientTags;
-
-                return verifyTasksDistribution(taskClientTagDistribution.standbyTasksClientTags,
-                                               activeTaskClientTags,
-                                               asList(tagsToCheck));
-            });
+            return tasksClientTagDistributions.stream().allMatch(taskClientTagDistributionPredicate);
         };
 
         TestUtils.waitForCondition(
             condition,
             IntegrationTestUtils.DEFAULT_TIMEOUT,
-            "Rack aware task distribution couldn't be reached on " +
-            "client tags [" + Arrays.toString(tagsToCheck) + "]."
+            failureMessage
         );
     }
 
-    private static boolean verifyTasksDistribution(final List<TaskClientTags> standbyTasks,
-                                                   final Map<String, String> activeTaskClientTags,
-                                                   final List<String> tagsToCheck) {
-        return tagsAmongstStandbyTasksAreDifferent(standbyTasks, tagsToCheck)
-               && tagsAmongstActiveAndStandbyTasksAreDifferent(standbyTasks, activeTaskClientTags, tagsToCheck);
+    private static boolean tagsAmongstActiveAndAllStandbyTasksAreDifferent(final List<TaskClientTags> standbyTasks,
+                                                                           final Map<String, String> activeTaskClientTags,
+                                                                           final List<String> tagsToCheck) {
+        return standbyTasks.stream().allMatch(standbyTask -> tagsToCheck.stream().noneMatch(tag -> activeTaskClientTags.get(tag).equals(standbyTask.clientTags.get(tag))));
     }
 
-    private static boolean tagsAmongstActiveAndStandbyTasksAreDifferent(final List<TaskClientTags> standbyTasks,
-                                                                        final Map<String, String> activeTaskClientTags,
-                                                                        final List<String> tagsToCheck) {
-        return standbyTasks.stream().allMatch(standbyTask -> tagsToCheck.stream().noneMatch(tag -> activeTaskClientTags.get(tag).equals(standbyTask.clientTags.get(tag))));
+    private static boolean tagsAmongstActiveAndAtLeastOneStandbyTaskIsDifferent(final List<TaskClientTags> standbyTasks,
+                                                                                final Map<String, String> activeTaskClientTags,
+                                                                                final List<String> tagsToCheck) {
+        return standbyTasks.stream().anyMatch(standbyTask -> tagsToCheck.stream().noneMatch(tag -> activeTaskClientTags.get(tag).equals(standbyTask.clientTags.get(tag))));
     }
 
     private static boolean tagsAmongstStandbyTasksAreDifferent(final List<TaskClientTags> standbyTasks, final List<String> tagsToCheck) {

@@ -39,6 +39,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -427,7 +428,7 @@ public class ConfigDefTest {
     public void testMissingDependentConfigs() {
         // Should not be possible to parse a config if a dependent config has not been defined
         final ConfigDef configDef = new ConfigDef()
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"));
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"));
         assertThrows(ConfigException.class, () -> configDef.parse(Collections.emptyMap()));
     }
 
@@ -439,7 +440,7 @@ public class ConfigDefTest {
         assertEquals(new HashSet<>(Arrays.asList("a")), baseConfigDef.getConfigsWithNoParent());
 
         final ConfigDef configDef = new ConfigDef(baseConfigDef)
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"))
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"))
                 .define("child", Type.STRING, Importance.HIGH, "docs");
 
         assertEquals(new HashSet<>(Arrays.asList("a", "parent")), configDef.getConfigsWithNoParent());
@@ -542,7 +543,7 @@ public class ConfigDefTest {
                 .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
                         "Group Two", 1, Width.NONE, "..", Collections.<String>emptyList())
                 .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
-                        "Group Two", 0, Width.NONE, "..", Collections.singletonList("some.option"))
+                        "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
                 .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
 
         final String expectedRst = "" +
@@ -728,17 +729,28 @@ public class ConfigDefTest {
         assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
                                                                          Type.LIST,
                                                                          asList("a", "b"),
-                                                                         ListSize.max(1),
+                                                                         ListSize.atMostOfLength(1),
                                                                          Importance.HIGH,
                                                                          "lst doc"));
     }
 
     @Test
-    public void testNoExceptionIsThrownWhenListSizeIsWithinTheLimit() {
+    public void testNoExceptionIsThrownWhenListSizeEqualsTheLimit() {
+        final List<String> lst = asList("a", "b", "c");
+        new ConfigDef().define("lst",
+                               Type.LIST,
+                               lst,
+                               ListSize.atMostOfLength(lst.size()),
+                               Importance.HIGH,
+                               "lst doc");
+    }
+
+    @Test
+    public void testNoExceptionIsThrownWhenListSizeIsBelowTheLimit() {
         new ConfigDef().define("lst",
                                Type.LIST,
                                asList("a", "b"),
-                               ListSize.max(2),
+                               ListSize.atMostOfLength(3),
                                Importance.HIGH,
                                "lst doc");
     }
