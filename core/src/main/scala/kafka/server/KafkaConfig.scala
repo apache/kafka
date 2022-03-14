@@ -27,7 +27,7 @@ import kafka.log.LogConfig
 import kafka.log.LogConfig.MessageFormatVersion
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.security.authorizer.AuthorizerUtils
-import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp}
+import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp, ListenersProp}
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.utils.CoreUtils.parseCsvList
 import kafka.utils.{CoreUtils, Logging}
@@ -1887,8 +1887,20 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  def listeners: Seq[EndPoint] =
+  def listeners: Seq[EndPoint] = {
+    if (usesSelfManagedQuorum && !originals.containsKey(ListenersProp)) {
+      val msg = if (processRoles == Set(BrokerRole)) {
+        s"PLAINTEXT://:9092 for broker nodes(${KafkaConfig.ProcessRolesProp}=broker)"
+      } else if (processRoles == Set(ControllerRole)) {
+        s"PLAINTEXT://:9093 for controller nodes(${KafkaConfig.ProcessRolesProp}=controller)"
+      } else {
+        s"PLAINTEXT://:9092,CONTROLLER://:9093 for combined nodes(${KafkaConfig.ProcessRolesProp}=broker,controller)"
+      }
+      require(originals.containsKey(ListenersProp),
+        s"$ListenersProp must be explicit set for all kraft nodes, for example, $msg")
+    }
     CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp), effectiveListenerSecurityProtocolMap)
+  }
 
   def controllerListenerNames: Seq[String] = {
     val value = Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("")
@@ -2018,6 +2030,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
           s"when `process.roles` is defined (i.e. when running in KRaft mode).")
       }
     }
+    // invoke to
+    require(listeners.nonEmpty)
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")

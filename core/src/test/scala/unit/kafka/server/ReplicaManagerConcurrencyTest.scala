@@ -147,6 +147,7 @@ class ReplicaManagerConcurrencyTest {
     val props = new Properties
     props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     props.put(KafkaConfig.NodeIdProp, localId.toString)
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)

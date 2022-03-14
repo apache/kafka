@@ -47,6 +47,7 @@ class BrokerLifecycleManagerTest {
     val properties = new Properties()
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    properties.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     properties.setProperty(KafkaConfig.NodeIdProp, "1")
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")
     properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
