@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +40,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class StandbyTaskAssignmentUtilsTest {
+    private static final Logger log = LoggerFactory.getLogger(StandbyTaskAssignmentUtilsTest.class);
+
     private static final Set<TaskId> ACTIVE_TASKS = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
     private Map<UUID, ClientState> clients;
@@ -55,17 +59,15 @@ public class StandbyTaskAssignmentUtilsTest {
 
     @Test
     public void shouldReturnNumberOfStandbyTasksThatWereNotAssigned() {
-        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(3, ACTIVE_TASKS);
+        final int numStandbyReplicas = 3;
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas, ACTIVE_TASKS);
 
-        assertTrue(tasksToRemainingStandbys.keySet()
-                                           .stream()
-                                           .map(taskId -> pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(
-                                               clients,
-                                               tasksToRemainingStandbys,
-                                               clientsByTaskLoad,
-                                               taskId
-                                           ))
-                                           .allMatch(numRemainingStandbys -> numRemainingStandbys == 1));
+        tasksToRemainingStandbys.keySet().forEach(taskId -> pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(numStandbyReplicas,
+                                                                                                                   clients,
+                                                                                                                   tasksToRemainingStandbys,
+                                                                                                                   clientsByTaskLoad,
+                                                                                                                   taskId,
+                                                                                                                   log));
 
         assertTrue(ACTIVE_TASKS.stream().allMatch(activeTask -> tasksToRemainingStandbys.get(activeTask) == 1));
         assertTrue(areStandbyTasksPresentForAllActiveTasks(2));
@@ -73,17 +75,15 @@ public class StandbyTaskAssignmentUtilsTest {
 
     @Test
     public void shouldReturnZeroWhenAllStandbyTasksWereSuccessfullyAssigned() {
-        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(1, ACTIVE_TASKS);
+        final int numStandbyReplicas = 1;
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas, ACTIVE_TASKS);
 
-        assertTrue(tasksToRemainingStandbys.keySet()
-                                           .stream()
-                                           .map(taskId -> pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(
-                                               clients,
-                                               tasksToRemainingStandbys,
-                                               clientsByTaskLoad,
-                                               taskId
-                                           ))
-                                           .allMatch(numRemainingStandbys -> numRemainingStandbys == 0));
+        tasksToRemainingStandbys.keySet().forEach(taskId -> pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(numStandbyReplicas,
+                                                                                                                   clients,
+                                                                                                                   tasksToRemainingStandbys,
+                                                                                                                   clientsByTaskLoad,
+                                                                                                                   taskId,
+                                                                                                                   log));
 
         assertTrue(ACTIVE_TASKS.stream().allMatch(activeTask -> tasksToRemainingStandbys.get(activeTask) == 0));
         assertTrue(areStandbyTasksPresentForAllActiveTasks(1));
