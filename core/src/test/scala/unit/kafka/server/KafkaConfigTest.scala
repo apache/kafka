@@ -620,6 +620,11 @@ class KafkaConfigTest {
         case KafkaConfig.ConnectionSetupTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
+        // Linkedin internal use for unofficial client logging
+        case KafkaConfig.UnofficialClientLoggingEnableProp => // ignore
+        case KafkaConfig.UnofficialClientCacheTtlProp => // ignore
+        case KafkaConfig.ExpectedClientSoftwareNamesProp => //ignore string
+
         // KRaft mode configs
         case KafkaConfig.ProcessRolesProp => // ignore
         case KafkaConfig.InitialBrokerRegistrationTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")

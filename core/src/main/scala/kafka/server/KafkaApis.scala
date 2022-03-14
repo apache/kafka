@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import kafka.admin.AdminUtils
 import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
@@ -78,7 +79,7 @@ import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMe
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
@@ -118,6 +119,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
+
+  val unofficialClientsCache: LoadingCache[String, String] = CacheBuilder.newBuilder()
+    .expireAfterWrite(config.unofficialClientCacheTtl, TimeUnit.HOURS)
+    .build(
+      new CacheLoader[String, String]() {
+        @Override
+        def load(key: String): String = { key }
+      }
+    )
 
   def close(): Unit = {
     aclApis.close()
@@ -1867,6 +1877,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     // If this is considered to leak information about the broker version a workaround is to use SSL
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
+    val apiVersionRequest = request.body[ApiVersionsRequest]
+
+    if (config.unofficialClientLoggingEnable) {
+      // Check if the last part of clientSoftwareName (after commitId) is an unexpected software name
+      val softwareName = apiVersionRequest.data.clientSoftwareName().split("-").last
+      if (!config.expectedClientSoftwareNames.contains(softwareName)) {
+        val clientIdentity = request.context.clientId() + " " + request.context.clientAddress() + " " + request.context.principal()
+        unofficialClientsCache.get(clientIdentity)
+        warn(s"received ApiVersionsRequest from user with unofficial client type. clientId clientAddress principal = $clientIdentity")
+      }
+    }
+
     def createResponseCallback(requestThrottleMs: Int): ApiVersionsResponse = {
       val apiVersionRequest = request.body[ApiVersionsRequest]
       if (apiVersionRequest.hasUnsupportedRequestVersion) {
