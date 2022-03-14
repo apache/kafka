@@ -246,6 +246,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // LinkedIn internal request types
         case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => handleLiControlledShutdownSkipSafetyCheck(request)
         case ApiKeys.LI_COMBINED_CONTROL => handleLiCombinedControlRequest(request, requestLocal)
+        case ApiKeys.LI_MOVE_CONTROLLER => handleMoveControllerRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3587,6 +3588,22 @@ class KafkaApis(val requestChannel: RequestChannel,
     responseData.setStopReplicaPartitionErrors(stopReplicaPartitionErrors)
 
     requestHelper.sendResponseExemptThrottle(request, new LiCombinedControlResponse(responseData, liCombinedControlRequest.version()))
+  }
+
+  def handleMoveControllerRequest(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    val moveControllerRequest = request.body[LiMoveControllerRequest]
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
+
+    val moveControllerResponse = try {
+      zkSupport.zkClient.deleteControllerRaw()
+      LiMoveControllerResponse.prepareResponse(Errors.NONE, moveControllerRequest.version())
+    } catch {
+      case throwable: Throwable  =>
+        moveControllerRequest.getErrorResponse(throwable)
+    }
+
+    requestHelper.sendResponseExemptThrottle(request, moveControllerResponse)
   }
 }
 

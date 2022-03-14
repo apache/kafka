@@ -1266,6 +1266,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Deletes the controller znode without checking the expectedControllerEpochZkVersion
+   * This is used to force a controller switch from the cli.
+   * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
+   */
+  def deleteControllerRaw(): Unit = {
+    val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.MatchAnyVersion)
+    retryRequestUntilConnected(deleteRequest, ZkVersion.MatchAnyVersion)
+  }
+
+  /**
    * Gets the controller epoch.
    * @return optional (Int, Stat) that is Some if the controller epoch path exists and None otherwise.
    */

@@ -657,6 +657,9 @@ class RequestQuotaTest extends BaseRequestTest {
             new util.ArrayList[Node](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataPartitionState](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataBroker](),
             new util.ArrayList[LiCombinedControlRequestData.StopReplicaPartitionState](), Collections.emptyMap())
 
+        case ApiKeys.LI_MOVE_CONTROLLER =>
+          new LiMoveControllerRequest.Builder(new LiMoveControllerRequestData(), ApiKeys.LI_MOVE_CONTROLLER.latestVersion)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

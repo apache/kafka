@@ -1176,6 +1176,15 @@ public interface Admin extends AutoCloseable {
     ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options);
 
     /**
+     * Move the kafka controller to a different host.
+     * When the active controller is elected via Zookeeper, this API will send
+     * an LiMoveControllerRequest to a kafka broker, which will delete the /controller znode.
+     *
+     * @param options The options to use when moving the controller.
+     */
+    MoveControllerResult moveController(MoveControllerOptions options);
+
+    /**
      * Describes all entities matching the provided filter that have at least one client quota configuration
      * value defined.
      * <p>

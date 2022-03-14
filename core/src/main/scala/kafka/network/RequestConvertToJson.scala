@@ -97,6 +97,7 @@ object RequestConvertToJson {
       case req: ListTransactionsRequest => ListTransactionsRequestDataJsonConverter.write(req.data, request.version)
       case req: LiControlledShutdownSkipSafetyCheckRequest => LiControlledShutdownSkipSafetyCheckRequestDataJsonConverter.write(req.data, request.version)
       case req: LiCombinedControlRequest => LiCombinedControlRequestDataJsonConverter.write(req.data, request.version())
+      case req: LiMoveControllerRequest => LiMoveControllerRequestDataJsonConverter.write(req.data, request.version())
       case _ => throw new IllegalStateException(s"ApiKey ${request.apiKey} is not currently handled in `request`, the " +
         "code should be updated to do so.");
     }
@@ -174,6 +175,7 @@ object RequestConvertToJson {
       case res: ListTransactionsResponse => ListTransactionsResponseDataJsonConverter.write(res.data, version)
       case res: LiControlledShutdownSkipSafetyCheckResponse => LiControlledShutdownSkipSafetyCheckResponseDataJsonConverter.write(res.data, version)
       case res: LiCombinedControlResponse => LiCombinedControlResponseDataJsonConverter.write(res.data, version)
+      case res: LiMoveControllerResponse => LiMoveControllerResponseDataJsonConverter.write(res.data, version)
       case _ => throw new IllegalStateException(s"ApiKey ${response.apiKey} is not currently handled in `response`, the " +
         "code should be updated to do so.");
     }

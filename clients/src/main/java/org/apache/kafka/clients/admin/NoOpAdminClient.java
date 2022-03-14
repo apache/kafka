@@ -214,6 +214,11 @@ public class NoOpAdminClient extends AdminClient {
     }
 
     @Override
+    public MoveControllerResult moveController(MoveControllerOptions options) {
+        return null;
+    }
+
+    @Override
     public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter,
         DescribeClientQuotasOptions options) {
         return null;
