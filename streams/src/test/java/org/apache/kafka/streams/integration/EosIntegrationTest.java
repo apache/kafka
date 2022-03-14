@@ -266,38 +266,37 @@ public class EosIntegrationTest {
                 Serdes.LongSerde.class.getName(),
                 properties);
 
+            final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
+
+            final Properties producerConfigs = new Properties();
+            if (inputTopicTransactional) {
+                producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
+            }
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                inputData,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
+                CLUSTER.time,
+                inputTopicTransactional
+            );
+
             try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
                 startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
-                final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
-
-                final Properties producerConfigs = new Properties();
-                if (inputTopicTransactional) {
-                    producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
-                }
-
-                IntegrationTestUtils.produceKeyValuesSynchronously(
-                    inputTopic,
-                    inputData,
-                    TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
-                    CLUSTER.time,
-                    inputTopicTransactional
+                final List<KeyValue<Long, Long>> committedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                    TestUtils.consumerConfig(
+                        CLUSTER.bootstrapServers(),
+                        CONSUMER_GROUP_ID,
+                        LongDeserializer.class,
+                        LongDeserializer.class,
+                        Utils.mkProperties(Collections.singletonMap(
+                            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+                            IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
+                        ),
+                    outputTopic,
+                    inputData.size()
                 );
-
-                final List<KeyValue<Long, Long>> committedRecords =
-                    IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                        TestUtils.consumerConfig(
-                            CLUSTER.bootstrapServers(),
-                            CONSUMER_GROUP_ID,
-                            LongDeserializer.class,
-                            LongDeserializer.class,
-                            Utils.mkProperties(Collections.singletonMap(
-                                ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                            ),
-                        outputTopic,
-                        inputData.size()
-                    );
 
                 checkResultPerKey(committedRecords, inputData, "The committed records do not match what expected");
             }
