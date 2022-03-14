@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
+import org.apache.kafka.clients.telemetry.ConsumerMetricRecorder;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -158,6 +159,7 @@ public class Fetcher<K, V> implements Closeable {
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
+    private final ConsumerMetricRecorder consumerMetricRecorder;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
     private CompletedFetch nextInLineFetch = null;
@@ -181,7 +183,8 @@ public class Fetcher<K, V> implements Closeable {
                    long retryBackoffMs,
                    long requestTimeoutMs,
                    IsolationLevel isolationLevel,
-                   ApiVersions apiVersions) {
+                   ApiVersions apiVersions,
+                   ConsumerMetricRecorder consumerMetricRecorder) {
         this.log = logContext.logger(Fetcher.class);
         this.logContext = logContext;
         this.time = time;
@@ -203,6 +206,7 @@ public class Fetcher<K, V> implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.apiVersions = apiVersions;
+        this.consumerMetricRecorder = consumerMetricRecorder;
         this.sessionHandlers = new HashMap<>();
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.nodesWithPendingFetchRequests = new HashSet<>();
@@ -298,7 +302,7 @@ public class Fetcher<K, V> implements Closeable {
 
                             Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
-                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
+                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, consumerMetricRecorder, partitions);
 
                             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                                 TopicPartition partition = entry.getKey();
@@ -1726,14 +1730,17 @@ public class Fetcher<K, V> implements Closeable {
      */
     private static class FetchResponseMetricAggregator {
         private final FetchManagerMetrics sensors;
+        private final ConsumerMetricRecorder consumerMetricRecorder;
         private final Set<TopicPartition> unrecordedPartitions;
 
         private final FetchMetrics fetchMetrics = new FetchMetrics();
         private final Map<String, FetchMetrics> topicFetchMetrics = new HashMap<>();
 
         private FetchResponseMetricAggregator(FetchManagerMetrics sensors,
+                                              ConsumerMetricRecorder consumerMetricRecorder,
                                               Set<TopicPartition> partitions) {
             this.sensors = sensors;
+            this.consumerMetricRecorder = consumerMetricRecorder;
             this.unrecordedPartitions = partitions;
         }
 
@@ -1764,6 +1771,9 @@ public class Fetcher<K, V> implements Closeable {
                     FetchMetrics metric = entry.getValue();
                     this.sensors.recordTopicFetchMetrics(entry.getKey(), metric.fetchBytes, metric.fetchRecords);
                 }
+
+                consumerMetricRecorder.addRecordApplicationBytes(this.fetchMetrics.fetchBytes);
+                consumerMetricRecorder.addRecordApplicationCount(this.fetchMetrics.fetchRecords);
             }
         }
 

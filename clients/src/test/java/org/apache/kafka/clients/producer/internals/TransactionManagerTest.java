@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.telemetry.ClientTelemetry;
+import org.apache.kafka.clients.telemetry.DefaultClientTelemetry;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -171,12 +173,15 @@ public class TransactionManagerTest {
         String metricGrpName = "producer-metrics";
 
         this.brokerNode = new Node(0, "localhost", 2211);
+        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
                 deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
-                new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+                new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
+                (short) -1, clientTelemetry);
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics),
+                clientTelemetry, this.time, REQUEST_TIMEOUT,
                 50, transactionManager, apiVersions);
     }
 
@@ -3131,8 +3136,11 @@ public class TransactionManagerTest {
     public void testHealthyPartitionRetriesDuringEpochBump() throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
         initializeTransactionManager(Optional.empty());
+        Metrics metrics = new Metrics(time);
+        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics),
+                clientTelemetry, this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         initializeIdempotentProducerId(producerId, epoch);
 
@@ -3255,8 +3263,11 @@ public class TransactionManagerTest {
     public void testFailedInflightBatchAfterEpochBump() throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
         initializeTransactionManager(Optional.empty());
+        Metrics metrics = new Metrics(time);
+        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics),
+                clientTelemetry, this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         initializeIdempotentProducerId(producerId, epoch);
 

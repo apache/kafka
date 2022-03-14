@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.decrementProducerQueueMetrics;
+import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.incrementProducerQueueMetrics;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -33,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.telemetry.ClientTelemetry;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -87,6 +91,8 @@ public class RecordAccumulator {
     private final Map<String, Integer> nodesDrainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
+    private final short acks;
+    private final ClientTelemetry clientTelemetry;
 
     /**
      * Create a new record accumulator
@@ -121,7 +127,8 @@ public class RecordAccumulator {
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
-                             BufferPool bufferPool) {
+                             BufferPool bufferPool,
+                             ClientTelemetry clientTelemetry) {
         this.logContext = logContext;
         this.log = logContext.logger(RecordAccumulator.class);
         this.closed = false;
@@ -141,6 +148,8 @@ public class RecordAccumulator {
         this.apiVersions = apiVersions;
         nodesDrainIndex = new HashMap<>();
         this.transactionManager = transactionManager;
+        this.clientTelemetry = clientTelemetry;
+        this.acks = 1;
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -163,6 +172,7 @@ public class RecordAccumulator {
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      * @param bufferPool The buffer pool
+     * @param clientTelemetry {@link ClientTelemetry} used to record metrics
      */
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
@@ -175,7 +185,8 @@ public class RecordAccumulator {
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
-                             BufferPool bufferPool) {
+                             BufferPool bufferPool,
+                             ClientTelemetry clientTelemetry) {
         this(logContext,
             batchSize,
             compression,
@@ -188,7 +199,8 @@ public class RecordAccumulator {
             time,
             apiVersions,
             transactionManager,
-            bufferPool);
+            bufferPool,
+            clientTelemetry);
     }
 
     private void registerMetrics(Metrics metrics, String metricGrpName) {
@@ -260,6 +272,7 @@ public class RecordAccumulator {
                 // deque lock.
                 final BuiltInPartitioner.StickyPartitionInfo partitionInfo;
                 final int effectivePartition;
+
                 if (partition == RecordMetadata.UNKNOWN_PARTITION) {
                     partitionInfo = topicInfo.builtInPartitioner.peekCurrentPartitionInfo(cluster);
                     effectivePartition = partitionInfo.partition();
@@ -267,6 +280,8 @@ public class RecordAccumulator {
                     partitionInfo = null;
                     effectivePartition = partition;
                 }
+
+                final TopicPartition tp = new TopicPartition(topic, effectivePartition);
 
                 // Now that we know the effective partition, let the caller know.
                 setPartition(callbacks, effectivePartition);
@@ -280,7 +295,7 @@ public class RecordAccumulator {
                                 partitionInfo.partition(), topic);
                         continue;
                     }
-                    RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
+                    RecordAppendResult appendResult = tryAppend(tp, timestamp, key, value, headers, callbacks, dq, nowMs);
                     if (appendResult != null) {
                         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster);
                         return appendResult;
@@ -307,7 +322,7 @@ public class RecordAccumulator {
                                 partitionInfo.partition(), topic);
                         continue;
                     }
-                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer);
+                    RecordAppendResult appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks, buffer);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
@@ -324,8 +339,7 @@ public class RecordAccumulator {
     /**
      * Append a new batch to the queue
      *
-     * @param topic The topic
-     * @param partition The partition (cannot be RecordMetadata.UNKNOWN_PARTITION)
+     * @param tp The TopicPartition (cannot be RecordMetadata.UNKNOWN_PARTITION)
      * @param dq The queue
      * @param timestamp The timestamp of the record
      * @param key The key for the record
@@ -334,8 +348,7 @@ public class RecordAccumulator {
      * @param callbacks The callbacks to execute
      * @param buffer The buffer for the new batch
      */
-    private RecordAppendResult appendNewBatch(String topic,
-                                              int partition,
+    private RecordAppendResult appendNewBatch(TopicPartition tp,
                                               Deque<ProducerBatch> dq,
                                               long timestamp,
                                               byte[] key,
@@ -343,18 +356,18 @@ public class RecordAccumulator {
                                               Header[] headers,
                                               AppendCallbacks callbacks,
                                               ByteBuffer buffer) {
-        assert partition != RecordMetadata.UNKNOWN_PARTITION;
+        assert tp.partition() != RecordMetadata.UNKNOWN_PARTITION;
 
         // Update the current time in case the buffer allocation blocked above.
         long nowMs = time.milliseconds();
-        RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
+        RecordAppendResult appendResult = tryAppend(tp, timestamp, key, value, headers, callbacks, dq, nowMs);
         if (appendResult != null) {
             // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
             return appendResult;
         }
 
         MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, apiVersions.maxUsableProduceMagic());
-        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
+        ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
 
@@ -380,7 +393,7 @@ public class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(TopicPartition tp, long timestamp, byte[] key, byte[] value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");
@@ -391,6 +404,14 @@ public class RecordAccumulator {
             if (future == null) {
                 last.closeForRecordAppends();
             } else {
+                incrementProducerQueueMetrics(clientTelemetry,
+                    apiVersions,
+                    acks,
+                    tp,
+                    timestamp,
+                    key,
+                    value,
+                    headers);
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false, appendedBytes);
             }
@@ -842,6 +863,11 @@ public class RecordAccumulator {
                     log.debug("Assigned producerId {} and producerEpoch {} to batch with base sequence " +
                             "{} being sent to partition {}", producerIdAndEpoch.producerId,
                         producerIdAndEpoch.epoch, batch.baseSequence(), tp);
+
+                    decrementProducerQueueMetrics(clientTelemetry,
+                        acks,
+                        tp,
+                        batch.records().sizeInBytes());
 
                     transactionManager.addInFlightBatch(batch);
                 }

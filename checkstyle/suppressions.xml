@@ -73,6 +73,10 @@
               files="DefaultRecordBatch.java"/>
     <suppress checks="ParameterNumber"
               files="MemoryRecordsBuilder.java"/>
+    <suppress checks="ParameterNumber"
+              files="RecordAccumulator.java"/>
+    <suppress checks="ParameterNumber"
+              files="ConsumerCoordinator.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaRaftClient|KafkaRaftClientTest).java"/>

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
@@ -377,6 +378,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
 
         return this.cluster.partitionsForTopic(topic);
+    }
+
+    @Override
+    public Optional<String> clientInstanceId(Duration timeout) {
+        return Optional.empty();
     }
 
     public Map<MetricName, Metric> metrics() {
