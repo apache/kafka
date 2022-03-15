@@ -47,6 +47,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     private final Windows<W> windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
+    private final boolean emitFinal = true; // TODO: set this from external API. KIP-825 under discussion
 
     TimeWindowedKStreamImpl(final Windows<W> windows,
                             final InternalStreamsBuilder builder,
@@ -107,7 +108,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
                 materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitFinal, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());
@@ -155,7 +156,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
                 materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitFinal, initializer, aggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());
@@ -202,7 +203,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return aggregateBuilder.build(
                 new NamedInternal(reduceName),
                 materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitFinal, aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());

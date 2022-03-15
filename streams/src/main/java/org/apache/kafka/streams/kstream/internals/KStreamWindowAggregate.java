@@ -18,8 +18,10 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -30,6 +32,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -48,6 +51,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
     private final Windows<W> windows;
     private final Initializer<VAgg> initializer;
     private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
+    private final boolean emitFinal;
 
     private boolean sendOldValues = false;
 
@@ -55,8 +59,17 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                                   final String storeName,
                                   final Initializer<VAgg> initializer,
                                   final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
+        this(windows, storeName, false, initializer, aggregator);
+    }
+
+    public KStreamWindowAggregate(final Windows<W> windows,
+                                  final String storeName,
+                                  final boolean emitFinal,
+                                  final Initializer<VAgg> initializer,
+                                  final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
+        this.emitFinal = emitFinal;
         this.initializer = initializer;
         this.aggregator = aggregator;
     }
@@ -81,6 +94,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
         private TimestampedTupleForwarder<Windowed<KIn>, VAgg> tupleForwarder;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+        private long lastEmitCloseTime = ConsumerRecord.NO_TIMESTAMP;
 
         @Override
         public void init(final ProcessorContext<Windowed<KIn>, Change<VAgg>> context) {
@@ -96,6 +110,9 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
+
+
+            // TODO: restore lastEmitCloseTime from context
         }
 
         @Override
@@ -146,10 +163,12 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
                     // update the store with the new value
                     windowStore.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
-                    tupleForwarder.maybeForward(
-                        record.withKey(new Windowed<>(record.key(), entry.getValue()))
-                            .withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
-                            .withTimestamp(newTimestamp));
+                    if (!emitFinal) {
+                        tupleForwarder.maybeForward(
+                            record.withKey(new Windowed<>(record.key(), entry.getValue()))
+                                .withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                                .withTimestamp(newTimestamp));
+                    }
                 } else {
                     if (context().recordMetadata().isPresent()) {
                         final RecordMetadata recordMetadata = context().recordMetadata().get();
@@ -183,6 +202,52 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     }
                     droppedRecordsSensor.record();
                 }
+            }
+
+            if (emitFinal) {
+                if (!(windows instanceof TimeWindows)) {
+                    throw new IllegalStateException("Emit final is only supported for TimeWindows and SlidingWindows for TimeWindowedKStream");
+                }
+
+                // Close time does not progress
+                if (lastEmitCloseTime >= closeTime) {
+                    return;
+                }
+
+                // Emit final deosn't make sense for some window like unlimitedWindow
+                // This should be checked in upstream before pass emit final in or checked here
+                final long closeWindowStart = closeTime - windows.size();
+                if (closeWindowStart <= 0) {
+                    return;
+                }
+
+                final long lastEmitWindowStart = lastEmitCloseTime == ConsumerRecord.NO_TIMESTAMP ?
+                    0 : lastEmitCloseTime - windows.size();
+
+                final Map<Long, W> matchedCloseWindows = windows.windowsFor(closeWindowStart);
+                final Map<Long, W> matchedEmitWindows = windows.windowsFor(lastEmitWindowStart);
+
+                // Don't fetch store if there's new close time doesn't progress enough to cover next
+                // window
+                if (matchedCloseWindows.equals(matchedEmitWindows)) {
+                    log.debug("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}", lastEmitCloseTime, closeTime);
+                    return;
+                }
+
+                KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
+                    .fetchAll(lastEmitWindowStart + 1, closeWindowStart);
+
+                while (windowToEmit.hasNext()) {
+                    KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+                    tupleForwarder.maybeForward(
+                        record.withKey(kv.key)
+                            .withValue(new Change<>(kv.value.value(), null))
+                            .withTimestamp(kv.value.timestamp())
+                            .withHeaders(null)); // Don't set header
+                }
+
+                lastEmitCloseTime = closeTime;
+                // TODO: commit this to offset meta
             }
         }
     }
