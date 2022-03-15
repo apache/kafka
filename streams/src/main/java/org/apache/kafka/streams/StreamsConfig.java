@@ -154,9 +154,9 @@ public class StreamsConfig extends AbstractConfig {
 
     // We impose these limitations because client tags are encoded into the subscription info,
     // which is part of the group metadata message that is persisted into the internal topic.
-    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE = 10;
-    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH = 50;
-    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH = 100;
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE = 5;
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH = 20;
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH = 30;
 
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
@@ -1213,14 +1213,14 @@ public class StreamsConfig extends AbstractConfig {
 
         clientTags.forEach((tagKey, tagValue) -> {
             if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX + tagKey,
-                                          tagValue,
-                                          "Key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
+                throw new ConfigException(CLIENT_TAG_PREFIX,
+                                          tagKey,
+                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
             }
             if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX + tagKey,
+                throw new ConfigException(CLIENT_TAG_PREFIX,
                                           tagValue,
-                                          "Value exceeds max length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
+                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
             }
         });
     }
