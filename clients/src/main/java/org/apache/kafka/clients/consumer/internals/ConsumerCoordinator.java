@@ -970,7 +970,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
-            maybeAutoCommitOffsetsAsync();
+            maybeAutoCommitOffsetsSync(timer);
             while (pendingAsyncCommits.get() > 0 && timer.notExpired()) {
                 ensureCoordinatorReady(timer);
                 client.poll(timer);
@@ -1108,6 +1108,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         } while (timer.notExpired());
 
         return false;
+    }
+
+    private void maybeAutoCommitOffsetsSync(Timer timer) {
+        if (autoCommitEnabled) {
+            Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+            try {
+                log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
+                if (!commitOffsetsSync(allConsumedOffsets, timer))
+                    log.debug("Auto-commit of offsets {} timed out before completion", allConsumedOffsets);
+            } catch (WakeupException | InterruptException e) {
+                log.debug("Auto-commit of offsets {} was interrupted before completion", allConsumedOffsets);
+                // rethrow wakeups since they are triggered by the user
+                throw e;
+            } catch (Exception e) {
+                // consistent with async auto-commit failures, we do not propagate the exception
+                log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
+            }
+        }
     }
 
     public void maybeAutoCommitOffsetsAsync(long now) {
