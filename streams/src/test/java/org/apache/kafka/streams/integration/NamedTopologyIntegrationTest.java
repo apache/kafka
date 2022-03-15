@@ -779,7 +779,11 @@ public class NamedTopologyIntegrationTest {
             CLUSTER.createTopic(NEW_STREAM, 2, 1);
             produceToInputTopics(NEW_STREAM, STANDARD_INPUT_DATA);
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+            final List<KeyValue<String, Integer>> output =
+                waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3);
+            output.retainAll(COUNT_OUTPUT_DATA);
+
+            assertThat(output, equalTo(COUNT_OUTPUT_DATA));
 
             // Make sure the threads were not actually killed and replaced
             assertThat(streams.metadataForLocalThreads().size(), equalTo(2));
