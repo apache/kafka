@@ -768,8 +768,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * response after each one.
      * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
-     * it was assigned and the timestamp of the record. If
-     * {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
+     * it was assigned and the timestamp of the record. If the producer is configured with acks = 0, the {@link RecordMetadata}
+     * will have offset = -1 because the producer does not wait for the acknowledgement from the broker.
+     * If {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
      * will be the user provided timestamp or the record send time if the user did not specify a timestamp for the
      * record. If {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime} is used for the
      * topic, the timestamp will be the Kafka broker local time when the message is appended.
