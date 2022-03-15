@@ -52,10 +52,12 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
@@ -129,6 +131,13 @@ public class RackAwarenessIntegrationTest {
             clientTags2.put(key, "value-2-" + i);
             clientTags3.put(key, "value-3-" + i);
         }
+
+        assertEquals(StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE, clientTagKeys.size());
+        Stream.of(clientTags1, clientTags2, clientTags3)
+              .forEach(clientTags -> assertEquals(String.format("clientsTags with content '%s' " +
+                                                                "did not match expected size", clientTags),
+                                                  StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
+                                                  clientTags.size()));
 
         createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
         createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
