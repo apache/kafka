@@ -1295,8 +1295,8 @@ public class DistributedHerderTest {
         EasyMock.expect(restartPlan.shouldRestartTasks()).andReturn(true).anyTimes();
         // The connector has three tasks
         EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Arrays.asList(TASK0, TASK1, TASK2)).anyTimes();
-        EasyMock.expect(restartPlan.restartTaskCount()).andReturn(1).anyTimes();
-        EasyMock.expect(restartPlan.totalTaskCount()).andReturn(1).anyTimes();
+        EasyMock.expect(restartPlan.restartTaskCount()).andReturn(3).anyTimes();
+        EasyMock.expect(restartPlan.totalTaskCount()).andReturn(3).anyTimes();
         EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         herder.assignment = PowerMock.createMock(ExtendedAssignment.class);
