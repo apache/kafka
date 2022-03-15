@@ -152,6 +152,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
+    // We impose these limitations because client tags are encoded into the subscription info,
+    // which is part of the group metadata message that is persisted into the internal topic.
     public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE = 10;
     public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH = 50;
     public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH = 100;
@@ -1186,7 +1188,12 @@ public class StreamsConfig extends AbstractConfig {
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
 
-        // validate rack awareness related configuration
+        validateRackAwarenessConfiguration();
+
+        return configUpdates;
+    }
+
+    private void validateRackAwarenessConfiguration() {
         final List<String> rackAwareAssignmentTags = getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         final Map<String, String> clientTags = getClientTags();
 
@@ -1216,7 +1223,6 @@ public class StreamsConfig extends AbstractConfig {
                                           "Value exceeds max length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
             }
         });
-        return configUpdates;
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {

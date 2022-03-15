@@ -33,7 +33,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -51,10 +50,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class RackAwarenessIntegrationTest {
@@ -120,7 +121,7 @@ public class RackAwarenessIntegrationTest {
         createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
-        waitUntilIdealTaskDistributionIsReachedForTags(singletonList(TAG_ZONE));
+        assertTrue(isIdealTaskDistributionReachedForTags(singletonList(TAG_ZONE)));
     }
 
     @Test
@@ -141,7 +142,7 @@ public class RackAwarenessIntegrationTest {
         createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_3), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
-        waitUntilIdealTaskDistributionIsReachedForTags(asList(TAG_ZONE, TAG_CLUSTER));
+        assertTrue(isIdealTaskDistributionReachedForTags(asList(TAG_ZONE, TAG_CLUSTER)));
     }
 
     @Test
@@ -158,31 +159,27 @@ public class RackAwarenessIntegrationTest {
         createAndStart(topology, buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_2), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
-        waitUntilIdealTaskDistributionIsReachedForTags(singletonList(TAG_ZONE));
-        waitUntilPartialTaskDistributionIsReachedForTags(singletonList(TAG_CLUSTER));
+
+        assertTrue(isIdealTaskDistributionReachedForTags(singletonList(TAG_ZONE)));
+        assertTrue(isPartialTaskDistributionReachedForTags(singletonList(TAG_CLUSTER)));
     }
 
     private void waitUntilAllKafkaStreamsClientsAreRunning() throws Exception {
-        TestUtils.waitForCondition(
-            () -> kafkaStreamsInstances.stream().allMatch(it -> KafkaStreams.State.RUNNING == it.kafkaStreams.state()),
-            IntegrationTestUtils.DEFAULT_TIMEOUT,
-            String.format("Kafka Streams did not transit to state %s in %d milliseconds",
-                          KafkaStreams.State.RUNNING, IntegrationTestUtils.DEFAULT_TIMEOUT)
-        );
+        IntegrationTestUtils.waitForApplicationState(kafkaStreamsInstances.stream().map(it -> it.kafkaStreams).collect(Collectors.toList()),
+                                                     KafkaStreams.State.RUNNING,
+                                                     Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
     }
 
-    private void waitUntilPartialTaskDistributionIsReachedForTags(final List<String> tagsToCheck) throws Exception {
+    private boolean isPartialTaskDistributionReachedForTags(final List<String> tagsToCheck) {
         final Predicate<TaskClientTagDistribution> partialTaskClientTagDistributionTest = taskClientTagDistribution -> {
             final Map<String, String> activeTaskClientTags = taskClientTagDistribution.activeTaskClientTags.clientTags;
             return tagsAmongstActiveAndAtLeastOneStandbyTaskIsDifferent(taskClientTagDistribution.standbyTasksClientTags, activeTaskClientTags, tagsToCheck);
         };
 
-        waitUntilAllTaskDistributionTestSucceeds(partialTaskClientTagDistributionTest,
-                                                 "Partial rack aware task distribution couldn't be reached on " +
-                                                 "client tags " + tagsToCheck + ".");
+        return isTaskDistributionTestSuccessful(partialTaskClientTagDistributionTest);
     }
 
-    private void waitUntilIdealTaskDistributionIsReachedForTags(final List<String> tagsToCheck) throws Exception {
+    private boolean isIdealTaskDistributionReachedForTags(final List<String> tagsToCheck) {
         final Predicate<TaskClientTagDistribution> idealTaskClientTagDistributionTest = taskClientTagDistribution -> {
             final Map<String, String> activeTaskClientTags = taskClientTagDistribution.activeTaskClientTags.clientTags;
             return tagsAmongstStandbyTasksAreDifferent(taskClientTagDistribution.standbyTasksClientTags, tagsToCheck)
@@ -191,28 +188,17 @@ public class RackAwarenessIntegrationTest {
                                                                       tagsToCheck);
         };
 
-        waitUntilAllTaskDistributionTestSucceeds(idealTaskClientTagDistributionTest,
-                                                 "Ideal rack aware task distribution couldn't be reached on " +
-                                                 "client tags " + tagsToCheck + ".");
+        return isTaskDistributionTestSuccessful(idealTaskClientTagDistributionTest);
     }
 
-    private void waitUntilAllTaskDistributionTestSucceeds(final Predicate<TaskClientTagDistribution> taskClientTagDistributionPredicate,
-                                                          final String failureMessage) throws Exception {
-        final TestCondition condition = () -> {
-            final List<TaskClientTagDistribution> tasksClientTagDistributions = getTasksClientTagDistributions();
+    private boolean isTaskDistributionTestSuccessful(final Predicate<TaskClientTagDistribution> taskClientTagDistributionPredicate) {
+        final List<TaskClientTagDistribution> tasksClientTagDistributions = getTasksClientTagDistributions();
 
-            if (tasksClientTagDistributions.isEmpty()) {
-                return false;
-            }
+        if (tasksClientTagDistributions.isEmpty()) {
+            return false;
+        }
 
-            return tasksClientTagDistributions.stream().allMatch(taskClientTagDistributionPredicate);
-        };
-
-        TestUtils.waitForCondition(
-            condition,
-            IntegrationTestUtils.DEFAULT_TIMEOUT,
-            failureMessage
-        );
+        return tasksClientTagDistributions.stream().allMatch(taskClientTagDistributionPredicate);
     }
 
     private static boolean tagsAmongstActiveAndAllStandbyTasksAreDifferent(final List<TaskClientTags> standbyTasks,
