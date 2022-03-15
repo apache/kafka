@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.telemetry.ConsumerMetricRecorder;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -98,6 +99,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
+    private final ConsumerMetricRecorder consumerMetricRecorder;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
@@ -152,6 +154,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                SubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,
+                               ConsumerMetricRecorder consumerMetricRecorder,
                                Time time,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
@@ -175,6 +178,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
+        this.consumerMetricRecorder = consumerMetricRecorder;
         this.pendingAsyncCommits = new AtomicInteger();
         this.asyncCommitFenced = new AtomicBoolean(false);
         this.groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId,
@@ -304,6 +308,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
+
+        consumerMetricRecorder.addGroupRebalanceCount(1);
+        consumerMetricRecorder.setAssignmentPartitionCount(assignedPartitions.size());
+        consumerMetricRecorder.setGroupAssignmentPartitionCount(assignedPartitions.size());
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
@@ -1142,7 +1150,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
         if (autoCommitEnabled)
             return autoCommitOffsetsAsync();
-        return null;    
+        return null;
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {

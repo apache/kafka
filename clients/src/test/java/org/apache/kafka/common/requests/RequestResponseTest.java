@@ -182,6 +182,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -229,6 +230,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
@@ -245,6 +247,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -1041,6 +1044,8 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsRequest(version);
             case LIST_TRANSACTIONS: return createListTransactionsRequest(version);
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsRequest(version);
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetryRequest(version);
+            case PUSH_TELEMETRY: return createPushTelemetryRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1115,8 +1120,35 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsResponse();
             case LIST_TRANSACTIONS: return createListTransactionsResponse();
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsResponse();
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetryResponse();
+            case PUSH_TELEMETRY: return createPushTelemetryResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
+    }
+
+    private GetTelemetrySubscriptionRequest createGetTelemetryRequest(short version) {
+        Uuid id = Uuid.randomUuid();
+        return new GetTelemetrySubscriptionRequest.Builder(id).build((short) 0);
+    }
+
+    private GetTelemetrySubscriptionResponse createGetTelemetryResponse() {
+        List<String> metrics = new ArrayList<>();
+        int subscriptionId =  new Random().nextInt();
+        return new GetTelemetrySubscriptionResponse(0, Errors.NONE.code(), Uuid.randomUuid(),
+                subscriptionId, 60, false, metrics);
+    }
+
+    private PushTelemetryRequest createPushTelemetryRequest(short version) {
+        byte[] data = "something".getBytes();
+        return new PushTelemetryRequest.Builder(
+                Uuid.randomUuid(), 0, false, CompressionType.NONE, new Bytes(data)).build((short) 0);
+    }
+
+    private PushTelemetryResponse createPushTelemetryResponse() {
+        PushTelemetryResponseData data = new PushTelemetryResponseData()
+                .setErrorCode(Errors.NONE.code());
+
+        return new PushTelemetryResponse(data);
     }
 
     private FetchSnapshotRequest createFetchSnapshotRequest(short version) {

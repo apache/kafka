@@ -88,6 +88,10 @@ public class KafkaConsumerMetrics implements AutoCloseable {
         );
     }
 
+    public long timeSinceLastPollMs() {
+        return timeSinceLastPollMs;
+    }
+
     public void recordPollStart(long pollStartMs) {
         this.pollStartMs = pollStartMs;
         this.timeSinceLastPollMs = lastPollMs != 0L ? pollStartMs - lastPollMs : 0;
