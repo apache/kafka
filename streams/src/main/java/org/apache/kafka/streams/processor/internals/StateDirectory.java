@@ -535,8 +535,9 @@ public class StateDirectory {
         try {
             Utils.delete(namedTopologyDir);
         } catch (final IOException e) {
-            log.error("Hit an unexpected error while clearing local state for NamedTopology {}", topologyName);
-            throw new StreamsException("Unable to delete state for the named topology " + topologyName);
+            log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);
+            throw new StreamsException("Unable to delete state for the named topology " + topologyName,
+                                       e, new TaskId(-1, -1, topologyName)); // use dummy taskid to report source topology for this error
         }
     }
 

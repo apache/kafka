@@ -210,9 +210,10 @@ public interface SegmentedBytesStore extends StateStore {
          * @param binaryKeyTo   the last key in the range
          * @param from          starting time range
          * @param to            ending time range
+         * @param forward       forward or backward
          * @return
          */
-        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to);
+        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to, final boolean forward);
 
         /**
          * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations to determine
