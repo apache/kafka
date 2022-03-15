@@ -105,7 +105,6 @@ public class KStreamKStreamJoinTest {
         }
     }
 
-
     @Test
     public void shouldReuseRepartitionTopicWithGeneratedName() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -139,8 +138,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldDisableLoggingOnStreamJoined() {
-
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ofMillis(50));
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), Duration.ofMillis(50));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
             .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
             .withStoreName("store")
@@ -166,8 +164,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldEnableLoggingWithCustomConfigOnStreamJoined() {
-
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ofMillis(50));
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), Duration.ofMillis(50));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
             .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
             .withStoreName("store")
@@ -1199,7 +1196,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(0)).after(ofMillis(100)).grace(ofMillis(0)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).after(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String())
