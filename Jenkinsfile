@@ -197,6 +197,24 @@ pipeline {
           }
         }
         
+        stage('s390x') {
+          agent { label 's390x' }
+          tools {
+            jdk 'jdk_11_latest'
+          }
+          options {
+            timeout(time: 2, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+        }
         // To avoid excessive Jenkins resource usage, we only run the stages
         // above at the PR stage. The ones below are executed after changes
         // are pushed to trunk and/or release branches. We achieve this via
