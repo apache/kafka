@@ -301,20 +301,31 @@ class LogCleanerTest {
     val appendProducer1 = appendTransactionalAsLeader(log, producerId1, producerEpoch)
     val appendProducer2 = appendTransactionalAsLeader(log, producerId2, producerEpoch)
 
-    appendProducer1(Seq(1, 2))
-    appendProducer2(Seq(2, 3))
-    appendProducer1(Seq(3, 4))
-    log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
-    log.appendAsLeader(commitMarker(producerId2, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
-    appendProducer1(Seq(2, 3))
-    log.appendAsLeader(abortMarker(producerId1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
-    appendProducer2(Seq(4, 5))
-    appendProducer1(Seq(5, 6))
-    log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
-    log.appendAsLeader(abortMarker(producerId2, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
-    appendProducer2(Seq(6, 7))
-    log.appendAsLeader(commitMarker(producerId2, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
+    def abort(producerId: Long): Unit = {
+      log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
+    }
+
+    def commit(producerId: Long): Unit = {
+      log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
+    }
+
+    // Append some transaction data (offset range in parenthesis)
+    appendProducer1(Seq(1, 2))  // [0, 1]
+    appendProducer2(Seq(2, 3))  // [2, 3]
+    appendProducer1(Seq(3, 4))  // [4, 5]
+    commit(producerId1)         // [6, 6]
+    commit(producerId2)         // [7, 7]
+    appendProducer1(Seq(2, 3))  // [8, 9]
+    abort(producerId1)          // [10, 10]
+    appendProducer2(Seq(4, 5))  // [11, 12]
+    appendProducer1(Seq(5, 6))  // [13, 14]
+    commit(producerId1)         // [15, 15]
+    abort(producerId2)          // [16, 16]
+    appendProducer2(Seq(6, 7))  // [17, 18]
+    commit(producerId2)         // [19, 19]
+
     log.roll()
+    assertEquals(20L, log.logEndOffset)
 
     val expectedAbortedTxns = List(
       new AbortedTxn(producerId=producerId1, firstOffset=8, lastOffset=10, lastStableOffset=11),
@@ -355,7 +366,7 @@ class LogCleanerTest {
 
     // On the last pass, wait for the retention time to expire. The abort markers
     // (offsets 10 and 16) should be deleted.
-    time.sleep(deleteRetentionMs * 2)
+    time.sleep(deleteRetentionMs)
     cleanSegments()
     assertEquals(20L, dirtyOffset)
     assertEquals(List(0, 2, 4, 6, 7, 13, 15, 17, 19), batchBaseOffsetsInLog(log))
