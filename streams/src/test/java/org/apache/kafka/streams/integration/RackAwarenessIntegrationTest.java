@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.ThreadMetadata;
@@ -26,8 +25,8 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -73,10 +72,14 @@ public class RackAwarenessIntegrationTest {
     private static final String TAG_VALUE_EU_CENTRAL_1B = "eu-central-1b";
     private static final String TAG_VALUE_EU_CENTRAL_1C = "eu-central-1c";
 
+    private static final int DEFAULT_NUMBER_OF_STATEFUL_SUB_TOPOLOGIES = 1;
+    private static final int DEFAULT_FANOUT_NUMBER_OF_PARTITIONS = 2;
+
     @Rule
     public TestName testName = new TestName();
 
     private static final String INPUT_TOPIC = "input-topic";
+
     private static final String TAG_ZONE = "zone";
     private static final String TAG_CLUSTER = "cluster";
 
@@ -101,7 +104,6 @@ public class RackAwarenessIntegrationTest {
         baseConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         baseConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         baseConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        topology = createStatefulTopology();
     }
 
     @After
@@ -115,11 +117,13 @@ public class RackAwarenessIntegrationTest {
 
     @Test
     public void shouldDoRebalancingWithMaximumNumberOfClientTags() throws Exception {
-        final int numberOfStandbyReplicas = 2;
+        initTopology(100, 2);
+        final Duration timeout = Duration.ofMinutes(3);
+        final int numberOfStandbyReplicas = 1;
+
         final List<String> clientTagKeys = new ArrayList<>();
         final Map<String, String> clientTags1 = new HashMap<>();
         final Map<String, String> clientTags2 = new HashMap<>();
-        final Map<String, String> clientTags3 = new HashMap<>();
 
         for (int i = 0; i < StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE; i++) {
             clientTagKeys.add("key-" + i);
@@ -129,48 +133,33 @@ public class RackAwarenessIntegrationTest {
             final String key = clientTagKeys.get(i);
             clientTags1.put(key, "value-1-" + i);
             clientTags2.put(key, "value-2-" + i);
-            clientTags3.put(key, "value-3-" + i);
         }
 
         assertEquals(StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE, clientTagKeys.size());
-        Stream.of(clientTags1, clientTags2, clientTags3)
+        Stream.of(clientTags1, clientTags2)
               .forEach(clientTags -> assertEquals(String.format("clientsTags with content '%s' " +
                                                                 "did not match expected size", clientTags),
                                                   StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
                                                   clientTags.size()));
 
         createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
-        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
-        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
-
-        createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
-        createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
         createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
 
-        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
-        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
-        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
-
-        waitUntilAllKafkaStreamsClientsAreRunning();
-
+        waitUntilAllKafkaStreamsClientsAreRunning(timeout);
         assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
 
         stopKafkaStreamsInstanceWithIndex(0);
-        stopKafkaStreamsInstanceWithIndex(3);
-        stopKafkaStreamsInstanceWithIndex(6);
-
-        waitUntilAllKafkaStreamsClientsAreRunning();
+        waitUntilAllKafkaStreamsClientsAreRunning(timeout);
 
         createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
-        createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
-        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
 
-        waitUntilAllKafkaStreamsClientsAreRunning();
+        waitUntilAllKafkaStreamsClientsAreRunning(timeout);
         assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
     }
 
     @Test
     public void shouldDistributeStandbyReplicasWhenAllClientsAreLocatedOnASameClusterTag() throws Exception {
+        initTopology();
         final int numberOfStandbyReplicas = 1;
         createAndStart(buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
         createAndStart(buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
@@ -186,6 +175,7 @@ public class RackAwarenessIntegrationTest {
 
     @Test
     public void shouldDistributeStandbyReplicasOverMultipleClientTags() throws Exception {
+        initTopology();
         final int numberOfStandbyReplicas = 2;
 
         createAndStart(buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
@@ -206,6 +196,7 @@ public class RackAwarenessIntegrationTest {
 
     @Test
     public void shouldDistributeStandbyReplicasWhenIdealDistributionCanNotBeAchieved() throws Exception {
+        initTopology();
         final int numberOfStandbyReplicas = 2;
 
         createAndStart(buildClientTags(TAG_VALUE_EU_CENTRAL_1A, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
@@ -228,9 +219,13 @@ public class RackAwarenessIntegrationTest {
     }
 
     private void waitUntilAllKafkaStreamsClientsAreRunning() throws Exception {
+        waitUntilAllKafkaStreamsClientsAreRunning(Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
+    }
+
+    private void waitUntilAllKafkaStreamsClientsAreRunning(final Duration timeout) throws Exception {
         IntegrationTestUtils.waitForApplicationState(kafkaStreamsInstances.stream().map(it -> it.kafkaStreams).collect(Collectors.toList()),
                                                      KafkaStreams.State.RUNNING,
-                                                     Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
+                                                     timeout);
     }
 
     private boolean isPartialTaskDistributionReachedForTags(final Collection<String> tagsToCheck) {
@@ -290,7 +285,11 @@ public class RackAwarenessIntegrationTest {
         return statistics.values().stream().noneMatch(occurrence -> occurrence > 1);
     }
 
-    private static Topology createStatefulTopology() {
+    private void initTopology() {
+        initTopology(DEFAULT_FANOUT_NUMBER_OF_PARTITIONS, DEFAULT_NUMBER_OF_STATEFUL_SUB_TOPOLOGIES);
+    }
+
+    private void initTopology(final int fanoutNumberOfPartitions, final int numberOfStatefulSubTopologies) {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
 
@@ -302,23 +301,19 @@ public class RackAwarenessIntegrationTest {
 
         builder.addStateStore(keyValueStoreBuilder);
 
-        builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-               .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-                   @Override
-                   public void init(final ProcessorContext context) {
-                   }
+        final KStream<Integer, Integer> stream = builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()));
 
-                   @Override
-                   public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
-                       return null;
-                   }
+        // Stateless sub-topology
+        stream.repartition(Repartitioned.numberOfPartitions(fanoutNumberOfPartitions)).filter((k, v) -> true);
 
-                   @Override
-                   public void close() {
-                   }
-               }, stateStoreName);
+        // Stateful sub-topologies
+        for (int i = 0; i < numberOfStatefulSubTopologies; i++) {
+            stream.repartition(Repartitioned.numberOfPartitions(fanoutNumberOfPartitions))
+                  .groupByKey()
+                  .reduce(Integer::sum);
+        }
 
-        return builder.build();
+        topology = builder.build();
     }
 
     private List<TaskClientTagDistribution> getTasksClientTagDistributions() {
@@ -330,10 +325,13 @@ public class RackAwarenessIntegrationTest {
                 localThreadsMetadata.activeTasks().forEach(activeTask -> {
                     final TaskId activeTaskId = activeTask.taskId();
                     final Map<String, String> clientTags = config.getClientTags();
+
                     final List<TaskClientTags> standbyTasks = findStandbysForActiveTask(activeTaskId);
 
-                    final TaskClientTags activeTaskView = new TaskClientTags(activeTaskId, clientTags);
-                    taskClientTags.add(new TaskClientTagDistribution(activeTaskView, standbyTasks));
+                    if (!standbyTasks.isEmpty()) {
+                        final TaskClientTags activeTaskView = new TaskClientTags(activeTaskId, clientTags);
+                        taskClientTags.add(new TaskClientTagDistribution(activeTaskView, standbyTasks));
+                    }
                 });
 
             }

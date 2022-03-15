@@ -60,7 +60,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(
             numStandbyReplicas,
-            allTaskIds
+            statefulTaskIds
         );
 
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
