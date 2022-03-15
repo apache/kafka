@@ -212,7 +212,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 11'
+            echo 'Skipping Kafka Streams archetype test for s390x'
           }
         }
         // To avoid excessive Jenkins resource usage, we only run the stages
