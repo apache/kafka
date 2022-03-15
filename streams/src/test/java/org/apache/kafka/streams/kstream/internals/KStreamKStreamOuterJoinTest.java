@@ -723,7 +723,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -740,7 +740,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 0L;
 
             // push two items to the primary stream; the other window is empty; this should not produce any items
@@ -810,7 +810,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -827,7 +827,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 0L;
 
             // push two items to the primary stream; the other window is empty; this should not produce any item
