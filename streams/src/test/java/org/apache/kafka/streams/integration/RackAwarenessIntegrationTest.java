@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -55,13 +54,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.nCopies;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
@@ -118,73 +112,52 @@ public class RackAwarenessIntegrationTest {
     }
 
     @Test
-    public void shouldThrowConfigExceptionWhenRackAwareAssignmentTagsExceedTheLimit() {
-        final int numberOfStandbyReplicas = 1;
-        final List<String> rackAwareAssignmentTags = new ArrayList<>();
-        final Map<String, String> clientTags = mkMap(mkEntry("key-0", "value-0"));
+    public void shouldDoRebalancingWithMaximumNumberOfClientTags() throws Exception {
+        final int numberOfStandbyReplicas = 2;
+        final List<String> clientTagKeys = new ArrayList<>();
+        final Map<String, String> clientTags1 = new HashMap<>();
+        final Map<String, String> clientTags2 = new HashMap<>();
+        final Map<String, String> clientTags3 = new HashMap<>();
 
-        for (int i = 0; i < StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1; i++) {
-            rackAwareAssignmentTags.add("key-" + i);
+        for (int i = 0; i < StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE; i++) {
+            clientTagKeys.add("key-" + i);
         }
 
-        final ConfigException exception = assertThrows(ConfigException.class, () -> createAndStart(clientTags, rackAwareAssignmentTags, numberOfStandbyReplicas));
-        assertEquals(
-            String.format("Invalid value %s for configuration %s: exceeds maximum list size of [%s].",
-                          rackAwareAssignmentTags,
-                          StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                          StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
-            exception.getMessage()
-        );
-    }
-
-    @Test
-    public void shouldThrowConfigExceptionWhenClientTagsExceedTheLimit() {
-        final int numberOfStandbyReplicas = 1;
-        final Map<String, String> clientTags = new HashMap<>();
-
-        for (int i = 0; i < StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1; i++) {
-            clientTags.put("key-" + i, "value-" + i);
+        for (int i = 0; i < clientTagKeys.size(); i++) {
+            final String key = clientTagKeys.get(i);
+            clientTags1.put(key, "value-1-" + i);
+            clientTags2.put(key, "value-2-" + i);
+            clientTags3.put(key, "value-3-" + i);
         }
 
-        final ConfigException exception = assertThrows(ConfigException.class, () -> createAndStart(clientTags, singletonList("key-0"), numberOfStandbyReplicas));
-        assertEquals(
-            String.format("At most %s client tags can be specified using %s prefix.",
-                          StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
-                          StreamsConfig.CLIENT_TAG_PREFIX),
-            exception.getMessage()
-        );
-    }
+        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
 
-    @Test
-    public void shouldThrowConfigExceptionWhenClientTagKeyLengthExceedsTheLimit() {
-        final int numberOfStandbyReplicas = 1;
-        final Map<String, String> clientTags = new HashMap<>();
-        final String value = "value";
-        final String clientTagKey = String.join("", nCopies(StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + 1, "k"));
-        clientTags.put(clientTagKey, value);
+        createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
 
-        final ConfigException exception = assertThrows(ConfigException.class, () -> createAndStart(clientTags, singletonList(clientTagKey), numberOfStandbyReplicas));
-        assertEquals(
-            String.format("Invalid value %s for configuration %s: Tag key exceeds maximum length of %s.",
-                          clientTagKey, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH),
-            exception.getMessage()
-        );
-    }
+        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
 
-    @Test
-    public void shouldThrowConfigExceptionWhenClientTagValueLengthExceedsTheLimit() {
-        final int numberOfStandbyReplicas = 1;
-        final String key = "key";
-        final Map<String, String> clientTags = new HashMap<>();
-        final String clientTagValue = String.join("", nCopies(StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + 1, "v"));
-        clientTags.put(key, clientTagValue);
+        waitUntilAllKafkaStreamsClientsAreRunning();
 
-        final ConfigException exception = assertThrows(ConfigException.class, () -> createAndStart(clientTags, singletonList(key), numberOfStandbyReplicas));
-        assertEquals(
-            String.format("Invalid value %s for configuration %s: Tag value exceeds maximum length of %s.",
-                          clientTagValue, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH),
-            exception.getMessage()
-        );
+        assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
+
+        stopKafkaStreamsInstanceWithIndex(0);
+        stopKafkaStreamsInstanceWithIndex(3);
+        stopKafkaStreamsInstanceWithIndex(6);
+
+        waitUntilAllKafkaStreamsClientsAreRunning();
+
+        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags3, clientTagKeys, numberOfStandbyReplicas);
+
+        waitUntilAllKafkaStreamsClientsAreRunning();
+        assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
     }
 
     @Test
@@ -240,13 +213,18 @@ public class RackAwarenessIntegrationTest {
         assertTrue(isPartialTaskDistributionReachedForTags(singletonList(TAG_CLUSTER)));
     }
 
+    private void stopKafkaStreamsInstanceWithIndex(final int index) {
+        kafkaStreamsInstances.get(index).kafkaStreams.close(Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
+        kafkaStreamsInstances.remove(index);
+    }
+
     private void waitUntilAllKafkaStreamsClientsAreRunning() throws Exception {
         IntegrationTestUtils.waitForApplicationState(kafkaStreamsInstances.stream().map(it -> it.kafkaStreams).collect(Collectors.toList()),
                                                      KafkaStreams.State.RUNNING,
                                                      Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
     }
 
-    private boolean isPartialTaskDistributionReachedForTags(final List<String> tagsToCheck) {
+    private boolean isPartialTaskDistributionReachedForTags(final Collection<String> tagsToCheck) {
         final Predicate<TaskClientTagDistribution> partialTaskClientTagDistributionTest = taskClientTagDistribution -> {
             final Map<String, String> activeTaskClientTags = taskClientTagDistribution.activeTaskClientTags.clientTags;
             return tagsAmongstActiveAndAtLeastOneStandbyTaskIsDifferent(taskClientTagDistribution.standbyTasksClientTags, activeTaskClientTags, tagsToCheck);
@@ -255,7 +233,7 @@ public class RackAwarenessIntegrationTest {
         return isTaskDistributionTestSuccessful(partialTaskClientTagDistributionTest);
     }
 
-    private boolean isIdealTaskDistributionReachedForTags(final List<String> tagsToCheck) {
+    private boolean isIdealTaskDistributionReachedForTags(final Collection<String> tagsToCheck) {
         final Predicate<TaskClientTagDistribution> idealTaskClientTagDistributionTest = taskClientTagDistribution -> {
             final Map<String, String> activeTaskClientTags = taskClientTagDistribution.activeTaskClientTags.clientTags;
             return tagsAmongstStandbyTasksAreDifferent(taskClientTagDistribution.standbyTasksClientTags, tagsToCheck)
@@ -277,19 +255,19 @@ public class RackAwarenessIntegrationTest {
         return tasksClientTagDistributions.stream().allMatch(taskClientTagDistributionPredicate);
     }
 
-    private static boolean tagsAmongstActiveAndAllStandbyTasksAreDifferent(final List<TaskClientTags> standbyTasks,
+    private static boolean tagsAmongstActiveAndAllStandbyTasksAreDifferent(final Collection<TaskClientTags> standbyTasks,
                                                                            final Map<String, String> activeTaskClientTags,
-                                                                           final List<String> tagsToCheck) {
+                                                                           final Collection<String> tagsToCheck) {
         return standbyTasks.stream().allMatch(standbyTask -> tagsToCheck.stream().noneMatch(tag -> activeTaskClientTags.get(tag).equals(standbyTask.clientTags.get(tag))));
     }
 
-    private static boolean tagsAmongstActiveAndAtLeastOneStandbyTaskIsDifferent(final List<TaskClientTags> standbyTasks,
+    private static boolean tagsAmongstActiveAndAtLeastOneStandbyTaskIsDifferent(final Collection<TaskClientTags> standbyTasks,
                                                                                 final Map<String, String> activeTaskClientTags,
-                                                                                final List<String> tagsToCheck) {
+                                                                                final Collection<String> tagsToCheck) {
         return standbyTasks.stream().anyMatch(standbyTask -> tagsToCheck.stream().noneMatch(tag -> activeTaskClientTags.get(tag).equals(standbyTask.clientTags.get(tag))));
     }
 
-    private static boolean tagsAmongstStandbyTasksAreDifferent(final List<TaskClientTags> standbyTasks, final List<String> tagsToCheck) {
+    private static boolean tagsAmongstStandbyTasksAreDifferent(final Collection<TaskClientTags> standbyTasks, final Collection<String> tagsToCheck) {
         final Map<String, Integer> statistics = new HashMap<>();
 
         for (final TaskClientTags standbyTask : standbyTasks) {

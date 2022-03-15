@@ -1142,7 +1142,13 @@ public class StreamsConfigTest {
         for (int i = 0; i < limit; i++) {
             props.put(StreamsConfig.clientTagPrefix("k" + i), "v" + i);
         }
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("At most %s client tags can be specified using %s prefix.",
+                          StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
+                          StreamsConfig.CLIENT_TAG_PREFIX
+            ), exception.getMessage()
+        );
     }
 
     @Test
@@ -1156,7 +1162,14 @@ public class StreamsConfigTest {
         }
 
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("Invalid value %s for configuration %s: exceeds maximum list size of [%s].",
+                          rackAwareAssignmentTags,
+                          StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                          StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -1196,14 +1209,24 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionWhenClientTagKeyExceedMaxLimit() {
         final String key = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + 1, "k"));
         props.put(StreamsConfig.clientTagPrefix(key), "eu-central-1a");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("Invalid value %s for configuration %s: Tag key exceeds maximum length of %s.",
+                          key, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH),
+            exception.getMessage()
+        );
     }
 
     @Test
     public void shouldThrowExceptionWhenClientTagValueExceedMaxLimit() {
         final String value = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + 1, "v"));
         props.put(StreamsConfig.clientTagPrefix("x"), value);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("Invalid value %s for configuration %s: Tag value exceeds maximum length of %s.",
+                          value, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH),
+            exception.getMessage()
+        );
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
