@@ -155,6 +155,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
+  @Disabled // TODO: re-enable after KAFKA-13737 is fixed
   def testPreferredReplicaElection(): Unit = {
     val client = cluster.createAdminClient()
     val topic = "preferred-topic"

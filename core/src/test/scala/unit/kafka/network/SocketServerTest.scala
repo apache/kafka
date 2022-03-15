@@ -1427,6 +1427,7 @@ class SocketServerTest {
    * The channel must be closed after pending receives are processed.
    */
   @Test
+  @Disabled // TODO: re-enable after KAFKA-13736 is fixed
   def closingChannelWithBufferedReceives(): Unit = {
     verifyRemoteCloseWithBufferedReceives(numComplete = 3, hasIncomplete = false, makeClosing = true)
   }
