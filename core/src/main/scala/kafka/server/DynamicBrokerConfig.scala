@@ -198,22 +198,22 @@ object DynamicBrokerConfig {
 
 class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
 
-  class Foo extends ArrayBuffer[Reconfigurable] {
+  class LoggingBuffer extends ArrayBuffer[Reconfigurable] {
     override def clear(): Unit = {
       println("Reconfigurables: cleared")
       super.clear()
     }
 
     override def addOne(elem: Reconfigurable): this.type = {
-      elem match {
-        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Broker ${x.config.brokerId}, Adding data plane acceptor for ${x.listenerName()}")
-        case _ =>
-      }
+//      elem match {
+//        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Broker ${x.config.brokerId}, Adding data plane acceptor for ${x.listenerName()}")
+//        case _ =>
+//      }
 
       super.addOne(elem)
     }
 
-    override def subtractOne(elem: Reconfigurable): Foo.this.type = {
+    override def subtractOne(elem: Reconfigurable): LoggingBuffer.this.type = {
       elem match {
         case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Broker ${x.config.brokerId}, Removing data plane acceptor for ${x.listenerName()}")
         case _ =>
@@ -228,7 +228,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] val staticDefaultConfigs = ConfigDef.convertToStringMapWithPasswordValues(KafkaConfig.defaultValues.asJava).asScala
   private val dynamicBrokerConfigs = mutable.Map[String, String]()
   private val dynamicDefaultConfigs = mutable.Map[String, String]()
-  private val reconfigurables: mutable.Buffer[Reconfigurable] = mutable.Buffer[Reconfigurable]()
+  private val reconfigurables: mutable.Buffer[Reconfigurable] = new LoggingBuffer()
   private val brokerReconfigurables = mutable.Buffer[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
   private var currentConfig: KafkaConfig = null
