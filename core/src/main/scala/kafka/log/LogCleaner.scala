@@ -577,6 +577,8 @@ private[log] class Cleaner(val id: Int,
         val currentSegment = currentSegmentOpt.get
         val nextSegmentOpt = if (iter.hasNext) Some(iter.next()) else None
 
+        // Note that it is important to collect aborted transactions from the full log segment
+        // range since we need to rebuild the full transaction index for the new segment.
         val startOffset = currentSegment.baseOffset
         val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(currentSegment.readNextOffset)
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
