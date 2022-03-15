@@ -27,8 +27,7 @@ import java.util.function.Function;
 import static java.util.stream.Collectors.toMap;
 
 final class StandbyTaskAssignmentUtils {
-    private StandbyTaskAssignmentUtils() {
-    }
+    private StandbyTaskAssignmentUtils() {}
 
     static ConstrainedPrioritySet createLeastLoadedPrioritySetConstrainedByAssignedTask(final Map<UUID, ClientState> clients) {
         return new ConstrainedPrioritySet((client, t) -> !clients.get(client).hasAssignedTask(t),
@@ -53,11 +52,13 @@ final class StandbyTaskAssignmentUtils {
             tasksToRemainingStandbys.put(activeTaskId, numRemainingStandbys);
         }
 
-        log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                 "There is not enough available capacity. You should " +
-                 "increase the number of application instances " +
-                 "to maintain the requested number of standby replicas.",
-                 numRemainingStandbys, numStandbyReplicas, activeTaskId);
+        if (numRemainingStandbys > 0) {
+            log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
+                     "There is not enough available capacity. You should " +
+                     "increase the number of application instances " +
+                     "to maintain the requested number of standby replicas.",
+                     numRemainingStandbys, numStandbyReplicas, activeTaskId);
+        }
     }
 
     static Map<TaskId, Integer> computeTasksToRemainingStandbys(final int numStandbyReplicas,

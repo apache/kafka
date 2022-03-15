@@ -40,6 +40,7 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -726,33 +727,35 @@ public class ConfigDefTest {
 
     @Test
     public void testThrowsExceptionWhenListSizeExceedsLimit() {
-        assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
-                                                                         Type.LIST,
-                                                                         asList("a", "b"),
-                                                                         ListSize.atMostOfSize(1),
-                                                                         Importance.HIGH,
-                                                                         "lst doc"));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
+                                                                                                           Type.LIST,
+                                                                                                           asList("a", "b"),
+                                                                                                           ListSize.atMostOfSize(1),
+                                                                                                           Importance.HIGH,
+                                                                                                           "lst doc"));
+        assertEquals("Invalid value [a, b] for configuration lst: exceeds maximum list size of [1].",
+                     exception.getMessage());
     }
 
     @Test
     public void testNoExceptionIsThrownWhenListSizeEqualsTheLimit() {
         final List<String> lst = asList("a", "b", "c");
-        new ConfigDef().define("lst",
-                               Type.LIST,
-                               lst,
-                               ListSize.atMostOfSize(lst.size()),
-                               Importance.HIGH,
-                               "lst doc");
+        assertDoesNotThrow(() -> new ConfigDef().define("lst",
+                                                        Type.LIST,
+                                                        lst,
+                                                        ListSize.atMostOfSize(lst.size()),
+                                                        Importance.HIGH,
+                                                        "lst doc"));
     }
 
     @Test
     public void testNoExceptionIsThrownWhenListSizeIsBelowTheLimit() {
-        new ConfigDef().define("lst",
-                               Type.LIST,
-                               asList("a", "b"),
-                               ListSize.atMostOfSize(3),
-                               Importance.HIGH,
-                               "lst doc");
+        assertDoesNotThrow(() -> new ConfigDef().define("lst",
+                                                        Type.LIST,
+                                                        asList("a", "b"),
+                                                        ListSize.atMostOfSize(3),
+                                                        Importance.HIGH,
+                                                        "lst doc"));
     }
 
 }
