@@ -654,13 +654,13 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
 
     if (!validateOnly) {
-      if (printf) {
+      if (printf && lr != null) {
         println(s"Reconfiguring ${lr.listenerName()}, updated configs: $updatedConfigNames " +
           s"custom configs: ${ConfigUtils.configMapToRedactedString(newCustomConfigs, KafkaConfig.configDef)}")
       }
       reconfigurable.reconfigure(newConfigs)
     } else {
-      println(s"${lr.listenerName()} was validatedOnly")
+      if (lr != null) println(s"${lr.listenerName()} was validatedOnly")
     }
   }
 }
