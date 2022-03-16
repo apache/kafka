@@ -73,7 +73,7 @@ public class RackAwarenessIntegrationTest {
     private static final String TAG_VALUE_EU_CENTRAL_1C = "eu-central-1c";
 
     private static final int DEFAULT_NUMBER_OF_STATEFUL_SUB_TOPOLOGIES = 1;
-    private static final int DEFAULT_FANOUT_NUMBER_OF_PARTITIONS = 2;
+    private static final int DEFAULT_NUMBER_OF_PARTITIONS_OF_SUB_TOPOLOGIES = 2;
 
     @Rule
     public TestName testName = new TestName();
@@ -117,8 +117,7 @@ public class RackAwarenessIntegrationTest {
 
     @Test
     public void shouldDoRebalancingWithMaximumNumberOfClientTags() throws Exception {
-        initTopology(50, 4);
-        final Duration timeout = Duration.ofMinutes(1).plus(Duration.ofSeconds(30));
+        initTopology(25, 4);
         final int numberOfStandbyReplicas = 1;
 
         final List<String> clientTagKeys = new ArrayList<>();
@@ -146,12 +145,12 @@ public class RackAwarenessIntegrationTest {
         createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
         createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
 
-        waitUntilAllKafkaStreamsClientsAreRunning(timeout);
+        waitUntilAllKafkaStreamsClientsAreRunning();
         assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
 
         stopKafkaStreamsInstanceWithIndex(0);
 
-        waitUntilAllKafkaStreamsClientsAreRunning(timeout);
+        waitUntilAllKafkaStreamsClientsAreRunning();
 
         assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
     }
@@ -285,10 +284,10 @@ public class RackAwarenessIntegrationTest {
     }
 
     private void initTopology() {
-        initTopology(DEFAULT_FANOUT_NUMBER_OF_PARTITIONS, DEFAULT_NUMBER_OF_STATEFUL_SUB_TOPOLOGIES);
+        initTopology(DEFAULT_NUMBER_OF_PARTITIONS_OF_SUB_TOPOLOGIES, DEFAULT_NUMBER_OF_STATEFUL_SUB_TOPOLOGIES);
     }
 
-    private void initTopology(final int fanoutNumberOfPartitions, final int numberOfStatefulSubTopologies) {
+    private void initTopology(final int numberOfPartitionsOfSubTopologies, final int numberOfStatefulSubTopologies) {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
 
@@ -303,11 +302,11 @@ public class RackAwarenessIntegrationTest {
         final KStream<Integer, Integer> stream = builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()));
 
         // Stateless sub-topology
-        stream.repartition(Repartitioned.numberOfPartitions(fanoutNumberOfPartitions)).filter((k, v) -> true);
+        stream.repartition(Repartitioned.numberOfPartitions(numberOfPartitionsOfSubTopologies)).filter((k, v) -> true);
 
         // Stateful sub-topologies
         for (int i = 0; i < numberOfStatefulSubTopologies; i++) {
-            stream.repartition(Repartitioned.numberOfPartitions(fanoutNumberOfPartitions))
+            stream.repartition(Repartitioned.numberOfPartitions(numberOfPartitionsOfSubTopologies))
                   .groupByKey()
                   .reduce(Integer::sum);
         }
