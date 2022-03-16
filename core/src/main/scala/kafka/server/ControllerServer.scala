@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 
@@ -160,10 +161,9 @@ class ControllerServer(
 
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
-          TimeUnit.NANOSECONDS.convert(config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS)
+          OptionalLong.of(TimeUnit.NANOSECONDS.convert(config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS))
         } else {
-          // A negative value disables auto leader rebalance in the quorum controller
-          -1L
+          OptionalLong.empty()
         }
 
         new QuorumController.Builder(config.nodeId, metaProperties.clusterId).

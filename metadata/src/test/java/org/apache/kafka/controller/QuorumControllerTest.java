@@ -287,13 +287,13 @@ public class QuorumControllerTest {
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
         long sessionTimeoutMillis = 1000;
-        long leaderImbalanceCheckIntervalSeconds = 1;
+        long leaderImbalanceCheckIntervalNs = 1_000_000_000;
 
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalSeconds));
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs));
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -403,7 +403,7 @@ public class QuorumControllerTest {
                     }
                     return !active.replicationControl().arePartitionLeadersImbalanced();
                 },
-                TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalSeconds * 10, TimeUnit.SECONDS),
+                TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 10, TimeUnit.NANOSECONDS),
                 "Leaders where not balanced after unfencing all of the brokers"
             );
         }

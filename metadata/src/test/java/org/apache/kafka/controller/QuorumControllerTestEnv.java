@@ -52,7 +52,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv logEnv,
         Consumer<Builder> builderConsumer,
         OptionalLong sessionTimeoutMillis,
-        OptionalLong leaderImbalanceCheckIntervalSeconds
+        OptionalLong leaderImbalanceCheckIntervalNs
     ) throws Exception {
         this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
@@ -64,9 +64,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 sessionTimeoutMillis.ifPresent(timeout -> {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
                 });
-                leaderImbalanceCheckIntervalSeconds.ifPresent(timeout -> {
-                    builder.setLeaderImbalanceCheckIntervalNs(NANOSECONDS.convert(timeout, TimeUnit.SECONDS));
-                });
+                builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
             }
