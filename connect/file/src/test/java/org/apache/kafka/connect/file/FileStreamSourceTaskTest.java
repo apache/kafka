@@ -21,7 +21,6 @@ import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -82,6 +81,7 @@ public class FileStreamSourceTaskTest {
     @Test
     public void testNormalLifecycle() throws InterruptedException, IOException {
         expectOffsetLookupReturnNone();
+        replay();
 
         task.start(config);
 
@@ -136,6 +136,7 @@ public class FileStreamSourceTaskTest {
     @Test
     public void testBatchSize() throws IOException, InterruptedException {
         expectOffsetLookupReturnNone();
+        replay();
 
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
         task.start(config);
@@ -163,6 +164,7 @@ public class FileStreamSourceTaskTest {
     public void testBufferResize() throws IOException, InterruptedException {
         int batchSize = 1000;
         expectOffsetLookupReturnNone();
+        replay();
 
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, Integer.toString(batchSize));
         task.start(config);
@@ -223,12 +225,11 @@ public class FileStreamSourceTaskTest {
     }
 
     @Test
-    @Disabled
     public void testInvalidFile() throws InterruptedException {
         config.put(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
         task.start(config);
         // Currently the task retries indefinitely if the file isn't found, but shouldn't return any data.
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 3; i++)
             assertNull(task.poll());
     }
 
