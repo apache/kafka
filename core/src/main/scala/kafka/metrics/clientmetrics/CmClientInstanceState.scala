@@ -19,10 +19,10 @@ package kafka.metrics.clientmetrics
 import kafka.Kafka.info
 import kafka.metrics.clientmetrics.ClientMetricsConfig.ClientMetrics.DEFAULT_PUSH_INTERVAL
 import kafka.metrics.clientmetrics.ClientMetricsConfig.SubscriptionInfo
+import kafka.server.ClientMetricsManager.getCurrentTime
 import org.apache.kafka.common.Uuid
 
 import java.nio.charset.StandardCharsets
-import java.util.Calendar
 import java.util.zip.CRC32
 import scala.collection.mutable.ListBuffer
 
@@ -34,7 +34,7 @@ object CmClientInstanceState {
   def apply(instance: CmClientInstanceState,
             subscriptions: java.util.Collection[SubscriptionInfo]): CmClientInstanceState = {
     val newInstance = create(instance.getId, instance.getClientInfo, subscriptions)
-    newInstance.updateLastAccessTs(instance.getLastAccessTs.getTime)
+    newInstance.updateLastAccessTs(instance.getLastAccessTs)
     newInstance
   }
 
@@ -89,8 +89,9 @@ class CmClientInstanceState private (clientInstanceId: Uuid,
                                      pushIntervalMs: Int,
                                      allMetricsSubscribed: Boolean) {
 
-  private val lastAccessTs = Calendar.getInstance.getTime
+  private var lastAccessTs: Long = getCurrentTime
   private val subscriptionId = computeSubscriptionId
+  private var terminating: Boolean = false
 
   def getPushIntervalMs = pushIntervalMs
   def getLastAccessTs = lastAccessTs
@@ -100,11 +101,12 @@ class CmClientInstanceState private (clientInstanceId: Uuid,
   def getSubscriptions = subscriptions
   def getMetrics = metrics
   def getAllMetricsSubscribed = allMetricsSubscribed
-  def updateLastAccessTs(tsInMs: Long): Unit =  lastAccessTs.setTime(tsInMs)
+  def isClientTerminating = this.terminating
+  def updateLastAccessTs(tsInMs: Long): Unit =  { this.lastAccessTs = tsInMs }
+  def setTerminatingFlag(f: Boolean): Unit =  { this.terminating = f }
 
   // Whenever push-interval for a client is set to 0 means metric collection for this specific client is disabled.
   def isDisabledForMetricsCollection :Boolean =  getPushIntervalMs == 0
-
 
   // Computes the SubscriptionId as a unique identifier for a client instance's subscription set, the id is generated
   // by calculating a CRC32 of the configured metrics subscriptions including the PushIntervalMs,
@@ -114,6 +116,32 @@ class CmClientInstanceState private (clientInstanceId: Uuid,
     val metricsStr = metrics.toString() + pushIntervalMs.toString
     crc.update(metricsStr.getBytes(StandardCharsets.UTF_8))
     crc.getValue.toInt ^ clientInstanceId.hashCode
+  }
+
+  // Returns true, if the time elapsed since last message is >= configured pushInterval, only exception to this
+  // rule is if client sends the isClientTerminating the flag, in that case broker accepts the message
+  // regardless of the push interval, however broker can accept only one request with isClientTerminating flag set.
+  // Whatever the reason if client keeps on sending the messages with isClientTerminating flag, subsequent requests
+  // are rejected if they don't fall into the current PushInterval.
+  def canAcceptPushRequest() : Boolean = {
+    // A fix is required to support the initial request jitter which may up to half the
+    // configured push interval.
+    //
+    // See https://confluentinc.atlassian.net/browse/CLIENTS-2418
+    // val timeElapsedSinceLastMsg = getCurrentTime - getLastAccessTs
+    // timeElapsedSinceLastMsg >= getPushIntervalMs
+    true
+    //(timeElapsedSinceLastMsg >= getPushIntervalMs) || (clientTerminatingFlagSet && !this.isClientTerminating)
+  }
+
+  // Returns the current push interval if timeElapsed since last message > configured pushInterval
+  // otherwise, returns the delta (pushInterval - timeElapsedSinceLastMsg)
+  def getAdjustedPushInterval(): Int = {
+    val timeElapsedSinceLastMsg: Int = (getCurrentTime - getLastAccessTs).toInt
+    if (timeElapsedSinceLastMsg < pushIntervalMs)
+      pushIntervalMs - timeElapsedSinceLastMsg
+    else
+      pushIntervalMs
   }
 
 }

@@ -16,12 +16,11 @@
  */
 package kafka.metrics
 
-import kafka.metrics.ClientMetricsTestUtils.{createCMSubscription, createClientInstance, defaultMetrics, defaultPushInterval, getCM}
-import kafka.metrics.clientmetrics.ClientMetricsCache.DEFAULT_TTL_MS
+import kafka.metrics.ClientMetricsTestUtils.{createCMSubscription, createClientInstance, defaultMetrics, defaultPushInterval, getClientInstance}
 import kafka.metrics.clientmetrics.ClientMetricsConfig.ClientMatchingParams.{CLIENT_SOFTWARE_NAME, CLIENT_SOFTWARE_VERSION, CLIENT_SOURCE_ADDRESS}
 import kafka.metrics.clientmetrics.{ClientMetricsCache, ClientMetricsConfig, CmClientInformation}
 import kafka.utils.TestUtils
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
 
 import java.util.Properties
@@ -37,18 +36,18 @@ class ClientMetricsCacheTest {
   def testClientMetricsSubscription(): Unit = {
     // create a client metric subscription.
     val subscription1 = createCMSubscription("cm_1")
-    assertTrue(subscription1 != null)
+    assertNotNull(subscription1)
 
     // create a client instance state object and make sure it picks up the metrics from the previously created
     // metrics subscription.
     val client = CmClientInformation("testClient1", "clientId", "Java", "11.1.0.1", "", "")
     val clientState = createClientInstance(client)
-    val clientStateFromCache = getCM.getClientInstance(clientState.getId)
-    assertTrue(clientState == clientStateFromCache)
-    assertTrue(clientStateFromCache.getSubscriptions.size() == 1)
-    assertTrue(clientStateFromCache.getPushIntervalMs == defaultPushInterval)
-    assertTrue(clientStateFromCache.metrics.size == 2 &&
-               clientStateFromCache.getMetrics.mkString(",").equals(defaultMetrics))
+    val clientStateFromCache = getClientInstance(clientState.getId)
+    assertEquals(clientState, clientStateFromCache)
+    assertEquals(clientStateFromCache.getSubscriptions.size(), 1)
+    assertEquals(clientStateFromCache.getPushIntervalMs, defaultPushInterval)
+    assertEquals(clientStateFromCache.metrics.size, 2)
+    assertTrue(clientStateFromCache.getMetrics.mkString(",").equals(defaultMetrics))
   }
 
   @Test
@@ -56,20 +55,20 @@ class ClientMetricsCacheTest {
     // create a client instance state object  when there are no client metrics subscriptions exists
     val client = CmClientInformation("testClient1", "clientId", "Java", "11.1.0.1", "", "")
     val clientState = createClientInstance(client)
-    var clientStateFromCache = getCM.getClientInstance(clientState.getId)
-    assertTrue(clientState == clientStateFromCache)
+    var clientStateFromCache = getClientInstance(clientState.getId)
+    assertEquals(clientState, clientStateFromCache)
     assertTrue(clientStateFromCache.getSubscriptions.isEmpty)
     assertTrue(clientStateFromCache.getMetrics.isEmpty)
     val oldSubscriptionId = clientStateFromCache.getSubscriptionId
 
     // Now create a new client subscription and make sure the client instance is updated with the metrics.
     createCMSubscription("cm_1")
-    clientStateFromCache = getCM.getClientInstance(clientState.getId)
-    assertTrue(clientStateFromCache.getSubscriptions.size() == 1)
-    assertTrue(clientStateFromCache.getPushIntervalMs == defaultPushInterval)
-    assertTrue(clientStateFromCache.getSubscriptionId != oldSubscriptionId)
-    assertTrue(clientStateFromCache.metrics.size == 2 &&
-      clientStateFromCache.getMetrics.mkString(",").equals(defaultMetrics))
+    clientStateFromCache = getClientInstance(clientState.getId)
+    assertEquals(clientStateFromCache.getSubscriptions.size(), 1)
+    assertEquals(clientStateFromCache.getPushIntervalMs, defaultPushInterval)
+    assertNotEquals(clientStateFromCache.getSubscriptionId, oldSubscriptionId)
+    assertEquals(clientStateFromCache.metrics.size, 2)
+    assertTrue(clientStateFromCache.getMetrics.mkString(",").equals(defaultMetrics))
   }
 
   @Test
@@ -81,19 +80,21 @@ class ClientMetricsCacheTest {
     // TEST-1: CREATE new metric subscriptions and make sure client instance picks up those metrics.
     val subscription1 = createCMSubscription("cm_1")
     val subscription2 = createCMSubscription("cm_2", props)
-    assertTrue(subscription1 != null && subscription2 != null)
+    assertNotNull(subscription1)
+    assertNotNull(subscription2)
 
     // create a client instance state object and make sure every thing is in correct order.
     val client = CmClientInformation("testClient1", "clientId", "Java", "11.1.0.1", "", "")
     val clientState = createClientInstance(client)
-    val clientStateFromCache = getCM.getClientInstance(clientState.getId)
-    assertTrue(clientState == clientStateFromCache)
+    val clientStateFromCache = getClientInstance(clientState.getId)
+    assertEquals(clientState, clientStateFromCache)
 
     val res = clientState.getSubscriptions
-    assertTrue(res.size() == 1)
+    assertEquals(res.size(), 1)
     assertTrue(res.contains(subscription1))
-    assertTrue(clientState.getPushIntervalMs == defaultPushInterval)
-    assertTrue(clientState.metrics.size == 2 && clientState.metrics.mkString(",").equals(defaultMetrics))
+    assertEquals(clientState.getPushIntervalMs, defaultPushInterval)
+    assertEquals(clientState.metrics.size, 2)
+    assertTrue(clientState.metrics.mkString(",").equals(defaultMetrics))
 
     // TEST-2: UPDATE the metrics subscription: Create update the metrics subscriptions by adding new
     // subscription with different metrics and make sure that client instance object is updated
@@ -102,11 +103,11 @@ class ClientMetricsCacheTest {
     val props3 = new Properties()
     props3.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, metrics3)
     createCMSubscription("cm_3", props3)
-    val afterAddingNewSubscription = getCM.getClientInstance(clientState.getId)
-    assertTrue(clientStateFromCache.getId == afterAddingNewSubscription.getId)
-    assertTrue(clientState.getSubscriptionId != afterAddingNewSubscription.getSubscriptionId)
-    assertTrue(afterAddingNewSubscription.metrics.size == 3 &&
-      afterAddingNewSubscription.metrics.mkString(",").equals(defaultMetrics + "," + metrics3))
+    val afterAddingNewSubscription = getClientInstance(clientState.getId)
+    assertEquals(clientStateFromCache.getId, afterAddingNewSubscription.getId)
+    assertNotEquals(clientState.getSubscriptionId, afterAddingNewSubscription.getSubscriptionId)
+    assertEquals(afterAddingNewSubscription.metrics.size, 3)
+    assertTrue(afterAddingNewSubscription.metrics.mkString(",").equals(defaultMetrics + "," + metrics3))
 
     // TEST-3: UPDATE the first subscription's metrics and make sure
     // client instance picked up the change.
@@ -114,11 +115,11 @@ class ClientMetricsCacheTest {
     val updatedProps = new Properties()
     updatedProps.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, updated_metrics)
     createCMSubscription("cm_1", updatedProps)
-    val afterSecondUpdate = getCM.getClientInstance(clientState.getId)
-    assertTrue(afterSecondUpdate.getId == afterAddingNewSubscription.getId)
-    assertTrue(afterSecondUpdate.getSubscriptionId != afterAddingNewSubscription.getSubscriptionId)
-    assertTrue(afterSecondUpdate.metrics.size == 2 &&
-      afterSecondUpdate.metrics.mkString(",").equals(metrics3 + "," + updated_metrics))
+    val afterSecondUpdate = getClientInstance(clientState.getId)
+    assertEquals(afterSecondUpdate.getId, afterAddingNewSubscription.getId)
+    assertNotEquals(afterSecondUpdate.getSubscriptionId, afterAddingNewSubscription.getSubscriptionId)
+    assertEquals(afterSecondUpdate.metrics.size, 2)
+    assertTrue(afterSecondUpdate.metrics.mkString(",").equals(metrics3 + "," + updated_metrics))
 
     // TEST3: DELETE the metrics subscription: Delete the first subscription and make sure
     // client instance is updated
@@ -127,13 +128,14 @@ class ClientMetricsCacheTest {
     createCMSubscription("cm_1", props4)
 
     // subscription should have been deleted.
-    assertTrue(ClientMetricsConfig.getClientSubscriptionInfo("cm_1") == null)
+    assertNull(ClientMetricsConfig.getClientSubscriptionInfo("cm_1"))
 
-    val afterDeleting = getCM.getClientInstance(clientState.getId)
-    assertTrue(afterAddingNewSubscription.getId == afterDeleting.getId)
-    assertTrue(afterAddingNewSubscription.getSubscriptionId != afterDeleting.getSubscriptionId)
-    assertTrue(afterAddingNewSubscription.getSubscriptions.size() - afterDeleting.getSubscriptions.size() == 1)
-    assertTrue(afterDeleting.metrics.size == 1 && afterDeleting.metrics.mkString(",").equals(metrics3))
+    val afterDeleting = getClientInstance(clientState.getId)
+    assertEquals(afterAddingNewSubscription.getId, afterDeleting.getId)
+    assertNotEquals(afterAddingNewSubscription.getSubscriptionId, afterDeleting.getSubscriptionId)
+    assertEquals(afterAddingNewSubscription.getSubscriptions.size() - afterDeleting.getSubscriptions.size(), 1)
+    assertEquals(afterDeleting.metrics.size, 1)
+    assertTrue(afterDeleting.metrics.mkString(",").equals(metrics3))
   }
 
   @Test
@@ -160,14 +162,14 @@ class ClientMetricsCacheTest {
     props4.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, clientPatterns4.mkString(","))
     props4.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, metrics4)
     createCMSubscription("cm_4", props4)
-    assertTrue(ClientMetricsConfig.getSubscriptionsCount == 4)
+    assertEquals(ClientMetricsConfig.getSubscriptionsCount, 4)
 
     val client1 = createClientInstance(CmClientInformation("testClient1", "Id1", "Java", "11.1.0.1", "", ""))
     val client2 = createClientInstance(CmClientInformation("testClient2", "Id2", "Python", "8.2.1", "abcd", "0"))
     val client3 = createClientInstance(CmClientInformation("testClient3", "Id3", "C++", "12.1", "192.168.1.7", "9093"))
     val client4 = createClientInstance(CmClientInformation("testClient4", "Id4", "Java", "11.1", "1.2.3.4", "8080"))
     val client5 = createClientInstance(CmClientInformation("testClient2", "Id5", "Python", "8.2.1", "1.2.3.4", "0"))
-    assertTrue(ClientMetricsCache.getInstance.getSize == 5)
+    assertEquals(ClientMetricsCache.getInstance.getSize, 5)
 
     // Verifications:
     // Client 1 should have the metrics from the subscription1 and subscription2
@@ -194,7 +196,7 @@ class ClientMetricsCacheTest {
     val client3 = createClientInstance(CmClientInformation("t3", "c3", "C++", "12.1", "192.168.1.7", "9093")).getId
     val client4 = createClientInstance(CmClientInformation("t4", "c4", "Java", "11.1", "1.2.3.4", "8080")).getId
     val client5 = createClientInstance(CmClientInformation("t5", "c5", "Python", "8.2.1", "1.2.3.4", "0")).getId
-    assertTrue(ClientMetricsCache.getInstance.getSize == 5)
+    assertEquals(ClientMetricsCache.getInstance.getSize, 5)
 
     // Now create the subscriptions.
     createCMSubscription("cm_1")
@@ -219,49 +221,48 @@ class ClientMetricsCacheTest {
     props4.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, clientPatterns4.mkString(","))
     props4.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, metrics4)
     createCMSubscription("cm_4", props4)
-    assertTrue(ClientMetricsConfig.getSubscriptionsCount == 4)
+    assertEquals(ClientMetricsConfig.getSubscriptionsCount, 4)
 
     // Verifications:
     // Client 1 should have the metrics from subscription1 and subscription2
-    assertTrue(getCM.getClientInstance(client1).getMetrics.mkString(",").equals(defaultMetrics + "," + metrics2))
+    assertTrue(getClientInstance(client1).getMetrics.mkString(",").equals(defaultMetrics + "," + metrics2))
 
     // Client 2 should have the subscription3 which is just default metrics
-    assertTrue(getCM.getClientInstance(client2).getMetrics.mkString(",").equals(metrics3))
+    assertTrue(getClientInstance(client2).getMetrics.mkString(",").equals(metrics3))
 
     // client 3 should end up with nothing.
-    assertTrue(getCM.getClientInstance(client3).getMetrics.isEmpty)
+    assertTrue(getClientInstance(client3).getMetrics.isEmpty)
 
     // Client 4 should have the metrics from subscription1 and subscription2
-    assertTrue(getCM.getClientInstance(client4).getMetrics.mkString(",").equals(defaultMetrics + "," + metrics2))
+    assertTrue(getClientInstance(client4).getMetrics.mkString(",").equals(defaultMetrics + "," + metrics2))
 
     // Client 5 should have the metrics from subscription-3 and subscription-4
-    assertTrue(getCM.getClientInstance(client5).getMetrics.mkString(",").equals(metrics3 + "," + metrics4))
+    assertTrue(getClientInstance(client5).getMetrics.mkString(",").equals(metrics3 + "," + metrics4))
   }
 
 
   @Test
-  def testCacheGC(): Unit = {
+  def testCleanupTtlEntries(): Unit = {
     val cache = ClientMetricsCache.getInstance
     val client1 = createClientInstance(CmClientInformation("testClient1", "clientId1", "Java", "11.1.0.1", "", ""))
     val client2 = createClientInstance(CmClientInformation("testClient2", "clientId2", "Python", "8.2.1", "", ""))
     val client3 = createClientInstance(CmClientInformation("testClient3", "clientId3", "C++", "12.1", "", ""))
-    assertTrue(cache.getSize == 3)
+    assertEquals(cache.getSize, 3)
 
     // Modify client3's timestamp to meet the TTL expiry limit.
-    val ts = client3.getLastAccessTs.getTime -
-                    (Math.max(3 * client3.getPushIntervalMs, DEFAULT_TTL_MS) + 10)
+    val ts = client3.getLastAccessTs - (Math.max(3 * client3.getPushIntervalMs, ClientMetricsCache.getTtlTs) + 10)
     client3.updateLastAccessTs(ts)
-    ClientMetricsCache.gcTs.setTime(ClientMetricsCache.gcTs.getTime - (ClientMetricsCache.CM_CACHE_GC_INTERVAL_MS + 10))
+    ClientMetricsCache.setLastCleanupTs(ClientMetricsCache.getLastCleanupTs - (ClientMetricsCache.getCleanupInterval + 10))
 
     // Run the GC and wait until client3 entry is removed from the cache
-    ClientMetricsCache.runGCIfNeeded(true)
+    ClientMetricsCache.deleteExpiredEntries(true)
     TestUtils.waitUntilTrue(() => ClientMetricsCache.getInstance.getSize == 2, "Failed to run GC on Client Metrics Cache", 6000)
 
     // Make sure that client3 is removed from the cache.
-    assertTrue(cache.get(client3.getId) == null)
+    assertTrue(cache.get(client3.getId).isEmpty)
 
     // client1 and client2 should remain in the cache.
-    assertTrue(cache.get(client1.getId) != null)
-    assertTrue(cache.get(client2.getId) != null)
+    assertTrue(!cache.get(client1.getId).isEmpty)
+    assertTrue(!cache.get(client2.getId).isEmpty)
   }
 }

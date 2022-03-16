@@ -31,7 +31,6 @@ import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
-import org.apache.kafka.clients.telemetry.ConsumerMetricRecorder;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -159,7 +158,7 @@ public class Fetcher<K, V> implements Closeable {
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
-    private final ConsumerMetricRecorder consumerMetricRecorder;
+    private final Optional<ConsumerMetricsRegistry> consumerMetricsRegistry;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
     private CompletedFetch nextInLineFetch = null;
@@ -184,7 +183,7 @@ public class Fetcher<K, V> implements Closeable {
                    long requestTimeoutMs,
                    IsolationLevel isolationLevel,
                    ApiVersions apiVersions,
-                   ConsumerMetricRecorder consumerMetricRecorder) {
+                   Optional<ConsumerMetricsRegistry> consumerMetricsRegistry) {
         this.log = logContext.logger(Fetcher.class);
         this.logContext = logContext;
         this.time = time;
@@ -206,7 +205,7 @@ public class Fetcher<K, V> implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.apiVersions = apiVersions;
-        this.consumerMetricRecorder = consumerMetricRecorder;
+        this.consumerMetricsRegistry = consumerMetricsRegistry;
         this.sessionHandlers = new HashMap<>();
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.nodesWithPendingFetchRequests = new HashSet<>();
@@ -302,7 +301,7 @@ public class Fetcher<K, V> implements Closeable {
 
                             Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
-                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, consumerMetricRecorder, partitions);
+                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, consumerMetricsRegistry, partitions);
 
                             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                                 TopicPartition partition = entry.getKey();
@@ -1730,17 +1729,17 @@ public class Fetcher<K, V> implements Closeable {
      */
     private static class FetchResponseMetricAggregator {
         private final FetchManagerMetrics sensors;
-        private final ConsumerMetricRecorder consumerMetricRecorder;
+        private final Optional<ConsumerMetricsRegistry> consumerMetricsRegistry;
         private final Set<TopicPartition> unrecordedPartitions;
 
         private final FetchMetrics fetchMetrics = new FetchMetrics();
         private final Map<String, FetchMetrics> topicFetchMetrics = new HashMap<>();
 
         private FetchResponseMetricAggregator(FetchManagerMetrics sensors,
-                                              ConsumerMetricRecorder consumerMetricRecorder,
+                                              Optional<ConsumerMetricsRegistry> consumerMetricsRegistry,
                                               Set<TopicPartition> partitions) {
             this.sensors = sensors;
-            this.consumerMetricRecorder = consumerMetricRecorder;
+            this.consumerMetricsRegistry = consumerMetricsRegistry;
             this.unrecordedPartitions = partitions;
         }
 
@@ -1772,8 +1771,10 @@ public class Fetcher<K, V> implements Closeable {
                     this.sensors.recordTopicFetchMetrics(entry.getKey(), metric.fetchBytes, metric.fetchRecords);
                 }
 
-                consumerMetricRecorder.addRecordApplicationBytes(this.fetchMetrics.fetchBytes);
-                consumerMetricRecorder.addRecordApplicationCount(this.fetchMetrics.fetchRecords);
+                consumerMetricsRegistry.ifPresent(cmr -> {
+                    cmr.sumSensor(cmr.recordApplicationBytes).record(this.fetchMetrics.fetchBytes);
+                    cmr.sumSensor(cmr.recordApplicationCount).record(this.fetchMetrics.fetchRecords);
+                });
             }
         }
 

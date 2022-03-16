@@ -31,8 +31,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.clients.telemetry.ConsumerMetricRecorder;
-import org.apache.kafka.clients.telemetry.NoopClientTelemetry;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -2568,7 +2566,6 @@ public class KafkaConsumerTest {
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
 
         ConsumerCoordinator consumerCoordinator = null;
-        ConsumerMetricRecorder consumerMetricRecorder = new NoopClientTelemetry().consumerMetricRecorder();
         if (groupId != null) {
             GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
                 rebalanceTimeoutMs,
@@ -2585,7 +2582,8 @@ public class KafkaConsumerTest {
                 subscription,
                 metrics,
                 metricGroupPrefix,
-                consumerMetricRecorder,
+                Optional.empty(),
+                Optional.empty(),
                 time,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
@@ -2613,7 +2611,7 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
                 new ApiVersions(),
-                consumerMetricRecorder);
+                Optional.empty());
 
         return new KafkaConsumer<>(
                 loggerFactory,

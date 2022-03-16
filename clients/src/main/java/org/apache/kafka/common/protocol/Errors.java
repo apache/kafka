@@ -20,6 +20,8 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
+import org.apache.kafka.common.errors.ClientMetricsRateLimitedException;
+import org.apache.kafka.common.errors.ClientMetricsReceiverPluginNotFoundException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
 import org.apache.kafka.common.errors.ControllerMovedException;
@@ -115,6 +117,7 @@ import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
+import org.apache.kafka.common.errors.UnknownClientMetricsSubscriptionIdException;
 import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
@@ -368,7 +371,10 @@ public enum Errors {
     TRANSACTIONAL_ID_NOT_FOUND(105, "The transactionalId could not be found", TransactionalIdNotFoundException::new),
     FETCH_SESSION_TOPIC_ID_ERROR(106, "The fetch session encountered inconsistent topic ID usage", FetchSessionTopicIdException::new),
     INELIGIBLE_REPLICA(107, "The new ISR contains at least one ineligible replica.", IneligibleReplicaException::new),
-    NEW_LEADER_ELECTED(108, "The AlterPartition request successfully updated the partition state but the leader has changed.", NewLeaderElectedException::new);
+    NEW_LEADER_ELECTED(108, "The AlterPartition request successfully updated the partition state but the leader has changed.", NewLeaderElectedException::new),
+    CLIENT_METRICS_RATE_LIMITED(109, "Client pushed the metrics before the next push interval", ClientMetricsRateLimitedException::new),
+    CLIENT_METRICS_PLUGIN_NOT_FOUND(110, "Broker does not have any client metrics plugin configured", ClientMetricsReceiverPluginNotFoundException::new),
+    UNKNOWN_CLIENT_METRICS_SUBSCRIPTION_ID(111, "Client metric subscription id does not match with broker's cached value", UnknownClientMetricsSubscriptionIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

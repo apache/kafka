@@ -42,7 +42,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
+import org.apache.kafka.common.resource.ResourceType.{CLIENT_METRICS, CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
@@ -421,6 +421,12 @@ class ControllerApis(val requestChannel: RequestChannel,
           new ApiError(NONE)
         } else {
           new ApiError(TOPIC_AUTHORIZATION_FAILED)
+        }
+      case ConfigResource.Type.CLIENT_METRICS =>
+        if (authHelper.authorize(requestContext, ALTER_CONFIGS, CLIENT_METRICS, resource.name)) {
+          new ApiError(NONE)
+        } else {
+          new ApiError(CLUSTER_AUTHORIZATION_FAILED)
         }
       case rt => new ApiError(INVALID_REQUEST, s"Unexpected resource type $rt.")
     }

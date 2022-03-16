@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.decrementProducerQueueMetrics;
-import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.incrementProducerQueueMetrics;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -29,14 +26,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientTelemetry;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -91,8 +89,9 @@ public class RecordAccumulator {
     private final Map<String, Integer> nodesDrainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
-    private final short acks;
-    private final ClientTelemetry clientTelemetry;
+    private final Optional<ClientTelemetry> clientTelemetry;
+    private final Optional<ProducerMetricsRegistry> producerMetricsRegistry;
+    private final Optional<ProducerTopicMetricsRegistry> producerTopicMetricsRegistry;
 
     /**
      * Create a new record accumulator
@@ -128,7 +127,7 @@ public class RecordAccumulator {
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool,
-                             ClientTelemetry clientTelemetry) {
+                             Optional<ClientTelemetry> clientTelemetry) {
         this.logContext = logContext;
         this.log = logContext.logger(RecordAccumulator.class);
         this.closed = false;
@@ -149,7 +148,8 @@ public class RecordAccumulator {
         nodesDrainIndex = new HashMap<>();
         this.transactionManager = transactionManager;
         this.clientTelemetry = clientTelemetry;
-        this.acks = 1;
+        this.producerMetricsRegistry = clientTelemetry.map(ct -> new ProducerMetricsRegistry(ct.metrics()));
+        this.producerTopicMetricsRegistry = clientTelemetry.map(ct -> new ProducerTopicMetricsRegistry(ct.metrics()));
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -186,7 +186,7 @@ public class RecordAccumulator {
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool,
-                             ClientTelemetry clientTelemetry) {
+                             Optional<ClientTelemetry> clientTelemetry) {
         this(logContext,
             batchSize,
             compression,
@@ -404,14 +404,21 @@ public class RecordAccumulator {
             if (future == null) {
                 last.closeForRecordAppends();
             } else {
-                incrementProducerQueueMetrics(clientTelemetry,
-                    apiVersions,
-                    acks,
-                    tp,
-                    timestamp,
-                    key,
-                    value,
-                    headers);
+                if (producerMetricsRegistry.isPresent() || producerTopicMetricsRegistry.isPresent()) {
+                    int queueBytes = last.records().sizeInBytes();
+                    int queueCount = last.recordCount;
+
+                    producerMetricsRegistry.ifPresent(pmr -> {
+                        pmr.gaugeSensor(pmr.recordQueueBytes).record(queueBytes);
+                        pmr.gaugeSensor(pmr.recordQueueCount).record(queueCount);
+                    });
+
+                    producerTopicMetricsRegistry.ifPresent(ptmr -> {
+                        ptmr.gaugeSensor(ptmr.recordQueueBytes(tp)).record(queueBytes);
+                        ptmr.gaugeSensor(ptmr.recordQueueCount(tp)).record(queueCount);
+                    });
+                }
+
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false, appendedBytes);
             }
@@ -863,12 +870,6 @@ public class RecordAccumulator {
                     log.debug("Assigned producerId {} and producerEpoch {} to batch with base sequence " +
                             "{} being sent to partition {}", producerIdAndEpoch.producerId,
                         producerIdAndEpoch.epoch, batch.baseSequence(), tp);
-
-                    decrementProducerQueueMetrics(clientTelemetry,
-                        acks,
-                        tp,
-                        batch.records().sizeInBytes());
-
                     transactionManager.addInFlightBatch(batch);
                 }
             }
@@ -877,6 +878,22 @@ public class RecordAccumulator {
             // close() is particularly expensive
 
             batch.close();
+
+            if (producerMetricsRegistry.isPresent() || producerTopicMetricsRegistry.isPresent()) {
+                int queueBytes = batch.records().sizeInBytes();
+                int queueCount = batch.recordCount;
+
+                producerMetricsRegistry.ifPresent(pmr -> {
+                    pmr.gaugeSensor(pmr.recordQueueBytes).record(-queueBytes);
+                    pmr.gaugeSensor(pmr.recordQueueCount).record(-queueCount);
+                });
+
+                producerTopicMetricsRegistry.ifPresent(ptmr -> {
+                    ptmr.gaugeSensor(ptmr.recordQueueBytes(tp)).record(-queueBytes);
+                    ptmr.gaugeSensor(ptmr.recordQueueCount(tp)).record(-queueCount);
+                });
+            }
+
             size += batch.records().sizeInBytes();
             ready.add(batch);
 

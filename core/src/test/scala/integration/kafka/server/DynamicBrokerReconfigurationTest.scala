@@ -26,7 +26,6 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
@@ -34,8 +33,9 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.{CleanerConfig, LogConfig}
 import kafka.message.ProducerCompressionCodec
+import kafka.metrics.ClientMetricsTestUtils.TestClientMetricsReceiver
+import kafka.metrics.clientmetrics.ClientMetricsReceiverPlugin
 import kafka.network.{Processor, RequestChannel}
-import kafka.server.QuorumTestHarness
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -52,7 +52,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
+import org.apache.kafka.common.metrics.{ClientTelemetryReceiver, KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
@@ -865,6 +865,40 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
+  def testClientMetricsEmptyReporter(): Unit = {
+    // Add a default test metrics reporter that doesn't implement the clientReceiver method
+    val newProps = new Properties
+    newProps.put(TestMetricsReporter.PollingIntervalProp, "100")
+    configureMetricsReporters(Seq(classOf[TestMetricsReporter]), newProps)
+
+    val reporters = TestMetricsReporter.waitForReporters(servers.size)
+    reporters.foreach { reporter =>
+      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 100)
+
+      // There should not be any clientReceiver in the default implementation.
+      assertNull(reporter.clientReceiver)
+    }
+  }
+
+  @Test
+  def testClientMetricsReporter(): Unit = {
+    // Add a new metrics reporter that has implemented the clientReceiver interface method.
+    val newProps = new Properties
+    newProps.put(TestMetricsReporter.PollingIntervalProp, "100")
+    configureMetricsReporters(Seq(classOf[TestClientMetricsReporter]), newProps)
+
+    val reporters = TestMetricsReporter.waitForReporters(servers.size)
+    assertFalse(ClientMetricsReceiverPlugin.isEmpty)
+
+    reporters.foreach { reporter =>
+      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 100)
+
+      // we should have a valid clientReceiver here.
+      assertNotNull(reporter.clientReceiver)
+    }
+  }
+
+  @Test
   @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-7957)
   def testMetricsReporterUpdate(): Unit = {
     // Add a new metrics reporter
@@ -1254,7 +1288,23 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Timed out while waiting for assignment")
-    consumer.assignment.forEach(consumer.position(_))
+
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+
   }
 
   private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
@@ -1884,6 +1934,12 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 }
 
+class TestClientMetricsReporter extends TestMetricsReporter {
+  var cmReceiver: Option[TestClientMetricsReceiver] =  Option(new TestClientMetricsReceiver)
+  override def clientReceiver: ClientTelemetryReceiver =  {
+    if (cmReceiver.isEmpty)  super.clientReceiver else cmReceiver.get
+  }
+}
 
 class MockFileConfigProvider extends FileConfigProvider {
   @throws(classOf[IOException])

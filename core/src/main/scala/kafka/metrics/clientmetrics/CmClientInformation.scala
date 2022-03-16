@@ -100,6 +100,7 @@ class CmClientInformation {
     attributesMap(CLIENT_SOURCE_ADDRESS) = clientHostAddress
     attributesMap(CLIENT_SOURCE_PORT) = clientPort // TODO: how to get the client's port info.
   }
+  def getClientId = attributesMap.get(CLIENT_ID)
 
   def isMatched(patterns: Map[String, String]) : Boolean = {
     // Empty pattern or missing pattern still considered as a match

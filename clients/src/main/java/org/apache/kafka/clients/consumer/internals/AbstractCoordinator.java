@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.ClientTelemetry;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -63,6 +65,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.telemetry.emitter.Context;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -147,6 +150,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected MemberState state = MemberState.UNJOINED;
 
+    protected final Optional<ClientTelemetry> clientTelemetry;
+    protected final Optional<ConsumerMetricsRegistry> consumerMetricsRegistry;
 
     /**
      * Initialize the coordination manager.
@@ -156,7 +161,9 @@ public abstract class AbstractCoordinator implements Closeable {
                                ConsumerNetworkClient client,
                                Metrics metrics,
                                String metricGrpPrefix,
-                               Time time) {
+                               Time time,
+                               Optional<ClientTelemetry> clientTelemetry,
+                               Optional<ConsumerMetricsRegistry> consumerMetricsRegistry) {
         Objects.requireNonNull(rebalanceConfig.groupId,
                                "Expected a non-null group id for coordinator construction");
         this.rebalanceConfig = rebalanceConfig;
@@ -165,6 +172,8 @@ public abstract class AbstractCoordinator implements Closeable {
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.clientTelemetry = clientTelemetry;
+        this.consumerMetricsRegistry = consumerMetricsRegistry;
     }
 
     /**
@@ -607,6 +616,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 joinResponse.data().memberId(), joinResponse.data().protocolName());
 
                             log.info("Successfully joined group with generation {}", AbstractCoordinator.this.generation);
+                            clientTelemetry.ifPresent(ct -> ct.context().put(Context.GROUP_MEMBER_ID, joinResponse.data().memberId()));
 
                             if (joinResponse.isLeader()) {
                                 onLeaderElected(joinResponse).chain(future);

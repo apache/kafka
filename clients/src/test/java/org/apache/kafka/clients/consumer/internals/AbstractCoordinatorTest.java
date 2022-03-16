@@ -1668,7 +1668,7 @@ public class AbstractCoordinatorTest {
                          ConsumerNetworkClient client,
                          Metrics metrics,
                          Time time) {
-            super(rebalanceConfig, new LogContext(), client, metrics, METRIC_GROUP_PREFIX, time);
+            super(rebalanceConfig, new LogContext(), client, metrics, METRIC_GROUP_PREFIX, time, Optional.empty(), Optional.empty());
         }
 
         @Override

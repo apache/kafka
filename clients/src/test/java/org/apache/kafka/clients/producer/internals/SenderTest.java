@@ -16,16 +16,14 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
-import org.apache.kafka.clients.telemetry.DefaultClientTelemetry;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.telemetry.NoopClientTelemetry;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
@@ -291,10 +289,9 @@ public class SenderTest {
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         String clientId = "mock";
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, clientId);
         NetworkClient client = new NetworkClient(selector, metadata, clientId, Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), throttleTimeSensor, clientTelemetry, logContext);
+                time, true, new ApiVersions(), throttleTimeSensor, Optional.empty(), logContext);
 
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
@@ -340,9 +337,8 @@ public class SenderTest {
         Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
         metrics = new Metrics(new MetricConfig().tags(clientTags));
         SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                1, metricsRegistry, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
+                1, metricsRegistry, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
 
         // Append a message so that topic metrics are created
         appendToAccumulator(tp0, 0L, "key", "value");
@@ -368,10 +364,9 @@ public class SenderTest {
         int maxRetries = 1;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         try {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                    maxRetries, senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
+                    maxRetries, senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
             // do a successful retry
             Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
             sender.runOnce(); // connect
@@ -426,11 +421,10 @@ public class SenderTest {
         int maxRetries = 1;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
 
         try {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                    senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
+                    senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("test", 2));
             client.prepareMetadataUpdate(metadataUpdate1);
@@ -570,11 +564,11 @@ public class SenderTest {
             long totalSize = 1024 * 1024;
             accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null,
-                new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"), new NoopClientTelemetry());
+                new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"), Optional.empty());
 
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL, 1,
-                senderMetrics, new NoopClientTelemetry(), time, REQUEST_TIMEOUT, 1000L, null, new ApiVersions());
+                senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, 1000L, null, new ApiVersions());
 
             // Produce and send batch.
             long time1 = time.milliseconds();
@@ -1630,10 +1624,8 @@ public class SenderTest {
         int maxRetries = 10;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
-
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+                senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         appendToAccumulator(tp0); // failed response
         Future<RecordMetadata> successfulResponse = appendToAccumulator(tp1);
@@ -1672,10 +1664,8 @@ public class SenderTest {
 
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
-
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, 10,
-            senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+            senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         appendToAccumulator(tp0); // failed response
         appendToAccumulator(tp1); // success response
@@ -1706,10 +1696,8 @@ public class SenderTest {
 
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
-
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, 10,
-            senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+            senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         Future<RecordMetadata> failedResponse = appendToAccumulator(tp0);
         Future<RecordMetadata> successfulResponse = appendToAccumulator(tp1);
@@ -1740,10 +1728,9 @@ public class SenderTest {
         int maxRetries = 10;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
 
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+                senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         Future<RecordMetadata> outOfOrderResponse = appendToAccumulator(tp0);
         Future<RecordMetadata> successfulResponse = appendToAccumulator(tp1);
@@ -2279,10 +2266,9 @@ public class SenderTest {
         int maxRetries = 10;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
 
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+                senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
         client.prepareResponse(body -> {
@@ -2321,9 +2307,8 @@ public class SenderTest {
         int maxRetries = 10;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+                senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
         sender.runOnce();  // connect.
@@ -2357,10 +2342,9 @@ public class SenderTest {
         int maxRetries = 10;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
 
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+                senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
         sender.runOnce();  // connect.
@@ -2418,14 +2402,13 @@ public class SenderTest {
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         try (Metrics m = new Metrics()) {
-            ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
             accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.GZIP,
                 0, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"),
-                clientTelemetry);
+                Optional.empty());
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                    senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
+                    senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
             client.prepareMetadataUpdate(metadataUpdate1);
@@ -2736,11 +2719,10 @@ public class SenderTest {
         int maxRetries = 1;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         try {
             TransactionManager txnManager = new TransactionManager(logContext, "testTransactionalRequestsSentOnShutdown", 6000, 100, apiVersions);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                    maxRetries, senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
+                    maxRetries, senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
             TopicPartition tp = new TopicPartition("testTransactionalRequestsSentOnShutdown", 1);
@@ -2770,13 +2752,12 @@ public class SenderTest {
         try (Metrics m = new Metrics()) {
             int lingerMs = 50;
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-            ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
 
             TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions);
             setupWithTransactionState(txnManager, lingerMs);
 
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                1, senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
+                1, senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
             // Begin a transaction and successfully add one partition to it.
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
@@ -2828,13 +2809,11 @@ public class SenderTest {
     public void testAwaitPendingRecordsBeforeCommittingTransaction() throws Exception {
         try (Metrics m = new Metrics()) {
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-            ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
-
             TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions);
             setupWithTransactionState(txnManager);
 
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                1, senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
+                1, senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
             // Begin a transaction and successfully add one partition to it.
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
@@ -2900,11 +2879,10 @@ public class SenderTest {
         int maxRetries = 1;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         try {
             TransactionManager txnManager = new TransactionManager(logContext, "testIncompleteTransactionAbortOnShutdown", 6000, 100, apiVersions);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                    maxRetries, senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
+                    maxRetries, senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
             TopicPartition tp = new TopicPartition("testIncompleteTransactionAbortOnShutdown", 1);
@@ -2935,11 +2913,10 @@ public class SenderTest {
         int maxRetries = 1;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         try {
             TransactionManager txnManager = new TransactionManager(logContext, "testForceShutdownWithIncompleteTransaction", 6000, 100, apiVersions);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                    maxRetries, senderMetrics, clientTelemetry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
+                    maxRetries, senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
             TopicPartition tp = new TopicPartition("testForceShutdownWithIncompleteTransaction", 1);
@@ -3242,13 +3219,12 @@ public class SenderTest {
         this.metrics = new Metrics(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, lingerMs, 0L,
             DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, pool,
-            clientTelemetry);
+            Optional.empty());
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
-            retries, this.senderMetricsRegistry, clientTelemetry,
+            retries, this.senderMetricsRegistry, Optional.empty(),
             this.time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         metadata.add("test", time.milliseconds());

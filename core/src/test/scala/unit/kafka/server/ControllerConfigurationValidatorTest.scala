@@ -17,12 +17,13 @@
 
 package kafka.server
 
+import kafka.metrics.clientmetrics.ClientMetricsConfig
+
 import java.util.TreeMap
 import java.util.Collections.emptyMap
-
 import org.junit.jupiter.api.Test
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.common.config.TopicConfig.{SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
@@ -99,4 +100,60 @@ class ControllerConfigurationValidatorTest {
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(BROKER, "-1"), config)). getMessage())
   }
+
+  @Test
+  def testClientMetricSubscription() = {
+    val groupName: String = "subscription-1"
+    val metrics = "org.apache.kafka/client.producer.partition.queue.,org.apache.kafka/client.producer.partition.latency"
+    val clientMatchingPattern = "client_instance_id=b69cc35a-7a54-4790-aa69-cc2bd4ee4538"
+
+    val validator = new ControllerConfigurationValidator()
+    val props = new TreeMap[String, String]
+    val resource = new ConfigResource(CLIENT_METRICS, groupName)
+
+    // Test-1: test the missing parameters,
+    // add one after one until all the required params are added
+    assertThrows(classOf[IllegalArgumentException], () => validator.validate(resource, props))
+
+    val interval = -1
+    props.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, interval.toString)
+    assertThrows(classOf[IllegalArgumentException], () =>
+      validator.validate(resource, props))
+
+    props.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, 2000.toString)
+    assertThrows(classOf[IllegalArgumentException], () => validator.validate(resource, props))
+
+    props.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, metrics)
+    validator.validate(resource, props)
+
+    props.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, "client_software_name=*")
+    assertThrows(classOf[InvalidConfigurationException], () => validator.validate(resource, props))
+
+    props.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, clientMatchingPattern)
+    validator.validate(resource, props)
+
+    // TEST-2 Add an invalid parameter
+    props.put("INVALID_PARAMETER", "INVALID_ARGUMENT")
+    assertThrows(classOf[IllegalArgumentException], () => validator.validate(resource, props))
+    props.remove("INVALID_PARAMETER")
+    validator.validate(resource, props)
+
+    // TEST-3: Delete the metric subscription
+    props.clear()
+    props.put(ClientMetricsConfig.ClientMetrics.DeleteSubscription, "true")
+    validator.validate(resource, props)
+
+    // TEST-4: subscription with all metrics flag
+    props.clear()
+    props.put(ClientMetricsConfig.ClientMetrics.AllMetricsFlag, "true")
+    assertThrows(classOf[IllegalArgumentException], () => validator.validate(resource, props))
+
+    props.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, clientMatchingPattern)
+    assertThrows(classOf[IllegalArgumentException], () => validator.validate(resource, props))
+
+    props.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, 2000.toString)
+    validator.validate(resource, props)
+  }
+
 }
+
