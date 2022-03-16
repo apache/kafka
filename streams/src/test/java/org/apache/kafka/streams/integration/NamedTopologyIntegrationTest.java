@@ -621,38 +621,40 @@ public class NamedTopologyIntegrationTest {
     @Test
     public void shouldAddToEmptyInitialTopologyRemoveResetOffsetsThenAddSameNamedTopology() throws Exception {
         CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
-        // Build up named topology with two stateful subtopologies
-        final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
-        inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
-        inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-        streams.start();
-        final NamedTopology namedTopology = topology1Builder.build();
-        streams.addNamedTopology(namedTopology).all().get();
+        try {
+            // Build up named topology with two stateful subtopologies
+            final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
+            inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
+            inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+            streams.start();
+            final NamedTopology namedTopology = topology1Builder.build();
+            streams.addNamedTopology(namedTopology).all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-        streams.removeNamedTopology("topology-1", true).all().get();
-        streams.cleanUpNamedTopology("topology-1");
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+            streams.removeNamedTopology("topology-1", true).all().get();
+            streams.cleanUpNamedTopology("topology-1");
 
-        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("changelog")).forEach(t -> {
-            try {
-                CLUSTER.deleteTopicAndWait(t);
-            } catch (final InterruptedException e) {
-                e.printStackTrace();
-            }
-        });
+            CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("changelog")).forEach(t -> {
+                try {
+                    CLUSTER.deleteTopicAndWait(t);
+                } catch (final InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
 
-        final KStream<String, Long> inputStream = topology1BuilderDup.stream(INPUT_STREAM_1);
-        inputStream.groupByKey().count().toStream().to(COUNT_OUTPUT);
-        inputStream.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+            final KStream<String, Long> inputStream = topology1BuilderDup.stream(INPUT_STREAM_1);
+            inputStream.groupByKey().count().toStream().to(COUNT_OUTPUT);
+            inputStream.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
 
-        final NamedTopology namedTopologyDup = topology1BuilderDup.build();
-        streams.addNamedTopology(namedTopologyDup).all().get();
+            final NamedTopology namedTopologyDup = topology1BuilderDup.build();
+            streams.addNamedTopology(namedTopologyDup).all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-
-        CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        } finally {
+            CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
+        }
     }
 
     @Test
@@ -777,7 +779,11 @@ public class NamedTopologyIntegrationTest {
             CLUSTER.createTopic(NEW_STREAM, 2, 1);
             produceToInputTopics(NEW_STREAM, STANDARD_INPUT_DATA);
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+            final List<KeyValue<String, Integer>> output =
+                waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3);
+            output.retainAll(COUNT_OUTPUT_DATA);
+
+            assertThat(output, equalTo(COUNT_OUTPUT_DATA));
 
             // Make sure the threads were not actually killed and replaced
             assertThat(streams.metadataForLocalThreads().size(), equalTo(2));

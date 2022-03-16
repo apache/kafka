@@ -329,8 +329,10 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code acceptable.recovery.lag} */
     public static final String ACCEPTABLE_RECOVERY_LAG_CONFIG = "acceptable.recovery.lag";
-    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up for an active task." +
-                                                                  "Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
+    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough" +
+                                                                  " to receive an active task assignment. Upon assignment, it will still restore the rest of the changelog" +
+                                                                  " before processing. To avoid a pause in processing during rebalances, this config" +
+                                                                  " should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
 
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
@@ -372,6 +374,13 @@ public class StreamsConfig extends AbstractConfig {
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to save the position of the processor." +
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
+
+    /** {@code repartition.purge.interval.ms} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String REPARTITION_PURGE_INTERVAL_MS_CONFIG = "repartition.purge.interval.ms";
+    private static final String REPARTITION_PURGE_INTERVAL_MS_DOC = "The frequency in milliseconds with which to delete fully consumed records from repartition topics." +
+            " Purging will occur after at least this value since the last purge, but may be delayed until later." +
+            " (Note, unlike <code>commit.interval.ms</code>, the default for this value remains unchanged when <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>).";
 
     /** {@code connections.max.idle.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -774,6 +783,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
+            .define(REPARTITION_PURGE_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    DEFAULT_COMMIT_INTERVAL_MS,
+                    atLeast(0),
+                    Importance.LOW,
+                    REPARTITION_PURGE_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
                     9 * 60 * 1000L,

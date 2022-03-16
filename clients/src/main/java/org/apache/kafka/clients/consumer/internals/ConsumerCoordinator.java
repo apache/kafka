@@ -1000,8 +1000,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public RequestFuture<Void> commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         invokeCompletedOffsetCommitCallbacks();
 
-        RequestFuture<Void> future =  null;
-        if (!coordinatorUnknown()) {
+        RequestFuture<Void> future = null;
+        if (offsets.isEmpty()) {
+            // No need to check coordinator if offsets is empty since commit of empty offsets is completed locally.
+            future = doCommitOffsetsAsync(offsets, callback);
+        } else if (!coordinatorUnknown()) {
             future = doCommitOffsetsAsync(offsets, callback);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit

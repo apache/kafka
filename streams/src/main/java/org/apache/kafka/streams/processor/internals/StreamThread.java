@@ -261,6 +261,7 @@ public class StreamThread extends Thread {
     public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
+    private final long purgeTimeMs;
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
@@ -288,6 +289,7 @@ public class StreamThread extends Thread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPurgeMs;
     private long lastPartitionAssignedMs = -1L;
     private int numIterations;
     private volatile State state = State.CREATED;
@@ -517,6 +519,7 @@ public class StreamThread extends Thread {
         this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
             .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.purgeTimeMs = config.getLong(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
@@ -585,7 +588,7 @@ public class StreamThread extends Thread {
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
-                    mainConsumer.enforceRebalance("Scheduled probing rebalance.");
+                    mainConsumer.enforceRebalance();
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
@@ -597,7 +600,7 @@ public class StreamThread extends Thread {
                     final boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
                     if (enforceRebalance && eosEnabled) {
                         log.info("Active task(s) got corrupted. Triggering a rebalance.");
-                        mainConsumer.enforceRebalance("Active tasks corrupted.");
+                        mainConsumer.enforceRebalance();
                     }
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
@@ -639,7 +642,7 @@ public class StreamThread extends Thread {
         if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             log.warn("Detected that shutdown was requested. " +
                     "All clients in this app will now begin to shutdown");
-            mainConsumer.enforceRebalance("Shutdown requested.");
+            mainConsumer.enforceRebalance();
         }
     }
 
@@ -882,17 +885,15 @@ public class StreamThread extends Thread {
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
         if (topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) {
+            log.info("StreamThread has detected an update to the topology");
+
             taskManager.handleTopologyUpdates();
-            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
-            if (topologyMetadata.isEmpty()) {
-                mainConsumer.unsubscribe();
-            }
-            topologyMetadata.maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(getName());
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             // We don't need to manually trigger a rebalance to pick up tasks from the new topology, as
             // a rebalance will always occur when the metadata is updated after a change in subscription
+            log.info("Updating consumer subscription following topology update");
             subscribeConsumer();
         }
     }
@@ -1069,9 +1070,10 @@ public class StreamThread extends Thread {
                     .collect(Collectors.toSet())
             );
 
-            if (committed > 0) {
+            if (committed > 0 && (now - lastPurgeMs) > purgeTimeMs) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
+                lastPurgeMs = now;
             }
 
             if (committed == -1) {
@@ -1124,14 +1126,14 @@ public class StreamThread extends Thread {
         log.info("Shutting down");
 
         try {
-            topologyMetadata.unregisterThread(threadMetadata.threadName());
-        } catch (final Throwable e) {
-            log.error("Failed to unregister thread due to the following error:", e);
-        }
-        try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
             log.error("Failed to close task manager due to the following error:", e);
+        }
+        try {
+            topologyMetadata.unregisterThread(threadMetadata.threadName());
+        } catch (final Throwable e) {
+            log.error("Failed to unregister thread due to the following error:", e);
         }
         try {
             changelogReader.clear();
