@@ -64,7 +64,6 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({KafkaOffsetBackingStore.class, ConnectUtils.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
-@SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "connect-offsets";
     private static final short TOPIC_PARTITIONS = 2;
@@ -82,8 +81,6 @@ public class KafkaOffsetBackingStoreTest {
         DEFAULT_PROPS.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
         DEFAULT_PROPS.put(DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_PROPS.put(DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_PROPS.put(DistributedConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_PROPS.put(DistributedConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_DISTRIBUTED_CONFIG = new DistributedConfig(DEFAULT_PROPS);
 
     }
@@ -394,7 +391,7 @@ public class KafkaOffsetBackingStoreTest {
                 .andReturn(storeLog);
     }
 
-    private void expectStart(final List<ConsumerRecord<byte[], byte[]>> preexistingRecords) throws Exception {
+    private void expectStart(final List<ConsumerRecord<byte[], byte[]>> preexistingRecords) {
         storeLog.start();
         PowerMock.expectLastCall().andAnswer(() -> {
             for (ConsumerRecord<byte[], byte[]> rec : preexistingRecords)

@@ -47,7 +47,8 @@
   // Version 12 adds flexible versions support as well as epoch validation through
   // the `LastFetchedEpoch` field
   //
-  "validVersions": "0-12",
+  // Version 13 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
+  "validVersions": "0-13",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
@@ -69,8 +70,9 @@
       "about": "The fetch session epoch, which is used for ordering requests in a session." },
     { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Topic", "type": "string", "versions": "0-12", "entityType": "topicName", "ignorable": true,
         "about": "The name of the topic to fetch." },
+      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
       { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",
@@ -89,8 +91,9 @@
     ]},
     { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
       "about": "In an incremental fetch request, the partitions to remove.", "fields": [
-      { "name": "Topic", "type": "string", "versions": "7+", "entityType": "topicName",
+      { "name": "Topic", "type": "string", "versions": "7-12", "entityType": "topicName", "ignorable": true,
         "about": "The partition name." },
+      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
       { "name": "Partitions", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }
     ]},

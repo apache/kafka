@@ -62,11 +62,12 @@ public class RecordQueueTest {
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
 
-    final InternalMockProcessorContext context = new InternalMockProcessorContext(
+    @SuppressWarnings("rawtypes")
+    final InternalMockProcessorContext context = new InternalMockProcessorContext<>(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new MockRecordCollector()
     );
-    private final MockSourceNode<Integer, Integer, ?, ?> mockSourceNodeWithMetrics
+    private final MockSourceNode<Integer, Integer> mockSourceNodeWithMetrics
         = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final RecordQueue queue = new RecordQueue(
         new TopicPartition("topic", 1),
@@ -86,6 +87,7 @@ public class RecordQueueTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
+    @SuppressWarnings("unchecked")
     @Before
     public void before() {
         mockSourceNodeWithMetrics.init(context);
@@ -290,23 +292,28 @@ public class RecordQueueTest {
     @Test
     public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() {
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
-        final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
-            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, key, recordValue,
-                new RecordHeaders(), Optional.empty()));
+        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("topic", 1, 1, 0L,
+            TimestampType.CREATE_TIME, 0, 0, key, recordValue,
+            new RecordHeaders(), Optional.empty());
+        final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(record);
 
         queueThatSkipsDeserializeErrors.addRawRecords(records);
-        assertEquals(0, queueThatSkipsDeserializeErrors.size());
+        assertEquals(1, queueThatSkipsDeserializeErrors.size());
+        assertEquals(new CorruptedRecord(record), queueThatSkipsDeserializeErrors.poll());
     }
 
     @Test
     public void shouldNotThrowStreamsExceptionWhenValueDeserializationFailsWithSkipHandler() {
         final byte[] value = Serdes.Long().serializer().serialize("foo", 1L);
+        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("topic", 1, 1, 0L,
+            TimestampType.CREATE_TIME, 0, 0, recordKey, value,
+            new RecordHeaders(), Optional.empty());
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
-            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, value,
-                new RecordHeaders(), Optional.empty()));
+            record);
 
         queueThatSkipsDeserializeErrors.addRawRecords(records);
-        assertEquals(0, queueThatSkipsDeserializeErrors.size());
+        assertEquals(1, queueThatSkipsDeserializeErrors.size());
+        assertEquals(new CorruptedRecord(record), queueThatSkipsDeserializeErrors.poll());
     }
 
     @Test

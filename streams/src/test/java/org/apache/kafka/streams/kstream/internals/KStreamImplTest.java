@@ -56,13 +56,15 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -102,7 +104,7 @@ import static org.junit.Assert.assertTrue;
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
-    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+    private final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
     private final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
         () -> new Transformer<String, String, KeyValue<String, String>>() {
             @Override
@@ -702,6 +704,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("materialized can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -710,6 +713,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -722,6 +726,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -730,6 +735,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -738,6 +744,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -750,6 +757,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -782,6 +790,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -794,6 +803,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -802,6 +812,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -814,6 +825,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -822,6 +834,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -830,6 +843,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -842,6 +856,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -875,6 +890,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -887,6 +903,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -895,6 +912,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -907,6 +925,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -915,6 +934,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -923,6 +943,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -935,6 +956,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -967,6 +989,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -1503,12 +1526,13 @@ public class KStreamImplTest {
             inputTopic.pipeInput("a", "v2");
             inputTopic.pipeInput("b", "v1");
         }
-        final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        final List<MockApiProcessor<String, String, Void, Void>> mockProcessors = processorSupplier.capturedProcessors(2);
         assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
             new KeyValueTimestamp<>("a", "v2", 0))));
         assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1525,9 +1549,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1536,6 +1560,7 @@ public class KStreamImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1554,9 +1579,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -2381,7 +2406,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcess() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2389,7 +2414,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, "storeName"));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     "storeName"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2397,7 +2423,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, Named.as("processor")));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     Named.as("processor")));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2405,7 +2432,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, Named.as("processor"), "stateStore"));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     Named.as("processor"), "stateStore"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 

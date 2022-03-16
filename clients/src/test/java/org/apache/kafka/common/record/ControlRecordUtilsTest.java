@@ -35,7 +35,7 @@ public class ControlRecordUtilsTest {
     public void testInvalidControlRecordType() {
         IllegalArgumentException thrown = assertThrows(
             IllegalArgumentException.class, () -> testDeserializeRecord(ControlRecordType.COMMIT));
-        assertEquals("Expected LEADER_CHANGE control record type(3), but found COMMIT", thrown.getMessage());
+        assertEquals("Expected LEADER_CHANGE control record type(2), but found COMMIT", thrown.getMessage());
     }
 
     @Test

@@ -35,18 +35,19 @@ public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC
         return new StrictBufferConfigImpl(
             Long.MAX_VALUE,
             Long.MAX_VALUE,
-            SHUT_DOWN // doesn't matter, given the bounds
+            SHUT_DOWN, // doesn't matter, given the bounds
+            getLogConfig()
         );
     }
 
     @Override
     public Suppressed.StrictBufferConfig shutDownWhenFull() {
-        return new StrictBufferConfigImpl(maxRecords(), maxBytes(), SHUT_DOWN);
+        return new StrictBufferConfigImpl(maxRecords(), maxBytes(), SHUT_DOWN, getLogConfig());
     }
 
     @Override
     public Suppressed.EagerBufferConfig emitEarlyWhenFull() {
-        return new EagerBufferConfigImpl(maxRecords(), maxBytes());
+        return new EagerBufferConfigImpl(maxRecords(), maxBytes(), getLogConfig());
     }
 
     public abstract boolean isLoggingEnabled();

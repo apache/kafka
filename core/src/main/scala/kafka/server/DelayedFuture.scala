@@ -97,4 +97,6 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
     executor.awaitTermination(60, TimeUnit.SECONDS)
     purgatory.shutdown()
   }
+
+  def isShutdown: Boolean = executor.isShutdown
 }

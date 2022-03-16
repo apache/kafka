@@ -126,13 +126,14 @@ public class SmokeTestClient extends SmokeTestUtil {
         try {
             if (!countDownLatch.await(1, TimeUnit.MINUTES)) {
                 System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't start in one minute");
+            } else {
+                System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
+                System.out.println(name + " started at " + Instant.now());
             }
         } catch (final InterruptedException e) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: " + e);
             e.printStackTrace(System.out);
         }
-        System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
-        System.out.println(name + " started at " + Instant.now());
     }
 
     public void closeAsync() {
@@ -145,7 +146,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         if (wasClosed && !uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");
         } else if (wasClosed) {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Got an uncaught exception");
         } else {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close in time.");
         }
@@ -156,6 +157,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, tempDirectory().getAbsolutePath());
+        fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         fullProps.putAll(props);
         return fullProps;
     }
@@ -173,7 +175,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         final KGroupedStream<String, Integer> groupedData = data.groupByKey(Grouped.with(stringSerde, intSerde));
 
         final KTable<Windowed<String>, Integer> minAggregation = groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(1)).grace(Duration.ofMinutes(1)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofMinutes(1)))
             .aggregate(
                 () -> Integer.MAX_VALUE,
                 (aggKey, value, aggregate) -> (value < aggregate) ? value : aggregate,
@@ -193,7 +195,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             .to("min", Produced.with(stringSerde, intSerde));
 
         final KTable<Windowed<String>, Integer> smallWindowSum = groupedData
-            .windowedBy(TimeWindows.of(Duration.ofSeconds(2)).advanceBy(Duration.ofSeconds(1)).grace(Duration.ofSeconds(30)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(2), Duration.ofSeconds(30)).advanceBy(Duration.ofSeconds(1)))
             .reduce((l, r) -> l + r);
 
         streamify(smallWindowSum, "sws-raw");
@@ -208,7 +210,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // max
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(2)))
             .aggregate(
                 () -> Integer.MIN_VALUE,
                 (aggKey, value, aggregate) -> (value > aggregate) ? value : aggregate,
@@ -225,7 +227,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // sum
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(2)))
             .aggregate(
                 () -> 0L,
                 (aggKey, value, aggregate) -> (long) value + aggregate,
@@ -240,7 +242,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // cnt
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(2)))
             .count(Materialized.as("uwin-cnt"))
             .toStream(new Unwindow<>())
             .filterNot((k, v) -> k.equals("flush"))

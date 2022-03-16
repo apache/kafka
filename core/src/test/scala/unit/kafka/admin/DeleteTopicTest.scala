@@ -21,10 +21,10 @@ import java.util.concurrent.ExecutionException
 import java.util.{Collections, Optional, Properties}
 
 import scala.collection.Seq
-import kafka.log.Log
-import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
+import kafka.log.UnifiedLog
+import kafka.zk.TopicPartitionZNode
 import kafka.utils.TestUtils
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import kafka.common.TopicAlreadyMarkedForDeletionException
@@ -34,7 +34,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import scala.jdk.CollectionConverters._
 
-class DeleteTopicTest extends ZooKeeperTestHarness {
+class DeleteTopicTest extends QuorumTestHarness {
 
   var servers: Seq[KafkaServer] = Seq()
 
@@ -131,7 +131,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     adminZkClient.deleteTopic(topic)
     // verify that a partition from the topic cannot be reassigned
     val props = new Properties()
-    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(servers))
     val adminClient = Admin.create(props)
     try {
       waitUntilTopicGone(adminClient, "test")
@@ -147,7 +147,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   private def waitUntilTopicGone(adminClient: Admin, topicName: String): Unit = {
     TestUtils.waitUntilTrue(() => {
       try {
-        adminClient.describeTopics(util.Collections.singletonList(topicName)).all().get()
+        adminClient.describeTopics(util.Collections.singletonList(topicName)).allTopicNames().get()
         false
       } catch {
         case e: ExecutionException =>
@@ -222,7 +222,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
     // increase the partition count for topic
     val props = new Properties()
-    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(servers))
     val adminClient = Admin.create(props)
     try {
       adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
@@ -389,7 +389,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     servers
   }
 
-  private def writeDups(numKeys: Int, numDups: Int, log: Log): Seq[(Int, Int)] = {
+  private def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog): Seq[(Int, Int)] = {
     var counter = 0
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter

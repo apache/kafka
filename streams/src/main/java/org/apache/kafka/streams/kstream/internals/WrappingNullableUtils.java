@@ -19,6 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 /**
  * If a component's serdes are Wrapping serdes, then they require a little extra setup
@@ -27,70 +29,80 @@ import org.apache.kafka.common.serialization.Serializer;
 public class WrappingNullableUtils {
 
     @SuppressWarnings("unchecked")
-    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final boolean isKey) {
-        Deserializer<T> deserializerToUse = specificDeserializer;
-        if (deserializerToUse == null) {
+    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final ProcessorContext context, final boolean isKey, final String name) {
+        final Deserializer<T> deserializerToUse;
+
+        if (specificDeserializer == null) {
+            final Deserializer<?> contextKeyDeserializer = context.keySerde().deserializer();
+            final Deserializer<?> contextValueDeserializer = context.valueSerde().deserializer();
             deserializerToUse = (Deserializer<T>) (isKey ? contextKeyDeserializer : contextValueDeserializer);
         } else {
-            initNullableDeserializer(deserializerToUse, contextKeyDeserializer, contextValueDeserializer);
+            deserializerToUse = specificDeserializer;
+            initNullableDeserializer(deserializerToUse, new SerdeGetter(context));
         }
         return deserializerToUse;
     }
     @SuppressWarnings("unchecked")
-    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey) {
-        Serializer<T> serializerToUse = specificSerializer;
-        if (serializerToUse == null) {
+    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final ProcessorContext context, final boolean isKey, final String name) {
+        final Serializer<T> serializerToUse;
+        if (specificSerializer == null) {
+            final Serializer<?> contextKeySerializer = context.keySerde().serializer();
+            final Serializer<?> contextValueSerializer = context.valueSerde().serializer();
             serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
         } else {
-            initNullableSerializer(serializerToUse, contextKeySerializer, contextValueSerializer);
+            serializerToUse = specificSerializer;
+            initNullableSerializer(serializerToUse, new SerdeGetter(context));
         }
         return serializerToUse;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde, final boolean isKey) {
-        Serde<T> serdeToUse = specificSerde;
-        if (serdeToUse == null) {
-            serdeToUse = (Serde<T>) (isKey ?  contextKeySerde : contextValueSerde);
-        } else if (serdeToUse instanceof WrappingNullableSerde) {
-            ((WrappingNullableSerde) serdeToUse).setIfUnset(contextKeySerde, contextValueSerde);
+    private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final SerdeGetter getter, final boolean isKey) {
+        final Serde<T> serdeToUse;
+        if (specificSerde == null) {
+            serdeToUse = (Serde<T>) (isKey ?  getter.keySerde() : getter.valueSerde());
+        } else {
+            serdeToUse = specificSerde;
+        }
+        if (serdeToUse instanceof WrappingNullableSerde) {
+            ((WrappingNullableSerde) serdeToUse).setIfUnset(getter);
         }
         return serdeToUse;
     }
 
-    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer) {
-        return prepareDeserializer(specificDeserializer, contextKeyDeserializer, contextValueDeserializer, true);
+    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final ProcessorContext context, final String name) {
+        return prepareDeserializer(specificDeserializer, context, true, name);
     }
 
-    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer) {
-        return prepareDeserializer(specificDeserializer, contextKeyDeserializer, contextValueDeserializer, false);
+    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final ProcessorContext context, final String name) {
+        return prepareDeserializer(specificDeserializer, context, false, name);
     }
 
-    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
-        return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, true);
+    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final ProcessorContext context, final String name) {
+        return prepareSerializer(specificSerializer, context, true, name);
     }
 
-    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
-        return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, false);
+    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final ProcessorContext context, final String name) {
+        return prepareSerializer(specificSerializer, context, false, name);
     }
 
-    public static <K> Serde<K> prepareKeySerde(final Serde<K> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
-        return prepareSerde(specificSerde, keySerde, valueSerde, true);
+    public static <K> Serde<K> prepareKeySerde(final Serde<K> specificSerde, final SerdeGetter getter) {
+        return prepareSerde(specificSerde, getter, true);
     }
 
-    public static <V> Serde<V> prepareValueSerde(final Serde<V> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
-        return prepareSerde(specificSerde, keySerde, valueSerde, false);
+    public static <V> Serde<V> prepareValueSerde(final Serde<V> specificSerde, final SerdeGetter getter) {
+        return prepareSerde(specificSerde, getter, false);
     }
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public static <T> void initNullableSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
+    public static <T> void initNullableSerializer(final Serializer<T> specificSerializer, final SerdeGetter getter) {
         if (specificSerializer instanceof WrappingNullableSerializer) {
-            ((WrappingNullableSerializer) specificSerializer).setIfUnset(contextKeySerializer, contextValueSerializer);
+            ((WrappingNullableSerializer) specificSerializer).setIfUnset(getter);
         }
     }
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public static <T> void initNullableDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer) {
+    public static <T> void initNullableDeserializer(final Deserializer<T> specificDeserializer, final SerdeGetter getter) {
         if (specificDeserializer instanceof WrappingNullableDeserializer) {
-            ((WrappingNullableDeserializer) specificDeserializer).setIfUnset(contextKeyDeserializer, contextValueDeserializer);
+            ((WrappingNullableDeserializer) specificDeserializer).setIfUnset(getter);
         }
     }
 

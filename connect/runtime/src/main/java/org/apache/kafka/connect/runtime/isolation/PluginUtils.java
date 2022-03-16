@@ -319,7 +319,6 @@ public class PluginUtils {
         switch (plugin.type()) {
             case SOURCE:
             case SINK:
-            case CONNECTOR:
                 return prunePluginName(plugin, "Connector");
             default:
                 return prunePluginName(plugin, plugin.type().simpleName());

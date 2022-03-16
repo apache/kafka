@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
@@ -66,7 +67,6 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
 
     static byte[] rawValue(final byte[] rawValueAndTimestamp) {
         final int rawValueLength = rawValueAndTimestamp.length - 8;
-
         return ByteBuffer
             .allocate(rawValueLength)
             .put(rawValueAndTimestamp, 8, rawValueLength)
@@ -85,9 +85,9 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
     }
 
     @Override
-    public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<V> defaultValueDeserializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         // ValueAndTimestampDeserializer never wraps a null deserializer (or configure would throw),
         // but it may wrap a deserializer that itself wraps a null deserializer.
-        initNullableDeserializer(valueDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
+        initNullableDeserializer(valueDeserializer, getter);
     }
 }

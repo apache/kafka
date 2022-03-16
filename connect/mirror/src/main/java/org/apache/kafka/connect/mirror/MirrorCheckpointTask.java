@@ -113,6 +113,7 @@ public class MirrorCheckpointTask extends SourceTask {
     public void stop() {
         long start = System.currentTimeMillis();
         stopping = true;
+        Utils.closeQuietly(topicFilter, "topic filter");
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
@@ -123,7 +124,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public String version() {
-        return "1";
+        return new MirrorCheckpointConnector().version();
     }
 
     @Override

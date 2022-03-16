@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImp
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 
 public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
@@ -48,7 +49,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * Create a size-constrained buffer in terms of the maximum number of keys it will store.
          */
         static EagerBufferConfig maxRecords(final long recordLimit) {
-            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE);
+            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE, Collections.emptyMap());
         }
 
         /**
@@ -60,7 +61,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * Create a size-constrained buffer in terms of the maximum number of bytes it will use.
          */
         static EagerBufferConfig maxBytes(final long byteLimit) {
-            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit);
+            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit, Collections.emptyMap());
         }
 
         /**

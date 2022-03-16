@@ -170,6 +170,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false); // disable idempotence since retries is force to 0
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
@@ -302,7 +303,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         });
     }
 
-    private <V extends AbstractStatus> void send(final String key,
+    private <V extends AbstractStatus<?>> void send(final String key,
                                                  final V status,
                                                  final CacheEntry<V> entry,
                                                  final boolean safeWrite) {
@@ -492,7 +493,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private byte[] serialize(AbstractStatus status) {
+    private byte[] serialize(AbstractStatus<?> status) {
         Struct struct = new Struct(STATUS_SCHEMA_V0);
         struct.put(STATE_KEY_NAME, status.state().name());
         if (status.trace() != null)
@@ -539,7 +540,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private void readConnectorStatus(String key, byte[] value) {
         String connector = parseConnectorStatusKey(key);
-        if (connector == null || connector.isEmpty()) {
+        if (connector.isEmpty()) {
             log.warn("Discarding record with invalid connector status key {}", key);
             return;
         }
@@ -645,7 +646,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private static class CacheEntry<T extends AbstractStatus> {
+    private static class CacheEntry<T extends AbstractStatus<?>> {
         private T value = null;
         private int sequence = 0;
         private boolean deleted = false;

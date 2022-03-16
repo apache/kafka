@@ -20,6 +20,8 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
+import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
@@ -40,6 +42,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.authorizer.AclMutator;
 
 import java.util.Collection;
 import java.util.List;
@@ -47,7 +50,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 
-public interface Controller extends AutoCloseable {
+public interface Controller extends AclMutator, AutoCloseable {
     /**
      * Change partition ISRs.
      *
@@ -87,6 +90,16 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(long deadlineNs,
                                                                      Collection<String> topicNames);
+
+    /**
+     * Find the ids for all topic names. Note that this function should only be used for
+     * integration tests.
+     *
+     * @param deadlineNs    The time by which this operation needs to be complete, before
+     *                      we will complete this operation with a timeout.
+     * @return              A future yielding a map from topic name to id.
+     */
+    CompletableFuture<Map<String, Uuid>> findAllTopicIds(long deadlineNs);
 
     /**
      * Find the names for topic ids.
@@ -224,6 +237,15 @@ public interface Controller extends AutoCloseable {
     );
 
     /**
+     * Allocate a block of producer IDs for transactional and idempotent producers
+     * @param request   The allocate producer IDs request
+     * @return          A future which yields a new producer ID block as a response
+     */
+    CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
+        AllocateProducerIdsRequestData request
+    );
+
+    /**
      * Begin writing a controller snapshot.  If there was already an ongoing snapshot, it
      * simply returns information about that snapshot rather than starting a new one.
      *
@@ -252,7 +274,7 @@ public interface Controller extends AutoCloseable {
      * If this controller is active, this is the non-negative controller epoch.
      * Otherwise, this is -1.
      */
-    long curClaimEpoch();
+    int curClaimEpoch();
 
     /**
      * Returns true if this controller is currently active.

@@ -30,9 +30,9 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -59,8 +59,8 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     createTopic(topic1, numPartitions, numServers, topicConfig)
@@ -244,11 +244,11 @@ class TransactionsTest extends KafkaServerTestHarness {
     String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit) = {
 
     // The basic plan for the test is as follows:
-    //  1. Seed topic1 with 1000 unique, numbered, messages.
+    //  1. Seed topic1 with 500 unique, numbered, messages.
     //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
     //     offsets as part of the transaction.
     //  3. Randomly abort transactions in step2.
-    //  4. Validate that we have 1000 unique committed messages in topic2. If the offsets were committed properly with the
+    //  4. Validate that we have 500 unique committed messages in topic2. If the offsets were committed properly with the
     //     transactions, we should not have any duplicates or missing messages since we should process in the input
     //     messages exactly once.
 
@@ -295,7 +295,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       consumer.close()
     }
 
-    // In spite of random aborts, we should still have exactly 1000 messages in topic2. I.e. we should not
+    // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
     val verifyingConsumer = transactionalConsumers(0)
     verifyingConsumer.subscribe(List(topic2).asJava)
@@ -604,7 +604,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
     producer.initTransactions()
-    assertThrows(classOf[KafkaException], () => producer.initTransactions())
+    assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
   @Test
@@ -752,7 +752,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   private def createReadCommittedConsumer(group: String = "group",
                                           maxPollRecords: Int = 500,
                                           props: Properties = new Properties) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
       groupId = group,
       enableAutoCommit = false,
       readCommitted = true,
@@ -762,7 +762,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   private def createReadUncommittedConsumer(group: String) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
       groupId = group,
       enableAutoCommit = false)
     nonTransactionalConsumers += consumer

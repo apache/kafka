@@ -32,15 +32,14 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +57,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.parseType;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -134,7 +134,6 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
-@SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -144,6 +143,7 @@ public class StreamsConfig extends AbstractConfig {
     private final boolean eosEnabled;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+    private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
@@ -323,19 +323,16 @@ public class StreamsConfig extends AbstractConfig {
     public static final String EXACTLY_ONCE_V2 = "exactly_once_v2";
 
     /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
-     */
-    public static final String METRICS_0100_TO_24 = "0.10.0-2.4";
-
-    /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
      */
     public static final String METRICS_LATEST = "latest";
 
     /** {@code acceptable.recovery.lag} */
     public static final String ACCEPTABLE_RECOVERY_LAG_CONFIG = "acceptable.recovery.lag";
-    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up for an active task." +
-                                                                  "Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
+    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough" +
+                                                                  " to receive an active task assignment. Upon assignment, it will still restore the rest of the changelog" +
+                                                                  " before processing. To avoid a pause in processing during rebalances, this config" +
+                                                                  " should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
 
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
@@ -354,7 +351,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
-    private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
+    public static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
 
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
@@ -363,7 +360,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
-    private static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
+    public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
@@ -378,6 +375,13 @@ public class StreamsConfig extends AbstractConfig {
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
+    /** {@code repartition.purge.interval.ms} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String REPARTITION_PURGE_INTERVAL_MS_CONFIG = "repartition.purge.interval.ms";
+    private static final String REPARTITION_PURGE_INTERVAL_MS_DOC = "The frequency in milliseconds with which to delete fully consumed records from repartition topics." +
+            " Purging will occur after at least this value since the last purge, but may be delayed until later." +
+            " (Note, unlike <code>commit.interval.ms</code>, the default for this value remains unchanged when <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>).";
+
     /** {@code connections.max.idle.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -385,7 +389,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code default.deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
-    private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
+    public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
     /** {@code default.production.exception.handler} */
     @SuppressWarnings("WeakerAccess")
@@ -428,12 +432,22 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
-    private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
+    public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
-    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time in milliseconds a stream task will stay idle when not all of its partition buffers contain records," +
-        " to avoid potential out-of-order record processing across multiple input streams.";
+    public static final String MAX_TASK_IDLE_MS_DOC = "This config controls whether joins and merges"
+        + " may produce out-of-order results."
+        + " The config value is the maximum amount of time in milliseconds a stream task will stay idle"
+        + " when it is fully caught up on some (but not all) input partitions"
+        + " to wait for producers to send additional records and avoid potential"
+        + " out-of-order record processing across multiple input streams."
+        + " The default (zero) does not wait for producers to send more records,"
+        + " but it does wait to fetch data that is already present on the brokers."
+        + " This default means that for records that are already present on the brokers,"
+        + " Streams will process them in timestamp order."
+        + " Set to -1 to disable idling entirely and process any locally available data,"
+        + " even though doing so may produce out-of-order processing.";
 
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
@@ -615,6 +629,11 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LIST,
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+            .define(NUM_STANDBY_REPLICAS_CONFIG,
+                    Type.INT,
+                    0,
+                    Importance.HIGH,
+                    NUM_STANDBY_REPLICAS_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
@@ -647,7 +666,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
-                    Serdes.ByteArraySerde.class.getName(),
+                    null,
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
@@ -682,7 +701,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
             .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
                     Type.CLASS,
-                    Serdes.ByteArraySerde.class.getName(),
+                    null,
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
@@ -696,11 +715,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(1),
                     Importance.MEDIUM,
                     MAX_WARMUP_REPLICAS_DOC)
-            .define(NUM_STANDBY_REPLICAS_CONFIG,
-                    Type.INT,
-                    0,
-                    Importance.MEDIUM,
-                    NUM_STANDBY_REPLICAS_DOC)
             .define(NUM_STREAM_THREADS_CONFIG,
                     Type.INT,
                     1,
@@ -751,7 +765,6 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     METRICS_LATEST,
                     in(
-                        METRICS_0100_TO_24,
                         METRICS_LATEST
                     ),
                     Importance.LOW,
@@ -762,6 +775,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
+            .define(REPARTITION_PURGE_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    DEFAULT_COMMIT_INTERVAL_MS,
+                    atLeast(0),
+                    Importance.LOW,
+                    REPARTITION_PURGE_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
                     9 * 60 * 1000L,
@@ -907,7 +926,7 @@ public class StreamsConfig extends AbstractConfig {
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
 
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
@@ -940,8 +959,15 @@ public class StreamsConfig extends AbstractConfig {
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
 
-        // Private API used to disable the fix on left/outer joins (https://issues.apache.org/jira/browse/KAFKA-10847)
-        public static final String ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__enable.kstreams.outer.join.spurious.results.fix__";
+        // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
+        public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
+
+        // Private API used to control the usage of consistency offset vectors
+        public static final String IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED = "__iq.consistency.offset"
+            + ".vector.enabled__";
+
+        // Private API used to control the prefix of the auto created topics
+        public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
@@ -951,6 +977,28 @@ public class StreamsConfig extends AbstractConfig {
                 return Boolean.parseBoolean((String) value);
             } else {
                 log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+                return defaultValue;
+            }
+        }
+
+        public static long getLong(final Map<String, Object> configs, final String key, final long defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            } else if (value instanceof String) {
+                return Long.parseLong((String) value);
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
+                return defaultValue;
+            }
+        }
+
+        public static String getString(final Map<String, Object> configs, final String key, final String defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof String) {
+                return (String) value;
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a String value.");
                 return defaultValue;
             }
         }
@@ -1062,7 +1110,7 @@ public class StreamsConfig extends AbstractConfig {
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
-        eosEnabled = StreamThread.eosEnabled(this);
+        eosEnabled = StreamsConfigUtils.eosEnabled(this);
 
         final String processingModeConfig = getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
         if (processingModeConfig.equals(EXACTLY_ONCE)) {
@@ -1078,6 +1126,26 @@ public class StreamsConfig extends AbstractConfig {
         if (props.containsKey(RETRIES_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release.", RETRIES_CONFIG);
         }
+
+        if (eosEnabled) {
+            verifyEOSTransactionTimeoutCompatibility();
+        }
+    }
+
+    private void verifyEOSTransactionTimeoutCompatibility() {
+        final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
+        final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
+            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+
+        if (transactionTimeout < commitInterval) {
+            throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
+                "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
+                "caused by long commit interval. Consider reconfiguring commit interval to match " +
+                "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
+                "commit interval by tuning `producer.transaction.timeout.ms` config.",
+                transactionTimeout, commitInterval));
+        }
     }
 
     @Override
@@ -1085,7 +1153,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> configUpdates =
             CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
 
-        if (StreamThread.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
+        if (StreamsConfigUtils.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using {} default value of {} as exactly once is enabled.",
                     COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
@@ -1101,7 +1169,7 @@ public class StreamsConfig extends AbstractConfig {
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
-        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_V2) {
+        if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2) {
             consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
         }
         consumerProps.putAll(getClientCustomProps());
@@ -1178,23 +1246,6 @@ public class StreamsConfig extends AbstractConfig {
                 throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
             }
         }
-    }
-
-    /**
-     * Get the configs to the {@link KafkaConsumer consumer}.
-     * Properties using the prefix {@link #CONSUMER_PREFIX} will be used in favor over their non-prefixed versions
-     * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
-     * version as we only support reading/writing from/to the same Kafka Cluster.
-     *
-     * @param groupId      consumer groupId
-     * @param clientId     clientId
-     * @return Map of the consumer configuration.
-     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String, int)}
-     */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public Map<String, Object> getConsumerConfigs(final String groupId, final String clientId) {
-        return getMainConsumerConfigs(groupId, clientId, DUMMY_THREAD_INDEX);
     }
 
     /**
@@ -1360,7 +1411,7 @@ public class StreamsConfig extends AbstractConfig {
         props.putAll(clientProvidedProps);
 
         // When using EOS alpha, stream should auto-downgrade the transactional commit protocol to be compatible with older brokers.
-        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+        if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) {
             props.put("internal.auto.downgrade.txn.commit", true);
         }
 
@@ -1426,6 +1477,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public Serde defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
+        if (keySerdeConfigSetting ==  null) {
+            throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
+        }
         try {
             final Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), true);
@@ -1445,6 +1499,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public Serde defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
+        if (valueSerdeConfigSetting == null) {
+            throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
+        }
         try {
             final Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), false);

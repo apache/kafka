@@ -54,15 +54,22 @@ public class MirrorSourceTaskTest {
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(null, null, "cluster7",
                 new DefaultReplicationPolicy(), 50);
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
-        assertEquals("cluster7.topic1", sourceRecord.topic());
-        assertEquals(2, sourceRecord.kafkaPartition().intValue());
-        assertEquals(new TopicPartition("topic1", 2), MirrorUtils.unwrapPartition(sourceRecord.sourcePartition()));
-        assertEquals(3L, MirrorUtils.unwrapOffset(sourceRecord.sourceOffset()).longValue());
-        assertEquals(4L, sourceRecord.timestamp().longValue());
-        assertEquals(key, sourceRecord.key());
-        assertEquals(value, sourceRecord.value());
-        assertEquals(headers.lastHeader("header1").value(), sourceRecord.headers().lastWithName("header1").value());
-        assertEquals(headers.lastHeader("header2").value(), sourceRecord.headers().lastWithName("header2").value());
+        assertEquals("cluster7.topic1", sourceRecord.topic(),
+                "Failure on cluster7.topic1 consumerRecord serde");
+        assertEquals(2, sourceRecord.kafkaPartition().intValue(),
+                "sourceRecord kafka partition is incorrect");
+        assertEquals(new TopicPartition("topic1", 2), MirrorUtils.unwrapPartition(sourceRecord.sourcePartition()),
+                "topic1 unwrapped from sourcePartition is incorrect");
+        assertEquals(3L, MirrorUtils.unwrapOffset(sourceRecord.sourceOffset()).longValue(),
+                "sourceRecord's sourceOffset is incorrect");
+        assertEquals(4L, sourceRecord.timestamp().longValue(),
+                "sourceRecord's timestamp is incorrect");
+        assertEquals(key, sourceRecord.key(), "sourceRecord's key is incorrect");
+        assertEquals(value, sourceRecord.value(), "sourceRecord's value is incorrect");
+        assertEquals(headers.lastHeader("header1").value(), sourceRecord.headers().lastWithName("header1").value(),
+                "sourceRecord's header1 is incorrect");
+        assertEquals(headers.lastHeader("header2").value(), sourceRecord.headers().lastWithName("header2").value(),
+                "sourceRecord's header2 is incorrect");
     }
 
     @Test
@@ -86,16 +93,16 @@ public class MirrorSourceTaskTest {
         MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(0);
 
         // if max offset lag is zero, should always emit offset syncs
-        assertTrue(partitionState.update(0, 100));
-        assertTrue(partitionState.update(2, 102));
-        assertTrue(partitionState.update(3, 153));
-        assertTrue(partitionState.update(4, 154));
-        assertTrue(partitionState.update(5, 155));
-        assertTrue(partitionState.update(6, 207));
-        assertTrue(partitionState.update(2, 208));
-        assertTrue(partitionState.update(3, 209));
-        assertTrue(partitionState.update(4, 3));
-        assertTrue(partitionState.update(5, 4));
+        assertTrue(partitionState.update(0, 100), "zeroOffsetSync downStreamOffset 100 is incorrect");
+        assertTrue(partitionState.update(2, 102), "zeroOffsetSync downStreamOffset 102 is incorrect");
+        assertTrue(partitionState.update(3, 153), "zeroOffsetSync downStreamOffset 153 is incorrect");
+        assertTrue(partitionState.update(4, 154), "zeroOffsetSync downStreamOffset 154 is incorrect");
+        assertTrue(partitionState.update(5, 155), "zeroOffsetSync downStreamOffset 155 is incorrect");
+        assertTrue(partitionState.update(6, 207), "zeroOffsetSync downStreamOffset 207 is incorrect");
+        assertTrue(partitionState.update(2, 208), "zeroOffsetSync downStreamOffset 208 is incorrect");
+        assertTrue(partitionState.update(3, 209), "zeroOffsetSync downStreamOffset 209 is incorrect");
+        assertTrue(partitionState.update(4, 3), "zeroOffsetSync downStreamOffset 3 is incorrect");
+        assertTrue(partitionState.update(5, 4), "zeroOffsetSync downStreamOffset 4 is incorrect");
     }
 
     @Test
@@ -134,13 +141,16 @@ public class MirrorSourceTaskTest {
         for (int i = 0; i < sourceRecords.size(); i++) {
             SourceRecord sourceRecord = sourceRecords.get(i);
             ConsumerRecord<byte[], byte[]> consumerRecord = consumerRecordsList.get(i);
-            assertEquals(consumerRecord.key(), sourceRecord.key());
-            assertEquals(consumerRecord.value(), sourceRecord.value());
+            assertEquals(consumerRecord.key(), sourceRecord.key(),
+                    "consumerRecord key does not equal sourceRecord key");
+            assertEquals(consumerRecord.value(), sourceRecord.value(),
+                    "consumerRecord value does not equal sourceRecord value");
             // We expect that the topicname will be based on the replication policy currently used
             assertEquals(replicationPolicy.formatRemoteTopic(sourceClusterName, topicName),
-                    sourceRecord.topic());
+                    sourceRecord.topic(), "topicName not the same as the current replicationPolicy");
             // We expect that MirrorMaker will keep the same partition assignment
-            assertEquals(consumerRecord.partition(), sourceRecord.kafkaPartition().intValue());
+            assertEquals(consumerRecord.partition(), sourceRecord.kafkaPartition().intValue(),
+                    "partition assignment not the same as the current replicationPolicy");
             // Check header values
             List<Header> expectedHeaders = new ArrayList<>();
             consumerRecord.headers().forEach(expectedHeaders::add);
@@ -155,8 +165,10 @@ public class MirrorSourceTaskTest {
         for (int i = 0; i < expectedHeaders.size(); i++) {
             Header expectedHeader = expectedHeaders.get(i);
             org.apache.kafka.connect.header.Header taskHeader = taskHeaders.get(i);
-            assertEquals(expectedHeader.key(), taskHeader.key());
-            assertEquals(expectedHeader.value(), taskHeader.value());
+            assertEquals(expectedHeader.key(), taskHeader.key(),
+                    "taskHeader's key expected to equal " + taskHeader.key());
+            assertEquals(expectedHeader.value(), taskHeader.value(),
+                    "taskHeader's value expected to equal " + taskHeader.value().toString());
         }
     }
 }

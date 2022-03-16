@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -34,7 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public abstract class AbstractProcessorContext implements InternalProcessorContext {
+public abstract class AbstractProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
     private final TaskId taskId;
     private final String applicationId;
@@ -56,8 +57,8 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
-        valueSerde = config.defaultValueSerde();
-        keySerde = config.defaultKeySerde();
+        valueSerde = null;
+        keySerde = null;
         this.cache = cache;
     }
 
@@ -85,11 +86,17 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public Serde<?> keySerde() {
+        if (keySerde == null) {
+            return config.defaultKeySerde();
+        }
         return keySerde;
     }
 
     @Override
     public Serde<?> valueSerde() {
+        if (valueSerde == null) {
+            return config.defaultValueSerde();
+        }
         return valueSerde;
     }
 
@@ -106,11 +113,18 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
+        register(store, stateRestoreCallback, () -> { });
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CommitCallback checkpoint) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
         Objects.requireNonNull(store, "store must not be null");
-        stateManager().registerStore(store, stateRestoreCallback);
+        stateManager().registerStore(store, stateRestoreCallback, checkpoint);
     }
 
     @Override

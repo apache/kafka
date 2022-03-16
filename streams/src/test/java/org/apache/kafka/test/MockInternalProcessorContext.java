@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -31,16 +32,17 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
+public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext<Object, Object> {
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private ProcessorNode currentNode;
@@ -132,7 +134,16 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {
+        restoreCallbacks.put(store.name(), stateRestoreCallback);
+        super.register(store, stateRestoreCallback);
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CommitCallback checkpoint) {
         restoreCallbacks.put(store.name(), stateRestoreCallback);
         super.register(store, stateRestoreCallback);
     }
@@ -150,7 +161,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     public void logChange(final String storeName,
                           final Bytes key,
                           final byte[] value,
-                          final long timestamp) {
+                          final long timestamp,
+                          final Position position) {
     }
 
     @Override

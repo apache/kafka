@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static java.time.Duration.ofHours;
 import static java.time.Duration.ofSeconds;
 
 /**
@@ -96,7 +97,11 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
         );
 
-        leftStream.join(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.join(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -138,9 +143,12 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
-                .join(rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
-                                 .selectKey(MockMapper.selectKeyKeyValueMapper()),
-                       valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+            .join(
+                rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
+                    .selectKey(MockMapper.selectKeyKeyValueMapper()),
+                valueJoiner,
+                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -181,7 +189,11 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
         );
 
-        leftStream.leftJoin(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.leftJoin(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -223,9 +235,12 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
-                .leftJoin(rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
-                                     .selectKey(MockMapper.selectKeyKeyValueMapper()),
-                        valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+            .leftJoin(
+                rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
+                     .selectKey(MockMapper.selectKeyKeyValueMapper()),
+                valueJoiner,
+                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -266,7 +281,11 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
         );
 
-        leftStream.outerJoin(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.outerJoin(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -308,9 +327,12 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
-                .outerJoin(rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
-                                .selectKey(MockMapper.selectKeyKeyValueMapper()),
-                        valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+            .outerJoin(
+                rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
+                    .selectKey(MockMapper.selectKeyKeyValueMapper()),
+                valueJoiner,
+                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -399,8 +421,15 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L))
         );
 
-        leftStream.join(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10)))
-                .join(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.join(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).join(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }

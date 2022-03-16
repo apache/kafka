@@ -23,27 +23,19 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.eq;
 
 import java.math.BigInteger;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expect;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.powermock.api.easymock.PowerMock.createStrictMock;
-import static org.powermock.api.easymock.PowerMock.mockStatic;
-import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.replayAll;
-import static org.powermock.api.easymock.PowerMock.verify;
-import static org.powermock.api.easymock.PowerMock.verifyAll;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(StreamsMetricsImpl.class)
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
@@ -56,7 +48,7 @@ public class RocksDBMetricsTest {
 
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
-    private final StreamsMetricsImpl streamsMetrics = createStrictMock(StreamsMetricsImpl.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Map<String, String> tags = Collections.singletonMap("hello", "world");
 
     private interface SensorCreator {
@@ -467,20 +459,18 @@ public class RocksDBMetricsTest {
     }
 
     private void runAndVerifyMutableMetric(final String name, final String description, final Runnable metricAdder) {
-        streamsMetrics.addStoreLevelMutableMetric(
-            eq(TASK_ID),
-            eq(STORE_TYPE),
-            eq(STORE_NAME),
-            eq(name),
-            eq(description),
-            eq(RecordingLevel.INFO),
-            eq(VALUE_PROVIDER)
-        );
-        replay(streamsMetrics);
 
         metricAdder.run();
 
-        verify(streamsMetrics);
+        verify(streamsMetrics).addStoreLevelMutableMetric(
+                eq(TASK_ID),
+                eq(STORE_TYPE),
+                eq(STORE_NAME),
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(VALUE_PROVIDER)
+        );
     }
 
     private void verifyRateAndTotalSensor(final String metricNamePrefix,
@@ -534,28 +524,24 @@ public class RocksDBMetricsTest {
     }
 
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
-        mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.storeLevelSensor(
-            TASK_ID,
-            STORE_NAME,
-            metricNamePrefix,
-            RecordingLevel.DEBUG
-        )).andReturn(sensor);
-        expect(streamsMetrics.storeLevelTagMap(
-            TASK_ID,
-            STORE_TYPE,
-            STORE_NAME
-        )).andReturn(tags);
+
+        when(streamsMetrics.storeLevelSensor(
+                TASK_ID,
+                STORE_NAME,
+                metricNamePrefix,
+                RecordingLevel.DEBUG
+        )).thenReturn(sensor);
+        when(streamsMetrics.storeLevelTagMap(
+                TASK_ID,
+                STORE_TYPE,
+                STORE_NAME
+        )).thenReturn(tags);
     }
 
     private void replayCallAndVerify(final SensorCreator sensorCreator) {
-        replayAll();
-        replay(StreamsMetricsImpl.class);
 
         final Sensor sensor = sensorCreator.sensor(streamsMetrics, ROCKSDB_METRIC_CONTEXT);
 
-        verifyAll();
-        verify(StreamsMetricsImpl.class);
 
         assertThat(sensor, is(this.sensor));
     }

@@ -19,13 +19,22 @@ package org.apache.kafka.controller;
 
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
+    private volatile int fencedBrokers;
+    private volatile int activeBrokers;
     private volatile int topics;
     private volatile int partitions;
+    private volatile int offlinePartitions;
+    private volatile int preferredReplicaImbalances;
+    private volatile boolean closed = false;
 
     public MockControllerMetrics() {
         this.active = false;
+        this.fencedBrokers = 0;
+        this.activeBrokers = 0;
         this.topics = 0;
         this.partitions = 0;
+        this.offlinePartitions = 0;
+        this.preferredReplicaImbalances = 0;
     }
 
     @Override
@@ -49,6 +58,26 @@ public final class MockControllerMetrics implements ControllerMetrics {
     }
 
     @Override
+    public void setFencedBrokerCount(int brokerCount) {
+        this.fencedBrokers = brokerCount;
+    }
+
+    @Override
+    public int fencedBrokerCount() {
+        return this.fencedBrokers;
+    }
+
+    @Override
+    public void setActiveBrokerCount(int brokerCount) {
+        this.activeBrokers = brokerCount;
+    }
+
+    @Override
+    public int activeBrokerCount() {
+        return activeBrokers;
+    }
+
+    @Override
     public void setGlobalTopicsCount(int topicCount) {
         this.topics = topicCount;
     }
@@ -66,5 +95,34 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public int globalPartitionCount() {
         return this.partitions;
+    }
+
+    @Override
+    public void setOfflinePartitionCount(int offlinePartitions) {
+        this.offlinePartitions = offlinePartitions;
+    }
+
+    @Override
+    public int offlinePartitionCount() {
+        return this.offlinePartitions;
+    }
+
+    @Override
+    public void setPreferredReplicaImbalanceCount(int replicaImbalances) {
+        this.preferredReplicaImbalances = replicaImbalances;
+    }
+
+    @Override
+    public int preferredReplicaImbalanceCount() {
+        return this.preferredReplicaImbalances;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+    }
+
+    public boolean isClosed() {
+        return this.closed;
     }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -63,7 +64,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
         }
 
         for (final KeyValue<String, String> kvToInsert : toInsert) {
@@ -96,7 +97,7 @@ public class ThreadCacheTest {
             final String keyStr = "K" + i;
             final Bytes key = Bytes.wrap(keyStr.getBytes());
             final byte[] value = new byte[valueSizeBytes];
-            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
         }
 
 
@@ -134,7 +135,7 @@ public class ThreadCacheTest {
     }
 
 
-    static int memoryCacheEntrySize(final byte[] key, final byte[] value, final String topic) {
+    static long memoryCacheEntrySize(final byte[] key, final byte[] value, final String topic) {
         return key.length +
             value.length +
             1 + // isDirty
@@ -174,7 +175,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1, 1, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1, 1, 1, ""));
         }
 
         for (int i = 0; i < expected.size(); i++) {
@@ -363,8 +364,8 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() {
-        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
-        final ThreadCache cache = setupThreadCache(0, 5, entrySize * 5, false);
+        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final ThreadCache cache = setupThreadCache(0, 5, entrySize * 5L, false);
         assertEquals(5, cache.size());
         // should evict byte[] {0}
         cache.put(namespace, Bytes.wrap(new byte[]{6}), dirtyEntry(new byte[]{6}));
@@ -374,8 +375,8 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCacheReverseRange() {
-        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
-        final ThreadCache cache = setupThreadCache(4, 0, entrySize * 5, true);
+        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final ThreadCache cache = setupThreadCache(4, 0, entrySize * 5L, true);
         assertEquals(5, cache.size());
         // should evict byte[] {4}
         cache.put(namespace, Bytes.wrap(new byte[]{6}), dirtyEntry(new byte[]{6}));
@@ -415,8 +416,8 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldReturnAllUnevictedValuesFromCache() {
-        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
-        final ThreadCache cache = setupThreadCache(0, 5, entrySize * 5, false);
+        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final ThreadCache cache = setupThreadCache(0, 5, entrySize * 5L, false);
         assertEquals(5, cache.size());
         // should evict byte[] {0}
         cache.put(namespace, Bytes.wrap(new byte[]{6}), dirtyEntry(new byte[]{6}));
@@ -426,8 +427,8 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldReturnAllUnevictedValuesFromCacheInReverseOrder() {
-        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
-        final ThreadCache cache = setupThreadCache(4, 0, entrySize * 5, true);
+        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final ThreadCache cache = setupThreadCache(4, 0, entrySize * 5L, true);
         assertEquals(5, cache.size());
         // should evict byte[] {4}
         cache.put(namespace, Bytes.wrap(new byte[]{6}), dirtyEntry(new byte[]{6}));
@@ -615,7 +616,7 @@ public class ThreadCacheTest {
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {
-        return new LRUCacheEntry(key, null, true, -1, -1, -1, "");
+        return new LRUCacheEntry(key, new RecordHeaders(), true, -1, -1, -1, "");
     }
 
     private LRUCacheEntry cleanEntry(final byte[] key) {

@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -30,34 +31,27 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V> the type of the value
  */
 class TimestampedTupleForwarder<K, V> {
-    private final ProcessorContext context;
+    private final InternalProcessorContext<K, Change<V>> context;
     private final boolean sendOldValues;
     private final boolean cachingEnabled;
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     TimestampedTupleForwarder(final StateStore store,
-                              final ProcessorContext context,
+                              final ProcessorContext<K, Change<V>> context,
                               final TimestampedCacheFlushListener<K, V> flushListener,
                               final boolean sendOldValues) {
-        this.context = context;
+        this.context = (InternalProcessorContext<K, Change<V>>) context;
         this.sendOldValues = sendOldValues;
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
-    public void maybeForward(final K key,
-                             final V newValue,
-                             final V oldValue) {
+    public void maybeForward(final Record<K, Change<V>> record) {
         if (!cachingEnabled) {
-            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
-        }
-    }
-
-    public void maybeForward(final K key,
-                             final V newValue,
-                             final V oldValue,
-                             final long timestamp) {
-        if (!cachingEnabled) {
-            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null), To.all().withTimestamp(timestamp));
+            if (sendOldValues) {
+                context.forward(record);
+            } else {
+                context.forward(record.withValue(new Change<>(record.value().newValue, null)));
+            }
         }
     }
 }

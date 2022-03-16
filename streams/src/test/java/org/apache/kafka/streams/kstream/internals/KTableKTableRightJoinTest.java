@@ -20,61 +20,49 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.api.MockProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.Properties;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
 
 public class KTableKTableRightJoinTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterSkippedRecordsDueToNullLeftKey(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterSkippedRecordsDueToNullLeftKey(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void shouldLogAndMeterSkippedRecordsDueToNullLeftKey(final String builtInMetricsVersion) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         @SuppressWarnings("unchecked")
-        final Processor<String, Change<String>> join = new KTableKTableRightJoin<>(
+        final Processor<String, Change<String>, String, Change<Object>> join = new KTableKTableRightJoin<>(
             (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
             (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
             null
         ).get();
 
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockProcessorContext context = new MockProcessorContext(props);
-        context.setRecordMetadata("left", -1, -2, null, -3);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+        final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(props);
+        context.setRecordMetadata("left", -1, -2);
         join.init(context);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableRightJoin.class)) {
-            join.process(null, new Change<>("new", "old"));
+            join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]")
-            );
-        }
-
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(
-                1.0,
-                getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
+                appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(Event::getMessage)
+                    .collect(Collectors.toList()),
+                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
             );
         }
     }

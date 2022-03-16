@@ -79,7 +79,7 @@ public class HasHeaderKeyTest {
     }
 
     private SimpleConfig config(Map<String, String> props) {
-        return new SimpleConfig(new HasHeaderKey().config(), props);
+        return new SimpleConfig(new HasHeaderKey<>().config(), props);
     }
 
     private SourceRecord recordWithHeaders(String... headers) {

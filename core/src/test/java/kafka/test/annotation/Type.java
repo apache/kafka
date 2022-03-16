@@ -28,7 +28,7 @@ import java.util.function.Consumer;
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
  */
 public enum Type {
-    RAFT {
+    KRAFT {
         @Override
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
             invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));

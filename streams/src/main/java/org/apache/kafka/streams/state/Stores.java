@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
@@ -57,7 +57,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  *               .withCachingDisabled());
  * }</pre>
  * When using the Processor API, i.e., {@link org.apache.kafka.streams.Topology Topology}, users create
- * {@link StoreBuilder}s that can be attached to {@link org.apache.kafka.streams.processor.Processor Processor}s.
+ * {@link StoreBuilder}s that can be attached to {@link org.apache.kafka.streams.processor.api.Processor Processor}s.
  * For example, you can create a {@link org.apache.kafka.streams.kstream.Windowed windowed} RocksDB store with custom
  * changelog topic configuration like:
  * <pre>{@code
@@ -122,22 +122,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new KeyValueBytesStoreSupplier() {
-            @Override
-            public String name() {
-                return name;
-            }
-
-            @Override
-            public KeyValueStore<Bytes, byte[]> get() {
-                return new InMemoryKeyValueStore(name);
-            }
-
-            @Override
-            public String metricsScope() {
-                return "in-memory";
-            }
-        };
+        return new InMemoryKeyValueBytesStoreSupplier(name);
     }
 
     /**

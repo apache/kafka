@@ -18,7 +18,7 @@ package kafka.cluster
 
 import java.util.Properties
 
-import kafka.log.{ClientRecordDeletion, Log, LogConfig, LogManager}
+import kafka.log.{ClientRecordDeletion, UnifiedLog, LogConfig, LogManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -32,7 +32,7 @@ class ReplicaTest {
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime()
   val brokerTopicStats = new BrokerTopicStats
-  var log: Log = _
+  var log: UnifiedLog = _
 
   @BeforeEach
   def setup(): Unit = {
@@ -41,18 +41,21 @@ class ReplicaTest {
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
     logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
     val config = LogConfig(logProps)
-    log = Log(logDir,
-      config,
+    log = UnifiedLog(
+      dir = logDir,
+      config = config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = time,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
-      keepPartitionMetadataFile = true)
+      keepPartitionMetadataFile = true
+    )
   }
 
   @AfterEach

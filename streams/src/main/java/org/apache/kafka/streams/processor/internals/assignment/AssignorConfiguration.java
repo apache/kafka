@@ -29,6 +29,8 @@ import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -105,13 +107,23 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
+                    // ATTENTION: The following log messages is used for verification in system test
+                    // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
+                    // If you change it, please do also change the system test accordingly and
+                    // verify whether the test passes.
+                    log.info("Eager rebalancing protocol is enabled now for upgrade from {}.x", upgradeFrom);
+                    log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
+                        " Please be prepared to remove the 'upgrade.from' config soon.");
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-        log.info("Cooperative rebalancing enabled now");
+        // ATTENTION: The following log messages is used for verification in system test
+        // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
+        // If you change it, please do also change the system test accordingly and
+        // verify whether the test passes.
+        log.info("Cooperative rebalancing protocol is enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 
@@ -231,22 +243,26 @@ public final class AssignorConfiguration {
         public final int maxWarmupReplicas;
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
+        public final List<String> rackAwareAssignmentTags;
 
         private AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+            rackAwareAssignmentTags = Collections.emptyList();
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
-                          final Long probingRebalanceIntervalMs) {
+                          final Long probingRebalanceIntervalMs,
+                          final List<String> rackAwareAssignmentTags) {
             this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
+            this.rackAwareAssignmentTags = rackAwareAssignmentTags;
         }
 
         private static <T> T validated(final String configKey, final T value) {

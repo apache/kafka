@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -32,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 public class MemoryConfigBackingStore implements ConfigBackingStore {
 
-    private Map<String, ConnectorState> connectors = new HashMap<>();
+    private final Map<String, ConnectorState> connectors = new HashMap<>();
     private UpdateListener updateListener;
     private WorkerConfigTransformer configTransformer;
 
@@ -147,6 +148,11 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     @Override
     public void putSessionKey(SessionKey sessionKey) {
+        // no-op
+    }
+
+    @Override
+    public void putRestartRequest(RestartRequest restartRequest) {
         // no-op
     }
 

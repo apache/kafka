@@ -30,11 +30,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.Exit
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.BeforeEach
 
+@deprecated(message = "Use the Connect-based MirrorMaker instead (aka MM2).", since = "3.0")
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] =
@@ -43,9 +42,9 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
   val exited = new AtomicBoolean(false)
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     Exit.setExitProcedure((_, _) => exited.set(true))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   @AfterEach
@@ -63,10 +62,10 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1")
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
-    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("test", 0), 0L)
     assertThrows(classOf[TimeoutException], () => mirrorMakerConsumer.commit())
   }
@@ -76,10 +75,10 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "2000")
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
-    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic1", 0), 0L)
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic2", 0), 0L)
     MirrorMaker.commitOffsets(mirrorMakerConsumer)
@@ -90,10 +89,9 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
   def testCommaSeparatedRegex(): Unit = {
     val topic = "new-topic"
     val msg = "a test message"
-    val brokerList = TestUtils.getBrokerListStrFromServers(servers)
 
     val producerProps = new Properties
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
     val producer = new MirrorMakerProducer(true, producerProps)
@@ -104,10 +102,10 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
 
-    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("another_topic,new.*,foo"))
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("another_topic,new.*,foo"))
     mirrorMakerConsumer.init()
     try {
       TestUtils.waitUntilTrue(() => {

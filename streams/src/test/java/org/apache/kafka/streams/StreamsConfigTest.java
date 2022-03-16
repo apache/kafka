@@ -47,6 +47,7 @@ import java.util.Properties;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
+import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
@@ -398,6 +399,32 @@ public class StreamsConfigTest {
         assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowIfTransactionTimeoutSmallerThanCommitIntervalForEOSAlpha() {
+        assertThrows(IllegalArgumentException.class,
+            () -> testTransactionTimeoutSmallerThanCommitInterval(EXACTLY_ONCE));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowIfTransactionTimeoutSmallerThanCommitIntervalForEOSBeta() {
+        assertThrows(IllegalArgumentException.class,
+            () -> testTransactionTimeoutSmallerThanCommitInterval(EXACTLY_ONCE_BETA));
+    }
+
+    @Test
+    public void shouldNotThrowIfTransactionTimeoutSmallerThanCommitIntervalForAtLeastOnce() {
+        testTransactionTimeoutSmallerThanCommitInterval(AT_LEAST_ONCE);
+    }
+
+    private void testTransactionTimeoutSmallerThanCommitInterval(final String processingGuarantee) {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10000L);
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), 3000);
+        new StreamsConfig(props);
+    }
+
     @Test
     public void shouldOverrideStreamsDefaultConsumerConifgsOnRestoreConsumer() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
@@ -575,13 +602,6 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionIfNotAtLeastOnceOrExactlyOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-    }
-
-    @Test
-    public void shouldAcceptBuiltInMetricsVersion0100To24() {
-        // don't use `StreamsConfig.METRICS_0100_TO_24` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.0-2.4");
-        new StreamsConfig(props);
     }
 
     @Test
@@ -838,9 +858,10 @@ public class StreamsConfigTest {
     @Test
     public void shouldUseCorrectDefaultsWhenNoneSpecified() {
         final StreamsConfig config = new StreamsConfig(getStreamsConfig());
-        assertTrue(config.defaultKeySerde() instanceof Serdes.ByteArraySerde);
-        assertTrue(config.defaultValueSerde() instanceof Serdes.ByteArraySerde);
+
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+        assertThrows(ConfigException.class, config::defaultKeySerde);
+        assertThrows(ConfigException.class, config::defaultValueSerde);
     }
 
     @Test

@@ -108,6 +108,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -579,7 +580,7 @@ public class SenderTest {
         // Verify producerId after the sender is run to process responses.
         MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
         client.respond(metadataUpdate);
-        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareFindCoordinatorResponse(Errors.NONE, "testInitProducerIdWithPendingMetadataRequest");
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         waitForProducerId(transactionManager, producerIdAndEpoch);
     }
@@ -629,13 +630,13 @@ public class SenderTest {
 
         Node node = metadata.fetch().nodes().get(0);
         client.delayReady(node, REQUEST_TIMEOUT + 20);
-        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareFindCoordinatorResponse(Errors.NONE, "testNodeNotReady");
         sender.runOnce();
         sender.runOnce();
         assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION), "Coordinator not found");
 
         client.throttle(node, REQUEST_TIMEOUT + 20);
-        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareFindCoordinatorResponse(Errors.NONE, "Coordinator not found");
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         waitForProducerId(transactionManager, producerIdAndEpoch);
     }
@@ -1033,7 +1034,7 @@ public class SenderTest {
         TransactionManager transactionManager = createTransactionManager();
 
         // Retries once
-        setupWithTransactionState(transactionManager, false, null, true, 1);
+        setupWithTransactionState(transactionManager, false, null, true, 1, 0);
 
         // Init producer id/epoch
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
@@ -1464,8 +1465,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
-        txnManager.failIfNotReadyForSend();
-        txnManager.maybeAddPartitionToTransaction(tp0);
+        txnManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
@@ -1750,7 +1750,8 @@ public class SenderTest {
         doInitTransactions(transactionManager, new ProducerIdAndEpoch(producerId, (short) 0));
         assertTrue(transactionManager.hasProducerId());
 
-        transactionManager.maybeAddPartitionToTransaction(tp0);
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce(); // Receive AddPartitions response
 
@@ -2306,8 +2307,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
-        txnManager.failIfNotReadyForSend();
-        txnManager.maybeAddPartitionToTransaction(tp);
+        txnManager.maybeAddPartition(tp);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
         sender.runOnce();
 
@@ -2653,8 +2653,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
-            txnManager.failIfNotReadyForSend();
-            txnManager.maybeAddPartitionToTransaction(tp);
+            txnManager.maybeAddPartition(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
@@ -2668,6 +2667,133 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
+
+    @Test
+    public void testRecordsFlushedImmediatelyOnTransactionCompletion() throws Exception {
+        try (Metrics m = new Metrics()) {
+            int lingerMs = 50;
+            SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+
+            TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions);
+            setupWithTransactionState(txnManager, lingerMs);
+
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                1, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
+
+            // Begin a transaction and successfully add one partition to it.
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+            doInitTransactions(txnManager, producerIdAndEpoch);
+            txnManager.beginTransaction();
+            addPartitionToTxn(sender, txnManager, tp0);
+
+            // Send a couple records and assert that they are not sent immediately (due to linger).
+            appendToAccumulator(tp0);
+            appendToAccumulator(tp0);
+            sender.runOnce();
+            assertFalse(client.hasInFlightRequests());
+
+            // Now begin the commit and assert that the Produce request is sent immediately
+            // without waiting for the linger.
+            TransactionalRequestResult commitResult = txnManager.beginCommit();
+            runUntil(sender, client::hasInFlightRequests);
+
+            // Respond to the produce request and wait for the EndTxn request to be sent.
+            respondToProduce(tp0, Errors.NONE, 1L);
+            runUntil(sender, txnManager::hasInFlightRequest);
+
+            // Respond to the expected EndTxn request.
+            respondToEndTxn(Errors.NONE);
+            runUntil(sender, txnManager::isReady);
+
+            assertTrue(commitResult.isSuccessful());
+            commitResult.await();
+
+            // Finally, we want to assert that the linger time is still effective
+            // when the new transaction begins.
+            txnManager.beginTransaction();
+            addPartitionToTxn(sender, txnManager, tp0);
+
+            appendToAccumulator(tp0);
+            appendToAccumulator(tp0);
+            time.sleep(lingerMs - 1);
+            sender.runOnce();
+            assertFalse(client.hasInFlightRequests());
+            assertTrue(accumulator.hasUndrained());
+
+            time.sleep(1);
+            runUntil(sender, client::hasInFlightRequests);
+            assertFalse(accumulator.hasUndrained());
+        }
+    }
+
+    @Test
+    public void testAwaitPendingRecordsBeforeCommittingTransaction() throws Exception {
+        try (Metrics m = new Metrics()) {
+            SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+
+            TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions);
+            setupWithTransactionState(txnManager);
+
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                1, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
+
+            // Begin a transaction and successfully add one partition to it.
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+            doInitTransactions(txnManager, producerIdAndEpoch);
+            txnManager.beginTransaction();
+            addPartitionToTxn(sender, txnManager, tp0);
+
+            // Send one Produce request.
+            appendToAccumulator(tp0);
+            runUntil(sender, () -> client.requests().size() == 1);
+            assertFalse(accumulator.hasUndrained());
+            assertTrue(client.hasInFlightRequests());
+            assertTrue(txnManager.hasInflightBatches(tp0));
+
+            // Enqueue another record and then commit the transaction. We expect the unsent record to
+            // get sent before the transaction can be completed.
+            appendToAccumulator(tp0);
+            txnManager.beginCommit();
+            runUntil(sender, () -> client.requests().size() == 2);
+
+            assertTrue(txnManager.isCompleting());
+            assertFalse(txnManager.hasInFlightRequest());
+            assertTrue(txnManager.hasInflightBatches(tp0));
+
+            // Now respond to the pending Produce requests.
+            respondToProduce(tp0, Errors.NONE, 0L);
+            respondToProduce(tp0, Errors.NONE, 1L);
+            runUntil(sender, txnManager::hasInFlightRequest);
+
+            // Finally, respond to the expected EndTxn request.
+            respondToEndTxn(Errors.NONE);
+            runUntil(sender, txnManager::isReady);
+        }
+    }
+
+    private void addPartitionToTxn(Sender sender, TransactionManager txnManager, TopicPartition tp) {
+        txnManager.maybeAddPartition(tp);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+        runUntil(sender, () -> txnManager.isPartitionAdded(tp));
+        assertFalse(txnManager.hasInFlightRequest());
+    }
+
+    private void respondToProduce(TopicPartition tp, Errors error, long offset) {
+        client.respond(
+            request -> request instanceof ProduceRequest,
+            produceResponse(tp, offset, error, 0)
+        );
+
+    }
+
+    private void respondToEndTxn(Errors error) {
+        client.respond(
+            request -> request instanceof EndTxnRequest,
+            new EndTxnResponse(new EndTxnResponseData()
+                .setErrorCode(error.code())
+                .setThrottleTimeMs(0))
+        );
     }
 
     @Test
@@ -2688,8 +2814,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
-            txnManager.failIfNotReadyForSend();
-            txnManager.maybeAddPartitionToTransaction(tp);
+            txnManager.maybeAddPartition(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
@@ -2723,8 +2848,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
-            txnManager.failIfNotReadyForSend();
-            txnManager.maybeAddPartitionToTransaction(tp);
+            txnManager.maybeAddPartition(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
 
@@ -2749,7 +2873,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
         // Begin the transaction
         txnManager.beginTransaction();
-        txnManager.maybeAddPartitionToTransaction(tp0);
+        txnManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         // Run it once so that the partition is added to the transaction.
         sender.runOnce();
@@ -2787,7 +2911,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
-        txnManager.maybeAddPartitionToTransaction(tp0);
+        txnManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
@@ -2984,11 +3108,15 @@ public class SenderTest {
     }
     
     private void setupWithTransactionState(TransactionManager transactionManager) {
-        setupWithTransactionState(transactionManager, false, null, true, Integer.MAX_VALUE);
+        setupWithTransactionState(transactionManager, false, null, true, Integer.MAX_VALUE, 0);
+    }
+
+    private void setupWithTransactionState(TransactionManager transactionManager, int lingerMs) {
+        setupWithTransactionState(transactionManager, false, null, true, Integer.MAX_VALUE, lingerMs);
     }
 
     private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool) {
-        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true, Integer.MAX_VALUE);
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true, Integer.MAX_VALUE, 0);
     }
 
     private void setupWithTransactionState(
@@ -2997,7 +3125,7 @@ public class SenderTest {
         BufferPool customPool,
         boolean updateMetadata
     ) {
-        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, updateMetadata, Integer.MAX_VALUE);
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, updateMetadata, Integer.MAX_VALUE, 0);
     }
 
     private void setupWithTransactionState(
@@ -3005,7 +3133,8 @@ public class SenderTest {
         boolean guaranteeOrder,
         BufferPool customPool,
         boolean updateMetadata,
-        int retries
+        int retries,
+        int lingerMs
     ) {
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
@@ -3013,7 +3142,7 @@ public class SenderTest {
         this.metrics = new Metrics(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, lingerMs, 0L,
             DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3061,19 +3190,20 @@ public class SenderTest {
     }
 
     private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE);
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, transactionManager.transactionalId());
         sender.runOnce();
         sender.runOnce();
 
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         sender.runOnce();
         assertTrue(transactionManager.hasProducerId());
+        result.await();
     }
 
-    private void prepareFindCoordinatorResponse(Errors error) {
+    private void prepareFindCoordinatorResponse(Errors error, String txnid) {
         Node node = metadata.fetch().nodes().get(0);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(error, node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(error, txnid, node));
     }
 
     private void prepareInitProducerResponse(Errors error, long producerId, short producerEpoch) {

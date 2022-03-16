@@ -211,6 +211,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @Test
+  @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-7540)
   def testClose(): Unit = {
     val numRecords = 10
     val producer = createProducer()
@@ -261,7 +262,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def findCoordinator(group: String): Int = {
     val request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
       .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-      .setKey(group)).build()
+      .setCoordinatorKeys(Collections.singletonList(group))).build()
     var nodeId = -1
     TestUtils.waitUntilTrue(() => {
       val response = connectAndReceive[FindCoordinatorResponse](request)
@@ -288,7 +289,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     servers.foreach(server => killBroker(server.config.brokerId))
     val closeTimeout = 2000
     val future1 = submitCloseAndValidate(consumer1, closeTimeout, None, Some(closeTimeout))
-    val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, Some(requestTimeout), Some(requestTimeout))
+    val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(requestTimeout))
     future1.get
     future2.get
   }
@@ -299,6 +300,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     * Then, 1 consumer should be left out of the group.
     */
   @Test
+  @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-13421)
   def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
     val group = "group-max-size-test"
     val topic = "group-max-size-test"

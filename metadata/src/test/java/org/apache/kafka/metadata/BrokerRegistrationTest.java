@@ -18,8 +18,11 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -46,7 +49,7 @@ public class BrokerRegistrationTest {
         new BrokerRegistration(2, 0, Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
             Collections.singletonMap("foo", new VersionRange((short) 2, (short) 3)),
-            Optional.empty(), false));
+            Optional.of("myrack"), false));
 
     @Test
     public void testValues() {
@@ -74,5 +77,32 @@ public class BrokerRegistrationTest {
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
             "rack=Optional.empty, fenced=false)",
             REGISTRATIONS.get(1).toString());
+    }
+
+    @Test
+    public void testFromRecordAndToRecord() {
+        testRoundTrip(REGISTRATIONS.get(0));
+        testRoundTrip(REGISTRATIONS.get(1));
+        testRoundTrip(REGISTRATIONS.get(2));
+    }
+
+    private void testRoundTrip(BrokerRegistration registration) {
+        ApiMessageAndVersion messageAndVersion = registration.toRecord();
+        BrokerRegistration registration2 = BrokerRegistration.fromRecord(
+            (RegisterBrokerRecord) messageAndVersion.message());
+        assertEquals(registration, registration2);
+        ApiMessageAndVersion messageAndVersion2 = registration2.toRecord();
+        assertEquals(messageAndVersion, messageAndVersion2);
+    }
+
+    @Test
+    public void testToNode() {
+        assertEquals(Optional.empty(), REGISTRATIONS.get(0).node("NONEXISTENT"));
+        assertEquals(Optional.of(new Node(0, "localhost", 9090, null)),
+            REGISTRATIONS.get(0).node("INTERNAL"));
+        assertEquals(Optional.of(new Node(1, "localhost", 9091, null)),
+            REGISTRATIONS.get(1).node("INTERNAL"));
+        assertEquals(Optional.of(new Node(2, "localhost", 9092, "myrack")),
+            REGISTRATIONS.get(2).node("INTERNAL"));
     }
 }

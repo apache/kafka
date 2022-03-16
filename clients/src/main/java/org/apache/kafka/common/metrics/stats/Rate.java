@@ -101,11 +101,4 @@ public class Rate implements MeasurableStat {
             ", stat=" + stat +
             ')';
     }
-
-    /**
-     * @deprecated since 2.4 Use {@link WindowedSum} instead.
-     */
-    @Deprecated
-    public static class SampledTotal extends WindowedSum {
-    }
 }

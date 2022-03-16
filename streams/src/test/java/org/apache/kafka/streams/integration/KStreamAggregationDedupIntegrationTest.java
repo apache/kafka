@@ -65,6 +65,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
  * by virtue of having a large commit interval
  */
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class KStreamAggregationDedupIntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static final long COMMIT_INTERVAL_MS = 300L;

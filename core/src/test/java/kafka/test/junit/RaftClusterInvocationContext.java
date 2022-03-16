@@ -27,19 +27,25 @@ import kafka.testkit.TestKitNodes;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+import scala.compat.java8.OptionConverters;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
@@ -66,19 +72,24 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     @Override
     public String getDisplayName(int invocationIndex) {
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
-            .map(Object::toString)
-            .collect(Collectors.joining(", "));
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
         return String.format("[%d] Type=Raft, %s", invocationIndex, clusterDesc);
     }
 
     @Override
     public List<Extension> getAdditionalExtensions() {
+        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterReference, clusterConfig);
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
-                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(
-                    new TestKitNodes.Builder().
+                TestKitNodes nodes = new TestKitNodes.Builder().
                         setNumBrokerNodes(clusterConfig.numBrokers()).
-                        setNumControllerNodes(clusterConfig.numControllers()).build());
+                        setNumControllerNodes(clusterConfig.numControllers()).build();
+                nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
+                    clusterConfig.brokerServerProperties(brokerId).forEach(
+                            (key, value) -> brokerNode.propertyOverrides().put(key.toString(), value.toString()));
+                });
+                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
@@ -88,13 +99,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 cluster.format();
                 cluster.startup();
                 kafka.utils.TestUtils.waitUntilTrue(
-                    () -> cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+                    () -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
                     () -> "Broker never made it to RUNNING state.",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);
             },
-            (AfterTestExecutionCallback) context -> clusterReference.get().close(),
-            new ClusterInstanceParameterResolver(new RaftClusterInstance(clusterReference, clusterConfig)),
+            (AfterTestExecutionCallback) context -> clusterInstance.stop(),
+            new ClusterInstanceParameterResolver(clusterInstance),
             new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
         );
     }
@@ -105,6 +116,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
+        private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
 
         RaftClusterInstance(AtomicReference<KafkaClusterTestKit> clusterReference, ClusterConfig clusterConfig) {
             this.clusterReference = clusterReference;
@@ -118,7 +130,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Collection<SocketServer> brokerSocketServers() {
-            return clusterReference.get().brokers().values().stream()
+            return brokers()
                 .map(BrokerServer::socketServer)
                 .collect(Collectors.toList());
         }
@@ -129,15 +141,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public Optional<ListenerName> controllerListenerName() {
+            return OptionConverters.toJava(controllers().findAny().get().config().controllerListenerNames().headOption().map(ListenerName::new));
+        }
+
+        @Override
         public Collection<SocketServer> controllerSocketServers() {
-            return clusterReference.get().controllers().values().stream()
+            return controllers()
                 .map(ControllerServer::socketServer)
                 .collect(Collectors.toList());
         }
 
         @Override
         public SocketServer anyBrokerSocketServer() {
-            return clusterReference.get().brokers().values().stream()
+            return brokers()
                 .map(BrokerServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
@@ -145,7 +162,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public SocketServer anyControllerSocketServer() {
-            return clusterReference.get().controllers().values().stream()
+            return controllers()
                 .map(ControllerServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
@@ -168,7 +185,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            return Admin.create(clusterReference.get().clientProperties());
+            Admin admin = Admin.create(clusterReference.get().clientProperties());
+            admins.add(admin);
+            return admin;
         }
 
         @Override
@@ -185,12 +204,47 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
-                try {
-                    clusterReference.get().close();
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to stop Raft server", e);
-                }
+                admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
+                Utils.closeQuietly(clusterReference.get(), "cluster");
             }
         }
+
+        @Override
+        public void shutdownBroker(int brokerId) {
+            findBrokerOrThrow(brokerId).shutdown();
+        }
+
+        @Override
+        public void startBroker(int brokerId) {
+            findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void waitForReadyBrokers() throws InterruptedException {
+            try {
+                clusterReference.get().waitForReadyBrokers();
+            } catch (ExecutionException e) {
+                throw new AssertionError("Failed while waiting for brokers to become ready", e);
+            }
+        }
+
+        @Override
+        public void rollingBrokerRestart() {
+            throw new UnsupportedOperationException("Restarting Raft servers is not yet supported.");
+        }
+
+        private BrokerServer findBrokerOrThrow(int brokerId) {
+            return Optional.ofNullable(clusterReference.get().brokers().get(brokerId))
+                .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
+        }
+
+        private Stream<BrokerServer> brokers() {
+            return clusterReference.get().brokers().values().stream();
+        }
+
+        private Stream<ControllerServer> controllers() {
+            return clusterReference.get().controllers().values().stream();
+        }
+
     }
 }

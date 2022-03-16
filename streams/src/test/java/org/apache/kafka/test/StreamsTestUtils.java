@@ -20,13 +20,15 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -45,6 +47,7 @@ import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertFalse;
 
 public final class StreamsTestUtils {
     private StreamsTestUtils() {}
@@ -60,6 +63,19 @@ public final class StreamsTestUtils {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, keySerdeClassName);
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, valueSerdeClassName);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name);
+        props.putAll(additional);
+        return props;
+    }
+
+    public static Properties getStreamsConfig(final String applicationId,
+                                              final String bootstrapServers,
+                                              final Properties additional) {
+
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name);
         props.putAll(additional);
@@ -84,8 +100,6 @@ public final class StreamsTestUtils {
         return getStreamsConfig(
             applicationId,
             "localhost:9091",
-            Serdes.ByteArraySerde.class.getName(),
-            Serdes.ByteArraySerde.class.getName(),
             additional);
     }
 
@@ -120,6 +134,13 @@ public final class StreamsTestUtils {
         while (iterator.hasNext()) {
             results.add(iterator.next());
         }
+
+        if (iterator instanceof Closeable) {
+            try {
+                ((Closeable) iterator).close();
+            } catch (IOException e) { /* do nothing */ }
+        }
+
         return results;
     }
 
@@ -149,6 +170,24 @@ public final class StreamsTestUtils {
             assertThat(actualKv.key, equalTo(expectedKv.key));
             assertThat(actualKv.value, equalTo(expectedKv.value));
         }
+    }
+
+    public static void verifyAllWindowedKeyValues(final KeyValueIterator<Windowed<Bytes>, byte[]> iterator,
+                                                  final List<Windowed<Bytes>> expectedKeys,
+                                                  final List<String> expectedValues) {
+        if (expectedKeys.size() != expectedValues.size()) {
+            throw new IllegalArgumentException("expectedKeys and expectedValues should have the same size. " +
+                "expectedKeys size: " + expectedKeys.size() + ", expectedValues size: " + expectedValues.size());
+        }
+
+        for (int i = 0; i < expectedKeys.size(); i++) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                expectedKeys.get(i),
+                expectedValues.get(i)
+            );
+        }
+        assertFalse(iterator.hasNext());
     }
 
     public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,

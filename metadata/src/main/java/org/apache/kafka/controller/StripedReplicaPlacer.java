@@ -340,14 +340,14 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         }
 
         List<Integer> place(int replicationFactor) {
-            if (replicationFactor <= 0) {
-                throw new InvalidReplicationFactorException("Invalid replication factor " +
-                        replicationFactor + ": the replication factor must be positive.");
-            }
+            throwInvalidReplicationFactorIfNonPositive(replicationFactor);
+            throwInvalidReplicationFactorIfTooFewBrokers(replicationFactor, numTotalBrokers());
+            throwInvalidReplicationFactorIfZero(numUnfencedBrokers());
             // If we have returned as many assignments as there are unfenced brokers in
             // the cluster, shuffle the rack list and broker lists to try to avoid
             // repeating the same assignments again.
-            if (epoch == numUnfencedBrokers) {
+            // But don't reset the iteration epoch for a single unfenced broker -- otherwise we would loop forever
+            if (epoch == numUnfencedBrokers && numUnfencedBrokers > 1) {
                 shuffle();
                 epoch = 0;
             }
@@ -400,6 +400,27 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         }
     }
 
+    private static void throwInvalidReplicationFactorIfNonPositive(int replicationFactor) {
+        if (replicationFactor <= 0) {
+            throw new InvalidReplicationFactorException("Invalid replication factor " +
+                    replicationFactor + ": the replication factor must be positive.");
+        }
+    }
+
+    private static void throwInvalidReplicationFactorIfZero(int numUnfenced) {
+        if (numUnfenced == 0) {
+            throw new InvalidReplicationFactorException("All brokers are currently fenced.");
+        }
+    }
+
+    private static void throwInvalidReplicationFactorIfTooFewBrokers(int replicationFactor, int numTotalBrokers) {
+        if (replicationFactor > numTotalBrokers) {
+            throw new InvalidReplicationFactorException("The target replication factor " +
+                    "of " + replicationFactor + " cannot be reached because only " +
+                    numTotalBrokers + " broker(s) are registered.");
+        }
+    }
+
     private final Random random;
 
     public StripedReplicaPlacer(Random random) {
@@ -412,14 +433,9 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
                                      short replicationFactor,
                                      Iterator<UsableBroker> iterator) {
         RackList rackList = new RackList(random, iterator);
-        if (rackList.numUnfencedBrokers() == 0) {
-            throw new InvalidReplicationFactorException("All brokers are currently fenced.");
-        }
-        if (replicationFactor > rackList.numTotalBrokers()) {
-            throw new InvalidReplicationFactorException("The target replication factor " +
-                "of " + replicationFactor + " cannot be reached because only " +
-                rackList.numTotalBrokers() + " broker(s) are registered.");
-        }
+        throwInvalidReplicationFactorIfNonPositive(replicationFactor);
+        throwInvalidReplicationFactorIfZero(rackList.numUnfencedBrokers());
+        throwInvalidReplicationFactorIfTooFewBrokers(replicationFactor, rackList.numTotalBrokers());
         List<List<Integer>> placements = new ArrayList<>(numPartitions);
         for (int partition = 0; partition < numPartitions; partition++) {
             placements.add(rackList.place(replicationFactor));

@@ -47,7 +47,7 @@ import java.util.Properties;
 
 @Category({IntegrationTest.class})
 public class StateRestorationIntegrationTest {
-    private StreamsBuilder builder = new StreamsBuilder();
+    private final StreamsBuilder builder = new StreamsBuilder();
 
     private static final String APPLICATION_ID = "restoration-test-app";
     private static final String STATE_STORE_NAME = "stateStore";

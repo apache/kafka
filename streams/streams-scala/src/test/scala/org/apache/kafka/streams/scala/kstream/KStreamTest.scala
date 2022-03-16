@@ -17,8 +17,7 @@
 package org.apache.kafka.streams.scala.kstream
 
 import java.time.Duration.ofSeconds
-import java.time.Instant
-
+import java.time.{Duration, Instant}
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
@@ -191,6 +190,7 @@ class KStreamTest extends TestDriver {
     testDriver.close()
   }
 
+  //noinspection ScalaDeprecation
   @Test
   def testJoinCorrectlyRecords(): Unit = {
     val builder = new StreamsBuilder()
@@ -200,7 +200,9 @@ class KStreamTest extends TestDriver {
 
     val stream1 = builder.stream[String, String](sourceTopic1)
     val stream2 = builder.stream[String, String](sourceTopic2)
-    stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(ofSeconds(1))).to(sinkTopic)
+    stream1
+      .join(stream2)((a, b) => s"$a-$b", JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(1), Duration.ofHours(24)))
+      .to(sinkTopic)
 
     val now = Instant.now()
 

@@ -27,11 +27,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -214,13 +214,13 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
         client1.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING &&
-                    client1.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                    client1.metadataForLocalThreads().stream().allMatch(taskCondition)) {
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING &&
-                    client2.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                    client2.metadataForLocalThreads().stream().allMatch(taskCondition)) {
                 client2IsOk = true;
             }
         });

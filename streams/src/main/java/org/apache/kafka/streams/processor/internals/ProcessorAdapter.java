@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 
+@SuppressWarnings("deprecation") // Old PAPI compatibility
 public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
     private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
     private InternalProcessorContext context;
@@ -46,7 +47,6 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
         this.delegate = delegate;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
         // It only makes sense to use this adapter internally to Streams, in which case

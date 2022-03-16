@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
+import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerMetrics;
@@ -99,8 +100,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code
  * Properties props = new Properties();
  * props.put("bootstrap.servers", "localhost:9092");
- * props.put("acks", "all");
- * props.put("retries", 0);
  * props.put("linger.ms", 1);
  * props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
@@ -116,15 +115,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * as well as a background I/O thread that is responsible for turning these records into requests and transmitting them
  * to the cluster. Failure to close the producer after use will leak these resources.
  * <p>
- * The {@link #send(ProducerRecord) send()} method is asynchronous. When called it adds the record to a buffer of pending record sends
+ * The {@link #send(ProducerRecord) send()} method is asynchronous. When called, it adds the record to a buffer of pending record sends
  * and immediately returns. This allows the producer to batch together individual records for efficiency.
  * <p>
- * The <code>acks</code> config controls the criteria under which requests are considered complete. The "all" setting
- * we have specified will result in blocking on the full commit of the record, the slowest but most durable setting.
+ * The <code>acks</code> config controls the criteria under which requests are considered complete. The default setting "all"
+ * will result in blocking on the full commit of the record, the slowest but most durable setting.
  * <p>
- * If the request fails, the producer can automatically retry, though since we have specified <code>retries</code>
- * as 0 it won't. Enabling retries also opens up the possibility of duplicates (see the documentation on
- * <a href="http://kafka.apache.org/documentation.html#semantics">message delivery semantics</a> for details).
+ * If the request fails, the producer can automatically retry. The <code>retries</code> setting defaults to <code>Integer.MAX_VALUE</code>, and
+ * it's recommended to use <code>delivery.timeout.ms</code> to control retry behavior, instead of <code>retries</code>.
  * <p>
  * The producer maintains buffers of unsent records for each partition. These buffers are of a size specified by
  * the <code>batch.size</code> config. Making this larger can result in more batching, but requires more memory (since we will
@@ -136,7 +134,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * arrive to fill up the same batch. This is analogous to Nagle's algorithm in TCP. For example, in the code snippet above,
  * likely all 100 records would be sent in a single request since we set our linger time to 1 millisecond. However this setting
  * would add 1 millisecond of latency to our request waiting for more records to arrive if we didn't fill up the buffer. Note that
- * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code> so under heavy load
+ * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code>. So, under heavy load,
  * batching will occur regardless of the linger configuration; however setting this to something larger than 0 can lead to fewer, more
  * efficient requests when not under maximal load at the cost of a small amount of latency.
  * <p>
@@ -155,7 +153,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * to multiple partitions (and topics!) atomically.
  * </p>
  * <p>
- * To enable idempotence, the <code>enable.idempotence</code> configuration must be set to true. If set, the
+ * From Kafka 3.0, the <code>enable.idempotence</code> configuration defaults to true. When enabling idempotence,
  * <code>retries</code> config will default to <code>Integer.MAX_VALUE</code> and the <code>acks</code> config will
  * default to <code>all</code>. There are no API changes for the idempotent producer, so existing applications will
  * not need to be modified to take advantage of this feature.
@@ -241,6 +239,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final String clientId;
     // Visible for testing
     final Metrics metrics;
+    private final KafkaProducerMetrics producerMetrics;
     private final Partitioner partitioner;
     private final int maxRequestSize;
     private final long totalMemorySize;
@@ -356,6 +355,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            this.producerMetrics = new KafkaProducerMetrics(metrics);
             this.partitioner = config.getConfiguredInstance(
                     ProducerConfig.PARTITIONER_CLASS_CONFIG,
                     Partitioner.class,
@@ -442,7 +442,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     // visible for testing
     Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-        int maxInflightRequests = configureInflightRequests(producerConfig);
+        int maxInflightRequests = producerConfig.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time, logContext);
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
@@ -465,7 +465,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions,
                 throttleTimeSensor,
                 logContext);
-        short acks = configureAcks(producerConfig, log);
+
+        short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,
                 client,
                 metadata,
@@ -511,16 +512,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private TransactionManager configureTransactionState(ProducerConfig config,
                                                          LogContext logContext) {
-
         TransactionManager transactionManager = null;
 
-        final boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-        final boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
-        if (userConfiguredTransactions && !userConfiguredIdempotence)
-            log.info("Overriding the default {} to true since {} is specified.", ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
-                    ProducerConfig.TRANSACTIONAL_ID_CONFIG);
-
-        if (config.idempotenceEnabled()) {
+        if (config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -538,28 +532,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.info("Instantiated an idempotent producer.");
         }
         return transactionManager;
-    }
-
-    private static int configureInflightRequests(ProducerConfig config) {
-        if (config.idempotenceEnabled() && 5 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
-            throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
-                    " to use the idempotent producer.");
-        }
-        return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-    }
-
-    private static short configureAcks(ProducerConfig config, Logger log) {
-        boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
-        short acks = Short.parseShort(config.getString(ProducerConfig.ACKS_CONFIG));
-
-        if (config.idempotenceEnabled()) {
-            if (!userConfiguredAcks)
-                log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
-            else if (acks != -1)
-                throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                        "producer. Otherwise we cannot guarantee idempotence.");
-        }
-        return acks;
     }
 
     /**
@@ -590,9 +562,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordInit(time.nanoseconds() - now);
     }
 
     /**
@@ -613,7 +587,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long now = time.nanoseconds();
         transactionManager.beginTransaction();
+        producerMetrics.recordBeginTxn(time.nanoseconds() - now);
     }
 
     /**
@@ -697,9 +673,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
-        sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+
+        if (!offsets.isEmpty()) {
+            long start = time.nanoseconds();
+            TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
+            sender.wakeup();
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+            producerMetrics.recordSendOffsets(time.nanoseconds() - start);
+        }
     }
 
     /**
@@ -730,9 +711,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordCommitTxn(time.nanoseconds() - commitStart);
     }
 
     /**
@@ -761,9 +744,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         log.info("Aborting incomplete transaction");
+        long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
     }
 
     /**
@@ -783,8 +768,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * response after each one.
      * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
-     * it was assigned and the timestamp of the record. If
-     * {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
+     * it was assigned and the timestamp of the record. If the producer is configured with acks = 0, the {@link RecordMetadata}
+     * will have offset = -1 because the producer does not wait for the acknowledgement from the broker.
+     * If {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
      * will be the user provided timestamp or the record send time if the user did not specify a timestamp for the
      * record. If {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime} is used for the
      * topic, the timestamp will be the Kafka broker local time when the message is appended.
@@ -948,9 +934,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // producer callback will make sure to call both 'callback' and interceptor callback
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
-            if (transactionManager != null && transactionManager.isTransactional()) {
-                transactionManager.failIfNotReadyForSend();
+            if (transactionManager != null) {
+                transactionManager.maybeAddPartition(tp);
             }
+
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
 
@@ -969,9 +956,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
             }
 
-            if (transactionManager != null && transactionManager.isTransactional())
-                transactionManager.maybeAddPartitionToTransaction(tp);
-
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -982,10 +966,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
-            if (callback != null)
-                callback.onCompletion(null, e);
+            // producer callback will make sure to call both 'callback' and interceptor callback
+            if (tp == null) {
+                // set topicPartition to -1 when null
+                tp = ProducerInterceptors.extractTopicPartition(record);
+            }
+
+            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+
+            // The onCompletion callback does expect a non-null metadata, but one will be created inside
+            // the interceptor's onCompletion implementation before the user's callback is invoked.
+            interceptCallback.onCompletion(null, e);
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
+            if (transactionManager != null) {
+                transactionManager.maybeTransitionToErrorState(e);
+            }
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
@@ -1124,12 +1120,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public void flush() {
         log.trace("Flushing accumulated records in producer.");
+
+        long start = time.nanoseconds();
         this.accumulator.beginFlush();
         this.sender.wakeup();
         try {
             this.accumulator.awaitFlushCompletion();
         } catch (InterruptedException e) {
             throw new InterruptException("Flush interrupted.", e);
+        } finally {
+            producerMetrics.recordFlush(time.nanoseconds() - start);
         }
     }
 
@@ -1245,6 +1245,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         Utils.closeQuietly(interceptors, "producer interceptors", firstException);
+        Utils.closeQuietly(producerMetrics, "producer metrics wrapper", firstException);
         Utils.closeQuietly(metrics, "producer metrics", firstException);
         Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
@@ -1277,10 +1278,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
         Integer partition = record.partition();
-        return partition != null ?
-                partition :
-                partitioner.partition(
-                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+        if (partition != null) {
+            return partition;
+        }
+
+        int customPartition = partitioner.partition(
+                record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+        if (customPartition < 0) {
+            throw new IllegalArgumentException(String.format(
+                    "The partitioner generated an invalid partition number: %d. Partition number should always be non-negative.", customPartition));
+        }
+        return customPartition;
     }
 
     private void throwIfInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {

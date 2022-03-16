@@ -48,7 +48,7 @@ class StreamsSmokeTest(KafkaTest):
 
     @cluster(num_nodes=8)
     @matrix(processing_guarantee=['at_least_once'], crash=[True, False], metadata_quorum=quorum.all_non_upgrade)
-    @matrix(processing_guarantee=['exactly_once', 'exactly_once_beta'], crash=[True, False])
+    @matrix(processing_guarantee=['exactly_once', 'exactly_once_v2'], crash=[True, False])
     def test_streams(self, processing_guarantee, crash, metadata_quorum=quorum.zk):
         processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)
         processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)

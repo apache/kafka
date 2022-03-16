@@ -68,14 +68,11 @@ public final class WordCountTransformerDemo {
         @Override
         public Transformer<String, String, KeyValue<String, String>> get() {
             return new Transformer<String, String, KeyValue<String, String>>() {
-                private ProcessorContext context;
                 private KeyValueStore<String, Integer> kvStore;
 
                 @Override
-                @SuppressWarnings("unchecked")
                 public void init(final ProcessorContext context) {
-                    this.context = context;
-                    this.context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
+                    context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
                         try (final KeyValueIterator<String, Integer> iter = kvStore.all()) {
                             System.out.println("----------- " + timestamp + " ----------- ");
 
@@ -88,7 +85,7 @@ public final class WordCountTransformerDemo {
                             }
                         }
                     });
-                    this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("Counts");
+                    this.kvStore = context.getStateStore("Counts");
                 }
 
                 @Override

@@ -30,8 +30,9 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
@@ -119,7 +120,7 @@ public class GlobalThreadShutDownOrderTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
@@ -196,7 +197,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    private class GlobalStoreProcessor extends AbstractProcessor<String, Long> {
+    private class GlobalStoreProcessor implements Processor<String, Long, Void, Void> {
 
         private KeyValueStore<String, Long> store;
         private final String storeName;
@@ -206,14 +207,12 @@ public class GlobalThreadShutDownOrderTest {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            store = (KeyValueStore<String, Long>) context.getStateStore(storeName);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(storeName);
         }
 
         @Override
-        public void process(final String key, final Long value) {
+        public void process(final Record<String, Long> record) {
             firstRecordProcessed = true;
         }
 

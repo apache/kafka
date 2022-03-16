@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
- 
+
 import java.time.Duration;
 import java.util.Set;
 import java.util.HashSet;
@@ -56,9 +56,9 @@ import java.util.concurrent.ExecutionException;
 public class MirrorClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MirrorClient.class);
 
-    private AdminClient adminClient;
-    private ReplicationPolicy replicationPolicy;
-    private Map<String, Object> consumerConfig;
+    private final AdminClient adminClient;
+    private final ReplicationPolicy replicationPolicy;
+    private final Map<String, Object> consumerConfig;
 
     public MirrorClient(Map<String, Object> props) {
         this(new MirrorClientConfig(props));
@@ -121,7 +121,6 @@ public class MirrorClient implements AutoCloseable {
         return listTopics().stream()
             .filter(this::isHeartbeatTopic)
             .flatMap(x -> allSources(x).stream())
-            .distinct()
             .collect(Collectors.toSet());
     }
 
@@ -137,7 +136,6 @@ public class MirrorClient implements AutoCloseable {
         return listTopics().stream()
             .filter(this::isRemoteTopic)
             .filter(x -> source.equals(replicationPolicy.topicSource(x)))
-            .distinct()
             .collect(Collectors.toSet());
     }
 
@@ -151,12 +149,12 @@ public class MirrorClient implements AutoCloseable {
             String remoteClusterAlias, Duration timeout) {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfig,
-            new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        try {
+
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfig,
+                new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
             // checkpoint topics are not "remote topics", as they are not replicated. So we don't need
             // to use ReplicationPolicy to create the checkpoint topic here.
-            String checkpointTopic = remoteClusterAlias + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
+            String checkpointTopic = replicationPolicy.checkpointsTopic(remoteClusterAlias);
             List<TopicPartition> checkpointAssignment =
                 Collections.singletonList(new TopicPartition(checkpointTopic, 0));
             consumer.assign(checkpointAssignment);
@@ -176,8 +174,6 @@ public class MirrorClient implements AutoCloseable {
             }
             log.info("Consumed {} checkpoint records for {} from {}.", offsets.size(),
                 consumerGroupId, checkpointTopic);
-        } finally {
-            consumer.close();
         }
         return offsets;
     }
@@ -192,6 +188,7 @@ public class MirrorClient implements AutoCloseable {
 
     int countHopsForTopic(String topic, String sourceClusterAlias) {
         int hops = 0;
+        Set<String> visited = new HashSet<>();
         while (true) {
             hops++;
             String source = replicationPolicy.topicSource(topic);
@@ -201,18 +198,22 @@ public class MirrorClient implements AutoCloseable {
             if (source.equals(sourceClusterAlias)) {
                 return hops;
             }
+            if (visited.contains(source)) {
+                // Extra check for IdentityReplicationPolicy and similar impls that cannot prevent cycles.
+                // We assume we're stuck in a cycle and will never find sourceClusterAlias.
+                return -1;
+            }
+            visited.add(source);
             topic = replicationPolicy.upstreamTopic(topic);
-        } 
+        }
     }
 
     boolean isHeartbeatTopic(String topic) {
-        // heartbeats are replicated, so we must use ReplicationPolicy here
-        return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
+        return replicationPolicy.isHeartbeatsTopic(topic);
     }
 
     boolean isCheckpointTopic(String topic) {
-        // checkpoints are not replicated, so we don't need to use ReplicationPolicy here
-        return topic.endsWith(MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX);
+        return replicationPolicy.isCheckpointsTopic(topic);
     }
 
     boolean isRemoteTopic(String topic) {
@@ -223,7 +224,8 @@ public class MirrorClient implements AutoCloseable {
     Set<String> allSources(String topic) {
         Set<String> sources = new HashSet<>();
         String source = replicationPolicy.topicSource(topic);
-        while (source != null) {
+        while (source != null && !sources.contains(source)) {
+            // The extra Set.contains above is for ReplicationPolicies that cannot prevent cycles.
             sources.add(source);
             topic = replicationPolicy.upstreamTopic(topic);
             source = replicationPolicy.topicSource(topic);

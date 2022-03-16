@@ -32,9 +32,13 @@ public class CheckpointTest {
         byte[] value = checkpoint.recordValue();
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("any-topic", 7, 8, key, value);
         Checkpoint deserialized = Checkpoint.deserializeRecord(record);
-        assertEquals(checkpoint.consumerGroupId(), deserialized.consumerGroupId());
-        assertEquals(checkpoint.topicPartition(), deserialized.topicPartition());
-        assertEquals(checkpoint.upstreamOffset(), deserialized.upstreamOffset());
-        assertEquals(checkpoint.downstreamOffset(), deserialized.downstreamOffset());
+        assertEquals(checkpoint.consumerGroupId(), deserialized.consumerGroupId(),
+                "Failure on checkpoint consumerGroupId serde");
+        assertEquals(checkpoint.topicPartition(), deserialized.topicPartition(),
+                "Failure on checkpoint topicPartition serde");
+        assertEquals(checkpoint.upstreamOffset(), deserialized.upstreamOffset(),
+                "Failure on checkpoint upstreamOffset serde");
+        assertEquals(checkpoint.downstreamOffset(), deserialized.downstreamOffset(),
+                "Failure on checkpoint downstreamOffset serde");
     }
 }

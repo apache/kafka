@@ -31,8 +31,11 @@ public class HeartbeatTest {
         byte[] value = heartbeat.recordValue();
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("any-topic", 6, 7, key, value);
         Heartbeat deserialized = Heartbeat.deserializeRecord(record);
-        assertEquals(heartbeat.sourceClusterAlias(), deserialized.sourceClusterAlias());
-        assertEquals(heartbeat.targetClusterAlias(), deserialized.targetClusterAlias());
-        assertEquals(heartbeat.timestamp(), deserialized.timestamp());
+        assertEquals(heartbeat.sourceClusterAlias(), deserialized.sourceClusterAlias(),
+                "Failure on heartbeat sourceClusterAlias serde");
+        assertEquals(heartbeat.targetClusterAlias(), deserialized.targetClusterAlias(),
+                "Failure on heartbeat targetClusterAlias serde");
+        assertEquals(heartbeat.timestamp(), deserialized.timestamp(),
+                "Failure on heartbeat timestamp serde");
     }
 }

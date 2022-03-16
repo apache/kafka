@@ -27,6 +27,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,6 +46,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * href="http://kafka.apache.org/documentation.html#producerconfigs">Kafka documentation</a>
  */
 public class ProducerConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(ProducerConfig.class);
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS THESE ARE PART OF THE PUBLIC API AND
@@ -81,7 +84,12 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "<p>"
                                                  + "A small batch size will make batching less common and may reduce throughput (a batch size of zero will disable "
                                                  + "batching entirely). A very large batch size may use memory a bit more wastefully as we will always allocate a "
-                                                 + "buffer of the specified batch size in anticipation of additional records.";
+                                                 + "buffer of the specified batch size in anticipation of additional records."
+                                                 + "<p>"
+                                                 + "Note: This setting gives the upper bound of the batch size to be sent. If we have fewer than this many bytes accumulated "
+                                                 + "for this partition, we will 'linger' for the <code>linger.ms</code> time waiting for more records to show up. "
+                                                 + "This <code>linger.ms</code> setting defaults to 0, which means we'll immediately send out a record even the accumulated "
+                                                 + "batch size is under this <code>batch.size</code> setting.";
 
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
@@ -99,14 +107,17 @@ public class ProducerConfig extends AbstractConfig {
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
                                            + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting."
-                                           + "</ul>";
+                                           + "</ul>"
+                                           + "<p>"
+                                           + "Note that enabling idempotence requires this config value to be 'all'."
+                                           + " If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled.";
 
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
     private static final String LINGER_MS_DOC = "The producer groups together any records that arrive in between request transmissions into a single batched request. "
                                                 + "Normally this occurs only under load when records arrive faster than they can be sent out. However in some circumstances the client may want to "
                                                 + "reduce the number of requests even under moderate load. This setting accomplishes this by adding a small amount "
-                                                + "of artificial delay&mdash;that is, rather than immediately sending out a record the producer will wait for up to "
+                                                + "of artificial delay&mdash;that is, rather than immediately sending out a record, the producer will wait for up to "
                                                 + "the given delay to allow other records to be sent so that the sends can be batched together. This can be thought "
                                                 + "of as analogous to Nagle's algorithm in TCP. This setting gives the upper bound on the delay for batching: once "
                                                 + "we get <code>" + BATCH_SIZE_CONFIG + "</code> worth of records for a partition it will be sent immediately regardless of this "
@@ -197,23 +208,32 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
+    // max.in.flight.requests.per.connection should be less than or equal to 5 when idempotence producer enabled to ensure message ordering
+    private static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE = 5;
+
     /** <code>max.in.flight.requests.per.connection</code> */
     public static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = "max.in.flight.requests.per.connection";
     private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking."
-                                                                            + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
-                                                                            + " message re-ordering due to retries (i.e., if retries are enabled).";
+                                                                            + " Note that if this config is set to be greater than 1 and <code>enable.idempotence</code> is set to false, there is a risk of"
+                                                                            + " message re-ordering after a failed send due to retries (i.e., if retries are enabled)."
+                                                                            + " Additionally, enabling idempotence requires this config value to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + "."
+                                                                            + " If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled.";
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
             + " Note that this retry is no different than if the client resent the record upon receiving the error."
-            + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
-            + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
-            + " succeeds, then the records in the second batch may appear first. Note additionally that produce requests will be"
-            + " failed before the number of retries has been exhausted if the timeout configured by"
+            + " Produce requests will be failed before the number of retries has been exhausted if the timeout configured by"
             + " <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires first before successful acknowledgement. Users should generally"
             + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
-            + " retry behavior.";
+            + " retry behavior."
+            + "<p>"
+            + "Enabling idempotence requires this config value to be greater than 0."
+            + " If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled."
+            + "<p>"
+            + "Allowing retries while setting <code>enable.idempotence</code> to <code>false</code> and <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
+            + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
+            + " succeeds, then the records in the second batch may appear first.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
@@ -234,7 +254,25 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>partitioner.class</code> */
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
-    private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>org.apache.kafka.clients.producer.Partitioner</code> interface.";
+    private static final String PARTITIONER_CLASS_DOC = "A class to use to determine which partition to be send to when produce the records. Available options are:" +
+        "<ul>" +
+            "<li><code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>: The default partitioner. " +
+        "This strategy will try sticking to a partition until the batch is full, or <code>linger.ms</code> is up. It works with the strategy:" +
+                "<ul>" +
+                    "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key</li>" +
+                    "<li>If no partition or key is present, choose the sticky partition that changes when the batch is full, or <code>linger.ms</code> is up.</li>" +
+                "</ul>" +
+            "</li>" +
+            "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: This partitioning strategy is that " +
+        "each record in a series of consecutive records will be sent to a different partition(no matter if the 'key' is provided or not), " +
+        "until we run out of partitions and start over again. Note: There's a known issue that will cause uneven distribution when new batch is created. " +
+        "Please check KAFKA-9965 for more detail." +
+            "</li>" +
+            "<li><code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code>: This partitioning strategy will " +
+        "try sticking to a partition(no matter if the 'key' is provided or not) until the batch is full, or <code>linger.ms</code> is up." +
+            "</li>" +
+        "</ul>" +
+        "<p>Implementing the <code>org.apache.kafka.clients.producer.Partitioner</code> interface allows you to plug in a custom partitioner.";
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -246,10 +284,13 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
-                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5, "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and <code>" + ACKS_CONFIG + "</code> must be 'all'. If these values "
-                                                        + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
-                                                        + "a <code>ConfigException</code> will be thrown.";
+                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE
+                                                        + " (with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
+                                                        + ACKS_CONFIG + "</code> must be 'all'. "
+                                                        + "<p>"
+                                                        + "Idempotence is enabled by default if no conflicting configurations are set. "
+                                                        + "If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled. "
+                                                        + "If idempotence is explicitly enabled and conflicting configurations are set, a <code>ConfigException</code> is thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
@@ -284,9 +325,9 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RETRIES_CONFIG, Type.INT, Integer.MAX_VALUE, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
-                                        "1",
+                                        "all",
                                         in("all", "-1", "0", "1"),
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
@@ -396,7 +437,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,
                                         Type.BOOLEAN,
-                                        false,
+                                        true,
                                         Importance.LOW,
                                         ENABLE_IDEMPOTENCE_DOC)
                                 .define(TRANSACTION_TIMEOUT_CONFIG,
@@ -415,9 +456,8 @@ public class ProducerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
-        maybeOverrideEnableIdempotence(refinedConfigs);
+        postProcessAndValidateIdempotenceConfigs(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);
-        maybeOverrideAcksAndRetries(refinedConfigs);
         return refinedConfigs;
     }
 
@@ -433,33 +473,56 @@ public class ProducerConfig extends AbstractConfig {
         configs.put(CLIENT_ID_CONFIG, refinedClientId);
     }
 
-    private void maybeOverrideEnableIdempotence(final Map<String, Object> configs) {
-        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
-
-        if (userConfiguredTransactions && !userConfiguredIdempotence) {
-            configs.put(ENABLE_IDEMPOTENCE_CONFIG, true);
-        }
-    }
-
-    private void maybeOverrideAcksAndRetries(final Map<String, Object> configs) {
+    private void postProcessAndValidateIdempotenceConfigs(final Map<String, Object> configs) {
+        final Map<String, Object> originalConfigs = this.originals();
         final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
         configs.put(ACKS_CONFIG, acksStr);
-        // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` might need to be overridden.
-        if (idempotenceEnabled()) {
-            boolean userConfiguredRetries = this.originals().containsKey(RETRIES_CONFIG);
-            if (this.getInt(RETRIES_CONFIG) == 0) {
-                throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
-            }
-            configs.put(RETRIES_CONFIG, userConfiguredRetries ? this.getInt(RETRIES_CONFIG) : Integer.MAX_VALUE);
+        final boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean idempotenceEnabled = this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean shouldDisableIdempotence = false;
 
-            boolean userConfiguredAcks = this.originals().containsKey(ACKS_CONFIG);
-            final short acks = Short.valueOf(acksStr);
-            if (userConfiguredAcks && acks != (short) -1) {
-                throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
-                        "producer. Otherwise we cannot guarantee idempotence.");
+        // For idempotence producers, values for `retries` and `acks` and `max.in.flight.requests.per.connection` need validation
+        if (idempotenceEnabled) {
+            final int retries = this.getInt(RETRIES_CONFIG);
+            if (retries == 0) {
+                if (userConfiguredIdempotence) {
+                    throw new ConfigException("Must set " + RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
+                }
+                log.info("Idempotence will be disabled because {} is set to 0.", RETRIES_CONFIG, retries);
+                shouldDisableIdempotence = true;
             }
-            configs.put(ACKS_CONFIG, "-1");
+
+            final short acks = Short.valueOf(acksStr);
+            if (acks != (short) -1) {
+                if (userConfiguredIdempotence) {
+                    throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
+                        "producer. Otherwise we cannot guarantee idempotence.");
+                }
+                log.info("Idempotence will be disabled because {} is set to {}, not set to 'all'.", ACKS_CONFIG, acks);
+                shouldDisableIdempotence = true;
+            }
+
+            final int inFlightConnection = this.getInt(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+            if (MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < inFlightConnection) {
+                if (userConfiguredIdempotence) {
+                    throw new ConfigException("Must set " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
+                        " to use the idempotent producer.");
+                }
+                log.warn("Idempotence will be disabled because {} is set to {}, which is greater than 5. " +
+                    "Please note that in v4.0.0 and onward, this will become an error.", MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
+                shouldDisableIdempotence = true;
+            }
+        }
+
+        if (shouldDisableIdempotence) {
+            configs.put(ENABLE_IDEMPOTENCE_CONFIG, false);
+            idempotenceEnabled = false;
+        }
+
+        // validate `transaction.id` after validating idempotence dependant configs because `enable.idempotence` config might be overridden
+        boolean userConfiguredTransactions = originalConfigs.containsKey(TRANSACTIONAL_ID_CONFIG);
+        if (!idempotenceEnabled && userConfiguredTransactions) {
+            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
         }
     }
 
@@ -488,16 +551,6 @@ public class ProducerConfig extends AbstractConfig {
 
     public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
-    }
-
-    boolean idempotenceEnabled() {
-        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
-        boolean idempotenceEnabled = userConfiguredIdempotence && this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
-
-        if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
-            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
-        return userConfiguredTransactions || idempotenceEnabled;
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {

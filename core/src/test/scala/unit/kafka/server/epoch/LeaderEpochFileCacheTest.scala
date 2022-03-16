@@ -123,7 +123,7 @@ class LeaderEpochFileCacheTest {
     //Then epoch should have been updated
     assertEquals(ListBuffer(EpochEntry(3, 9)), cache.epochEntries)
   }
-  
+
   @Test
   def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned() = {
     cache.assign(2, 6)
@@ -578,5 +578,4 @@ class LeaderEpochFileCacheTest {
     //Then
     cache.truncateFromEnd(7)
   }
-
 }

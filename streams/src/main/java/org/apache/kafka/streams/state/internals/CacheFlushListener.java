@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.api.Record;
+
 /**
  * Listen to cache flush events
  * @param <K> key type
@@ -25,10 +28,6 @@ public interface CacheFlushListener<K, V> {
 
     /**
      * Called when records are flushed from the {@link ThreadCache}
-     * @param key         key of the entry
-     * @param newValue    current value
-     * @param oldValue    previous value
-     * @param timestamp   timestamp of new value
      */
-    void apply(final K key, final V newValue, final V oldValue, final long timestamp);
+    void apply(final Record<K, Change<V>> record);
 }

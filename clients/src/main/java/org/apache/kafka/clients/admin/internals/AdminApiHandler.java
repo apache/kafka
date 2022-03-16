@@ -16,17 +16,16 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.utils.Utils;
 
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static java.util.Objects.requireNonNull;
+import java.util.stream.Collectors;
 
 public interface AdminApiHandler<K, V> {
 
@@ -36,29 +35,18 @@ public interface AdminApiHandler<K, V> {
     String apiName();
 
     /**
-     * Initialize the set of keys required to handle this API and how the driver
-     * should map them to the broker that will handle the request for these keys.
-     *
-     * Two mapping types are supported:
-     *
-     * - Static mapping: when the brokerId is known ahead of time
-     * - Dynamic mapping: when the brokerId must be discovered dynamically
-     *
-     * @return the key mappings
-     */
-    Keys<K> initializeKeys();
-
-    /**
-     * Build the request. The set of keys are derived by {@link AdminApiDriver}
-     * during the lookup stage as the set of keys which all map to the same
-     * destination broker.
+     * Build the requests necessary for the given keys. The set of keys is derived by
+     * {@link AdminApiDriver} during the lookup stage as the set of keys which all map
+     * to the same destination broker. Handlers can choose to issue a single request for
+     * all of the provided keys (see {@link Batched}, issue one request per key (see
+     * {@link Unbatched}, or implement their own custom grouping logic if necessary.
      *
      * @param brokerId the target brokerId for the request
      * @param keys the set of keys that should be handled by this request
      *
-     * @return a builder for the request containing the given keys
+     * @return a collection of {@link RequestAndKeys} for the requests containing the given keys
      */
-    AbstractRequest.Builder<?> buildRequest(int brokerId, Set<K> keys);
+    Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys);
 
     /**
      * Callback that is invoked when a request returns successfully.
@@ -74,52 +62,21 @@ public interface AdminApiHandler<K, V> {
      * Note that keys which received a retriable error should be left out of the
      * result. They will be retried automatically.
      *
-     * @param brokerId the brokerId that the associated request was sent to
+     * @param broker the broker that the associated request was sent to
      * @param keys the set of keys from the associated request
      * @param response the response received from the broker
      *
      * @return result indicating key completion, failure, and unmapping
      */
-    ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response);
+    ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response);
 
-    class Keys<K> {
-        public final Map<K, Integer> staticKeys;
-        public final Set<K> dynamicKeys;
-        public final AdminApiLookupStrategy<K> lookupStrategy;
-
-        public Keys(
-            Map<K, Integer> staticKeys,
-            Set<K> dynamicKeys,
-            AdminApiLookupStrategy<K> lookupStrategy
-        ) {
-            this.staticKeys = requireNonNull(staticKeys);
-            this.dynamicKeys = requireNonNull(dynamicKeys);
-            this.lookupStrategy = lookupStrategy;
-
-            Set<K> staticAndDynamicKeys = Utils.intersection(HashSet::new, staticKeys.keySet(), dynamicKeys);
-            if (!staticAndDynamicKeys.isEmpty()) {
-                throw new IllegalArgumentException("The following keys were configured both as dynamically " +
-                    "and statically mapped: " + staticAndDynamicKeys);
-            }
-
-            if (!dynamicKeys.isEmpty()) {
-                requireNonNull(lookupStrategy);
-            }
-        }
-
-        public static <K> Keys<K> staticMapped(
-            Map<K, Integer> staticKeys
-        ) {
-            return new Keys<>(staticKeys, Collections.emptySet(), null);
-        }
-
-        public static <K> Keys<K> dynamicMapped(
-            Set<K> dynamicKeys,
-            AdminApiLookupStrategy<K> lookupStrategy
-        ) {
-            return new Keys<>(Collections.emptyMap(), dynamicKeys, lookupStrategy);
-        }
-    }
+    /**
+     * Get the lookup strategy that is responsible for finding the brokerId
+     * which will handle each respective key.
+     *
+     * @return non-null lookup strategy
+     */
+    AdminApiLookupStrategy<K> lookupStrategy();
 
     class ApiResult<K, V> {
         public final Map<K, V> completedKeys;
@@ -159,6 +116,64 @@ public interface AdminApiHandler<K, V> {
                 keys
             );
         }
+
+        public static <K, V> ApiResult<K, V> empty() {
+            return new ApiResult<>(
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyList()
+            );
+        }
     }
 
+    class RequestAndKeys<K> {
+        public final AbstractRequest.Builder<?> request;
+        public final Set<K> keys;
+
+        public RequestAndKeys(AbstractRequest.Builder<?> request, Set<K> keys) {
+            this.request = request;
+            this.keys = keys;
+        }
+    }
+
+    /**
+     * An {@link AdminApiHandler} that will group multiple keys into a single request when possible.
+     * Keys will be grouped together whenever they target the same broker. This type of handler
+     * should be used when interacting with broker APIs that can act on multiple keys at once, such
+     * as describing or listing transactions.
+     */
+    abstract class Batched<K, V> implements AdminApiHandler<K, V> {
+        abstract AbstractRequest.Builder<?> buildBatchedRequest(int brokerId, Set<K> keys);
+
+        @Override
+        public final Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys) {
+            return Collections.singleton(new RequestAndKeys<>(buildBatchedRequest(brokerId, keys), keys));
+        }
+    }
+
+    /**
+     * An {@link AdminApiHandler} that will create one request per key, not performing any grouping based
+     * on the targeted broker. This type of handler should only be used for broker APIs that do not accept
+     * multiple keys at once, such as initializing a transactional producer.
+     */
+    abstract class Unbatched<K, V> implements AdminApiHandler<K, V> {
+        abstract AbstractRequest.Builder<?> buildSingleRequest(int brokerId, K key);
+        abstract ApiResult<K, V> handleSingleResponse(Node broker, K key, AbstractResponse response);
+
+        @Override
+        public final Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys) {
+            return keys.stream()
+                .map(key -> new RequestAndKeys<>(buildSingleRequest(brokerId, key), Collections.singleton(key)))
+                .collect(Collectors.toSet());
+        }
+
+        @Override
+        public final ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response) {
+            if (keys.size() != 1) {
+                throw new IllegalArgumentException("Unbatched admin handler should only be required to handle responses for a single key at a time");
+            }
+            K key = keys.iterator().next();
+            return handleSingleResponse(broker, key, response);
+        }
+    }
 }

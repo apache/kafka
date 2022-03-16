@@ -28,7 +28,7 @@ import org.apache.kafka.common.Cluster;
  * <li>If a partition is specified in the record, use it
  * <li>Otherwise choose the sticky partition that changes when the batch is full.
  * 
- * NOTE: In constrast to the DefaultPartitioner, the record key is NOT used as part of the partitioning strategy in this 
+ * NOTE: In contrast to the DefaultPartitioner, the record key is NOT used as part of the partitioning strategy in this
  *       partitioner. Records with the same key are not guaranteed to be sent to the same partition.
  * 
  * See KIP-480 for details about sticky partitioning.

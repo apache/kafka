@@ -60,7 +60,7 @@ public class MockSinkTask extends SinkTask {
     public void put(Collection<SinkRecord> records) {
         if (MockConnector.TASK_FAILURE.equals(mockMode)) {
             long now = System.currentTimeMillis();
-            if (now > startTimeMs + failureDelayMs) {
+            if (now - startTimeMs > failureDelayMs) {
                 log.debug("Triggering sink task failure");
                 throw new RuntimeException();
             }

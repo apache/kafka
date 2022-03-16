@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -40,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DescribeTransactionsHandlerTest {
     private final LogContext logContext = new LogContext();
+    private final Node node = new Node(1, "host", 1234);
 
     @Test
     public void testBuildRequest() {
@@ -48,7 +50,7 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId3 = "baz";
 
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2, transactionalId3);
-        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(transactionalIds, logContext);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
 
         assertLookup(handler, transactionalIds);
         assertLookup(handler, mkSet(transactionalId1));
@@ -57,12 +59,11 @@ public class DescribeTransactionsHandlerTest {
 
     @Test
     public void testHandleSuccessfulResponse() {
-        int brokerId = 1;
         String transactionalId1 = "foo";
         String transactionalId2 = "bar";
 
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2);
-        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(transactionalIds, logContext);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
 
         DescribeTransactionsResponseData.TransactionState transactionState1 =
             sampleTransactionState1(transactionalId1);
@@ -74,20 +75,19 @@ public class DescribeTransactionsHandlerTest {
             .setTransactionStates(asList(transactionState1, transactionState2)));
 
         ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(
-            brokerId, keys, response);
+            node, keys, response);
 
         assertEquals(keys, result.completedKeys.keySet());
-        assertMatchingTransactionState(brokerId, transactionState1,
+        assertMatchingTransactionState(node.id(), transactionState1,
             result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId1)));
-        assertMatchingTransactionState(brokerId, transactionState2,
+        assertMatchingTransactionState(node.id(), transactionState2,
             result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId2)));
     }
 
     @Test
     public void testHandleErrorResponse() {
         String transactionalId = "foo";
-        Set<String> transactionalIds = mkSet(transactionalId);
-        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(transactionalIds, logContext);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_NOT_FOUND);
         assertFatalError(handler, transactionalId, Errors.UNKNOWN_SERVER_ERROR);
@@ -136,8 +136,6 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId,
         Errors error
     ) {
-        int brokerId = 1;
-
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         Set<CoordinatorKey> keys = mkSet(key);
 
@@ -148,7 +146,7 @@ public class DescribeTransactionsHandlerTest {
         DescribeTransactionsResponse response = new DescribeTransactionsResponse(new DescribeTransactionsResponseData()
             .setTransactionStates(singletonList(transactionState)));
 
-        ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(brokerId, keys, response);
+        ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(node, keys, response);
         assertEquals(emptyMap(), result.completedKeys);
         return result;
     }
@@ -158,7 +156,7 @@ public class DescribeTransactionsHandlerTest {
         Set<String> transactionalIds
     ) {
         Set<CoordinatorKey> keys = coordinatorKeys(transactionalIds);
-        DescribeTransactionsRequest.Builder request = handler.buildRequest(1, keys);
+        DescribeTransactionsRequest.Builder request = handler.buildBatchedRequest(1, keys);
         assertEquals(transactionalIds, new HashSet<>(request.data.transactionalIds()));
     }
 

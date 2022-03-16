@@ -29,6 +29,7 @@ object RequestConvertToJson {
     request match {
       case req: AddOffsetsToTxnRequest => AddOffsetsToTxnRequestDataJsonConverter.write(req.data, request.version)
       case req: AddPartitionsToTxnRequest => AddPartitionsToTxnRequestDataJsonConverter.write(req.data, request.version)
+      case req: AllocateProducerIdsRequest => AllocateProducerIdsRequestDataJsonConverter.write(req.data, request.version)
       case req: AlterClientQuotasRequest => AlterClientQuotasRequestDataJsonConverter.write(req.data, request.version)
       case req: AlterConfigsRequest => AlterConfigsRequestDataJsonConverter.write(req.data, request.version)
       case req: AlterIsrRequest => AlterIsrRequestDataJsonConverter.write(req.data, request.version)
@@ -103,6 +104,7 @@ object RequestConvertToJson {
     response match {
       case res: AddOffsetsToTxnResponse => AddOffsetsToTxnResponseDataJsonConverter.write(res.data, version)
       case res: AddPartitionsToTxnResponse => AddPartitionsToTxnResponseDataJsonConverter.write(res.data, version)
+      case res: AllocateProducerIdsResponse => AllocateProducerIdsResponseDataJsonConverter.write(res.data, version)
       case res: AlterClientQuotasResponse => AlterClientQuotasResponseDataJsonConverter.write(res.data, version)
       case res: AlterConfigsResponse => AlterConfigsResponseDataJsonConverter.write(res.data, version)
       case res: AlterIsrResponse => AlterIsrResponseDataJsonConverter.write(res.data, version)

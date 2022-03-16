@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.UncheckedIOException;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -67,7 +68,7 @@ public class FileBasedStateStore implements QuorumStateStore {
         this.stateFile = stateFile;
     }
 
-    private QuorumStateData readStateFromFile(File file) throws IOException {
+    private QuorumStateData readStateFromFile(File file) {
         try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
             final String line = reader.readLine();
             if (line == null) {
@@ -91,6 +92,9 @@ public class FileBasedStateStore implements QuorumStateStore {
 
             final short dataVersion = dataVersionNode.shortValue();
             return QuorumStateDataJsonConverter.read(dataObject, dataVersion);
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                String.format("Error while reading the Quorum status from the file %s", file), e);
         }
     }
 
@@ -98,7 +102,7 @@ public class FileBasedStateStore implements QuorumStateStore {
      * Reads the election state from local file.
      */
     @Override
-    public ElectionState readElectionState() throws IOException {
+    public ElectionState readElectionState() {
         if (!stateFile.exists()) {
             return null;
         }
@@ -115,7 +119,7 @@ public class FileBasedStateStore implements QuorumStateStore {
     }
 
     @Override
-    public void writeElectionState(ElectionState latest) throws IOException {
+    public void writeElectionState(ElectionState latest) {
         QuorumStateData data = new QuorumStateData()
             .setLeaderEpoch(latest.epoch)
             .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED)
@@ -129,9 +133,9 @@ public class FileBasedStateStore implements QuorumStateStore {
             voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList());
     }
 
-    private void writeElectionStateToFile(final File stateFile, QuorumStateData state) throws IOException  {
+    private void writeElectionStateToFile(final File stateFile, QuorumStateData state) {
         final File temp = new File(stateFile.getAbsolutePath() + ".tmp");
-        Files.deleteIfExists(temp.toPath());
+        deleteFileIfExists(temp);
 
         log.trace("Writing tmp quorum state {}", temp.getAbsolutePath());
 
@@ -146,25 +150,36 @@ public class FileBasedStateStore implements QuorumStateStore {
             writer.flush();
             fileOutputStream.getFD().sync();
             Utils.atomicMoveWithFallback(temp.toPath(), stateFile.toPath());
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                String.format("Error while writing the Quorum status from the file %s",
+                    stateFile.getAbsolutePath()), e);
         } finally {
             // cleanup the temp file when the write finishes (either success or fail).
-            Files.deleteIfExists(temp.toPath());
+            deleteFileIfExists(temp);
         }
     }
 
     /**
      * Clear state store by deleting the local quorum state file
-     *
-     * @throws IOException if there is any IO exception during delete
      */
     @Override
-    public void clear() throws IOException {
-        Files.deleteIfExists(stateFile.toPath());
-        Files.deleteIfExists(new File(stateFile.getAbsolutePath() + ".tmp").toPath());
+    public void clear() {
+        deleteFileIfExists(stateFile);
+        deleteFileIfExists(new File(stateFile.getAbsolutePath() + ".tmp"));
     }
 
     @Override
     public String toString() {
         return "Quorum state filepath: " + stateFile.getAbsolutePath();
+    }
+
+    private void deleteFileIfExists(File file) {
+        try {
+            Files.deleteIfExists(file.toPath());
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                String.format("Error while deleting file %s", file.getAbsoluteFile()), e);
+        }
     }
 }

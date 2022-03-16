@@ -27,7 +27,6 @@ import org.rocksdb.AbstractWalFilter;
 import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.ColumnFamilyOptions;
-import org.rocksdb.CompactionOptionsFIFO;
 import org.rocksdb.CompactionPriority;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.ComparatorOptions;
@@ -53,10 +52,14 @@ import org.rocksdb.util.BytewiseComparator;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+
+import java.util.Arrays;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
@@ -75,6 +78,20 @@ import static org.junit.Assert.fail;
  */
 @RunWith(EasyMockRunner.class)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
+
+    private final List<String> walRelatedMethods = new LinkedList<String>() {
+        {
+            add("setManualWalFlush");
+            add("setMaxTotalWalSize");
+            add("setWalBytesPerSync");
+            add("setWalDir");
+            add("setWalFilter");
+            add("setWalRecoveryMode");
+            add("setWalSizeLimitMB");
+            add("setWalTtlSeconds");
+        }
+    };
+
     private final List<String> ignoreMethods = new LinkedList<String>() {
         {
             add("isOwningHandle");
@@ -88,6 +105,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             add("notifyAll");
             add("toString");
             add("getOptionStringFromProps");
+            addAll(walRelatedMethods);
         }
     };
 
@@ -311,42 +329,28 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
     }
 
     @Test
-    public void shouldWarnThanMethodCompactionOptionsFIFOSetTtlWillBeRemoved() {
-        final DBOptions mockedDbOptions = mock(DBOptions.class);
-        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
+    public void shouldLogWarningWhenSettingWalOptions() throws Exception {
 
-        try (final LogCaptureAppender appender =
-            LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
-            optionsFacadeDbOptions.setCompactionOptionsFIFO(new CompactionOptionsFIFO());
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release." +
-                    " If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite" +
-                    " your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options`" +
-                    " (or `org.rocksdb.ColumnFamilyOptions`).")
-            );
-        }
-    }
+            final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter
+                = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions());
 
-    @Test
-    public void shouldWarnThanMethodCompactionOptionsFIFOTtlWillBeRemoved() {
-        final DBOptions mockedDbOptions = mock(DBOptions.class);
-        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
+            for (final Method method : RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class.getDeclaredMethods()) {
+                if (walRelatedMethods.contains(method.getName())) {
+                    method.invoke(adapter, getDBOptionsParameters(method.getParameterTypes()));
+                }
+            }
 
-        try (final LogCaptureAppender appender =
-            LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
-            optionsFacadeDbOptions.compactionOptionsFIFO();
+            final List<String> walOptions = Arrays.asList("walDir", "walFilter", "walRecoveryMode", "walBytesPerSync", "walSizeLimitMB", "manualWalFlush", "maxTotalWalSize", "walTtlSeconds");
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release." +
-                    " If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite" +
-                    " your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options`" +
-                    " (or `org.rocksdb.ColumnFamilyOptions`).")
-            );
+            final Set<String> logMessages = appender.getEvents().stream()
+                .filter(e -> e.getLevel().equals("WARN"))
+                .map(LogCaptureAppender.Event::getMessage)
+                .collect(Collectors.toSet());
+
+            walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
+
         }
     }
 }

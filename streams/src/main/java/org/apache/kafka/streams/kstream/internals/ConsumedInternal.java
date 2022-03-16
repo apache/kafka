@@ -37,7 +37,7 @@ public class ConsumedInternal<K, V> extends Consumed<K, V> {
     }
 
     public ConsumedInternal() {
-        this(Consumed.<K, V>with(null, null));
+        this(Consumed.with(null, null));
     }
 
     public Serde<K> keySerde() {

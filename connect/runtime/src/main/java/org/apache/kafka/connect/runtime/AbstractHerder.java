@@ -29,6 +29,7 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -41,7 +42,11 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -59,6 +64,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -100,7 +106,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
 
-    private ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -208,6 +214,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     @Override
     public void onDeletion(ConnectorTaskId id) {
         statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
+    }
+
+    public void onRestart(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RESTARTING,
+                workerId, generation()));
+    }
+
+    public void onRestart(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RESTARTING, workerId, generation()));
     }
 
     @Override
@@ -357,6 +372,54 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         });
     }
 
+    /**
+     * Build the {@link RestartPlan} that describes what should and should not be restarted given the restart request
+     * and the current status of the connector and task instances.
+     *
+     * @param request the restart request; may not be null
+     * @return the restart plan, or empty if this worker has no status for the connector named in the request and therefore the
+     *         connector cannot be restarted
+     */
+    public Optional<RestartPlan> buildRestartPlan(RestartRequest request) {
+        String connectorName = request.connectorName();
+        ConnectorStatus connectorStatus = statusBackingStore.get(connectorName);
+        if (connectorStatus == null) {
+            return Optional.empty();
+        }
+
+        // If requested, mark the connector as restarting
+        AbstractStatus.State connectorState = request.shouldRestartConnector(connectorStatus) ? AbstractStatus.State.RESTARTING : connectorStatus.state();
+        ConnectorStateInfo.ConnectorState connectorInfoState = new ConnectorStateInfo.ConnectorState(
+                connectorState.toString(),
+                connectorStatus.workerId(),
+                connectorStatus.trace()
+        );
+
+        // Collect the task states, If requested, mark the task as restarting
+        List<ConnectorStateInfo.TaskState> taskStates = statusBackingStore.getAll(connectorName)
+                .stream()
+                .map(taskStatus -> {
+                    AbstractStatus.State taskState = request.shouldRestartTask(taskStatus) ? AbstractStatus.State.RESTARTING : taskStatus.state();
+                    return new ConnectorStateInfo.TaskState(
+                            taskStatus.id().task(),
+                            taskState.toString(),
+                            taskStatus.workerId(),
+                            taskStatus.trace()
+                    );
+                })
+                .collect(Collectors.toList());
+        // Construct the response from the various states
+        Map<String, String> conf = rawConfig(connectorName);
+        ConnectorStateInfo stateInfo = new ConnectorStateInfo(
+                connectorName,
+                connectorInfoState,
+                taskStates,
+                conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))
+        );
+        return Optional.of(new RestartPlan(request, stateInfo));
+
+    }
+
     ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
         if (worker.configTransformer() != null) {
             connectorProps = worker.configTransformer().transform(connectorProps);
@@ -383,6 +446,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                     connector,
                     enrichedConfigDef,
                     connectorProps
+            );
+            connectorProps.entrySet().stream()
+                .filter(e -> e.getValue() == null)
+                .map(Map.Entry::getKey)
+                .forEach(prop ->
+                    validatedConnectorConfig.computeIfAbsent(prop, ConfigValue::new)
+                        .addErrorMessage("Null value can not be supplied as the configuration value.")
             );
             List<ConfigValue> configValues = new ArrayList<>(validatedConnectorConfig.values());
             Map<String, ConfigKey> configKeys = new LinkedHashMap<>(enrichedConfigDef.configKeys());
@@ -450,7 +520,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 }
 
             }
-            return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
+            return mergeConfigInfos(connType, configInfos, consumerConfigInfos, adminConfigInfos);
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
@@ -548,7 +618,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
-    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+    public static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
         return convertConfigKey(configKey, "");
     }
 
@@ -683,6 +753,43 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
         }
         return keys;
+    }
+
+    @Override
+    public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
+        List<ConfigKeyInfo> results = new ArrayList<>();
+        ConfigDef configDefs;
+        try {
+            Plugins p = plugins();
+            Object plugin = p.newPlugin(pluginName);
+            PluginType pluginType = PluginType.from(plugin.getClass());
+            switch (pluginType) {
+                case SINK:
+                case SOURCE:
+                    configDefs = ((Connector) plugin).config();
+                    break;
+                case CONVERTER:
+                    configDefs = ((Converter) plugin).config();
+                    break;
+                case HEADER_CONVERTER:
+                    configDefs = ((HeaderConverter) plugin).config();
+                    break;
+                case TRANSFORMATION:
+                    configDefs = ((Transformation<?>) plugin).config();
+                    break;
+                case PREDICATE:
+                    configDefs = ((Predicate<?>) plugin).config();
+                    break;
+                default:
+                    throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
+            }
+        } catch (ClassNotFoundException cnfe) {
+            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+        }
+        for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
+            results.add(AbstractHerder.convertConfigKey(configKey));
+        }
+        return results;
     }
 
 }

@@ -47,21 +47,26 @@ public class OffsetSyncStoreTest {
         FakeOffsetSyncStore store = new FakeOffsetSyncStore();
 
         store.sync(tp, 100, 200);
-        assertEquals(store.translateDownstream(tp, 150), 250);
+        assertEquals(store.translateDownstream(tp, 150), 250,
+                "Failure in translating downstream offset 250");
 
         // Translate exact offsets
         store.sync(tp, 150, 251);
-        assertEquals(store.translateDownstream(tp, 150), 251);
+        assertEquals(store.translateDownstream(tp, 150), 251,
+                "Failure in translating exact downstream offset 251");
 
         // Use old offset (5) prior to any sync -> can't translate
-        assertEquals(-1, store.translateDownstream(tp, 5));
+        assertEquals(-1, store.translateDownstream(tp, 5),
+                "Expected old offset to not translate");
 
         // Downstream offsets reset
         store.sync(tp, 200, 10);
-        assertEquals(store.translateDownstream(tp, 200), 10);
+        assertEquals(store.translateDownstream(tp, 200), 10,
+                "Failure in resetting translation of downstream offset");
 
         // Upstream offsets reset
         store.sync(tp, 20, 20);
-        assertEquals(store.translateDownstream(tp, 20), 20);
+        assertEquals(store.translateDownstream(tp, 20), 20,
+                "Failure in resetting translation of upstream offset");
     }
 }

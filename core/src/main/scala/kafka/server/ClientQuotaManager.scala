@@ -325,7 +325,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    *
    * @param request client request
    * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
-   * @param channelThrottlingCallback Callback for channel throttling
+   * @param throttleCallback Callback for channel throttling
    */
   def throttle(
     request: RequestChannel.Request,
@@ -562,8 +562,18 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       quotaMetricTags.asJava)
   }
 
+  def initiateShutdown(): Unit = {
+    throttledChannelReaper.initiateShutdown()
+    // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+    delayQueue.add(new ThrottledChannel(time, 0, new ThrottleCallback {
+      override def startThrottling(): Unit = {}
+      override def endThrottling(): Unit = {}
+    }))
+  }
+
   def shutdown(): Unit = {
-    throttledChannelReaper.shutdown()
+    initiateShutdown()
+    throttledChannelReaper.awaitShutdown()
   }
 
   class DefaultQuotaCallback extends ClientQuotaCallback {
@@ -668,7 +678,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                     if (!overriddenQuotas.containsKey(DefaultUserQuotaEntity)) {
                       // 7) /config/clients/<client-id>
                       // 8) /config/clients/<default>
-                      // 9) static client-id quota
                       metricTags = ("", clientId)
                     }
                   }

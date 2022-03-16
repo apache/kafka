@@ -19,6 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -40,7 +41,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -260,10 +260,11 @@ public class ConnectorTopicsIntegrationTest {
         Consumer<byte[], byte[]> verifiableConsumer = connect.kafka().createConsumer(
                 Collections.singletonMap("group.id", "verifiable-consumer-group-0"));
 
-        List<TopicPartition> partitions =
-                Optional.ofNullable(verifiableConsumer.partitionsFor(statusTopic))
-                .orElseThrow(() -> new AssertionError("Unable to retrieve partitions info for status topic"))
-                .stream()
+        List<PartitionInfo> partitionInfos = verifiableConsumer.partitionsFor(statusTopic);
+        if (partitionInfos.isEmpty()) {
+            throw new AssertionError("Unable to retrieve partitions info for status topic");
+        }
+        List<TopicPartition> partitions = partitionInfos.stream()
                 .map(info -> new TopicPartition(info.topic(), info.partition()))
                 .collect(Collectors.toList());
         verifiableConsumer.assign(partitions);

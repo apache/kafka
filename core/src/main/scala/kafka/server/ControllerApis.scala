@@ -20,8 +20,9 @@ package kafka.server
 import java.util
 import java.util.Collections
 import java.util.Map.Entry
-import java.util.concurrent.{CompletableFuture, ExecutionException}
 import java.util.concurrent.TimeUnit.{MILLISECONDS, NANOSECONDS}
+import java.util.concurrent.{CompletableFuture, ExecutionException}
+
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -35,16 +36,13 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message._
+import org.apache.kafka.common.message.{CreateTopicsRequestData, _}
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
@@ -76,11 +74,15 @@ class ControllerApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
-  override def handle(request: RequestChannel.Request): Unit = {
+  def isClosed: Boolean = aclApis.isClosed
+
+  def close(): Unit = aclApis.close()
+
+  override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
-        case ApiKeys.METADATA => handleMetadataRequest(request)
+        case ApiKeys.FETCH_SNAPSHOT => handleFetchSnapshot(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopics(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopics(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
@@ -97,28 +99,34 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
-        case ApiKeys.ENVELOPE => handleEnvelopeRequest(request)
+        case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
         case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
+        case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: ExecutionException => requestHelper.handleError(request, e.getCause)
-      case e: Throwable => requestHelper.handleError(request, e)
+      case e: Throwable => {
+        val t = if (e.isInstanceOf[ExecutionException]) e.getCause() else e
+        error(s"Unexpected error handling request ${request.requestDesc(true)} " +
+          s"with context ${request.context}", t)
+        requestHelper.handleError(request, t)
+      }
     }
   }
 
-  def handleEnvelopeRequest(request: RequestChannel.Request): Unit = {
+  def handleEnvelopeRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     if (!authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
         s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
     } else {
-      EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle)
+      EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle(_, requestLocal))
     }
   }
 
@@ -139,46 +147,16 @@ class ControllerApis(val requestChannel: RequestChannel,
     handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
   }
 
-  def handleMetadataRequest(request: RequestChannel.Request): Unit = {
-    val metadataRequest = request.body[MetadataRequest]
-    def createResponseCallback(requestThrottleMs: Int): MetadataResponse = {
-      val metadataResponseData = new MetadataResponseData()
-      metadataResponseData.setThrottleTimeMs(requestThrottleMs)
-      controllerNodes.foreach { node =>
-        metadataResponseData.brokers.add(new MetadataResponseBroker()
-          .setHost(node.host)
-          .setNodeId(node.id)
-          .setPort(node.port)
-          .setRack(node.rack))
-      }
-      metadataResponseData.setClusterId(metaProperties.clusterId)
-      if (controller.isActive) {
-        metadataResponseData.setControllerId(config.nodeId)
-      } else {
-        metadataResponseData.setControllerId(MetadataResponse.NO_CONTROLLER_ID)
-      }
-      val clusterAuthorizedOperations = if (metadataRequest.data.includeClusterAuthorizedOperations) {
-        if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
-          authHelper.authorizedOperations(request, Resource.CLUSTER)
-        } else {
-          0
-        }
-      } else {
-        Int.MinValue
-      }
-      // TODO: fill in information about the metadata topic
-      metadataResponseData.setClusterAuthorizedOperations(clusterAuthorizedOperations)
-      new MetadataResponse(metadataResponseData, request.header.apiVersion)
-    }
-    requestHelper.sendResponseMaybeThrottle(request,
-      requestThrottleMs => createResponseCallback(requestThrottleMs))
+  def handleFetchSnapshot(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new FetchSnapshotResponse(response.asInstanceOf[FetchSnapshotResponseData]))
   }
 
   def handleDeleteTopics(request: RequestChannel.Request): Unit = {
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
     val future = deleteTopics(deleteTopicsRequest.data,
       request.context.apiVersion,
-      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME),
+      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.whenComplete { (results, exception) =>
@@ -337,7 +315,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleCreateTopics(request: RequestChannel.Request): Unit = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val future = createTopics(createTopicsRequest.data(),
-        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
+        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
         names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity))
     future.whenComplete { (result, exception) =>
       requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
@@ -512,6 +490,24 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleDescribeQuorum(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     handleRaftRequest(request, response => new DescribeQuorumResponse(response.asInstanceOf[DescribeQuorumResponseData]))
+  }
+
+  def handleElectLeaders(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, ALTER)
+
+    val electLeadersRequest = request.body[ElectLeadersRequest]
+    val future = controller.electLeaders(electLeadersRequest.data)
+    future.whenComplete { (responseData, exception) =>
+      if (exception != null) {
+        requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
+          electLeadersRequest.getErrorResponse(throttleMs, exception)
+        })
+      } else {
+        requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
+          new ElectLeadersResponse(responseData.setThrottleTimeMs(throttleMs))
+        })
+      }
+    }
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
@@ -691,9 +687,15 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleCreatePartitions(request: RequestChannel.Request): Unit = {
-    val future = createPartitions(request.body[CreatePartitionsRequest].data,
-      authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
-      names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(n => n))
+    def filterAlterAuthorizedTopics(topics: Iterable[String]): Set[String] = {
+      authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
+    }
+
+    val future = createPartitions(
+      request.body[CreatePartitionsRequest].data,
+      filterAlterAuthorizedTopics
+    )
+
     future.whenComplete { (responses, exception) =>
       if (exception != null) {
         requestHelper.handleError(request, exception)
@@ -708,10 +710,10 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  def createPartitions(request: CreatePartitionsRequestData,
-                       hasClusterAuth: Boolean,
-                       getCreatableTopics: Iterable[String] => Set[String])
-                       : CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
+  def createPartitions(
+    request: CreatePartitionsRequestData,
+    getAlterAuthorizedTopics: Iterable[String] => Set[String]
+  ): CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
     val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS);
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
     val duplicateTopicNames = new util.HashSet[String]()
@@ -729,13 +731,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         setErrorMessage("Duplicate topic name."))
         topicNames.remove(topicName)
     }
-    val authorizedTopicNames = {
-      if (hasClusterAuth) {
-        topicNames.asScala
-      } else {
-        getCreatableTopics(topicNames.asScala)
-      }
-    }
+    val authorizedTopicNames = getAlterAuthorizedTopics(topicNames.asScala)
     val topics = new util.ArrayList[CreatePartitionsTopic]
     topicNames.forEach { topicName =>
       if (authorizedTopicNames.contains(topicName)) {
@@ -766,5 +762,21 @@ class ControllerApis(val requestChannel: RequestChannel,
     val response = controller.listPartitionReassignments(listRequest.data()).get()
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new ListPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+  }
+
+  def handleAllocateProducerIdsRequest(request: RequestChannel.Request): Unit = {
+    val allocatedProducerIdsRequest = request.body[AllocateProducerIdsRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    controller.allocateProducerIds(allocatedProducerIdsRequest.data)
+      .whenComplete((results, exception) => {
+        if (exception != null) {
+          requestHelper.handleError(request, exception)
+        } else {
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+            results.setThrottleTimeMs(requestThrottleMs)
+            new AllocateProducerIdsResponse(results)
+          })
+        }
+      })
   }
 }

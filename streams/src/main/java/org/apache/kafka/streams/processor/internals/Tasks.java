@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 
 class Tasks {
     private final Logger log;
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final StreamsMetricsImpl streamsMetrics;
 
     private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
@@ -59,22 +59,22 @@ class Tasks {
     // TODO: change type to `StandbyTask`
     private final Map<TaskId, Task> readOnlyStandbyTasksPerId = Collections.unmodifiableMap(standbyTasksPerId);
     private final Set<TaskId> readOnlyStandbyTaskIds = Collections.unmodifiableSet(standbyTasksPerId.keySet());
+    private final Collection<Task> successfullyProcessed = new HashSet<>();
 
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
 
     private Consumer<byte[], byte[]> mainConsumer;
 
-    Tasks(final String logPrefix,
-          final InternalTopologyBuilder builder,
+    Tasks(final LogContext logContext,
+          final TopologyMetadata topologyMetadata,
           final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
 
-        final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
@@ -82,6 +82,26 @@ class Tasks {
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
+    }
+
+    void handleNewAssignmentAndCreateTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                           final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                           final Set<TaskId> assignedActiveTasks,
+                                           final Set<TaskId> assignedStandbyTasks) {
+        activeTaskCreator.removeRevokedUnknownTasks(assignedActiveTasks);
+        standbyTaskCreator.removeRevokedUnknownTasks(assignedStandbyTasks);
+        createTasks(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    void maybeCreateTasksFromNewTopologies(final Set<String> currentNamedTopologies) {
+        createTasks(
+            activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
+            standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
+        );
+    }
+
+    double totalProducerBlockedTime() {
+        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
@@ -168,7 +188,7 @@ class Tasks {
                     activeTasksPerPartition.put(topicPartition, task);
                 }
             }
-            task.updateInputPartitions(topicPartitions, builder.nodeToSourceTopics());
+            task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
         }
         task.resume();
     }
@@ -293,6 +313,26 @@ class Tasks {
 
     Set<String> producerClientIds() {
         return activeTaskCreator.producerClientIds();
+    }
+
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
+    }
+
+    Collection<Task> successfullyProcessed() {
+        return successfullyProcessed;
+    }
+
+    void addToSuccessfullyProcessed(final Task task) {
+        successfullyProcessed.add(task);
+    }
+
+    void removeTaskFromCuccessfullyProcessedBeforeClosing(final Task task) {
+        successfullyProcessed.remove(task);
+    }
+
+    void clearSuccessfullyProcessed() {
+        successfullyProcessed.clear();
     }
 
     // for testing only

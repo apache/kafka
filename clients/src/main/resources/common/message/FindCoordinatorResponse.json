@@ -22,20 +22,33 @@
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
   //
   // Version 3 is the first flexible version.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds support for batching via Coordinators (KIP-699)
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+    { "name": "ErrorCode", "type": "int16", "versions": "0-3",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "ErrorMessage", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
+    { "name": "ErrorMessage", "type": "string", "versions": "1-3", "nullableVersions": "1-3", "ignorable": true,
       "about": "The error message, or null if there was no error." },
-    { "name": "NodeId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+    { "name": "NodeId", "type": "int32", "versions": "0-3", "entityType": "brokerId",
       "about": "The node id." },
-    { "name": "Host", "type": "string", "versions": "0+",
+    { "name": "Host", "type": "string", "versions": "0-3",
       "about": "The host name." },
-    { "name": "Port", "type": "int32", "versions": "0+",
-      "about": "The port." }
+    { "name": "Port", "type": "int32", "versions": "0-3",
+      "about": "The port." },
+    { "name": "Coordinators", "type": "[]Coordinator", "versions": "4+", "about": "Each coordinator result in the response", "fields": [
+      { "name": "Key", "type": "string", "versions": "4+", "about": "The coordinator key." },
+      { "name": "NodeId", "type": "int32", "versions": "4+", "entityType": "brokerId",
+        "about": "The node id." },
+      { "name": "Host", "type": "string", "versions": "4+", "about": "The host name." },
+      { "name": "Port", "type": "int32", "versions": "4+", "about": "The port." },
+      { "name": "ErrorCode", "type": "int16", "versions": "4+",
+        "about": "The error code, or 0 if there was no error." },
+      { "name": "ErrorMessage", "type": "string", "versions": "4+", "nullableVersions": "4+", "ignorable": true,
+        "about": "The error message, or null if there was no error." }
+    ]}
   ]
 }

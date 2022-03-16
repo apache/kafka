@@ -23,13 +23,14 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 
+import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
 
 public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
-    private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
@@ -47,6 +48,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
+        if (key == null) {
+            return null;
+        }
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
             // the end timestamp can be as large as possible as long as it's larger than start time
             .putLong(Long.MAX_VALUE)
@@ -58,6 +62,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
+        if (key == null) {
+            return null;
+        }
         return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 
@@ -67,7 +74,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
+    public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to, final boolean forward) {
         return iterator -> {
             while (iterator.hasNext()) {
                 final Bytes bytes = iterator.peekNextKey();

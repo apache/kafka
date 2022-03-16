@@ -67,7 +67,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
-public final class JoinWindows extends Windows<Window> {
+public class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */
     public final long beforeMs;
@@ -76,29 +76,91 @@ public final class JoinWindows extends Windows<Window> {
 
     private final long graceMs;
 
+    /**
+     * Enable left/outer stream-stream join, by not emitting left/outer results eagerly, but only after the grace period passed.
+     * This flag can only be enabled via ofTimeDifferenceAndGrace or ofTimeDifferenceWithNoGrace.
+     */
+    protected final boolean enableSpuriousResultFix;
+
+    protected JoinWindows(final JoinWindows joinWindows) {
+        this(joinWindows.beforeMs, joinWindows.afterMs, joinWindows.graceMs, joinWindows.enableSpuriousResultFix);
+    }
+
     private JoinWindows(final long beforeMs,
                         final long afterMs,
-                        final long graceMs) {
+                        final long graceMs,
+                        final boolean enableSpuriousResultFix) {
         if (beforeMs + afterMs < 0) {
             throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
         }
+
+        if (graceMs < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
         this.afterMs = afterMs;
         this.beforeMs = beforeMs;
         this.graceMs = graceMs;
+        this.enableSpuriousResultFix = enableSpuriousResultFix;
     }
 
     /**
      * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference},
-     * i.e., the timestamp of a record from the secondary stream is max {@code timeDifference} earlier or later than
+     * i.e., the timestamp of a record from the secondary stream is max {@code timeDifference} before or after
+     * the timestamp of the record from the primary stream.
+     * <p>
+     * Using this method explicitly sets the grace period to the duration specified by {@code afterWindowEnd}, which
+     * means that only out-of-order records arriving more than the grace period after the window end will be dropped.
+     * The window close, after which any incoming records are considered late and will be rejected, is defined as
+     * {@code windowEnd + afterWindowEnd}
+     *
+     * @param timeDifference join window interval
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
+     * @return A new JoinWindows object with the specified window definition and grace period
+     * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
+     *                                  if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     */
+    public static JoinWindows ofTimeDifferenceAndGrace(final Duration timeDifference, final Duration afterWindowEnd) {
+        final String timeDifferenceMsgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
+        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, timeDifferenceMsgPrefix);
+
+        final String afterWindowEndMsgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
+        final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, afterWindowEndMsgPrefix);
+
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, afterWindowEndMs, true);
+    }
+
+    /**
+     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference},
+     * i.e., the timestamp of a record from the secondary stream is max {@code timeDifference} before or after
+     * the timestamp of the record from the primary stream.
+     * <p>
+     * CAUTION: Using this method implicitly sets the grace period to zero, which means that any out-of-order
+     * records arriving after the window ends are considered late and will be dropped.
+     *
+     * @param timeDifference join window interval
+     * @return a new JoinWindows object with the window definition and no grace period. Note that this means out-of-order records arriving after the window end will be dropped
+     * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
+     */
+    public static JoinWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) {
+        return ofTimeDifferenceAndGrace(timeDifference, Duration.ofMillis(NO_GRACE_PERIOD));
+    }
+
+    /**
+     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference},
+     * i.e., the timestamp of a record from the secondary stream is max {@code timeDifference} before or after
      * the timestamp of the record from the primary stream.
      *
      * @param timeDifference join window interval
+     * @return a new JoinWindows object with the window definition with and grace period (default to 24 hours minus {@code timeDifference})
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0. Use {@link #ofTimeDifferenceWithNoGrace(Duration)}} instead
      */
+    @Deprecated
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
-        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, DEFAULT_GRACE_PERIOD_MS);
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, Math.max(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - timeDifferenceMs * 2, 0), false);
     }
 
     /**
@@ -114,7 +176,7 @@ public final class JoinWindows extends Windows<Window> {
     public JoinWindows before(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
-        return new JoinWindows(timeDifferenceMs, afterMs, DEFAULT_GRACE_PERIOD_MS);
+        return new JoinWindows(timeDifferenceMs, afterMs, graceMs, enableSpuriousResultFix);
     }
 
     /**
@@ -130,7 +192,7 @@ public final class JoinWindows extends Windows<Window> {
     public JoinWindows after(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
-        return new JoinWindows(beforeMs, timeDifferenceMs, DEFAULT_GRACE_PERIOD_MS);
+        return new JoinWindows(beforeMs, timeDifferenceMs, graceMs, enableSpuriousResultFix);
     }
 
     /**
@@ -157,15 +219,21 @@ public final class JoinWindows extends Windows<Window> {
      *
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
-     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     * @throws IllegalStateException if {@link #grace(Duration)} is called after {@link #ofTimeDifferenceAndGrace(Duration, Duration)} or {@link #ofTimeDifferenceWithNoGrace(Duration)}
+     * @deprecated since 3.0. Use {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
      */
+    @Deprecated
     public JoinWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
+        // re-use the enableSpuriousResultFix flag to identify if grace is called after ofTimeDifferenceAndGrace/ofTimeDifferenceWithNoGrace
+        if (this.enableSpuriousResultFix) {
+            throw new IllegalStateException(
+                "Cannot call grace() after setting grace value via ofTimeDifferenceAndGrace or ofTimeDifferenceWithNoGrace.");
+        }
+
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
-        if (afterWindowEndMs < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
-        }
-        return new JoinWindows(beforeMs, afterMs, afterWindowEndMs);
+        return new JoinWindows(beforeMs, afterMs, afterWindowEndMs, false);
     }
 
     @Override

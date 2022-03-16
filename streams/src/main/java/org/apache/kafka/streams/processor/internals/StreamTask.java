@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -42,9 +41,9 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
@@ -102,7 +101,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
+
+    @SuppressWarnings("rawtypes")
     private final InternalProcessorContext processorContext;
+
     private final RecordQueueCreator recordQueueCreator;
 
     private StampedRecord record;
@@ -110,11 +112,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
 
+    @SuppressWarnings("rawtypes")
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> mainConsumer,
-                      final StreamsConfig config,
+                      final TaskConfig config,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
@@ -129,7 +132,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            config.taskTimeoutMs,
             "task",
             StreamTask.class
         );
@@ -140,7 +143,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        eosEnabled = StreamThread.eosEnabled(config);
+        this.eosEnabled = config.eosEnabled;
 
         final String threadId = Thread.currentThread().getName();
         this.streamsMetrics = streamsMetrics;
@@ -168,24 +171,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
-        maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        maxBufferedSize = config.maxBufferedSize;
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
         resetOffsetsForPartitions = new HashSet<>();
 
-        recordQueueCreator = new RecordQueueCreator(this.logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
+        recordQueueCreator = new RecordQueueCreator(this.logContext, config.timestampExtractor, config.deserializationExceptionHandler);
 
         recordInfo = new PartitionGroup.RecordInfo();
 
         final Sensor enforcedProcessingSensor;
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
-            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics, parent);
-        } else {
-            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
-        }
-        final long maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
+        final long maxTaskIdleMs = config.maxTaskIdleMs;
         partitionGroup = new PartitionGroup(
             logContext,
             createPartitionQueues(),
@@ -317,6 +315,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void closeTopology() {
         log.trace("Closing processor topology");
 
@@ -578,7 +577,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
         // commitNeeded indicates we may have processed some records since last commit
         // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
-        if (commitNeeded) {
+        if (commitNeeded || enforceCheckpoint) {
             stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
 
@@ -705,33 +704,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         }
 
-
         try {
-            // process the record by passing to the source node of the topology
-            final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            log.trace("Start processing one record [{}]", record);
-
-            final ProcessorRecordContext recordContext = new ProcessorRecordContext(
-                record.timestamp,
-                record.offset(),
-                record.partition(),
-                record.topic(),
-                record.headers()
-            );
-            updateProcessorContext(currNode, wallClockTime, recordContext);
-
-            maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
-            final Record<Object, Object> toProcess = new Record<>(
-                record.key(),
-                record.value(),
-                processorContext.timestamp(),
-                processorContext.headers()
-            );
-            maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
-
-            log.trace("Completed processing one record [{}]", record);
+            if (!(record instanceof CorruptedRecord)) {
+                doProcess(wallClockTime);
+            }
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
@@ -777,6 +755,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return true;
     }
 
+    @SuppressWarnings("unchecked")
+    private void doProcess(final long wallClockTime) {
+        // process the record by passing to the source node of the topology
+        final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
+        log.trace("Start processing one record [{}]", record);
+
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            record.timestamp,
+            record.offset(),
+            record.partition(),
+            record.topic(),
+            record.headers()
+        );
+        updateProcessorContext(currNode, wallClockTime, recordContext);
+
+        maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
+        final Record<Object, Object> toProcess = new Record<>(
+            record.key(),
+            record.value(),
+            processorContext.timestamp(),
+            processorContext.headers()
+        );
+        maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
+
+        log.trace("Completed processing one record [{}]", record);
+    }
+
     @Override
     public void recordProcessBatchTime(final long processBatchTime) {
         processTimeMs += processBatchTime;
@@ -805,6 +810,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws IllegalStateException if the current node is not null
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
+    @SuppressWarnings("unchecked")
     @Override
     public void punctuate(final ProcessorNode<?, ?, ?, ?> node,
                           final long timestamp,
@@ -840,6 +846,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void updateProcessorContext(final ProcessorNode<?, ?, ?, ?> currNode,
                                         final long wallClockTime,
                                         final ProcessorRecordContext recordContext) {
@@ -933,6 +940,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return purgeableConsumedOffsets;
     }
 
+    @SuppressWarnings("unchecked")
     private void initializeTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
@@ -1095,18 +1103,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (encryptedString.isEmpty()) {
             return RecordQueue.UNKNOWN;
         }
-        final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
-        final byte version = buffer.get();
-        switch (version) {
-            case LATEST_MAGIC_BYTE:
-                return buffer.getLong();
-            default:
-                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.",
-                         LATEST_MAGIC_BYTE, version);
-                return RecordQueue.UNKNOWN;
+        try {
+            final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
+            final byte version = buffer.get();
+            switch (version) {
+                case LATEST_MAGIC_BYTE:
+                    return buffer.getLong();
+                default:
+                    log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.",
+                            LATEST_MAGIC_BYTE, version);
+                    return RecordQueue.UNKNOWN;
+            }
+        } catch (final Exception exception) {
+            log.warn("Unsupported offset metadata found");
+            return RecordQueue.UNKNOWN;
         }
     }
 
+    @SuppressWarnings("rawtypes")
     public InternalProcessorContext processorContext() {
         return processorContext;
     }
@@ -1155,7 +1169,38 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public boolean commitNeeded() {
-        return commitNeeded;
+        // we need to do an extra check if the flag was false, that
+        // if the consumer position has been updated; this is because
+        // there may be non data records such as control markers bypassed
+        if (commitNeeded) {
+            return true;
+        } else {
+            for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                final TopicPartition partition = entry.getKey();
+                try {
+                    final long offset = mainConsumer.position(partition);
+
+                    // note the position in consumer is the "next" record to fetch,
+                    // so it should be larger than the consumed offset by 1; if it is
+                    // more than 1 it means there are control records, which the consumer skips over silently
+                    if (offset > entry.getValue() + 1) {
+                        commitNeeded = true;
+                        entry.setValue(offset - 1);
+                    }
+                } catch (final TimeoutException error) {
+                    // the `consumer.position()` call should never block, because we know that we did process data
+                    // for the requested partition and thus the consumer should have a valid local position
+                    // that it can return immediately
+
+                    // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                    throw new IllegalStateException(error);
+                } catch (final KafkaException fatal) {
+                    throw new StreamsException(fatal);
+                }
+            }
+
+            return commitNeeded;
+        }
     }
 
     @Override
@@ -1230,7 +1275,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         public RecordQueue createQueue(final TopicPartition partition) {
-            final SourceNode<?, ?, ?, ?> source = topology.source(partition.topic());
+            final SourceNode<?, ?> source = topology.source(partition.topic());
             if (source == null) {
                 throw new TopologyException(
                         "Topic is unknown to the topology. " +

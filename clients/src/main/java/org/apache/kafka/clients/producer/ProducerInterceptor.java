@@ -64,7 +64,7 @@ public interface ProducerInterceptor<K, V> extends Configurable {
      * @param record the record from client or the record returned by the previous interceptor in the chain of interceptors.
      * @return producer record to send to topic/partition
      */
-    public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record);
+    ProducerRecord<K, V> onSend(ProducerRecord<K, V> record);
 
     /**
      * This method is called when the record sent to the server has been acknowledged, or when sending the record fails before
@@ -86,10 +86,10 @@ public interface ProducerInterceptor<K, V> extends Configurable {
      *                 {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)}.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
-    public void onAcknowledgement(RecordMetadata metadata, Exception exception);
+    void onAcknowledgement(RecordMetadata metadata, Exception exception);
 
     /**
      * This is called when interceptor is closed
      */
-    public void close();
+    void close();
 }

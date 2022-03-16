@@ -55,7 +55,7 @@ public class TimestampedSegmentsTest {
     @Before
     public void createContext() {
         stateDirectory = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             stateDirectory,
             Serdes.String(),
             Serdes.Long(),

@@ -21,20 +21,35 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class ProcessorRecordContextTest {
     // timestamp + offset + partition: 8 + 8 + 4
     private final static long MIN_SIZE = 20L;
 
     @Test
-    public void shouldEstimateNullTopicAndNullHeadersAsZeroLength() {
+    public void shouldNotAllowNullHeaders() {
+        assertThrows(
+            NullPointerException.class,
+            () -> new ProcessorRecordContext(
+                42L,
+                73L,
+                0,
+                "topic",
+                null
+            )
+        );
+    }
+
+    @Test
+    public void shouldEstimateNullTopicAndEmptyHeadersAsZeroLength() {
         final Headers headers = new RecordHeaders();
         final ProcessorRecordContext context = new ProcessorRecordContext(
             42L,
             73L,
             0,
             null,
-            null
+            new RecordHeaders()
         );
 
         assertEquals(MIN_SIZE, context.residentMemorySizeEstimate());
@@ -60,7 +75,7 @@ public class ProcessorRecordContextTest {
             73L,
             0,
             "topic",
-            null
+            new RecordHeaders()
         );
 
         assertEquals(MIN_SIZE + 5L, context.residentMemorySizeEstimate());

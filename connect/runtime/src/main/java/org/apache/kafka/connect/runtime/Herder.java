@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -225,6 +226,13 @@ public interface Herder {
     HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
 
     /**
+     * Restart the connector and optionally its tasks.
+     * @param request the details of the restart request
+     * @param cb      callback to invoke upon completion with the connector state info
+     */
+    void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
      * @param connector name of the connector
@@ -250,6 +258,14 @@ public interface Herder {
      * @return the cluster ID of the Kafka cluster backing this connect cluster
      */
     String kafkaClusterId();
+
+
+    /**
+     * Returns the configuration of a plugin
+     * @param pluginName the name of the plugin
+     * @return the list of ConfigKeyInfo of the plugin
+     */
+    List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
 
     enum ConfigReloadAction {
         NONE,

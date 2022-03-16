@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.NavigableMap;
-import java.util.TreeMap;
-import java.util.TreeSet;
-
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -29,10 +25,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
@@ -281,11 +281,27 @@ class NamedCache {
     }
 
     synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to, final boolean toInclusive) {
-        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, toInclusive), true);
+        final Set<Bytes> rangeSet = computeSubSet(from, to, toInclusive);
+        return keySetIterator(rangeSet, true);
     }
 
     synchronized Iterator<Bytes> reverseKeyRange(final Bytes from, final Bytes to) {
-        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true), false);
+        final Set<Bytes> rangeSet = computeSubSet(from, to, true);
+        return keySetIterator(rangeSet, false);
+    }
+
+    private Set<Bytes> computeSubSet(final Bytes from, final Bytes to, final boolean toInclusive) {
+        if (from == null && to == null) {
+            return cache.navigableKeySet();
+        } else if (from == null) {
+            return cache.headMap(to, toInclusive).keySet();
+        } else if (to == null) {
+            return cache.tailMap(from, true).keySet();
+        } else if (from.compareTo(to) > 0) {
+            return Collections.emptyNavigableSet();
+        } else {
+            return cache.navigableKeySet().subSet(from, true, to, toInclusive);
+        }
     }
 
     private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet, final boolean forward) {

@@ -25,7 +25,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestOutputTopic;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -39,9 +38,9 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.Matcher;
 import org.junit.Test;
@@ -54,7 +53,6 @@ import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -76,10 +74,10 @@ public class KStreamWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(100)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -154,16 +152,16 @@ public class KStreamWindowAggregateTest {
         final KTable<Windowed<String>, String> table1 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(100)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(100)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String()));
         table2.toStream().process(supplier);
 
@@ -180,7 +178,7 @@ public class KStreamWindowAggregateTest {
             inputTopic1.pipeInput("D", "4", 3L);
             inputTopic1.pipeInput("A", "1", 9L);
 
-            final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
+            final List<MockApiProcessor<Windowed<String>, String, Void, Void>> processors = supplier.capturedProcessors(3);
 
             processors.get(0).checkAndClearProcessResult(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1",  0),
@@ -266,30 +264,19 @@ public class KStreamWindowAggregateTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingNullKey(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingNullKey(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeterWhenSkippingNullKey(final String builtInMetricsVersion) {
+    public void shouldLogAndMeterWhenSkippingNullKey() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
         builder
             .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10)).advanceBy(ofMillis(5)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.toStringInstance("+"),
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String())
             );
-
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -298,33 +285,18 @@ public class KStreamWindowAggregateTest {
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
 
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                assertEquals(
-                    1.0,
-                    getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
-                );
-            }
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0]"));
+            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
         }
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindowWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingExpiredWindow(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindowWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingExpiredWindow(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeterWhenSkippingExpiredWindow(final String builtInMetricsVersion) {
+    public void shouldLogAndMeterWhenSkippingExpiredWindow() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-               .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)).grace(ofMillis(90)))
+               .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(90)).advanceBy(ofMillis(5)))
                .aggregate(
                    () -> "",
                    MockAggregator.toStringInstance("+"),
@@ -337,8 +309,6 @@ public class KStreamWindowAggregateTest {
                .toStream()
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
-
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -356,20 +326,19 @@ public class KStreamWindowAggregateTest {
 
             assertLatenessMetrics(
                 driver,
-                builtInMetricsVersion,
                 is(7.0), // how many events get dropped
                 is(100.0), // k:0 is 100ms late, since its time is 0, but it arrives at stream time 100.
                 is(84.875) // (0 + 100 + 99 + 98 + 97 + 96 + 95 + 94) / 8
             );
 
             assertThat(appender.getMessages(), hasItems(
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[2] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[3] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[4] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[5] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10] streamTime=[100]"
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[3] timestamp=[2] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[4] timestamp=[3] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[5] timestamp=[4] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[6] timestamp=[5] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10] streamTime=[100]"
             ));
 
             final TestOutputTopic<String, String> outputTopic =
@@ -384,22 +353,13 @@ public class KStreamWindowAggregateTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindowByGraceWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingExpiredWindowByGrace(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindowByGraceWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingExpiredWindowByGrace(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final String builtInMetricsVersion) {
+    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-               .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(10)).grace(ofMillis(90L)))
+               .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(90L)).advanceBy(ofMillis(10)))
                .aggregate(
                    () -> "",
                    MockAggregator.toStringInstance("+"),
@@ -408,8 +368,6 @@ public class KStreamWindowAggregateTest {
                .toStream()
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
-
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -425,16 +383,16 @@ public class KStreamWindowAggregateTest {
             inputTopic.pipeInput("k", "5", 105L);
             inputTopic.pipeInput("k", "6", 6L);
 
-            assertLatenessMetrics(driver, builtInMetricsVersion, is(7.0), is(194.0), is(97.375));
+            assertLatenessMetrics(driver, is(7.0), is(194.0), is(97.375));
 
             assertThat(appender.getMessages(), hasItems(
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110] streamTime=[200]"
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110] streamTime=[200]"
             ));
 
             final TestOutputTopic<String, String> outputTopic =
@@ -445,7 +403,6 @@ public class KStreamWindowAggregateTest {
     }
 
     private void assertLatenessMetrics(final TopologyTestDriver driver,
-                                       final String builtInMetricsVersion,
                                        final Matcher<Object> dropTotal,
                                        final Matcher<Object> maxLateness,
                                        final Matcher<Object> avgLateness) {
@@ -454,88 +411,45 @@ public class KStreamWindowAggregateTest {
         final MetricName dropRateMetric;
         final MetricName latenessMaxMetric;
         final MetricName latenessAvgMetric;
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            dropTotalMetric = new MetricName(
-                "late-record-drop-total",
-                "stream-processor-node-metrics",
-                "The total number of dropped late records",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
-                )
-            );
-            dropRateMetric = new MetricName(
-                "late-record-drop-rate",
-                "stream-processor-node-metrics",
-                "The average number of dropped late records per second",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
-                )
-            );
-            latenessMaxMetric = new MetricName(
-                "record-lateness-max",
-                "stream-task-metrics",
-                "The observed maximum lateness of records in milliseconds, measured by comparing the record "
-                    + "timestamp with the current stream time",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-            latenessAvgMetric = new MetricName(
-                "record-lateness-avg",
-                "stream-task-metrics",
-                "The observed average lateness of records in milliseconds, measured by comparing the record "
-                    + "timestamp with the current stream time",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-        } else {
-            dropTotalMetric = new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "The total number of dropped records",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-            dropRateMetric = new MetricName(
-                "dropped-records-rate",
-                "stream-task-metrics",
-                "The average number of dropped records per second",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-            latenessMaxMetric = new MetricName(
-                "record-lateness-max",
-                "stream-task-metrics",
-                "The observed maximum lateness of records in milliseconds, measured by comparing the record "
-                    + "timestamp with the current stream time",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-            latenessAvgMetric = new MetricName(
-                "record-lateness-avg",
-                "stream-task-metrics",
-                "The observed average lateness of records in milliseconds, measured by comparing the record "
-                    + "timestamp with the current stream time",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
+        dropTotalMetric = new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        dropRateMetric = new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        latenessMaxMetric = new MetricName(
+            "record-lateness-max",
+            "stream-task-metrics",
+            "The observed maximum lateness of records in milliseconds, measured by comparing the record "
+                + "timestamp with the current stream time",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        latenessAvgMetric = new MetricName(
+            "record-lateness-avg",
+            "stream-task-metrics",
+            "The observed average lateness of records in milliseconds, measured by comparing the record "
+                + "timestamp with the current stream time",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
 
-        }
         assertThat(driver.metrics().get(dropTotalMetric).metricValue(), dropTotal);
         assertThat(driver.metrics().get(dropRateMetric).metricValue(), not(0.0));
         assertThat(driver.metrics().get(latenessMaxMetric).metricValue(), maxLateness);

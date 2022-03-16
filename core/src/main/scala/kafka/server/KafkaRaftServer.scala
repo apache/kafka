@@ -18,19 +18,22 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
+
 import kafka.common.{InconsistentNodeIdException, KafkaException}
-import kafka.log.Log
+import kafka.log.{LogConfig, UnifiedLog}
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 /**
  * This class implements the KRaft (Kafka Raft) mode server which relies
@@ -55,7 +58,7 @@ class KafkaRaftServer(
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    metaProps.clusterId.toString
+    metaProps.clusterId
   )
 
   private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
@@ -73,13 +76,11 @@ class KafkaRaftServer(
     controllerQuorumVotersFuture
   )
 
-  private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
-
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
     Some(new BrokerServer(
       config,
       metaProps,
-      metaLogShim,
+      raftManager,
       time,
       metrics,
       threadNamePrefix,
@@ -95,12 +96,12 @@ class KafkaRaftServer(
     Some(new ControllerServer(
       metaProps,
       config,
-      metaLogShim,
       raftManager,
       time,
       metrics,
       threadNamePrefix,
-      controllerQuorumVotersFuture
+      controllerQuorumVotersFuture,
+      KafkaRaftServer.configSchema,
     ))
   } else {
     None
@@ -131,7 +132,7 @@ class KafkaRaftServer(
 }
 
 object KafkaRaftServer {
-  val MetadataTopic = "@metadata"
+  val MetadataTopic = "__cluster_metadata"
   val MetadataPartition = new TopicPartition(MetadataTopic, 0)
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
@@ -158,7 +159,7 @@ object KafkaRaftServer {
         s"loaded from ${config.metadataLogDir}")
     }
 
-    val metadataPartitionDirName = Log.logDirName(MetadataPartition)
+    val metadataPartitionDirName = UnifiedLog.logDirName(MetadataPartition)
     val onlineNonMetadataDirs = logDirs.diff(offlineDirs :+ config.metadataLogDir)
     onlineNonMetadataDirs.foreach { logDir =>
       val metadataDir = new File(logDir, metadataPartitionDirName)
@@ -179,4 +180,8 @@ object KafkaRaftServer {
     (metaProperties, offlineDirs.toSeq)
   }
 
+  val configSchema = new KafkaConfigSchema(Map(
+    ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
+    ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
+  ).asJava)
 }

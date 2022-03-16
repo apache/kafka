@@ -74,6 +74,7 @@ public class ReplaceFieldTest {
         assertEquals(schema, transformedRecord.valueSchema());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void schemaless() {
         final Map<String, String> props = new HashMap<>();
@@ -91,7 +92,7 @@ public class ReplaceFieldTest {
         final SinkRecord record = new SinkRecord("test", 0, null, null, null, value, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
-        final Map updatedValue = (Map) transformedRecord.value();
+        final Map<String, Object> updatedValue = (Map<String, Object>) transformedRecord.value();
         assertEquals(3, updatedValue.size());
         assertEquals(42, updatedValue.get("xyz"));
         assertEquals(true, updatedValue.get("bar"));
@@ -144,7 +145,7 @@ public class ReplaceFieldTest {
         assertNull(transformedRecord.valueSchema());
     }
 
-
+    @SuppressWarnings("unchecked")
     @Test
     public void testExcludeBackwardsCompatibility() {
         final Map<String, String> props = new HashMap<>();
@@ -162,7 +163,7 @@ public class ReplaceFieldTest {
         final SinkRecord record = new SinkRecord("test", 0, null, null, null, value, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
-        final Map updatedValue = (Map) transformedRecord.value();
+        final Map<String, Object> updatedValue = (Map<String, Object>) transformedRecord.value();
         assertEquals(3, updatedValue.size());
         assertEquals(42, updatedValue.get("xyz"));
         assertEquals(true, updatedValue.get("bar"));

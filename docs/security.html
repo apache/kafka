@@ -20,12 +20,12 @@
     In release 0.9.0.0, the Kafka community added a number of features that, used either separately or together, increases security in a Kafka cluster. The following security measures are currently supported:
     <ol>
         <li>Authentication of connections to brokers from clients (producers and consumers), other brokers and tools, using either SSL or SASL. Kafka supports the following SASL mechanisms:
-        <ul>
-            <li>SASL/GSSAPI (Kerberos) - starting at version 0.9.0.0</li>
-            <li>SASL/PLAIN - starting at version 0.10.0.0</li>
-            <li>SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 - starting at version 0.10.2.0</li>
-            <li>SASL/OAUTHBEARER - starting at version 2.0</li>
-        </ul></li>
+            <ul>
+                <li>SASL/GSSAPI (Kerberos) - starting at version 0.9.0.0</li>
+                <li>SASL/PLAIN - starting at version 0.10.0.0</li>
+                <li>SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 - starting at version 0.10.2.0</li>
+                <li>SASL/OAUTHBEARER - starting at version 2.0</li>
+            </ul></li>
         <li>Authentication of connections from brokers to ZooKeeper</li>
         <li>Encryption of data transferred between brokers and clients, between brokers, or between brokers and tools using SSL (Note that there is a performance degradation when SSL is enabled, the magnitude of which depends on the CPU type and the JVM implementation.)</li>
         <li>Authorization of read / write operations by clients</li>
@@ -47,7 +47,7 @@
             The tool supports two different keystore formats, the Java specific jks format which has been deprecated by now, as well as PKCS12.
             PKCS12 is the default format as of Java version 9, to ensure this format is being used regardless of the Java version in use all following
             commands explicitly specify the PKCS12 format.
-            <pre class="line-numbers"><code class="language-bash">keytool -keystore {keystorefile} -alias localhost -validity {validity} -genkey -keyalg RSA -storetype pkcs12</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore {keystorefile} -alias localhost -validity {validity} -genkey -keyalg RSA -storetype pkcs12</code></pre>
             You need to specify two parameters in the above command:
             <ol>
                 <li>keystorefile: the keystore file that stores the keys (and later the certificate) for this broker. The keystore file contains the private
@@ -63,7 +63,7 @@
             authentication purposes.<br>
             To generate certificate signing requests run the following command for all server keystores created so far.
 
-            <pre class="line-numbers"><code class="language-bash">keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}</code></pre>
             This command assumes that you want to add hostname information to the certificate, if this is not the case, you can omit the extension parameter <code>-ext SAN=DNS:{FQDN},IP:{IPADDRESS1}</code>. Please see below for more information on this.
 
             <h5>Host Name Verification</h5>
@@ -76,7 +76,7 @@
             Server host name verification may be disabled by setting <code>ssl.endpoint.identification.algorithm</code> to an empty string.<br>
             For dynamically configured broker listeners, hostname verification may be disabled using <code>kafka-configs.sh</code>:<br>
 
-            <pre class="line-numbers"><code class="language-text">bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="</code></pre>
 
             <p><b>Note:</b></p>
             Normally there is no good reason to disable hostname verification apart from being the quickest way to "just get it to work" followed
@@ -98,8 +98,8 @@
             signing request. It can also be specified when generating the keypair, but this will not automatically be copied into the signing request.<br>
 
 
-            To add a SAN field append the following argument <code> -ext SAN=DNS:{FQDN},IP:{IPADDRESS} </code> to the keytool command:
-            <pre class="line-numbers"><code class="language-bash">keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}</code></pre>
+            To add a SAN field append the following argument <code> -ext SAN=DNS:{FQDN},IP:{IPADDRESS}</code> to the keytool command:
+            <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}</code></pre>
         </li>
 
         <li><h4 class="anchor-heading"><a id="security_ssl_ca" class="anchor-link"></a><a href="#security_ssl_ca">Creating your own CA</a></h4>
@@ -208,25 +208,25 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             Then create a database and serial number file, these will be used to keep track of which certificates were signed with this CA. Both of
             these are simply text files that reside in the same directory as your CA keys.
 
-            <pre class="line-numbers"><code class="language-bash">echo 01 > serial.txt
-touch index.txt</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; echo 01 &gt; serial.txt
+&gt; touch index.txt</code></pre>
 
             With these steps done you are now ready to generate your CA that will be used to sign certificates later.
 
-            <pre class="line-numbers"><code class="language-bash">openssl req -x509 -config openssl-ca.cnf -newkey rsa:4096 -sha256 -nodes -out cacert.pem -outform PEM</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; openssl req -x509 -config openssl-ca.cnf -newkey rsa:4096 -sha256 -nodes -out cacert.pem -outform PEM</code></pre>
 
             The CA is simply a public/private key pair and certificate that is signed by itself, and is only intended to sign other certificates.<br>
             This keypair should be kept very safe, if someone gains access to it, they can create and sign certificates that will be trusted by your
             infrastructure, which means they will be able to impersonate anybody when connecting to any service that trusts this CA.<br>
 
             The next step is to add the generated CA to the **clients' truststore** so that the clients can trust this CA:
-            <pre class="line-numbers"><code class="language-bash">keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert</code></pre>
 
             <b>Note:</b>
             If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" in the
             <a href="#brokerconfigs">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have
             all the CA certificates that clients' keys were signed by.
-            <pre class="line-numbers"><code class="language-bash">keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert</code></pre>
 
             In contrast to the keystore in step 1 that stores each machine's own identity, the truststore of a client stores all the certificates
             that the client should trust. Importing a certificate into one's truststore also means trusting all certificates that are signed by that
@@ -237,11 +237,11 @@ touch index.txt</code></pre>
         </li>
         <li><h4 class="anchor-heading"><a id="security_ssl_signing" class="anchor-link"></a><a href="#security_ssl_signing">Signing the certificate</a></h4>
             Then sign it with the CA:
-            <pre class="line-numbers"><code class="language-bash">openssl ca -config openssl-ca.cnf -policy signing_policy -extensions signing_req -out {server certificate} -infiles {certificate signing request}</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; openssl ca -config openssl-ca.cnf -policy signing_policy -extensions signing_req -out {server certificate} -infiles {certificate signing request}</code></pre>
 
             Finally, you need to import both the certificate of the CA and the signed certificate into the keystore:
-            <pre class="line-numbers"><code class="language-bash">keytool -keystore {keystore} -alias CARoot -import -file {CA certificate}
-keytool -keystore {keystore} -alias localhost -import -file cert-signed</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore {keystore} -alias CARoot -import -file {CA certificate}
+&gt; keytool -keystore {keystore} -alias localhost -import -file cert-signed</code></pre>
 
             The definitions of the parameters are the following:
             <ol>
@@ -310,14 +310,14 @@ keytool -keystore {keystore} -alias localhost -import -file cert-signed</code></
                     harder for a malicious party to obtain certificates with potentially misleading or fraudulent values.
                     It is adviseable to double check signed certificates, whether these contain all requested SAN fields to enable proper hostname verification.
                     The following command can be used to print certificate details to the console, which should be compared with what was originally requested:
-                    <pre class="line-numbers"><code class="language-bash">openssl x509 -in certificate.crt -text -noout</code></pre>
+                    <pre class="line-numbers"><code class="language-bash">&gt; openssl x509 -in certificate.crt -text -noout</code></pre>
                 </li>
             </ol>
         </li>
         <li><h4 class="anchor-heading"><a id="security_configbroker" class="anchor-link"></a><a href="#security_configbroker">Configuring Kafka Brokers</a></h4>
             Kafka Brokers support listening for connections on multiple ports.
             We need to configure the following property in server.properties, which must have one or more comma-separated values:
-            <pre>listeners</code></pre>
+            <pre><code class="language-text">listeners</code></pre>
 
             If SSL is not enabled for inter-broker communication (see below for how to enable it), both PLAINTEXT and SSL ports will be necessary.
             <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://host.name:port,SSL://host.name:port</code></pre>
@@ -360,7 +360,7 @@ ssl.truststore.password=test1234</code></pre>
             <pre class="line-numbers"><code class="language-text">with addresses: PLAINTEXT -> EndPoint(192.168.64.1,9092,PLAINTEXT),SSL -> EndPoint(192.168.64.1,9093,SSL)</code></pre>
 
             To check quickly if  the server keystore and truststore are setup properly you can run the following command
-            <pre>openssl s_client -debug -connect localhost:9093 -tls1</code></pre> (Note: TLSv1 should be listed under ssl.enabled.protocols)<br>
+            <pre class="line-numbers"><code class="language-bash">&gt; openssl s_client -debug -connect localhost:9093 -tls1</code></pre> (Note: TLSv1 should be listed under ssl.enabled.protocols)<br>
             In the output of this command you should see server's certificate:
             <pre class="line-numbers"><code class="language-text">-----BEGIN CERTIFICATE-----
 {variable sized random bytes}
@@ -384,56 +384,56 @@ ssl.keystore.password=test1234
 ssl.key.password=test1234</code></pre>
 
             Other configuration settings that may also be needed depending on our requirements and the broker configuration:
-                <ol>
-                    <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
-                    <li>ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.</li>
-                    <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side</li>
-                    <li>ssl.truststore.type=JKS</li>
-                    <li>ssl.keystore.type=JKS</li>
-                </ol>
-    <br>
+            <ol>
+                <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
+                <li>ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.</li>
+                <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side</li>
+                <li>ssl.truststore.type=JKS</li>
+                <li>ssl.keystore.type=JKS</li>
+            </ol>
+            <br>
             Examples using console-producer and console-consumer:
-            <pre class="line-numbers"><code class="language-bash">kafka-console-producer.sh --bootstrap-server localhost:9093 --topic test --producer.config client-ssl.properties
-kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --consumer.config client-ssl.properties</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; kafka-console-producer.sh --bootstrap-server localhost:9093 --topic test --producer.config client-ssl.properties
+&gt; kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --consumer.config client-ssl.properties</code></pre>
         </li>
     </ol>
     <h3 class="anchor-heading"><a id="security_sasl" class="anchor-link"></a><a href="#security_sasl">7.3 Authentication using SASL</a></h3>
 
     <ol>
-    <li><h4 class="anchor-heading"><a id="security_sasl_jaasconfig" class="anchor-link"></a><a href="#security_sasl_jaasconfig">JAAS configuration</a></h4>
-    <p>Kafka uses the Java Authentication and Authorization Service
-    (<a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jaas/JAASRefGuide.html">JAAS</a>)
-    for SASL configuration.</p>
-        <ol>
-        <li><h5><a id="security_jaas_broker"
-            href="#security_jaas_broker">JAAS configuration for Kafka brokers</a></h5>
+        <li><h4 class="anchor-heading"><a id="security_sasl_jaasconfig" class="anchor-link"></a><a href="#security_sasl_jaasconfig">JAAS configuration</a></h4>
+            <p>Kafka uses the Java Authentication and Authorization Service
+            (<a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jaas/JAASRefGuide.html">JAAS</a>)
+            for SASL configuration.</p>
+                <ol>
+                <li><h5><a id="security_jaas_broker"
+                    href="#security_jaas_broker">JAAS configuration for Kafka brokers</a></h5>
 
-            <p><tt>KafkaServer</tt> is the section name in the JAAS file used by each
-            KafkaServer/Broker. This section provides SASL configuration options
-            for the broker including any SASL client connections made by the broker
-            for inter-broker communication. If multiple listeners are configured to use
-            SASL, the section name may be prefixed with the listener name in lower-case
-            followed by a period, e.g. <tt>sasl_ssl.KafkaServer</tt>.</p>
+                    <p><tt>KafkaServer</tt> is the section name in the JAAS file used by each
+                    KafkaServer/Broker. This section provides SASL configuration options
+                    for the broker including any SASL client connections made by the broker
+                    for inter-broker communication. If multiple listeners are configured to use
+                    SASL, the section name may be prefixed with the listener name in lower-case
+                    followed by a period, e.g. <tt>sasl_ssl.KafkaServer</tt>.</p>
 
-            <p><tt>Client</tt> section is used to authenticate a SASL connection with
-            zookeeper. It also allows the brokers to set SASL ACL on zookeeper
-            nodes which locks these nodes down so that only the brokers can
-            modify it. It is necessary to have the same principal name across all
-            brokers. If you want to use a section name other than Client, set the
-            system property <tt>zookeeper.sasl.clientconfig</tt> to the appropriate
-            name (<i>e.g.</i>, <tt>-Dzookeeper.sasl.clientconfig=ZkClient</tt>).</p>
+                    <p><tt>Client</tt> section is used to authenticate a SASL connection with
+                    zookeeper. It also allows the brokers to set SASL ACL on zookeeper
+                    nodes which locks these nodes down so that only the brokers can
+                    modify it. It is necessary to have the same principal name across all
+                    brokers. If you want to use a section name other than Client, set the
+                    system property <tt>zookeeper.sasl.clientconfig</tt> to the appropriate
+                    name (<i>e.g.</i>, <tt>-Dzookeeper.sasl.clientconfig=ZkClient</tt>).</p>
 
-            <p>ZooKeeper uses "zookeeper" as the service name by default. If you
-            want to change this, set the system property
-            <tt>zookeeper.sasl.client.username</tt> to the appropriate name
-            (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p>
+                    <p>ZooKeeper uses "zookeeper" as the service name by default. If you
+                    want to change this, set the system property
+                    <tt>zookeeper.sasl.client.username</tt> to the appropriate name
+                    (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p>
 
-            <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
-            The property name must be prefixed with the listener prefix including the SASL mechanism,
-            i.e. <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code>. Only one
-            login module may be specified in the config value. If multiple mechanisms are configured on a
-            listener, configs must be provided for each mechanism using the listener and mechanism prefix.
-            For example,
+                    <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
+                    The property name must be prefixed with the listener prefix including the SASL mechanism,
+                    i.e. <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code>. Only one
+                    login module may be specified in the config value. If multiple mechanisms are configured on a
+                    listener, configs must be provided for each mechanism using the listener and mechanism prefix.
+                    For example,</p>
                     <pre class="line-numbers"><code class="language-text">listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
     username="admin" \
     password="admin-secret";
@@ -443,134 +443,133 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
     user_admin="admin-secret" \
     user_alice="alice-secret";</code></pre>
 
-            If JAAS configuration is defined at different levels, the order of precedence used is:
-            <ul>
-              <li>Broker configuration property <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code></li>
-              <li><code>{listenerName}.KafkaServer</code> section of static JAAS configuration</code></li>
-              <li><code>KafkaServer</code> section of static JAAS configuration</code></li>
-            </ul>
-            Note that ZooKeeper JAAS config may only be configured using static JAAS configuration.
+                    If JAAS configuration is defined at different levels, the order of precedence used is:
+                    <ul>
+                        <li>Broker configuration property <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code></li>
+                        <li><code>{listenerName}.KafkaServer</code> section of static JAAS configuration</li>
+                        <li><code>KafkaServer</code> section of static JAAS configuration</li>
+                    </ul>
+                    Note that ZooKeeper JAAS config may only be configured using static JAAS configuration.
 
-            <p>See <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
-            <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
-            <a href="#security_sasl_scram_brokerconfig">SCRAM</a> or
-            <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a> for example broker configurations.</p></li>
+                    <p>See <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
+                        <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
+                        <a href="#security_sasl_scram_brokerconfig">SCRAM</a> or
+                        <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a> for example broker configurations.</p></li>
 
-        </li>
-        <li><h5><a id="security_jaas_client"
-            href="#security_jaas_client">JAAS configuration for Kafka clients</a></h5>
+                <li><h5><a id="security_jaas_client"
+                           href="#security_jaas_client">JAAS configuration for Kafka clients</a></h5>
 
-            <p>Clients may configure JAAS using the client configuration property
-            <a href="#security_client_dynamicjaas">sasl.jaas.config</a>
-            or using the <a href="#security_client_staticjaas">static JAAS config file</a>
-            similar to brokers.</p>
+                    <p>Clients may configure JAAS using the client configuration property
+                        <a href="#security_client_dynamicjaas">sasl.jaas.config</a>
+                        or using the <a href="#security_client_staticjaas">static JAAS config file</a>
+                        similar to brokers.</p>
 
-            <ol>
-            <li><h6><a id="security_client_dynamicjaas"
-                href="#security_client_dynamicjaas">JAAS configuration using client configuration property</a></h6>
-                <p>Clients may specify JAAS configuration as a producer or consumer property without
-                creating a physical configuration file. This mode also enables different producers
-                and consumers within the same JVM to use different credentials by specifying
-                different properties for each client. If both static JAAS configuration system property
-                <code>java.security.auth.login.config</code> and client property <code>sasl.jaas.config</code>
-                are specified, the client property will be used.</p>
+                    <ol>
+                        <li><h6><a id="security_client_dynamicjaas"
+                                   href="#security_client_dynamicjaas">JAAS configuration using client configuration property</a></h6>
+                            <p>Clients may specify JAAS configuration as a producer or consumer property without
+                                creating a physical configuration file. This mode also enables different producers
+                                and consumers within the same JVM to use different credentials by specifying
+                                different properties for each client. If both static JAAS configuration system property
+                                <code>java.security.auth.login.config</code> and client property <code>sasl.jaas.config</code>
+                                are specified, the client property will be used.</p>
 
-                <p>See <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
-                <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
-                <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
-                <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a> for example configurations.</p></li>
+                            <p>See <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
+                                <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
+                                <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
+                                <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a> for example configurations.</p></li>
 
-                <li><h6 class="anchor-heading"><a id="security_client_staticjaas" class="anchor-link"></a><a href="#security_client_staticjaas">JAAS configuration using static config file</a></h6>
-                To configure SASL authentication on the clients using static JAAS config file:
-                <ol>
-                <li>Add a JAAS config file with a client login section named <tt>KafkaClient</tt>. Configure
-                    a login module in <tt>KafkaClient</tt> for the selected mechanism as described in the examples
-                    for setting up <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
-                    <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
-                    <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
-                    <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a>.
-                    For example, <a href="#security_sasl_gssapi_clientconfig">GSSAPI</a>
-                    credentials may be configured as:
-                    <pre class="line-numbers"><code class="language-text">KafkaClient {
+                        <li><h6 class="anchor-heading"><a id="security_client_staticjaas" class="anchor-link"></a><a href="#security_client_staticjaas">JAAS configuration using static config file</a></h6>
+                            To configure SASL authentication on the clients using static JAAS config file:
+                            <ol>
+                                <li>Add a JAAS config file with a client login section named <tt>KafkaClient</tt>. Configure
+                                    a login module in <tt>KafkaClient</tt> for the selected mechanism as described in the examples
+                                    for setting up <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
+                                    <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
+                                    <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
+                                    <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a>.
+                                    For example, <a href="#security_sasl_gssapi_clientconfig">GSSAPI</a>
+                                    credentials may be configured as:
+                                    <pre class="line-numbers"><code class="language-text">KafkaClient {
     com.sun.security.auth.module.Krb5LoginModule required
     useKeyTab=true
     storeKey=true
     keyTab="/etc/security/keytabs/kafka_client.keytab"
     principal="kafka-client-1@EXAMPLE.COM";
 };</code></pre>
-                </li>
-                <li>Pass the JAAS config file location as JVM parameter to each client JVM. For example:
-                    <pre class="language-bash">    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</code></pre></li>
-                </ol>
+                                </li>
+                                <li>Pass the JAAS config file location as JVM parameter to each client JVM. For example:
+                                    <pre class="line-numbers"><code class="language-bash">-Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</code></pre></li>
+                            </ol>
+                        </li>
+                    </ol>
                 </li>
             </ol>
-            </li>
-        </ol>
-    </li>
-    <li><h4><a id="security_sasl_config"
-        href="#security_sasl_config">SASL configuration</a></h4>
-
-        <p>SASL may be used with PLAINTEXT or SSL as the transport layer using the
-        security protocol SASL_PLAINTEXT or SASL_SSL respectively. If SASL_SSL is
-        used, then <a href="#security_ssl">SSL must also be configured</a>.</p>
-
-        <ol>
-        <li><h5><a id="security_sasl_mechanism"
-            href="#security_sasl_mechanism">SASL mechanisms</a></h5>
-            Kafka supports the following SASL mechanisms:
-            <ul>
-                <li><a href="#security_sasl_kerberos">GSSAPI</a> (Kerberos)</li>
-                <li><a href="#security_sasl_plain">PLAIN</a></li>
-                <li><a href="#security_sasl_scram">SCRAM-SHA-256</a></li>
-                <li><a href="#security_sasl_scram">SCRAM-SHA-512</a></li>
-                <li><a href="#security_sasl_oauthbearer">OAUTHBEARER</a></li>
-            </ul>
         </li>
-        <li><h5><a id="security_sasl_brokerconfig"
-            href="#security_sasl_brokerconfig">SASL configuration for Kafka brokers</a></h5>
+        <li><h4><a id="security_sasl_config"
+                   href="#security_sasl_config">SASL configuration</a></h4>
+
+            <p>SASL may be used with PLAINTEXT or SSL as the transport layer using the
+                security protocol SASL_PLAINTEXT or SASL_SSL respectively. If SASL_SSL is
+                used, then <a href="#security_ssl">SSL must also be configured</a>.</p>
+
             <ol>
-            <li>Configure a SASL port in server.properties, by adding at least one of
-                SASL_PLAINTEXT or SASL_SSL to the <i>listeners</i> parameter, which
-                contains one or more comma-separated values:
-                <pre>listeners=SASL_PLAINTEXT://host.name:port</code></pre>
-                If you are only configuring a SASL port (or if you want
-                the Kafka brokers to authenticate each other using SASL) then make sure
-                you set the same SASL protocol for inter-broker communication:
-                <pre>security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)</code></pre></li>
-            <li>Select one or more  <a href="#security_sasl_mechanism">supported mechanisms</a>
-                to enable in the broker and follow the steps to configure SASL for the mechanism.
-                To enable multiple mechanisms in the broker, follow the steps
-                <a href="#security_sasl_multimechanism">here</a>.</li>
+                <li><h5><a id="security_sasl_mechanism"
+                           href="#security_sasl_mechanism">SASL mechanisms</a></h5>
+                    Kafka supports the following SASL mechanisms:
+                    <ul>
+                        <li><a href="#security_sasl_kerberos">GSSAPI</a> (Kerberos)</li>
+                        <li><a href="#security_sasl_plain">PLAIN</a></li>
+                        <li><a href="#security_sasl_scram">SCRAM-SHA-256</a></li>
+                        <li><a href="#security_sasl_scram">SCRAM-SHA-512</a></li>
+                        <li><a href="#security_sasl_oauthbearer">OAUTHBEARER</a></li>
+                    </ul>
+                </li>
+                <li><h5><a id="security_sasl_brokerconfig"
+                           href="#security_sasl_brokerconfig">SASL configuration for Kafka brokers</a></h5>
+                    <ol>
+                        <li>Configure a SASL port in server.properties, by adding at least one of
+                            SASL_PLAINTEXT or SASL_SSL to the <i>listeners</i> parameter, which
+                            contains one or more comma-separated values:
+                            <pre><code class="language-text">listeners=SASL_PLAINTEXT://host.name:port</code></pre>
+                            If you are only configuring a SASL port (or if you want
+                            the Kafka brokers to authenticate each other using SASL) then make sure
+                            you set the same SASL protocol for inter-broker communication:
+                            <pre><code class="language-text">security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)</code></pre></li>
+                        <li>Select one or more  <a href="#security_sasl_mechanism">supported mechanisms</a>
+                            to enable in the broker and follow the steps to configure SASL for the mechanism.
+                            To enable multiple mechanisms in the broker, follow the steps
+                            <a href="#security_sasl_multimechanism">here</a>.</li>
+                    </ol>
+                </li>
+                <li><h5><a id="security_sasl_clientconfig"
+                           href="#security_sasl_clientconfig">SASL configuration for Kafka clients</a></h5>
+                    <p>SASL authentication is only supported for the new Java Kafka producer and
+                        consumer, the older API is not supported.</p>
+
+                    <p>To configure SASL authentication on the clients, select a SASL
+                        <a href="#security_sasl_mechanism">mechanism</a> that is enabled in
+                        the broker for client authentication and follow the steps to configure SASL
+                        for the selected mechanism.</p></li>
             </ol>
         </li>
-        <li><h5><a id="security_sasl_clientconfig"
-            href="#security_sasl_clientconfig">SASL configuration for Kafka clients</a></h5>
-            <p>SASL authentication is only supported for the new Java Kafka producer and
-            consumer, the older API is not supported.</p>
-
-            <p>To configure SASL authentication on the clients, select a SASL
-            <a href="#security_sasl_mechanism">mechanism</a> that is enabled in
-            the broker for client authentication and follow the steps to configure SASL
-            for the selected mechanism.</p></li>
-        </ol>
-    </li>
-    <li><h4><a id="security_sasl_kerberos" href="#security_sasl_kerberos">Authentication using SASL/Kerberos</a></h4>
-        <ol>
-        <li><h5 class="anchor-heading"><a id="security_sasl_kerberos_prereq" class="anchor-link"></a><a href="#security_sasl_kerberos_prereq">Prerequisites</a></h5>
-        <ol>
-            <li><b>Kerberos</b><br>
-            If your organization is already using a Kerberos server (for example, by using Active Directory), there is no need to install a new server just for Kafka. Otherwise you will need to install one, your Linux vendor likely has packages for Kerberos and a short guide on how to install and configure it (<a href="https://help.ubuntu.com/community/Kerberos">Ubuntu</a>, <a href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Managing_Smart_Cards/installing-kerberos.html">Redhat</a>). Note that if you are using Oracle Java, you will need to download JCE policy files for your Java version and copy them to $JAVA_HOME/jre/lib/security.</li>
-            <li><b>Create Kerberos Principals</b><br>
-            If you are using the organization's Kerberos or Active Directory server, ask your Kerberos administrator for a principal for each Kafka broker in your cluster and for every operating system user that will access Kafka with Kerberos authentication (via clients and tools).</br>
-            If you have installed your own Kerberos, you will need to create these principals yourself using the following commands:
-                <pre class="line-numbers"><code class="language-bash">sudo /usr/sbin/kadmin.local -q 'addprinc -randkey kafka/{hostname}@{REALM}'
-sudo /usr/sbin/kadmin.local -q "ktadd -k /etc/security/keytabs/{keytabname}.keytab kafka/{hostname}@{REALM}"</code></pre></li>
-            <li><b>Make sure all hosts can be reachable using hostnames</b> - it is a Kerberos requirement that all your hosts can be resolved with their FQDNs.</li>
-        </ol>
-        <li><h5 class="anchor-heading"><a id="security_sasl_kerberos_brokerconfig" class="anchor-link"></a><a href="#security_sasl_kerberos_brokerconfig">Configuring Kafka Brokers</a></h5>
-        <ol>
-            <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example (note that each broker should have its own keytab):
-            <pre class="line-numbers"><code class="language-text">KafkaServer {
+        <li><h4><a id="security_sasl_kerberos" href="#security_sasl_kerberos">Authentication using SASL/Kerberos</a></h4>
+            <ol>
+                <li><h5 class="anchor-heading"><a id="security_sasl_kerberos_prereq" class="anchor-link"></a><a href="#security_sasl_kerberos_prereq">Prerequisites</a></h5>
+                    <ol>
+                        <li><b>Kerberos</b><br>
+                            If your organization is already using a Kerberos server (for example, by using Active Directory), there is no need to install a new server just for Kafka. Otherwise you will need to install one, your Linux vendor likely has packages for Kerberos and a short guide on how to install and configure it (<a href="https://help.ubuntu.com/community/Kerberos">Ubuntu</a>, <a href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Managing_Smart_Cards/installing-kerberos.html">Redhat</a>). Note that if you are using Oracle Java, you will need to download JCE policy files for your Java version and copy them to $JAVA_HOME/jre/lib/security.</li>
+                        <li><b>Create Kerberos Principals</b><br>
+                            If you are using the organization's Kerberos or Active Directory server, ask your Kerberos administrator for a principal for each Kafka broker in your cluster and for every operating system user that will access Kafka with Kerberos authentication (via clients and tools).<br>
+                            If you have installed your own Kerberos, you will need to create these principals yourself using the following commands:
+                            <pre class="line-numbers"><code class="language-bash">&gt; sudo /usr/sbin/kadmin.local -q 'addprinc -randkey kafka/{hostname}@{REALM}'
+&gt; sudo /usr/sbin/kadmin.local -q "ktadd -k /etc/security/keytabs/{keytabname}.keytab kafka/{hostname}@{REALM}"</code></pre></li>
+                        <li><b>Make sure all hosts can be reachable using hostnames</b> - it is a Kerberos requirement that all your hosts can be resolved with their FQDNs.</li>
+                    </ol>
+                <li><h5 class="anchor-heading"><a id="security_sasl_kerberos_brokerconfig" class="anchor-link"></a><a href="#security_sasl_kerberos_brokerconfig">Configuring Kafka Brokers</a></h5>
+                    <ol>
+                        <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example (note that each broker should have its own keytab):
+                            <pre class="line-numbers"><code class="language-text">KafkaServer {
     com.sun.security.auth.module.Krb5LoginModule required
     useKeyTab=true
     storeKey=true
@@ -587,426 +586,426 @@ Client {
     principal="kafka/kafka1.hostname.com@EXAMPLE.COM";
 };</code></pre>
 
-            </li>
-            <tt>KafkaServer</tt> section in the JAAS file tells the broker which principal to use and the location of the keytab where this principal is stored. It
-            allows the broker to login using the keytab specified in this section. See <a href="#security_jaas_broker">notes</a> for more details on Zookeeper SASL configuration.
-            <li>Pass the JAAS and optionally the krb5 file locations as JVM parameters to each Kafka broker (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
-                <pre>-Djava.security.krb5.conf=/etc/kafka/krb5.conf
+                            <tt>KafkaServer</tt> section in the JAAS file tells the broker which principal to use and the location of the keytab where this principal is stored. It
+                            allows the broker to login using the keytab specified in this section. See <a href="#security_jaas_broker">notes</a> for more details on Zookeeper SASL configuration.
+                        </li>
+                        <li>Pass the JAAS and optionally the krb5 file locations as JVM parameters to each Kafka broker (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
+                            <pre class="line-numbers"><code class="language-bash">-Djava.security.krb5.conf=/etc/kafka/krb5.conf
 -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre>
-            </li>
-            <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
-            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
-            <pre>listeners=SASL_PLAINTEXT://host.name:port
+                        </li>
+                        <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
+                        <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
+                            <pre class="line-numbers"><code class="language-text">listeners=SASL_PLAINTEXT://host.name:port
 security.inter.broker.protocol=SASL_PLAINTEXT
 sasl.mechanism.inter.broker.protocol=GSSAPI
 sasl.enabled.mechanisms=GSSAPI</code></pre>
-            </li>We must also configure the service name in server.properties, which should match the principal name of the kafka brokers. In the above example, principal is "kafka/kafka1.hostname.com@EXAMPLE.com", so:
-            <pre>sasl.kerberos.service.name=kafka</code></pre>
-
-        </ol></li>
-        <li><h5 class="anchor-heading"><a id="security_sasl_kerberos_clientconfig" class="anchor-link"></a><a href="#security_sasl_kerberos_clientconfig">Configuring Kafka Clients</a></h5>
-            To configure SASL authentication on the clients:
-            <ol>
-                <li>
-                    Clients (producers, consumers, connect workers, etc) will authenticate to the cluster with their
-                    own principal (usually with the same name as the user running the client), so obtain or create
-                    these principals as needed. Then configure the JAAS configuration property for each client.
-                    Different clients within a JVM may run as different users by specifying different principals.
-                    The property <code>sasl.jaas.config</code> in producer.properties or consumer.properties describes
-                    how clients like producer and consumer can connect to the Kafka Broker. The following is an example
-                    configuration for a client using a keytab (recommended for long-running processes):
-                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+                            We must also configure the service name in server.properties, which should match the principal name of the kafka brokers. In the above example, principal is "kafka/kafka1.hostname.com@EXAMPLE.com", so:
+                            <pre class="line-numbers"><code class="language-text">sasl.kerberos.service.name=kafka</code></pre>
+                        </li>
+                    </ol></li>
+                <li><h5 class="anchor-heading"><a id="security_sasl_kerberos_clientconfig" class="anchor-link"></a><a href="#security_sasl_kerberos_clientconfig">Configuring Kafka Clients</a></h5>
+                    To configure SASL authentication on the clients:
+                    <ol>
+                        <li>
+                            Clients (producers, consumers, connect workers, etc) will authenticate to the cluster with their
+                            own principal (usually with the same name as the user running the client), so obtain or create
+                            these principals as needed. Then configure the JAAS configuration property for each client.
+                            Different clients within a JVM may run as different users by specifying different principals.
+                            The property <code>sasl.jaas.config</code> in producer.properties or consumer.properties describes
+                            how clients like producer and consumer can connect to the Kafka Broker. The following is an example
+                            configuration for a client using a keytab (recommended for long-running processes):
+                            <pre class="line-numbers"><code class="language-text">sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
     useKeyTab=true \
     storeKey=true  \
     keyTab="/etc/security/keytabs/kafka_client.keytab" \
     principal="kafka-client-1@EXAMPLE.COM";</code></pre>
 
-                   For command-line utilities like kafka-console-consumer or kafka-console-producer, kinit can be used
-                   along with "useTicketCache=true" as in:
-                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+                            For command-line utilities like kafka-console-consumer or kafka-console-producer, kinit can be used
+                            along with "useTicketCache=true" as in:
+                            <pre class="line-numbers"><code class="language-text">sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
     useTicketCache=true;</code></pre>
 
-                   JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
-                   as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
-                   <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</li>
-                <li>Make sure the keytabs configured in the JAAS configuration are readable by the operating system user who is starting kafka client.</li>
-                <li>Optionally pass the krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
-                <pre>-Djava.security.krb5.conf=/etc/kafka/krb5.conf</code></pre></li>
-                <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_PLAINTEXT (or SASL_SSL)
+                            JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
+                            as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
+                            <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</li>
+                        <li>Make sure the keytabs configured in the JAAS configuration are readable by the operating system user who is starting kafka client.</li>
+                        <li>Optionally pass the krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
+                            <pre class="line-numbers"><code class="language-bash">-Djava.security.krb5.conf=/etc/kafka/krb5.conf</code></pre></li>
+                        <li>Configure the following properties in producer.properties or consumer.properties:
+                            <pre class="line-numbers"><code class="language-text">security.protocol=SASL_PLAINTEXT (or SASL_SSL)
 sasl.mechanism=GSSAPI
 sasl.kerberos.service.name=kafka</code></pre></li>
+                    </ol>
+                </li>
             </ol>
         </li>
-        </ol>
-    </li>
 
-    <li><h4><a id="security_sasl_plain" href="#security_sasl_plain">Authentication using SASL/PLAIN</a></h4>
-        <p>SASL/PLAIN is a simple username/password authentication mechanism that is typically used with TLS for encryption to implement secure authentication.
-        Kafka supports a default implementation for SASL/PLAIN which can be extended for production use as described <a href="#security_sasl_plain_production">here</a>.</p>
-        The username is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
-        <ol>
-        <li><h5 class="anchor-heading"><a id="security_sasl_plain_brokerconfig" class="anchor-link"></a><a href="#security_sasl_plain_brokerconfig">Configuring Kafka Brokers</a></h5>
+        <li><h4><a id="security_sasl_plain" href="#security_sasl_plain">Authentication using SASL/PLAIN</a></h4>
+            <p>SASL/PLAIN is a simple username/password authentication mechanism that is typically used with TLS for encryption to implement secure authentication.
+                Kafka supports a default implementation for SASL/PLAIN which can be extended for production use as described <a href="#security_sasl_plain_production">here</a>.</p>
+            The username is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
             <ol>
-            <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
-                <pre class="line-numbers"><code class="language-text">KafkaServer {
+                <li><h5 class="anchor-heading"><a id="security_sasl_plain_brokerconfig" class="anchor-link"></a><a href="#security_sasl_plain_brokerconfig">Configuring Kafka Brokers</a></h5>
+                    <ol>
+                        <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
+                            <pre class="line-numbers"><code class="language-text">KafkaServer {
     org.apache.kafka.common.security.plain.PlainLoginModule required
     username="admin"
     password="admin-secret"
     user_admin="admin-secret"
     user_alice="alice-secret";
 };</code></pre>
-                This configuration defines two users (<i>admin</i> and <i>alice</i>). The properties <tt>username</tt> and <tt>password</tt>
-                in the <tt>KafkaServer</tt> section are used by the broker to initiate connections to other brokers. In this example,
-                <i>admin</i> is the user for inter-broker communication. The set of properties <tt>user_<i>userName</i></tt> defines
-                the passwords for all users that connect to the broker and the broker validates all client connections including
-                those from other brokers using these properties.</li>
-            <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
-                <pre>-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
-            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
-                <pre>listeners=SASL_SSL://host.name:port
+                            This configuration defines two users (<i>admin</i> and <i>alice</i>). The properties <tt>username</tt> and <tt>password</tt>
+                            in the <tt>KafkaServer</tt> section are used by the broker to initiate connections to other brokers. In this example,
+                            <i>admin</i> is the user for inter-broker communication. The set of properties <tt>user_<i>userName</i></tt> defines
+                            the passwords for all users that connect to the broker and the broker validates all client connections including
+                            those from other brokers using these properties.</li>
+                        <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
+                            <pre class="line-numbers"><code class="language-bash">-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
+                        <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
+                            <pre class="line-numbers"><code class="language-text">listeners=SASL_SSL://host.name:port
 security.inter.broker.protocol=SASL_SSL
 sasl.mechanism.inter.broker.protocol=PLAIN
 sasl.enabled.mechanisms=PLAIN</code></pre></li>
-            </ol>
-        </li>
+                    </ol>
+                </li>
 
-        <li><h5 class="anchor-heading"><a id="security_sasl_plain_clientconfig" class="anchor-link"></a><a href="#security_sasl_plain_clientconfig">Configuring Kafka Clients</a></h5>
-            To configure SASL authentication on the clients:
-            <ol>
-            <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
-                The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-                The following is an example configuration for a client for the PLAIN mechanism:
-                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+                <li><h5 class="anchor-heading"><a id="security_sasl_plain_clientconfig" class="anchor-link"></a><a href="#security_sasl_plain_clientconfig">Configuring Kafka Clients</a></h5>
+                    To configure SASL authentication on the clients:
+                    <ol>
+                        <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+                            The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
+                            The following is an example configuration for a client for the PLAIN mechanism:
+                            <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
     username="alice" \
     password="alice-secret";</code></pre>
-                <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
-                the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
-                Different clients within a JVM may connect as different users by specifying different user names
-                and passwords in <code>sasl.jaas.config</code>.</p>
+                            <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
+                                the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
+                                Different clients within a JVM may connect as different users by specifying different user names
+                                and passwords in <code>sasl.jaas.config</code>.</p>
 
-                <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
-                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
-                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
-            <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL
+                            <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
+                                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
+                                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
+                        <li>Configure the following properties in producer.properties or consumer.properties:
+                            <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL
 sasl.mechanism=PLAIN</code></pre></li>
+                    </ol>
+                </li>
+                <li><h5><a id="security_sasl_plain_production" href="#security_sasl_plain_production">Use of SASL/PLAIN in production</a></h5>
+                    <ul>
+                        <li>SASL/PLAIN should be used only with SSL as transport layer to ensure that clear passwords are not transmitted on the wire without encryption.</li>
+                        <li>The default implementation of SASL/PLAIN in Kafka specifies usernames and passwords in the JAAS configuration file as shown
+                            <a href="#security_sasl_plain_brokerconfig">here</a>. From Kafka version 2.0 onwards, you can avoid storing clear passwords on disk
+                            by configuring your own callback handlers that obtain username and password from an external source using the configuration options
+                            <code>sasl.server.callback.handler.class</code> and <code>sasl.client.callback.handler.class</code>.</li>
+                        <li>In production systems, external authentication servers may implement password authentication. From Kafka version 2.0 onwards,
+                            you can plug in your own callback handlers that use external authentication servers for password verification by configuring
+                            <code>sasl.server.callback.handler.class</code>.</li>
+                    </ul>
+                </li>
             </ol>
         </li>
-        <li><h5><a id="security_sasl_plain_production" href="#security_sasl_plain_production">Use of SASL/PLAIN in production</a></h5>
-            <ul>
-            <li>SASL/PLAIN should be used only with SSL as transport layer to ensure that clear passwords are not transmitted on the wire without encryption.</li>
-            <li>The default implementation of SASL/PLAIN in Kafka specifies usernames and passwords in the JAAS configuration file as shown
-                <a href="#security_sasl_plain_brokerconfig">here</a>. From Kafka version 2.0 onwards, you can avoid storing clear passwords on disk
-                by configuring your own callback handlers that obtain username and password from an external source using the configuration options
-                <code>sasl.server.callback.handler.class</code> and <code>sasl.client.callback.handler.class</code>.</li>
-            <li>In production systems, external authentication servers may implement password authentication. From Kafka version 2.0 onwards,
-                you can plug in your own callback handlers that use external authentication servers for password verification by configuring
-                <code>sasl.server.callback.handler.class</code>.</li>
-            </ul>
-        </li>
-        </ol>
-    </li>
 
-    <li><h4><a id="security_sasl_scram" href="#security_sasl_scram">Authentication using SASL/SCRAM</a></h4>
-        <p>Salted Challenge Response Authentication Mechanism (SCRAM) is a family of SASL mechanisms that
-        addresses the security concerns with traditional mechanisms that perform username/password authentication
-        like PLAIN and DIGEST-MD5. The mechanism is defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
-        Kafka supports <a href="https://tools.ietf.org/html/rfc7677">SCRAM-SHA-256</a> and SCRAM-SHA-512 which
-        can be used with TLS to perform secure authentication. The username is used as the authenticated
-        <code>Principal</code> for configuration of ACLs etc. The default SCRAM implementation in Kafka
-        stores SCRAM credentials in Zookeeper and is suitable for use in Kafka installations where Zookeeper
-        is on a private network. Refer to <a href="#security_sasl_scram_security">Security Considerations</a>
-        for more details.</p>
-        <ol>
-        <li><h5 class="anchor-heading"><a id="security_sasl_scram_credentials" class="anchor-link"></a><a href="#security_sasl_scram_credentials">Creating SCRAM Credentials</a></h5>
-        <p>The SCRAM implementation in Kafka uses Zookeeper as credential store. Credentials can be created in
-        Zookeeper using <tt>kafka-configs.sh</tt>. For each SCRAM mechanism enabled, credentials must be created
-        by adding a config with the mechanism name. Credentials for inter-broker communication must be created
-        before Kafka brokers are started. Client credentials may be created and updated dynamically and updated
-        credentials will be used to authenticate new connections.</p>
-        <p>Create SCRAM credentials for user <i>alice</i> with password <i>alice-secret</i>:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]' --entity-type users --entity-name alice</code></pre>
-        <p>The default iteration count of 4096 is used if iterations are not specified. A random salt is created
-        and the SCRAM identity consisting of salt, iterations, StoredKey and ServerKey are stored in Zookeeper.
-        See <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a> for details on SCRAM identity and the individual fields.
-        <p>The following examples also require a user <i>admin</i> for inter-broker communication which can be created using:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]' --entity-type users --entity-name admin</code></pre>
-        <p>Existing credentials may be listed using the <i>--describe</i> option:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --describe --entity-type users --entity-name alice</code></pre>
-        <p>Credentials may be deleted for one or more SCRAM mechanisms using the <i>--alter --delete-config</i> option:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --delete-config 'SCRAM-SHA-512' --entity-type users --entity-name alice</code></pre>
-        </li>
-        <li><h5 class="anchor-heading"><a id="security_sasl_scram_brokerconfig" class="anchor-link"></a><a href="#security_sasl_scram_brokerconfig">Configuring Kafka Brokers</a></h5>
+        <li><h4><a id="security_sasl_scram" href="#security_sasl_scram">Authentication using SASL/SCRAM</a></h4>
+            <p>Salted Challenge Response Authentication Mechanism (SCRAM) is a family of SASL mechanisms that
+                addresses the security concerns with traditional mechanisms that perform username/password authentication
+                like PLAIN and DIGEST-MD5. The mechanism is defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
+                Kafka supports <a href="https://tools.ietf.org/html/rfc7677">SCRAM-SHA-256</a> and SCRAM-SHA-512 which
+                can be used with TLS to perform secure authentication. The username is used as the authenticated
+                <code>Principal</code> for configuration of ACLs etc. The default SCRAM implementation in Kafka
+                stores SCRAM credentials in Zookeeper and is suitable for use in Kafka installations where Zookeeper
+                is on a private network. Refer to <a href="#security_sasl_scram_security">Security Considerations</a>
+                for more details.</p>
             <ol>
-            <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
-                <pre class="line-numbers"><code class="language-text">KafkaServer {
+                <li><h5 class="anchor-heading"><a id="security_sasl_scram_credentials" class="anchor-link"></a><a href="#security_sasl_scram_credentials">Creating SCRAM Credentials</a></h5>
+                    <p>The SCRAM implementation in Kafka uses Zookeeper as credential store. Credentials can be created in
+                        Zookeeper using <tt>kafka-configs.sh</tt>. For each SCRAM mechanism enabled, credentials must be created
+                        by adding a config with the mechanism name. Credentials for inter-broker communication must be created
+                        before Kafka brokers are started. Client credentials may be created and updated dynamically and updated
+                        credentials will be used to authenticate new connections.</p>
+                    <p>Create SCRAM credentials for user <i>alice</i> with password <i>alice-secret</i>:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]' --entity-type users --entity-name alice</code></pre>
+                    <p>The default iteration count of 4096 is used if iterations are not specified. A random salt is created
+                        and the SCRAM identity consisting of salt, iterations, StoredKey and ServerKey are stored in Zookeeper.
+                        See <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a> for details on SCRAM identity and the individual fields.
+                    <p>The following examples also require a user <i>admin</i> for inter-broker communication which can be created using:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]' --entity-type users --entity-name admin</code></pre>
+                    <p>Existing credentials may be listed using the <i>--describe</i> option:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --describe --entity-type users --entity-name alice</code></pre>
+                    <p>Credentials may be deleted for one or more SCRAM mechanisms using the <i>--alter --delete-config</i> option:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --delete-config 'SCRAM-SHA-512' --entity-type users --entity-name alice</code></pre>
+                </li>
+                <li><h5 class="anchor-heading"><a id="security_sasl_scram_brokerconfig" class="anchor-link"></a><a href="#security_sasl_scram_brokerconfig">Configuring Kafka Brokers</a></h5>
+                    <ol>
+                        <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
+                            <pre class="line-numbers"><code class="language-text">KafkaServer {
     org.apache.kafka.common.security.scram.ScramLoginModule required
     username="admin"
     password="admin-secret";
 };</code></pre>
-                The properties <tt>username</tt> and <tt>password</tt> in the <tt>KafkaServer</tt> section are used by
-                the broker to initiate connections to other brokers. In this example, <i>admin</i> is the user for
-                inter-broker communication.</li>
-            <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
-                <pre>-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
-            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</code></pre> For example:
-                <pre class="line-numbers"><code class="language-text">listeners=SASL_SSL://host.name:port
+                            The properties <tt>username</tt> and <tt>password</tt> in the <tt>KafkaServer</tt> section are used by
+                            the broker to initiate connections to other brokers. In this example, <i>admin</i> is the user for
+                            inter-broker communication.</li>
+                        <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
+                            <pre class="line-numbers"><code class="language-bash">-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
+                        <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
+                            <pre class="line-numbers"><code class="language-text">listeners=SASL_SSL://host.name:port
 security.inter.broker.protocol=SASL_SSL
 sasl.mechanism.inter.broker.protocol=SCRAM-SHA-256 (or SCRAM-SHA-512)
 sasl.enabled.mechanisms=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
-            </ol>
-        </li>
+                    </ol>
+                </li>
 
-        <li><h5 class="anchor-heading"><a id="security_sasl_scram_clientconfig" class="anchor-link"></a><a href="#security_sasl_scram_clientconfig">Configuring Kafka Clients</a></h5>
-            To configure SASL authentication on the clients:
-            <ol>
-            <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
-                The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-                The following is an example configuration for a client for the SCRAM mechanisms:
-                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+                <li><h5 class="anchor-heading"><a id="security_sasl_scram_clientconfig" class="anchor-link"></a><a href="#security_sasl_scram_clientconfig">Configuring Kafka Clients</a></h5>
+                    To configure SASL authentication on the clients:
+                    <ol>
+                        <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+                            The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
+                            The following is an example configuration for a client for the SCRAM mechanisms:
+                            <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
     username="alice" \
     password="alice-secret";</code></pre>
 
-                <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
-                the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
-                Different clients within a JVM may connect as different users by specifying different user names
-                and passwords in <code>sasl.jaas.config</code>.</p>
+                            <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
+                                the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
+                                Different clients within a JVM may connect as different users by specifying different user names
+                                and passwords in <code>sasl.jaas.config</code>.</p>
 
-                <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
-                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
-                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
-            <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL
+                            <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
+                                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
+                                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
+                        <li>Configure the following properties in producer.properties or consumer.properties:
+                            <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL
 sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
+                    </ol>
+                </li>
+                <li><h5><a id="security_sasl_scram_security" href="#security_sasl_scram_security">Security Considerations for SASL/SCRAM</a></h5>
+                    <ul>
+                        <li>The default implementation of SASL/SCRAM in Kafka stores SCRAM credentials in Zookeeper. This
+                            is suitable for production use in installations where Zookeeper is secure and on a private network.</li>
+                        <li>Kafka supports only the strong hash functions SHA-256 and SHA-512 with a minimum iteration count
+                            of 4096. Strong hash functions combined with strong passwords and high iteration counts protect
+                            against brute force attacks if Zookeeper security is compromised.</li>
+                        <li>SCRAM should be used only with TLS-encryption to prevent interception of SCRAM exchanges. This
+                            protects against dictionary or brute force attacks and against impersonation if Zookeeper is compromised.</li>
+                        <li>From Kafka version 2.0 onwards, the default SASL/SCRAM credential store may be overridden using custom callback handlers
+                            by configuring <code>sasl.server.callback.handler.class</code> in installations where Zookeeper is not secure.</li>
+                        <li>For more details on security considerations, refer to
+                            <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.
+                    </ul>
+                </li>
             </ol>
         </li>
-        <li><h5><a id="security_sasl_scram_security" href="#security_sasl_scram_security">Security Considerations for SASL/SCRAM</a></h5>
-            <ul>
-            <li>The default implementation of SASL/SCRAM in Kafka stores SCRAM credentials in Zookeeper. This
-            is suitable for production use in installations where Zookeeper is secure and on a private network.</li>
-            <li>Kafka supports only the strong hash functions SHA-256 and SHA-512 with a minimum iteration count
-            of 4096. Strong hash functions combined with strong passwords and high iteration counts protect
-            against brute force attacks if Zookeeper security is compromised.</li>
-            <li>SCRAM should be used only with TLS-encryption to prevent interception of SCRAM exchanges. This
-            protects against dictionary or brute force attacks and against impersonation if Zookeeper is compromised.</li>
-            <li>From Kafka version 2.0 onwards, the default SASL/SCRAM credential store may be overridden using custom callback handlers
-            by configuring <code>sasl.server.callback.handler.class</code> in installations where Zookeeper is not secure.</li>
-            <li>For more details on security considerations, refer to
-            <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.
-            </ul>
-        </li>
-        </ol>
-    </li>
 
-    <li><h4><a id="security_sasl_oauthbearer" href="#security_sasl_oauthbearer">Authentication using SASL/OAUTHBEARER</a></h4>
-        <p>The <a href="https://tools.ietf.org/html/rfc6749">OAuth 2 Authorization Framework</a> "enables a third-party application to obtain limited access to an HTTP service,
-        either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP
-        service, or by allowing the third-party application to obtain access on its own behalf."  The SASL OAUTHBEARER mechanism
-        enables the use of the framework in a SASL (i.e. a non-HTTP) context; it is defined in <a href="https://tools.ietf.org/html/rfc7628">RFC 7628</a>.
-        The default OAUTHBEARER implementation in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>
-        and is only suitable for use in non-production Kafka installations. Refer to <a href="#security_sasl_oauthbearer_security">Security Considerations</a>
-        for more details.</p>
-        <ol>
-        <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_brokerconfig">Configuring Kafka Brokers</a></h5>
+        <li><h4><a id="security_sasl_oauthbearer" href="#security_sasl_oauthbearer">Authentication using SASL/OAUTHBEARER</a></h4>
+            <p>The <a href="https://tools.ietf.org/html/rfc6749">OAuth 2 Authorization Framework</a> "enables a third-party application to obtain limited access to an HTTP service,
+                either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP
+                service, or by allowing the third-party application to obtain access on its own behalf."  The SASL OAUTHBEARER mechanism
+                enables the use of the framework in a SASL (i.e. a non-HTTP) context; it is defined in <a href="https://tools.ietf.org/html/rfc7628">RFC 7628</a>.
+                The default OAUTHBEARER implementation in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>
+                and is only suitable for use in non-production Kafka installations. Refer to <a href="#security_sasl_oauthbearer_security">Security Considerations</a>
+                for more details.</p>
             <ol>
-            <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
-                <pre class="line-numbers"><code class="language-text">KafkaServer {
+                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_brokerconfig">Configuring Kafka Brokers</a></h5>
+                    <ol>
+                        <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
+                            <pre class="line-numbers"><code class="language-text">KafkaServer {
     org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required
     unsecuredLoginStringClaim_sub="admin";
 };</code></pre>
-                The property <tt>unsecuredLoginStringClaim_sub</tt> in the <tt>KafkaServer</tt> section is used by
-                the broker when it initiates connections to other brokers. In this example, <i>admin</i> will appear in the
-                subject (<tt>sub</tt>) claim and will be the user for inter-broker communication.</li>
-            <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
-                <pre>-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
-            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</code></pre> For example:
-                <pre class="line-numbers"><code class="language-text">listeners=SASL_SSL://host.name:port (or SASL_PLAINTEXT if non-production)
+                            The property <tt>unsecuredLoginStringClaim_sub</tt> in the <tt>KafkaServer</tt> section is used by
+                            the broker when it initiates connections to other brokers. In this example, <i>admin</i> will appear in the
+                            subject (<tt>sub</tt>) claim and will be the user for inter-broker communication.</li>
+                        <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
+                            <pre class="line-numbers"><code class="language-bash">-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
+                        <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
+                            <pre class="line-numbers"><code class="language-text">listeners=SASL_SSL://host.name:port (or SASL_PLAINTEXT if non-production)
 security.inter.broker.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
 sasl.mechanism.inter.broker.protocol=OAUTHBEARER
 sasl.enabled.mechanisms=OAUTHBEARER</code></pre></li>
-            </ol>
-        </li>
+                    </ol>
+                </li>
 
-        <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_clientconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_clientconfig">Configuring Kafka Clients</a></h5>
-            To configure SASL authentication on the clients:
-            <ol>
-	    <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
-                The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-	        The following is an example configuration for a client for the OAUTHBEARER mechanisms:
-                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_clientconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_clientconfig">Configuring Kafka Clients</a></h5>
+                    To configure SASL authentication on the clients:
+                    <ol>
+                        <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+                            The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
+                            The following is an example configuration for a client for the OAUTHBEARER mechanisms:
+                            <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
     unsecuredLoginStringClaim_sub="alice";</code></pre>
 
-                <p>The option <tt>unsecuredLoginStringClaim_sub</tt> is used by clients to configure
-                the subject (<tt>sub</tt>) claim, which determines the user for client connections.
-                In this example, clients connect to the broker as user <i>alice</i>.
-                Different clients within a JVM may connect as different users by specifying different subject (<tt>sub</tt>)
-                claims in <code>sasl.jaas.config</code>.</p>
+                            <p>The option <tt>unsecuredLoginStringClaim_sub</tt> is used by clients to configure
+                                the subject (<tt>sub</tt>) claim, which determines the user for client connections.
+                                In this example, clients connect to the broker as user <i>alice</i>.
+                                Different clients within a JVM may connect as different users by specifying different subject (<tt>sub</tt>)
+                                claims in <code>sasl.jaas.config</code>.</p>
 
-                <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
-                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
-                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
-            <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
+                            <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
+                                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
+                                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
+                        <li>Configure the following properties in producer.properties or consumer.properties:
+                            <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
 sasl.mechanism=OAUTHBEARER</code></pre></li>
-             <li>The default implementation of SASL/OAUTHBEARER depends on the jackson-databind library.
-                 Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
+                        <li>The default implementation of SASL/OAUTHBEARER depends on the jackson-databind library.
+                            Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
+                    </ol>
+                </li>
+                <li><h5><a id="security_sasl_oauthbearer_unsecured_retrieval" href="#security_sasl_oauthbearer_unsecured_retrieval">Unsecured Token Creation Options for SASL/OAUTHBEARER</a></h5>
+                    <ul>
+                        <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
+                            While suitable only for non-production use, it does provide the flexibility to create arbitrary tokens in a DEV or TEST environment.</li>
+                        <li>Here are the various supported JAAS module options on the client side (and on the broker side if OAUTHBEARER is the inter-broker protocol):
+                            <table>
+                                <tr>
+                                    <th>JAAS Module Option for Unsecured Token Creation</th>
+                                    <th>Documentation</th>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredLoginStringClaim_&lt;claimname&gt;="value"</tt></td>
+                                    <td>Creates a <tt>String</tt> claim with the given name and value. Any valid
+                                        claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
+                                        automatically generated).</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredLoginNumberClaim_&lt;claimname&gt;="value"</tt></td>
+                                    <td>Creates a <tt>Number</tt> claim with the given name and value. Any valid
+                                        claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
+                                        automatically generated).</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredLoginListClaim_&lt;claimname&gt;="value"</tt></td>
+                                    <td>Creates a <tt>String List</tt> claim with the given name and values parsed
+                                        from the given value where the first character is taken as the delimiter. For
+                                        example: <tt>unsecuredLoginListClaim_fubar="|value1|value2"</tt>. Any valid
+                                        claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
+                                        automatically generated).</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredLoginExtension_&lt;extensionname&gt;="value"</tt></td>
+                                    <td>Creates a <tt>String</tt> extension with the given name and value.
+                                        For example: <tt>unsecuredLoginExtension_traceId="123"</tt>. A valid extension name
+                                        is any sequence of lowercase or uppercase alphabet characters. In addition, the "auth" extension name is reserved.
+                                        A valid extension value is any combination of characters with ASCII codes 1-127.
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredLoginPrincipalClaimName</tt></td>
+                                    <td>Set to a custom claim name if you wish the name of the <tt>String</tt>
+                                        claim holding the principal name to be something other than '<tt>sub</tt>'.</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredLoginLifetimeSeconds</tt></td>
+                                    <td>Set to an integer value if the token expiration is to be set to something
+                                        other than the default value of 3600 seconds (which is 1 hour). The
+                                        '<tt>exp</tt>' claim will be set to reflect the expiration time.</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredLoginScopeClaimName</tt></td>
+                                    <td>Set to a custom claim name if you wish the name of the <tt>String</tt> or
+                                        <tt>String List</tt> claim holding any token scope to be something other than
+                                        '<tt>scope</tt>'.</td>
+                                </tr>
+                            </table>
+                        </li>
+                    </ul>
+                </li>
+                <li><h5><a id="security_sasl_oauthbearer_unsecured_validation" href="#security_sasl_oauthbearer_unsecured_validation">Unsecured Token Validation Options for SASL/OAUTHBEARER</a></h5>
+                    <ul>
+                        <li>Here are the various supported JAAS module options on the broker side for <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Token</a> validation:
+                            <table>
+                                <tr>
+                                    <th>JAAS Module Option for Unsecured Token Validation</th>
+                                    <th>Documentation</th>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredValidatorPrincipalClaimName="value"</tt></td>
+                                    <td>Set to a non-empty value if you wish a particular <tt>String</tt> claim
+                                        holding a principal name to be checked for existence; the default is to check
+                                        for the existence of the '<tt>sub</tt>' claim.</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredValidatorScopeClaimName="value"</tt></td>
+                                    <td>Set to a custom claim name if you wish the name of the <tt>String</tt> or
+                                        <tt>String List</tt> claim holding any token scope to be something other than
+                                        '<tt>scope</tt>'.</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredValidatorRequiredScope="value"</tt></td>
+                                    <td>Set to a space-delimited list of scope values if you wish the
+                                        <tt>String/String List</tt> claim holding the token scope to be checked to
+                                        make sure it contains certain values.</td>
+                                </tr>
+                                <tr>
+                                    <td><tt>unsecuredValidatorAllowableClockSkewMs="value"</tt></td>
+                                    <td>Set to a positive integer value if you wish to allow up to some number of
+                                        positive milliseconds of clock skew (the default is 0).</td>
+                                </tr>
+                            </table>
+                        </li>
+                        <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
+                            using custom login and SASL Server callback handlers.</li>
+                        <li>For more details on security considerations, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
+                    </ul>
+                </li>
+                <li><h5><a id="security_sasl_oauthbearer_refresh" href="#security_sasl_oauthbearer_refresh">Token Refresh for SASL/OAUTHBEARER</a></h5>
+                    Kafka periodically refreshes any token before it expires so that the client can continue to make
+                    connections to brokers. The parameters that impact how the refresh algorithm
+                    operates are specified as part of the producer/consumer/broker configuration
+                    and are as follows. See the documentation for these properties elsewhere for
+                    details.  The default values are usually reasonable, in which case these
+                    configuration parameters would not need to be explicitly set.
+                    <table>
+                        <tr>
+                            <th>Producer/Consumer/Broker Configuration Property</th>
+                        </tr>
+                        <tr>
+                            <td><tt>sasl.login.refresh.window.factor</tt></td>
+                        </tr>
+                        <tr>
+                            <td><tt>sasl.login.refresh.window.jitter</tt></td>
+                        </tr>
+                        <tr>
+                            <td><tt>sasl.login.refresh.min.period.seconds</tt></td>
+                        </tr>
+                        <tr>
+                            <td><tt>sasl.login.refresh.min.buffer.seconds</tt></td>
+                        </tr>
+                    </table>
+                </li>
+                <li><h5><a id="security_sasl_oauthbearer_prod" href="#security_sasl_oauthbearer_prod">Secure/Production Use of SASL/OAUTHBEARER</a></h5>
+                    Production use cases will require writing an implementation of
+                    <tt>org.apache.kafka.common.security.auth.AuthenticateCallbackHandler</tt> that can handle an instance of
+                    <tt>org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback</tt> and declaring it via either the
+                    <tt>sasl.login.callback.handler.class</tt> configuration option for a
+                    non-broker client or via the
+                    <tt>listener.name.sasl_ssl.oauthbearer.sasl.login.callback.handler.class</tt>
+                    configuration option for brokers (when SASL/OAUTHBEARER is the inter-broker
+                    protocol).
+                    <p>
+                        Production use cases will also require writing an implementation of
+                        <tt>org.apache.kafka.common.security.auth.AuthenticateCallbackHandler</tt> that can handle an instance of
+                        <tt>org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback</tt> and declaring it via the
+                        <tt>listener.name.sasl_ssl.oauthbearer.sasl.server.callback.handler.class</tt>
+                        broker configuration option.
+                </li>
+                <li><h5><a id="security_sasl_oauthbearer_security" href="#security_sasl_oauthbearer_security">Security Considerations for SASL/OAUTHBEARER</a></h5>
+                    <ul>
+                        <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
+                            This is suitable only for non-production use.</li>
+                        <li>OAUTHBEARER should be used in production enviromnments only with TLS-encryption to prevent interception of tokens.</li>
+                        <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
+                            using custom login and SASL Server callback handlers as described above.</li>
+                        <li>For more details on OAuth 2 security considerations in general, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
+                    </ul>
+                </li>
             </ol>
         </li>
-        <li><h5><a id="security_sasl_oauthbearer_unsecured_retrieval" href="#security_sasl_oauthbearer_unsecured_retrieval">Unsecured Token Creation Options for SASL/OAUTHBEARER</a></h5>
-            <ul>
-            <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
-            While suitable only for non-production use, it does provide the flexibility to create arbitrary tokens in a DEV or TEST environment.</li>
-            <li>Here are the various supported JAAS module options on the client side (and on the broker side if OAUTHBEARER is the inter-broker protocol):
-                 <table>
-                 <tr>
-                 <th>JAAS Module Option for Unsecured Token Creation</th>
-                 <th>Documentation</th>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredLoginStringClaim_&lt;claimname&gt;="value"</tt></td>
-                 <td>Creates a <tt>String</tt> claim with the given name and value. Any valid
-                 claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
-                 automatically generated).</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredLoginNumberClaim_&lt;claimname&gt;="value"</tt></td>
-                 <td>Creates a <tt>Number</tt> claim with the given name and value. Any valid
-                 claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
-                 automatically generated).</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredLoginListClaim_&lt;claimname&gt;="value"</tt></td>
-                 <td>Creates a <tt>String List</tt> claim with the given name and values parsed
-                 from the given value where the first character is taken as the delimiter. For
-                 example: <tt>unsecuredLoginListClaim_fubar="|value1|value2"</tt>. Any valid
-                 claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
-                 automatically generated).</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredLoginExtension_&lt;extensionname&gt;="value"</tt></td>
-                 <td>Creates a <tt>String</tt> extension with the given name and value.
-                 For example: <tt>unsecuredLoginExtension_traceId="123"</tt>. A valid extension name
-                 is any sequence of lowercase or uppercase alphabet characters. In addition, the "auth" extension name is reserved.
-                 A valid extension value is any combination of characters with ASCII codes 1-127.
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredLoginPrincipalClaimName</tt></td>
-                 <td>Set to a custom claim name if you wish the name of the <tt>String</tt>
-                 claim holding the principal name to be something other than '<tt>sub</tt>'.</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredLoginLifetimeSeconds</tt></td>
-                 <td>Set to an integer value if the token expiration is to be set to something
-                 other than the default value of 3600 seconds (which is 1 hour). The
-                 '<tt>exp</tt>' claim will be set to reflect the expiration time.</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredLoginScopeClaimName</tt></td>
-                 <td>Set to a custom claim name if you wish the name of the <tt>String</tt> or
-                 <tt>String List</tt> claim holding any token scope to be something other than
-                 '<tt>scope</tt>'.</td>
-                 </tr>
-                 </table>
-            </li>
-            </ul>
-        </li>
-        <li><h5><a id="security_sasl_oauthbearer_unsecured_validation" href="#security_sasl_oauthbearer_unsecured_validation">Unsecured Token Validation Options for SASL/OAUTHBEARER</a></h5>
-            <ul>
-            <li>Here are the various supported JAAS module options on the broker side for <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Token</a> validation:
-                 <table>
-                 <tr>
-                 <th>JAAS Module Option for Unsecured Token Validation</th>
-                 <th>Documentation</th>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredValidatorPrincipalClaimName="value"</tt></td>
-                 <td>Set to a non-empty value if you wish a particular <tt>String</tt> claim
-                 holding a principal name to be checked for existence; the default is to check
-                 for the existence of the '<tt>sub</tt>' claim.</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredValidatorScopeClaimName="value"</tt></td>
-                 <td>Set to a custom claim name if you wish the name of the <tt>String</tt> or
-                 <tt>String List</tt> claim holding any token scope to be something other than
-                 '<tt>scope</tt>'.</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredValidatorRequiredScope="value"</tt></td>
-                 <td>Set to a space-delimited list of scope values if you wish the
-                 <tt>String/String List</tt> claim holding the token scope to be checked to
-                 make sure it contains certain values.</td>
-                 </tr>
-                 <tr>
-                 <td><tt>unsecuredValidatorAllowableClockSkewMs="value"</tt></td>
-                 <td>Set to a positive integer value if you wish to allow up to some number of
-                 positive milliseconds of clock skew (the default is 0).</td>
-                 </tr>
-                 </table>
-            </li>
-            <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
-            using custom login and SASL Server callback handlers.</li>
-            <li>For more details on security considerations, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
-            </ul>
-        </li>
-        <li><h5><a id="security_sasl_oauthbearer_refresh" href="#security_sasl_oauthbearer_refresh">Token Refresh for SASL/OAUTHBEARER</a></h5>
-        Kafka periodically refreshes any token before it expires so that the client can continue to make
-        connections to brokers. The parameters that impact how the refresh algorithm
-        operates are specified as part of the producer/consumer/broker configuration
-        and are as follows. See the documentation for these properties elsewhere for
-        details.  The default values are usually reasonable, in which case these
-        configuration parameters would not need to be explicitly set.
-        <table>
-        <tr>
-        <th>Producer/Consumer/Broker Configuration Property</th>
-        </tr>
-        <tr>
-        <td><tt>sasl.login.refresh.window.factor</tt></td>
-        </tr>
-        <tr>
-        <td><tt>sasl.login.refresh.window.jitter</tt></td>
-        </tr>
-        <tr>
-        <td><tt>sasl.login.refresh.min.period.seconds</tt></td>
-        </tr>
-        <tr>
-        <td><tt>sasl.login.refresh.min.buffer.seconds</tt></td>
-        </tr>
-        </table>
-        </li>
-        <li><h5><a id="security_sasl_oauthbearer_prod" href="#security_sasl_oauthbearer_prod">Secure/Production Use of SASL/OAUTHBEARER</a></h5>
-        Production use cases will require writing an implementation of
-        <tt>org.apache.kafka.common.security.auth.AuthenticateCallbackHandler</tt> that can handle an instance of
-        <tt>org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback</tt> and declaring it via either the
-        <tt>sasl.login.callback.handler.class</tt> configuration option for a
-        non-broker client or via the
-        <tt>listener.name.sasl_ssl.oauthbearer.sasl.login.callback.handler.class</tt>
-        configuration option for brokers (when SASL/OAUTHBEARER is the inter-broker
-        protocol).
-        <p>
-        Production use cases will also require writing an implementation of
-        <tt>org.apache.kafka.common.security.auth.AuthenticateCallbackHandler</tt> that can handle an instance of
-        <tt>org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback</tt> and declaring it via the
-        <tt>listener.name.sasl_ssl.oauthbearer.sasl.server.callback.handler.class</tt>
-        broker configuration option.
-        </li>
-        <li><h5><a id="security_sasl_oauthbearer_security" href="#security_sasl_oauthbearer_security">Security Considerations for SASL/OAUTHBEARER</a></h5>
-            <ul>
-            <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
-            This is suitable only for non-production use.</li>
-            <li>OAUTHBEARER should be used in production enviromnments only with TLS-encryption to prevent interception of tokens.</li>
-            <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
-            using custom login and SASL Server callback handlers as described above.</li>
-            <li>For more details on OAuth 2 security considerations in general, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
-            </ul>
-        </li>
-        </ol>
-    </li>
 
-    <li><h4 class="anchor-heading"><a id="security_sasl_multimechanism" class="anchor-link"></a><a href="#security_sasl_multimechanism">Enabling multiple SASL mechanisms in a broker</a></h4>
-        <ol>
-        <li>Specify configuration for the login modules of all enabled mechanisms in the <tt>KafkaServer</tt> section of the JAAS config file. For example:
-            <pre class="line-numbers"><code class="language-text">KafkaServer {
+        <li><h4 class="anchor-heading"><a id="security_sasl_multimechanism" class="anchor-link"></a><a href="#security_sasl_multimechanism">Enabling multiple SASL mechanisms in a broker</a></h4>
+            <ol>
+                <li>Specify configuration for the login modules of all enabled mechanisms in the <tt>KafkaServer</tt> section of the JAAS config file. For example:
+                    <pre class="line-numbers"><code class="language-text">KafkaServer {
     com.sun.security.auth.module.Krb5LoginModule required
     useKeyTab=true
     storeKey=true
@@ -1019,130 +1018,130 @@ sasl.mechanism=OAUTHBEARER</code></pre></li>
     user_admin="admin-secret"
     user_alice="alice-secret";
 };</code></pre></li>
-        <li>Enable the SASL mechanisms in server.properties: <pre>sasl.enabled.mechanisms=GSSAPI,PLAIN,SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER</code></pre></li>
-        <li>Specify the SASL security protocol and mechanism for inter-broker communication in server.properties if required:
-            <pre class="line-numbers"><code class="language-text">security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
+                <li>Enable the SASL mechanisms in server.properties: <pre class="line-numbers"><code class="language-text">sasl.enabled.mechanisms=GSSAPI,PLAIN,SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER</code></pre></li>
+                <li>Specify the SASL security protocol and mechanism for inter-broker communication in server.properties if required:
+                    <pre class="line-numbers"><code class="language-text">security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
 sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechanisms)</code></pre></li>
-        <li>Follow the mechanism-specific steps in <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
-            <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
-            <a href="#security_sasl_scram_brokerconfig">SCRAM</a> and <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a>
-            to configure SASL for the enabled mechanisms.</li>
-        </ol>
-    </li>
-    <li><h4 class="anchor-heading"><a id="saslmechanism_rolling_upgrade" class="anchor-link"></a><a href="#saslmechanism_rolling_upgrade">Modifying SASL mechanism in a Running Cluster</a></h4>
-        <p>SASL mechanism can be modified in a running cluster using the following sequence:</p>
-        <ol>
-        <li>Enable new SASL mechanism by adding the mechanism to <tt>sasl.enabled.mechanisms</tt> in server.properties for each broker. Update JAAS config file to include both
-            mechanisms as described <a href="#security_sasl_multimechanism">here</a>. Incrementally bounce the cluster nodes.</li>
-        <li>Restart clients using the new mechanism.</li>
-        <li>To change the mechanism of inter-broker communication (if this is required), set <tt>sasl.mechanism.inter.broker.protocol</tt> in server.properties to the new mechanism and
-            incrementally bounce the cluster again.</li>
-        <li>To remove old mechanism (if this is required), remove the old mechanism from <tt>sasl.enabled.mechanisms</tt> in server.properties and remove the entries for the
-            old mechanism from JAAS config file. Incrementally bounce the cluster again.</li>
-        </ol>
-    </li>
-
-    <li><h4 class="anchor-heading"><a id="security_delegation_token" class="anchor-link"></a><a href="#security_delegation_token">Authentication using Delegation Tokens</a></h4>
-        <p>Delegation token based authentication is a lightweight authentication mechanism to complement existing SASL/SSL
-            methods. Delegation tokens are shared secrets between kafka brokers and clients. Delegation tokens will help processing
-            frameworks to distribute the workload to available workers in a secure environment without the added cost of distributing
-            Kerberos TGT/keytabs or keystores when 2-way SSL is used. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka">KIP-48</a>
-            for more details.</p>
-
-        <p>Typical steps for delegation token usage are:</p>
-        <ol>
-        <li>User authenticates with the Kafka cluster via SASL or SSL, and obtains a delegation token. This can be done
-            using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.</li>
-        <li>User securely passes the delegation token to Kafka clients for authenticating with the Kafka cluster.</li>
-        <li>Token owner/renewer can renew/expire the delegation tokens.</li>
-        </ol>
-
-        <ol>
-        <li><h5 class="anchor-heading"><a id="security_token_management" class="anchor-link"></a><a href="#security_token_management">Token Management</a></h5>
-        <p> A secret is used to generate and verify delegation tokens. This is supplied using config
-            option <tt>delegation.token.secret.key</tt>. The same secret key must be configured across all the brokers.
-            If the secret is not set or set to empty string, brokers will disable the delegation token authentication.</p>
-
-        <p>In the current implementation, token details are stored in Zookeeper and is suitable for use in Kafka installations where
-            Zookeeper is on a private network. Also currently, this secret is stored as plain text in the server.properties
-            config file. We intend to make these configurable in a future Kafka release.</p>
-
-        <p>A token has a current life, and a maximum renewable life. By default, tokens must be renewed once every 24 hours
-            for up to 7 days. These can be configured using <tt>delegation.token.expiry.time.ms</tt>
-            and <tt>delegation.token.max.lifetime.ms</tt> config options.</p>
-
-        <p>Tokens can also be cancelled explicitly.  If a token is not renewed by the token’s expiration time or if token
-            is beyond the max life time, it will be deleted from all broker caches as well as from zookeeper.</p>
+                <li>Follow the mechanism-specific steps in <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
+                    <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
+                    <a href="#security_sasl_scram_brokerconfig">SCRAM</a> and <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a>
+                    to configure SASL for the enabled mechanisms.</li>
+            </ol>
+        </li>
+        <li><h4 class="anchor-heading"><a id="saslmechanism_rolling_upgrade" class="anchor-link"></a><a href="#saslmechanism_rolling_upgrade">Modifying SASL mechanism in a Running Cluster</a></h4>
+            <p>SASL mechanism can be modified in a running cluster using the following sequence:</p>
+            <ol>
+                <li>Enable new SASL mechanism by adding the mechanism to <tt>sasl.enabled.mechanisms</tt> in server.properties for each broker. Update JAAS config file to include both
+                    mechanisms as described <a href="#security_sasl_multimechanism">here</a>. Incrementally bounce the cluster nodes.</li>
+                <li>Restart clients using the new mechanism.</li>
+                <li>To change the mechanism of inter-broker communication (if this is required), set <tt>sasl.mechanism.inter.broker.protocol</tt> in server.properties to the new mechanism and
+                    incrementally bounce the cluster again.</li>
+                <li>To remove old mechanism (if this is required), remove the old mechanism from <tt>sasl.enabled.mechanisms</tt> in server.properties and remove the entries for the
+                    old mechanism from JAAS config file. Incrementally bounce the cluster again.</li>
+            </ol>
         </li>
 
-        <li><h5 class="anchor-heading"><a id="security_sasl_create_tokens" class="anchor-link"></a><a href="#security_sasl_create_tokens">Creating Delegation Tokens</a></h5>
-        <p>Tokens can be created by using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
-            Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels.
-            Tokens can not be requests if the initial authentication is done through delegation token.
-            <tt>kafka-delegation-tokens.sh</tt> script examples are given below.</p>
-        <p>Create a delegation token:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --create   --max-life-time-period -1 --command-config client.properties --renewer-principal User:user1</code></pre>
-        <p>Renew a delegation token:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --renew    --renew-time-period -1 --command-config client.properties --hmac ABCDEFGHIJK</code></pre>
-        <p>Expire a delegation token:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --expire   --expiry-time-period -1   --command-config client.properties  --hmac ABCDEFGHIJK</code></pre>
-        <p>Existing tokens can be described using the --describe option:
-        <pre class="line-numbers"><code class="language-bash">> bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --describe --command-config client.properties  --owner-principal User:user1</code></pre>
-        </li>
-        <li><h5 class="anchor-heading"><a id="security_token_authentication" class="anchor-link"></a><a href="#security_token_authentication">Token Authentication</a></h5>
-            <p>Delegation token authentication piggybacks on the current SASL/SCRAM authentication mechanism. We must enable
-                SASL/SCRAM mechanism on Kafka cluster as described in <a href="#security_sasl_scram">here</a>.</p>
+        <li><h4 class="anchor-heading"><a id="security_delegation_token" class="anchor-link"></a><a href="#security_delegation_token">Authentication using Delegation Tokens</a></h4>
+            <p>Delegation token based authentication is a lightweight authentication mechanism to complement existing SASL/SSL
+                methods. Delegation tokens are shared secrets between kafka brokers and clients. Delegation tokens will help processing
+                frameworks to distribute the workload to available workers in a secure environment without the added cost of distributing
+                Kerberos TGT/keytabs or keystores when 2-way SSL is used. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka">KIP-48</a>
+                for more details.</p>
 
-             <p>Configuring Kafka Clients:</p>
-                <ol>
-                    <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
-                The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-                The following is an example configuration for a client for the token authentication:
-                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+            <p>Typical steps for delegation token usage are:</p>
+            <ol>
+                <li>User authenticates with the Kafka cluster via SASL or SSL, and obtains a delegation token. This can be done
+                    using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.</li>
+                <li>User securely passes the delegation token to Kafka clients for authenticating with the Kafka cluster.</li>
+                <li>Token owner/renewer can renew/expire the delegation tokens.</li>
+            </ol>
+
+            <ol>
+                <li><h5 class="anchor-heading"><a id="security_token_management" class="anchor-link"></a><a href="#security_token_management">Token Management</a></h5>
+                    <p> A secret is used to generate and verify delegation tokens. This is supplied using config
+                        option <tt>delegation.token.secret.key</tt>. The same secret key must be configured across all the brokers.
+                        If the secret is not set or set to empty string, brokers will disable the delegation token authentication.</p>
+
+                    <p>In the current implementation, token details are stored in Zookeeper and is suitable for use in Kafka installations where
+                        Zookeeper is on a private network. Also currently, this secret is stored as plain text in the server.properties
+                        config file. We intend to make these configurable in a future Kafka release.</p>
+
+                    <p>A token has a current life, and a maximum renewable life. By default, tokens must be renewed once every 24 hours
+                        for up to 7 days. These can be configured using <tt>delegation.token.expiry.time.ms</tt>
+                        and <tt>delegation.token.max.lifetime.ms</tt> config options.</p>
+
+                    <p>Tokens can also be cancelled explicitly.  If a token is not renewed by the token’s expiration time or if token
+                        is beyond the max life time, it will be deleted from all broker caches as well as from zookeeper.</p>
+                </li>
+
+                <li><h5 class="anchor-heading"><a id="security_sasl_create_tokens" class="anchor-link"></a><a href="#security_sasl_create_tokens">Creating Delegation Tokens</a></h5>
+                    <p>Tokens can be created by using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
+                        Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels.
+                        Tokens can not be requests if the initial authentication is done through delegation token.
+                        <tt>kafka-delegation-tokens.sh</tt> script examples are given below.</p>
+                    <p>Create a delegation token:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --create   --max-life-time-period -1 --command-config client.properties --renewer-principal User:user1</code></pre>
+                    <p>Renew a delegation token:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --renew    --renew-time-period -1 --command-config client.properties --hmac ABCDEFGHIJK</code></pre>
+                    <p>Expire a delegation token:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --expire   --expiry-time-period -1   --command-config client.properties  --hmac ABCDEFGHIJK</code></pre>
+                    <p>Existing tokens can be described using the --describe option:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --describe --command-config client.properties  --owner-principal User:user1</code></pre>
+                </li>
+                <li><h5 class="anchor-heading"><a id="security_token_authentication" class="anchor-link"></a><a href="#security_token_authentication">Token Authentication</a></h5>
+                    <p>Delegation token authentication piggybacks on the current SASL/SCRAM authentication mechanism. We must enable
+                        SASL/SCRAM mechanism on Kafka cluster as described in <a href="#security_sasl_scram">here</a>.</p>
+
+                    <p>Configuring Kafka Clients:</p>
+                    <ol>
+                        <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+                            The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
+                            The following is an example configuration for a client for the token authentication:
+                            <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
     username="tokenID123" \
     password="lAYYSFmLs4bTjf+lTZ1LCHR/ZZFNA==" \
     tokenauth="true";</code></pre>
 
-                <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure the token id and
-                    token HMAC. And the option <tt>tokenauth</tt> is used to indicate the server about token authentication.
-                    In this example, clients connect to the broker using token id: <i>tokenID123</i>. Different clients within a
-                    JVM may connect using different tokens by specifying different token details in <code>sasl.jaas.config</code>.</p>
+                            <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure the token id and
+                                token HMAC. And the option <tt>tokenauth</tt> is used to indicate the server about token authentication.
+                                In this example, clients connect to the broker using token id: <i>tokenID123</i>. Different clients within a
+                                JVM may connect using different tokens by specifying different token details in <code>sasl.jaas.config</code>.</p>
 
-                <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
-                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
-                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
+                            <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
+                                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
+                                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
+                    </ol>
+                </li>
+
+                <li><h5><a id="security_token_secret_rotation" href="#security_token_secret_rotation">Procedure to manually rotate the secret:</a></h5>
+                    <p>We require a re-deployment when the secret needs to be rotated. During this process, already connected clients
+                        will continue to work. But any new connection requests and renew/expire requests with old tokens can fail. Steps are given below.</p>
+
+                    <ol>
+                        <li>Expire all existing tokens.</li>
+                        <li>Rotate the secret by rolling upgrade, and</li>
+                        <li>Generate new tokens</li>
+                    </ol>
+                    <p>We intend to automate this in a future Kafka release.</p>
+                </li>
+
+                <li><h5 class="anchor-heading"><a id="security_token_notes" class="anchor-link"></a><a href="#security_token_notes">Notes on Delegation Tokens</a></h5>
+                    <ul>
+                        <li>Currently, we only allow a user to create delegation token for that user only. Owner/Renewers can renew or expire tokens.
+                            Owner/renewers can always describe their own tokens. To describe others tokens, we need to add DESCRIBE permission on Token Resource.</li>
+                    </ul>
+                </li>
             </ol>
         </li>
-
-        <li><h5><a id="security_token_secret_rotation" href="#security_token_secret_rotation">Procedure to manually rotate the secret:</a></h5>
-            <p>We require a re-deployment when the secret needs to be rotated. During this process, already connected clients
-                will continue to work. But any new connection requests and renew/expire requests with old tokens can fail. Steps are given below.</p>
-
-            <ol>
-                <li>Expire all existing tokens.</li>
-                <li>Rotate the secret by rolling upgrade, and</li>
-                <li>Generate new tokens</li>
-            </ol>
-            <p>We intend to automate this in a future Kafka release.</p>
-        </li>
-
-        <li><h5 class="anchor-heading"><a id="security_token_notes" class="anchor-link"></a><a href="#security_token_notes">Notes on Delegation Tokens</a></h5>
-            <ul>
-            <li>Currently, we only allow a user to create delegation token for that user only. Owner/Renewers can renew or expire tokens.
-                Owner/renewers can always describe their own tokens. To describe others tokens, we need to add DESCRIBE permission on Token Resource.</li>
-            </ul>
-        </li>
-        </ol>
-    </li>
     </ol>
 
     <h3 class="anchor-heading"><a id="security_authz" class="anchor-link"></a><a href="#security_authz">7.4 Authorization and ACLs</a></h3>
     Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. The Authorizer is configured by setting <tt>authorizer.class.name</tt> in server.properties. To enable the out of the box implementation use:
-    <pre>authorizer.class.name=kafka.security.authorizer.AclAuthorizer</code></pre>
+    <pre class="line-numbers"><code class="language-text">authorizer.class.name=kafka.security.authorizer.AclAuthorizer</code></pre>
     Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H on any Resource R matching ResourcePattern RP". You can read more about the acl structure in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-11+-+Authorization+Interface">KIP-11</a> and resource patterns in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if no ResourcePatterns match a specific Resource R, then R has no associated acls, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
-    <pre>allow.everyone.if.no.acl.found=true</code></pre>
+    <pre class="line-numbers"><code class="language-text">allow.everyone.if.no.acl.found=true</code></pre>
     One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive.
-    <pre>super.users=User:Bob;User:Alice</code></pre>
+    <pre class="line-numbers"><code class="language-text">super.users=User:Bob;User:Alice</code></pre>
 
     <h5 class="anchor-heading"><a id="security_authz_ssl" class="anchor-link"></a><a href="#security_authz_ssl">Customizing SSL User Name</a></h5>
 
@@ -1166,7 +1165,7 @@ DEFAULT</code></pre>
     and "CN=adminUser,OU=Admin,O=Unknown,L=Unknown,ST=Unknown,C=Unknown" to "adminuser@admin".
 
     <br>For advanced use cases, one can customize the name by setting a customized PrincipalBuilder in server.properties like the following.
-    <pre>principal.builder.class=CustomizedPrincipalBuilderClass</code></pre>
+    <pre class="line-numbers"><code class="language-text">principal.builder.class=CustomizedPrincipalBuilderClass</code></pre>
 
     <h5 class="anchor-heading"><a id="security_authz_sasl" class="anchor-link"></a><a href="#security_authz_sasl">Customizing SASL User Name</a></h5>
 
@@ -1181,7 +1180,7 @@ RULE:[n:string](regexp)s/pattern/replacement//U
 RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
 
     An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is:
-    <pre>sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT</code></pre>
+    <pre class="line-numbers"><code class="language-text">sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT</code></pre>
 
     <h4 class="anchor-heading"><a id="security_authz_cli" class="anchor-link"></a><a href="#security_authz_cli">Command Line Interface</a></h4>
     Kafka Authorization management CLI can be found under bin directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. Following lists all the options that the script supports:
@@ -1369,55 +1368,55 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <td></td>
             <td>Configuration</td>
         </tr>
-    </tbody></table>
+    </table>
 
     <h4 class="anchor-heading"><a id="security_authz_examples" class="anchor-link"></a><a href="#security_authz_examples">Examples</a></h4>
     <ul>
         <li><b>Adding Acls</b><br>
-    Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from IP 198.51.100.0 and IP 198.51.100.1". You can do that by executing the CLI with following options:
-            <pre class="language-bash">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic</code></pre>
+            Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from IP 198.51.100.0 and IP 198.51.100.1". You can do that by executing the CLI with following options:
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic</code></pre>
             By default, all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
-            <pre class="language-bash">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</code></pre>
             Note that <code>--allow-host</code> and <code>--deny-host</code> only support IP addresses (hostnames are not supported).
             Above examples add acls to a topic by specifying --topic [topic-name] as the resource pattern option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].
             You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0"
             You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options:
-            <pre class="language-bash">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</code></pre>
             You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name starts with 'Test-' from any host".
             You can do that by executing the CLI with following options:
-            <pre class="language-bash">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed</code></pre>
             Note, --resource-pattern-type defaults to 'literal', which only affects resources with the exact same name or, in the case of the wildcard resource name '*', a resource with any name.</li>
 
         <li><b>Removing Acls</b><br>
-                Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
-            <pre class="language-bash"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </code></pre>
+            Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </code></pre>
             If you want to remove the acl added to the prefixed resource pattern above we can execute the CLI with following options:
-            <pre class="language-bash"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Jane --producer --topic Test- --resource-pattern-type Prefixed</code></pre></li>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Jane --producer --topic Test- --resource-pattern-type Prefixed</code></pre></li>
 
         <li><b>List Acls</b><br>
-                We can list acls for any resource by specifying the --list option with the resource. To list all acls on the literal resource pattern Test-topic, we can execute the CLI with following options:
-                <pre class="language-bash">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</code></pre>
-                However, this will only return the acls that have been added to this exact resource pattern. Other acls can exist that affect access to the topic,
-                e.g. any acls on the topic wildcard '*', or any acls on prefixed resource patterns. Acls on the wildcard resource pattern can be queried explicitly:
-                <pre class="language-bash">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic *</code></pre>
-                However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known.
-                We can list <i>all</i> acls affecting Test-topic by using '--resource-pattern-type match', e.g.
-                <pre class="language-bash">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type match</code></pre>
-                This will list acls on all matching literal, wildcard and prefixed resource patterns.</li>
+            We can list acls for any resource by specifying the --list option with the resource. To list all acls on the literal resource pattern Test-topic, we can execute the CLI with following options:
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</code></pre>
+            However, this will only return the acls that have been added to this exact resource pattern. Other acls can exist that affect access to the topic,
+            e.g. any acls on the topic wildcard '*', or any acls on prefixed resource patterns. Acls on the wildcard resource pattern can be queried explicitly:
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic *</code></pre>
+            However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known.
+            We can list <i>all</i> acls affecting Test-topic by using '--resource-pattern-type match', e.g.
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type match</code></pre>
+            This will list acls on all matching literal, wildcard and prefixed resource patterns.</li>
 
         <li><b>Adding or removing a principal as producer or consumer</b><br>
-                The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
-            <pre class="language-bash"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --producer --topic Test-topic</code></pre>
-                Similarly to add Alice as a consumer of Test-topic with consumer group Group-1 we just have to pass --consumer option:
-            <pre class="language-bash"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1 </code></pre>
-                Note that for consumer option we must also specify the consumer group.
-                In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
+            The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --producer --topic Test-topic</code></pre>
+            Similarly to add Alice as a consumer of Test-topic with consumer group Group-1 we just have to pass --consumer option:
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1 </code></pre>
+            Note that for consumer option we must also specify the consumer group.
+            In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
 
         <li><b>Admin API based acl management</b><br>
             Users having Alter permission on ClusterResource can use Admin API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
             All the above examples can be executed by using <b>--bootstrap-server</b> option. For example:
 
-            <pre class="line-numbers"><code class="language-bash">bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --producer --topic Test-topic
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --producer --topic Test-topic
 bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1
 bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --list --topic Test-topic</code></pre></li>
 
@@ -1522,8 +1521,8 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
             <td>Create</td>
             <td>Cluster</td>
             <td>If topic auto-creation is enabled, then the broker-side API will check for the existence of a Cluster
-            level privilege. If it's found then it'll allow creating the topic, otherwise it'll iterate through the
-            Topic level privileges (see the next one).</td>
+                level privilege. If it's found then it'll allow creating the topic, otherwise it'll iterate through the
+                Topic level privileges (see the next one).</td>
         </tr>
         <tr>
             <td>METADATA (3)</td>
@@ -1835,28 +1834,28 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
             <td></td>
             <td></td>
             <td>Creating delegation tokens has special rules, for this please see the
-                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+                <a id="security_delegation_token_1" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
         </tr>
         <tr>
             <td>RENEW_DELEGATION_TOKEN (39)</td>
             <td></td>
             <td></td>
             <td>Renewing delegation tokens has special rules, for this please see the
-                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+                <a id="security_delegation_token_2" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
         </tr>
         <tr>
             <td>EXPIRE_DELEGATION_TOKEN (40)</td>
             <td></td>
             <td></td>
             <td>Expiring delegation tokens has special rules, for this please see the
-                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+                <a id="security_delegation_token_3" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
         </tr>
         <tr>
             <td>DESCRIBE_DELEGATION_TOKEN (41)</td>
             <td>Describe</td>
             <td>DelegationToken</td>
             <td>Describing delegation tokens has special rules, for this please see the
-                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+                <a id="security_delegation_token_4" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
         </tr>
         <tr>
             <td>DELETE_GROUPS (42)</td>
@@ -1910,64 +1909,64 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
     </table>
 
     <h3 class="anchor-heading"><a id="security_rolling_upgrade" class="anchor-link"></a><a href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></h3>
-        You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in phases:
-        <p></p>
-        <ul>
-            <li>Incrementally bounce the cluster nodes to open additional secured port(s).</li>
-            <li>Restart clients using the secured rather than PLAINTEXT port (assuming you are securing the client-broker connection).</li>
-            <li>Incrementally bounce the cluster again to enable broker-to-broker security (if this is required)</li>
-            <li>A final incremental bounce to close the PLAINTEXT port.</li>
-        </ul>
-        <p></p>
-        The specific steps for configuring SSL and SASL are described in sections <a href="#security_ssl">7.2</a> and <a href="#security_sasl">7.3</a>.
-        Follow these steps to enable security for your desired protocol(s).
-        <p></p>
-        The security implementation lets you configure different protocols for both broker-client and broker-broker communication.
-        These must be enabled in separate bounces. A PLAINTEXT port must be left open throughout so brokers and/or clients can continue to communicate.
-        <p></p>
+    You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in phases:
+    <p></p>
+    <ul>
+        <li>Incrementally bounce the cluster nodes to open additional secured port(s).</li>
+        <li>Restart clients using the secured rather than PLAINTEXT port (assuming you are securing the client-broker connection).</li>
+        <li>Incrementally bounce the cluster again to enable broker-to-broker security (if this is required)</li>
+        <li>A final incremental bounce to close the PLAINTEXT port.</li>
+    </ul>
+    <p></p>
+    The specific steps for configuring SSL and SASL are described in sections <a href="#security_ssl">7.2</a> and <a href="#security_sasl">7.3</a>.
+    Follow these steps to enable security for your desired protocol(s).
+    <p></p>
+    The security implementation lets you configure different protocols for both broker-client and broker-broker communication.
+    These must be enabled in separate bounces. A PLAINTEXT port must be left open throughout so brokers and/or clients can continue to communicate.
+    <p></p>
 
-        When performing an incremental bounce stop the brokers cleanly via a SIGTERM. It's also good practice to wait for restarted replicas to return to the ISR list before moving onto the next node.
-        <p></p>
-        As an example, say we wish to encrypt both broker-client and broker-broker communication with SSL. In the first incremental bounce, an SSL port is opened on each node:
-            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092</code></pre>
+    When performing an incremental bounce stop the brokers cleanly via a SIGTERM. It's also good practice to wait for restarted replicas to return to the ISR list before moving onto the next node.
+    <p></p>
+    As an example, say we wish to encrypt both broker-client and broker-broker communication with SSL. In the first incremental bounce, an SSL port is opened on each node:
+    <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092</code></pre>
 
-        We then restart the clients, changing their config to point at the newly opened, secured port:
+    We then restart the clients, changing their config to point at the newly opened, secured port:
 
-            <pre class="line-numbers"><code class="language-text">bootstrap.servers = [broker1:9092,...]
+    <pre class="line-numbers"><code class="language-text">bootstrap.servers = [broker1:9092,...]
 security.protocol = SSL
 ...etc</code></pre>
 
-        In the second incremental server bounce we instruct Kafka to use SSL as the broker-broker protocol (which will use the same SSL port):
+    In the second incremental server bounce we instruct Kafka to use SSL as the broker-broker protocol (which will use the same SSL port):
 
-            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092
+    <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092
 security.inter.broker.protocol=SSL</code></pre>
 
-        In the final bounce we secure the cluster by closing the PLAINTEXT port:
+    In the final bounce we secure the cluster by closing the PLAINTEXT port:
 
-            <pre class="line-numbers"><code class="language-text">listeners=SSL://broker1:9092
+    <pre class="line-numbers"><code class="language-text">listeners=SSL://broker1:9092
 security.inter.broker.protocol=SSL</code></pre>
 
-        Alternatively we might choose to open multiple ports so that different protocols can be used for broker-broker and broker-client communication. Say we wished to use SSL encryption throughout (i.e. for broker-broker and broker-client communication) but we'd like to add SASL authentication to the broker-client connection also. We would achieve this by opening two additional ports during the first bounce:
+    Alternatively we might choose to open multiple ports so that different protocols can be used for broker-broker and broker-client communication. Say we wished to use SSL encryption throughout (i.e. for broker-broker and broker-client communication) but we'd like to add SASL authentication to the broker-client connection also. We would achieve this by opening two additional ports during the first bounce:
 
-            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093</code></pre>
+    <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093</code></pre>
 
-        We would then restart the clients, changing their config to point at the newly opened, SASL & SSL secured port:
+    We would then restart the clients, changing their config to point at the newly opened, SASL & SSL secured port:
 
-            <pre class="line-numbers"><code class="language-text">bootstrap.servers = [broker1:9093,...]
+    <pre class="line-numbers"><code class="language-text">bootstrap.servers = [broker1:9093,...]
 security.protocol = SASL_SSL
 ...etc</code></pre>
 
-        The second server bounce would switch the cluster to use encrypted broker-broker communication via the SSL port we previously opened on port 9092:
+    The second server bounce would switch the cluster to use encrypted broker-broker communication via the SSL port we previously opened on port 9092:
 
-            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093
+    <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093
 security.inter.broker.protocol=SSL</code></pre>
 
-        The final bounce secures the cluster by closing the PLAINTEXT port.
+    The final bounce secures the cluster by closing the PLAINTEXT port.
 
-            <pre class="line-numbers"><code class="language-text">listeners=SSL://broker1:9092,SASL_SSL://broker1:9093
+    <pre class="line-numbers"><code class="language-text">listeners=SSL://broker1:9092,SASL_SSL://broker1:9093
 security.inter.broker.protocol=SSL</code></pre>
 
-        ZooKeeper can be secured independently of the Kafka cluster. The steps for doing this are covered in section <a href="#zk_authz_migration">7.6.2</a>.
+    ZooKeeper can be secured independently of the Kafka cluster. The steps for doing this are covered in section <a href="#zk_authz_migration">7.6.2</a>.
 
 
     <h3 class="anchor-heading"><a id="zk_authz" class="anchor-link"></a><a href="#zk_authz">7.6 ZooKeeper Authentication</a></h3>
@@ -1981,7 +1980,8 @@ security.inter.broker.protocol=SSL</code></pre>
         This can be changed as described below, but it involves writing and deploying a custom ZooKeeper authentication provider.
         Generally each certificate should have the same DN but a different Subject Alternative Name (SAN)
         so that hostname verification of the brokers and any CLI tools by ZooKeeper will succeed.
-        <p>
+    </p>
+    <p>
         When using SASL authentication to ZooKeeper together with mTLS, both the SASL identity and
         either the DN that created the znode (i.e. the creating broker's certificate)
         or the DN of the Security Migration Tool (if migration was performed after the znode was created)
@@ -1989,7 +1989,6 @@ security.inter.broker.protocol=SSL</code></pre>
         because they will all use the same ACL'ed SASL identity.
         It is only when  using mTLS authentication alone that all the DNs must match (and SANs become critical --
         again, in the absence of writing and deploying a custom ZooKeeper authentication provider as described below).
-        </p>
     </p>
     <p>
         Use the broker properties file to set TLS configs for brokers as described below.
@@ -2040,7 +2039,7 @@ ssl.trustStore.password=zk-ts-passwd</code></pre>
     Be sure to set the key password to be the same as the keystore password.
 
     <p>Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with mTLS authentication.
-    These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
+        These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
     </p>
     <pre class="line-numbers"><code class="language-text"># connect to the ZooKeeper port configured for TLS
 zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
@@ -2080,15 +2079,15 @@ ssl.trustStore.password=zk-ts-passwd</code></pre>
     <p>It is also possible to turn off authentication in a secure cluster. To do it, follow these steps:</p>
     <ol>
         <li>Perform a rolling restart of brokers setting the JAAS login file and/or defining ZooKeeper mutual TLS configurations, which enables brokers to authenticate, but setting <tt>zookeeper.set.acl</tt> to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
-        <li>Execute the ZkSecurityMigrator tool. To execute the tool, run this script <tt>bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes. Use the <code>--zk-tls-config-file &lt;file&gt;</code> option if you need to set TLS configuration.</li></li>
+        <li>Execute the ZkSecurityMigrator tool. To execute the tool, run this script <tt>bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes. Use the <code>--zk-tls-config-file &lt;file&gt;</code> option if you need to set TLS configuration.</li>
         <li>If you are disabling mTLS, enable the non-TLS port in ZooKeeper</li>
         <li>Perform a second rolling restart of brokers, this time omitting the system property that sets the JAAS login file and/or removing ZooKeeper mutual TLS configuration (including connecting to the non-TLS-enabled ZooKeeper port) as required</li>
         <li>If you are disabling mTLS, disable the TLS port in ZooKeeper</li>
     </ol>
     Here is an example of how to run the migration tool:
-    <pre class="line-numbers"><code class="language-bash">bin/zookeeper-security-migration.sh --zookeeper.acl=secure --zookeeper.connect=localhost:2181</code></pre>
+    <pre class="line-numbers"><code class="language-bash">&gt; bin/zookeeper-security-migration.sh --zookeeper.acl=secure --zookeeper.connect=localhost:2181</code></pre>
     <p>Run this to see the full list of parameters:</p>
-    <pre class="line-numbers"><code class="language-bash">bin/zookeeper-security-migration.sh --help</code></pre>
+    <pre class="line-numbers"><code class="language-bash">&gt; bin/zookeeper-security-migration.sh --help</code></pre>
     <h4 class="anchor-heading"><a id="zk_authz_ensemble" class="anchor-link"></a><a href="#zk_authz_ensemble">7.6.3 Migrating the ZooKeeper ensemble</a></h4>
     It is also necessary to enable SASL and/or mTLS authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. See above for mTLS information.  Please refer to the ZooKeeper documentation for more detail:
     <ol>

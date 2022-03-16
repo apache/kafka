@@ -38,6 +38,8 @@ import static org.mockito.Mockito.spy;
 
 public class MirrorCheckpointConnectorTest {
 
+    private static final String CONSUMER_GROUP = "consumer-group-1";
+
     @Test
     public void testMirrorCheckpointConnectorDisabled() {
         // disable the checkpoint emission
@@ -45,13 +47,13 @@ public class MirrorCheckpointConnectorTest {
             makeProps("emit.checkpoints.enabled", "false"));
 
         List<String> knownConsumerGroups = new ArrayList<>();
-        knownConsumerGroups.add("consumer-group-1");
+        knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
                                                                             config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
-        assertEquals(0, output.size());
+        assertEquals(0, output.size(), "MirrorCheckpointConnector not disabled");
     }
 
     @Test
@@ -61,14 +63,16 @@ public class MirrorCheckpointConnectorTest {
                 makeProps("emit.checkpoints.enabled", "true"));
 
         List<String> knownConsumerGroups = new ArrayList<>();
-        knownConsumerGroups.add("consumer-group-1");
+        knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
                 config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect 1 task will be created
-        assertEquals(1, output.size());
-        assertEquals("consumer-group-1", output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS));
+        assertEquals(1, output.size(),
+                "MirrorCheckpointConnectorEnabled for " + CONSUMER_GROUP + " has incorrect size");
+        assertEquals(CONSUMER_GROUP, output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS),
+                "MirrorCheckpointConnectorEnabled for " + CONSUMER_GROUP + " failed");
     }
 
     @Test
@@ -77,7 +81,7 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(new ArrayList<>(), config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
-        assertEquals(0, output.size());
+        assertEquals(0, output.size(), "ConsumerGroup shouldn't exist");
     }
 
     @Test
@@ -86,12 +90,12 @@ public class MirrorCheckpointConnectorTest {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("enabled", "false"));
 
         List<String> knownConsumerGroups = new ArrayList<>();
-        knownConsumerGroups.add("consumer-group-1");
+        knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups, config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
-        assertEquals(0, output.size());
+        assertEquals(0, output.size(), "Replication isn't disabled");
     }
 
     @Test
@@ -100,13 +104,14 @@ public class MirrorCheckpointConnectorTest {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("enabled", "true"));
 
         List<String> knownConsumerGroups = new ArrayList<>();
-        knownConsumerGroups.add("consumer-group-1");
+        knownConsumerGroups.add(CONSUMER_GROUP);
         // MirrorCheckpointConnector as minimum to run taskConfig()
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups, config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect 1 task will be created
-        assertEquals(1, output.size());
-        assertEquals("consumer-group-1", output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS));
+        assertEquals(1, output.size(), "Replication for consumer-group-1 has incorrect size");
+        assertEquals(CONSUMER_GROUP, output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS),
+                "Replication for consumer-group-1 failed");
     }
 
     @Test
@@ -123,7 +128,8 @@ public class MirrorCheckpointConnectorTest {
         List<String> groupFound = connector.findConsumerGroups();
 
         Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
-        assertEquals(expectedGroups, new HashSet<>(groupFound));
+        assertEquals(expectedGroups, new HashSet<>(groupFound),
+                "Expected groups are not the same as findConsumerGroups");
     }
 
 }

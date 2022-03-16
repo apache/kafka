@@ -90,22 +90,22 @@
               <p class="last">See the section <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a> for more information about Serializers/Deserializers.</p>
           </div>
           <p>Example <code class="docutils literal"><span class="pre">pom.xml</span></code> snippet when using Maven:</p>
-          <pre class="line-numbers"><code class="language-xml"><dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-streams</artifactId>
-    <version>{{fullDotVersion}}</version>
-</dependency>
-<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-clients</artifactId>
-    <version>{{fullDotVersion}}</version>
-</dependency>
-<!-- Optionally include Kafka Streams DSL for Scala for Scala {{scalaVersion}} -->
-<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-streams-scala_{{scalaVersion}}</artifactId>
-    <version>{{fullDotVersion}}</version>
-</dependency></code></pre>
+          <pre class="line-numbers"><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;!-- Optionally include Kafka Streams DSL for Scala for Scala {{scalaVersion}} --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-streams-scala_{{scalaVersion}}&lt;/artifactId&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
       </div>
     <div class="section" id="using-kafka-streams-within-your-application-code">
       <h2>Using Kafka Streams within your application code<a class="headerlink" href="#using-kafka-streams-within-your-application-code" title="Permalink to this headline"></a></h2>
@@ -120,79 +120,69 @@
         <li>The second argument is an instance of <code class="docutils literal"><span class="pre">java.util.Properties</span></code>, which defines the configuration for this specific topology.</li>
       </ul>
       <p>Code example:</p>
-      <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.KafkaStreams</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.StreamsBuilder</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.processor.Topology</span><span class="o">;</span>
+        <pre class="line-numbers"><code class="language-java">import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.kstream.StreamsBuilder;
+import org.apache.kafka.streams.processor.Topology;
 
-<span class="c1">// Use the builders to define the actual processing topology, e.g. to specify</span>
-<span class="c1">// from which input topics to read, which stream operations (filter, map, etc.)</span>
-<span class="c1">// should be called, and so on.  We will cover this in detail in the subsequent</span>
-<span class="c1">// sections of this Developer Guide.</span>
+// Use the builders to define the actual processing topology, e.g. to specify
+// from which input topics to read, which stream operations (filter, map, etc.)
+// should be called, and so on.  We will cover this in detail in the subsequent
+// sections of this Developer Guide.
 
-<span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="o">...;</span>  <span class="c1">// when using the DSL</span>
-<span class="n">Topology</span> <span class="n">topology</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="na">build</span><span class="o">();</span>
-<span class="c1">//</span>
-<span class="c1">// OR</span>
-<span class="c1">//</span>
-<span class="n">Topology</span> <span class="n">topology</span> <span class="o">=</span> <span class="o">...;</span> <span class="c1">// when using the Processor API</span>
+StreamsBuilder builder = ...;  // when using the DSL
+Topology topology = builder.build();
+//
+// OR
+//
+Topology topology = ...; // when using the Processor API
 
-<span class="c1">// Use the configuration to tell your application where the Kafka cluster is,</span>
-<span class="c1">// which Serializers/Deserializers to use by default, to specify security settings,</span>
-<span class="c1">// and so on.</span>
-<span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="o">...;</span>
+// Use the configuration to tell your application where the Kafka cluster is,
+// which Serializers/Deserializers to use by default, to specify security settings,
+// and so on.
+Properties props = ...;
 
-<span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="k">new</span> <span class="n">KafkaStreams</span><span class="o">(</span><span class="n">topology</span><span class="o">,</span> <span class="n">props</span><span class="o">);</span></code></pre></div>
-      </div>
+KafkaStreams streams = new KafkaStreams(topology, props);</code></pre>
       <p>At this point, internal structures are initialized, but the processing is not started yet.
         You have to explicitly start the Kafka Streams thread by calling the <code class="docutils literal"><span class="pre">KafkaStreams#start()</span></code> method:</p>
-      <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Start the Kafka Streams threads</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">start</span><span class="o">();</span></code></pre></div>
-      </div>
+        <pre class="line-numbers"><code class="language-java">// Start the Kafka Streams threads
+streams.start();</code></pre>
       <p>If there are other instances of this stream processing application running elsewhere (e.g., on another machine), Kafka
         Streams transparently re-assigns tasks from the existing instances to the new instance that you just started.
         For more information, see <a class="reference internal" href="../architecture.html#streams_architecture_tasks"><span class="std std-ref">Stream Partitions and Tasks</span></a> and <a class="reference internal" href="../architecture.html#streams_architecture_threads"><span class="std std-ref">Threading Model</span></a>.</p>
       <p>To catch any unexpected exceptions, you can set an <code class="docutils literal"><span class="pre">java.lang.Thread.UncaughtExceptionHandler</span></code> before you start the
         application.  This handler is called whenever a stream thread is terminated by an unexpected exception:</p>
-      <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="c1">// Java 8+, using lambda expressions</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">setUncaughtExceptionHandler</span><span class="o">((</span><span class="n">Thread</span> <span class="n">thread</span><span class="o">,</span> <span class="n">Throwable</span> <span class="n">throwable</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
-  <span class="c1">// here you should examine the throwable/exception and perform an appropriate action!</span>
-<span class="o">});</span>
+        <pre class="line-numbers"><code class="language-java">// Java 8+, using lambda expressions
+streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
+  // here you should examine the throwable/exception and perform an appropriate action!
+});
 
 
-<span class="c1">// Java 7</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">setUncaughtExceptionHandler</span><span class="o">(</span><span class="k">new</span> <span class="n">Thread</span><span class="o">.</span><span class="na">UncaughtExceptionHandler</span><span class="o">()</span> <span class="o">{</span>
-  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">uncaughtException</span><span class="o">(</span><span class="n">Thread</span> <span class="n">thread</span><span class="o">,</span> <span class="n">Throwable</span> <span class="n">throwable</span><span class="o">)</span> <span class="o">{</span>
-    <span class="c1">// here you should examine the throwable/exception and perform an appropriate action!</span>
-  <span class="o">}</span>
-<span class="o">});</span></code></pre></div>
-      </div>
+// Java 7
+streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+  public void uncaughtException(Thread thread, Throwable throwable) {
+    // here you should examine the throwable/exception and perform an appropriate action!
+  }
+});</code></pre>
       <p>To stop the application instance, call the <code class="docutils literal"><span class="pre">KafkaStreams#close()</span></code> method:</p>
-      <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Stop the Kafka Streams threads</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">close</span><span class="o">();</span></code></pre></div>
-      </div>
+        <pre class="line-numbers"><code class="language-java">// Stop the Kafka Streams threads
+streams.close();</code></pre>
       <p>To allow your application to gracefully shutdown in response to SIGTERM, it is recommended that you add a shutdown hook
         and call <code class="docutils literal"><span class="pre">KafkaStreams#close</span></code>.</p>
       <ul>
         <li><p class="first">Here is a shutdown hook example in Java 8+:</p>
-          <blockquote>
-            <div><div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Add shutdown hook to stop the Kafka Streams threads.</span>
-<span class="c1">// You can optionally provide a timeout to `close`.</span>
-<span class="n">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="n">Thread</span><span class="o">(</span><span class="n">streams</span><span class="o">::</span><span class="n">close</span><span class="o">));</span></code></pre></div>
-            </div>
-            </div></blockquote>
+            <pre class="line-numbers"><code class="language-java">// Add shutdown hook to stop the Kafka Streams threads.
+// You can optionally provide a timeout to `close`.
+Runtime.getRuntime().addShutdownHook(new Thread(streams::close));</code></pre>
         </li>
         <li><p class="first">Here is a shutdown hook example in Java 7:</p>
-          <blockquote>
-            <div><div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Add shutdown hook to stop the Kafka Streams threads.</span>
-<span class="c1">// You can optionally provide a timeout to `close`.</span>
-<span class="n">Runtime</span><span class="o">.</span><span class="na">getRuntime</span><span class="o">().</span><span class="na">addShutdownHook</span><span class="o">(</span><span class="k">new</span> <span class="n">Thread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-  <span class="nd">@Override</span>
-  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-      <span class="n">streams</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
-  <span class="o">}</span>
-<span class="o">}));</span></code></pre></div>
-            </div>
-            </div></blockquote>
+            <pre class="line-numbers"><code class="language-java">// Add shutdown hook to stop the Kafka Streams threads.
+// You can optionally provide a timeout to `close`.
+Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+  @Override
+  public void run() {
+      streams.close();
+  }
+}));</code></pre>
         </li>
       </ul>
       <p>After an application is stopped, Kafka Streams will migrate any tasks that had been running in this instance to available remaining

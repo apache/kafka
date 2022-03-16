@@ -65,6 +65,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -92,6 +93,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private static final TopicPartition TOPIC_PARTITION2 = new TopicPartition(TOPIC, PARTITION2);
     private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
     private static final TopicPartition UNASSIGNED_TOPIC_PARTITION = new TopicPartition(TOPIC, 200);
+    private static final Set<TopicPartition> INITIAL_ASSIGNMENT = new HashSet<>(Arrays.asList(
+            TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     private static final long TIMESTAMP = 42L;
@@ -133,10 +136,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
@@ -202,6 +201,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         expectTaskGetTopic(true);
         expectPollInitialAssignment();
+        expectConsumerAssignment(INITIAL_ASSIGNMENT).times(2);
 
         // Make each poll() take the offset commit interval
         Capture<Collection<SinkRecord>> capturedRecords
@@ -236,6 +236,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         expectTaskGetTopic(true);
         expectPollInitialAssignment();
+        expectConsumerAssignment(INITIAL_ASSIGNMENT);
 
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, new RuntimeException(), null, 0, true);
@@ -276,6 +277,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         expectTaskGetTopic(true);
         expectPollInitialAssignment();
+        expectConsumerAssignment(INITIAL_ASSIGNMENT).times(3);
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, null, null, 0, true);
         expectOffsetCommit(2L, new RuntimeException(), null, 0, true);
@@ -315,6 +317,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         expectTaskGetTopic(true);
         expectPollInitialAssignment();
+        expectConsumerAssignment(INITIAL_ASSIGNMENT).times(2);
 
         Capture<Collection<SinkRecord>> capturedRecords
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
@@ -347,6 +350,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         expectTaskGetTopic(true);
         expectPollInitialAssignment();
+        expectConsumerAssignment(INITIAL_ASSIGNMENT).times(2);
 
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
         Capture<Collection<SinkRecord>> capturedRecords
@@ -483,6 +487,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         expectTaskGetTopic(true);
         expectPollInitialAssignment();
+        expectConsumerAssignment(INITIAL_ASSIGNMENT).times(2);
 
         expectRebalanceDuringPoll().andAnswer(() -> {
             Map<TopicPartition, Long> offsets = sinkTaskContext.getValue().offsets();
@@ -503,7 +508,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    private void expectInitializeTask() throws Exception {
+    private void expectInitializeTask() {
 
         consumer.subscribe(EasyMock.eq(Arrays.asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -514,14 +519,14 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         PowerMock.expectLastCall();
     }
 
-    private void expectPollInitialAssignment() throws Exception {
-        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
+    private void expectPollInitialAssignment() {
+        expectConsumerAssignment(INITIAL_ASSIGNMENT).times(2);
 
-        sinkTask.open(partitions);
+        sinkTask.open(INITIAL_ASSIGNMENT);
         EasyMock.expectLastCall();
 
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(() -> {
-            rebalanceListener.getValue().onPartitionsAssigned(partitions);
+            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
             return ConsumerRecords.empty();
         });
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
@@ -532,7 +537,11 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         EasyMock.expectLastCall();
     }
 
-    private void expectStopTask() throws Exception {
+    private IExpectationSetters<Set<TopicPartition>> expectConsumerAssignment(Set<TopicPartition> assignment) {
+        return EasyMock.expect(consumer.assignment()).andReturn(assignment);
+    }
+
+    private void expectStopTask() {
         sinkTask.stop();
         PowerMock.expectLastCall();
 
@@ -546,7 +555,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     }
 
     // Note that this can only be called once per test currently
-    private Capture<Collection<SinkRecord>> expectPolls(final long pollDelayMs) throws Exception {
+    private Capture<Collection<SinkRecord>> expectPolls(final long pollDelayMs) {
         // Stub out all the consumer stream/iterator responses, which we just want to verify occur,
         // but don't care about the exact details here.
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andStubAnswer(
@@ -598,7 +607,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     }
 
     @SuppressWarnings("unchecked")
-    private IExpectationSetters<Object> expectRebalanceDuringPoll() throws Exception {
+    private IExpectationSetters<Object> expectRebalanceDuringPoll() {
         final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
         final long startOffset = 40L;
@@ -643,8 +652,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                                                              final RuntimeException error,
                                                              final Exception consumerCommitError,
                                                              final long consumerCommitDelayMs,
-                                                             final boolean invokeCallback)
-            throws Exception {
+                                                             final boolean invokeCallback) {
         final long finalOffset = FIRST_OFFSET + expectedMessages;
 
         // All assigned partitions will have offsets committed, but we've only processed messages/updated offsets for one

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
@@ -34,8 +35,8 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */
-public interface InternalProcessorContext
-    extends ProcessorContext, org.apache.kafka.streams.processor.api.ProcessorContext<Object, Object>, StateStoreContext {
+public interface InternalProcessorContext<KOut, VOut>
+    extends ProcessorContext, org.apache.kafka.streams.processor.api.ProcessorContext<KOut, VOut>, StateStoreContext {
 
     BytesSerializer BYTES_KEY_SERIALIZER = new BytesSerializer();
     ByteArraySerializer BYTEARRAY_VALUE_SERIALIZER = new ByteArraySerializer();
@@ -115,7 +116,8 @@ public interface InternalProcessorContext
     void logChange(final String storeName,
                    final Bytes key,
                    final byte[] value,
-                   final long timestamp);
+                   final long timestamp,
+                   final Position position);
 
     String changelogFor(final String storeName);
 }

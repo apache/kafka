@@ -70,6 +70,7 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@SuppressWarnings("deprecation")
 public class SuppressScenarioTest {
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
@@ -581,7 +582,7 @@ public class SuppressScenarioTest {
             // arbitrarily disordered records are admitted, because the *window* is not closed until stream-time > window-end + grace
             inputTopic.pipeInput("k1", "v1", 1L);
             // any record in the same partition advances stream time (note the key is different)
-            inputTopic.pipeInput("k2", "v1", 6L);
+            inputTopic.pipeInput("k2", "v1", 11L);
             // late event for first window - this should get dropped from all streams, since the first window is now closed.
             inputTopic.pipeInput("k1", "v1", 5L);
             // just pushing stream time forward to flush the other events through.
@@ -594,7 +595,7 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("[k1@0/5]", 2L, 5L),
                     new KeyValueTimestamp<>("[k1@0/5]", null, 5L),
                     new KeyValueTimestamp<>("[k1@0/5]", 3L, 5L),
-                    new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L),
+                    new KeyValueTimestamp<>("[k2@11/11]", 1L, 11L),
                     new KeyValueTimestamp<>("[k1@30/30]", 1L, 30L)
                 )
             );
@@ -602,7 +603,7 @@ public class SuppressScenarioTest {
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KeyValueTimestamp<>("[k1@0/5]", 3L, 5L),
-                    new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L)
+                    new KeyValueTimestamp<>("[k2@11/11]", 1L, 11L)
                 )
             );
         }

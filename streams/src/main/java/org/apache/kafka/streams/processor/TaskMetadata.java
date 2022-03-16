@@ -27,7 +27,9 @@ import java.util.Set;
 
 /**
  * Represents the state of a single task running within a {@link KafkaStreams} application.
+ * @deprecated since 3.0, use {@link org.apache.kafka.streams.TaskMetadata} instead.
  */
+@Deprecated
 public class TaskMetadata {
 
     private final String taskId;
@@ -52,6 +54,9 @@ public class TaskMetadata {
         this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
+    /**
+     * @return the basic task metadata such as subtopology and partition id
+     */
     public String taskId() {
         return taskId;
     }

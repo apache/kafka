@@ -115,8 +115,9 @@ public abstract class SourceTask implements Task {
     /**
      * <p>
      * Commit an individual {@link SourceRecord} when the callback from the producer client is received. This method is
-     * also called when a record is filtered by a transformation, and thus will never be ACK'd by a broker. In this case
-     * {@code metadata} will be null.
+     * also called when a record is filtered by a transformation or when {@link ConnectorConfig} "errors.tolerance" is set to "all"
+     * and thus will never be ACK'd by a broker.
+     * In both cases {@code metadata} will be null.
      * </p>
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
@@ -128,8 +129,8 @@ public abstract class SourceTask implements Task {
      * not necessary to implement both methods.
      * </p>
      *
-     * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
-     * @param metadata {@link RecordMetadata} record metadata returned from the broker, or null if the record was filtered
+     * @param record {@link SourceRecord} that was successfully sent via the producer, filtered by a transformation, or dropped on producer exception
+     * @param metadata {@link RecordMetadata} record metadata returned from the broker, or null if the record was filtered or if producer exceptions are ignored
      * @throws InterruptedException
      */
     public void commitRecord(SourceRecord record, RecordMetadata metadata)

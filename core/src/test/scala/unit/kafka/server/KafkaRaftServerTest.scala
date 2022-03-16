@@ -20,7 +20,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException, KafkaException}
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
@@ -39,6 +39,9 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
 
     val (loadedMetaProperties, offlineDirs) =
       invokeLoadMetaProperties(metaProperties, configProperties)
@@ -58,6 +61,8 @@ class KafkaRaftServerTest {
 
     configProperties.put(KafkaConfig.ProcessRolesProp, "controller")
     configProperties.put(KafkaConfig.NodeIdProp, configNodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$configNodeId@localhost:9092")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
 
     assertThrows(classOf[InconsistentNodeIdException], () =>
       invokeLoadMetaProperties(metaProperties, configProperties))
@@ -102,7 +107,9 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
 
     assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config))
@@ -121,9 +128,11 @@ class KafkaRaftServerTest {
     val invalidDir = TestUtils.tempFile("blah")
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.MetadataLogDirProp, invalidDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, validDir.getAbsolutePath)
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
 
     assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config))
@@ -143,8 +152,10 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.MetadataLogDirProp, validDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, invalidDir.getAbsolutePath)
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
 
     val (loadedProperties, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
@@ -166,13 +177,15 @@ class KafkaRaftServerTest {
     }
 
     // Create the metadata dir in the data directory
-    Files.createDirectory(new File(dataDir, Log.logDirName(KafkaRaftServer.MetadataPartition)).toPath)
+    Files.createDirectory(new File(dataDir, UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)).toPath)
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, dataDir.getAbsolutePath)
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
 
     assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config))
@@ -191,8 +204,10 @@ class KafkaRaftServerTest {
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
 
     assertThrows(classOf[InconsistentBrokerMetadataException],

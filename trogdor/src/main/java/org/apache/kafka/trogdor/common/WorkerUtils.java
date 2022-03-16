@@ -279,7 +279,7 @@ public final class WorkerUtils {
             try {
                 DescribeTopicsResult topicsResult = adminClient.describeTopics(
                         topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
-                return topicsResult.all().get();
+                return topicsResult.allTopicNames().get();
             } catch (ExecutionException exception) {
                 if (exception.getCause() instanceof UnknownTopicOrPartitionException) {
                     lastException = (UnknownTopicOrPartitionException) exception.getCause();
@@ -321,7 +321,7 @@ public final class WorkerUtils {
         List<TopicPartition> out = new ArrayList<>();
         DescribeTopicsResult topicsResult = adminClient.describeTopics(
             matchedTopics, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
-        Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
+        Map<String, TopicDescription> topicDescriptionMap = topicsResult.allTopicNames().get();
         for (TopicDescription desc: topicDescriptionMap.values()) {
             List<TopicPartitionInfo> partitions = desc.partitions();
             for (TopicPartitionInfo info: partitions) {

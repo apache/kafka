@@ -76,8 +76,9 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedTable#reduce`
    */
-  def reduce(adder: (V, V) => V,
-             subtractor: (V, V) => V)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def reduce(adder: (V, V) => V, subtractor: (V, V) => V)(implicit
+    materialized: Materialized[K, V, ByteArrayKeyValueStore]
+  ): KTable[K, V] =
     new KTable(inner.reduce(adder.asReducer, subtractor.asReducer, materialized))
 
   /**
@@ -92,8 +93,8 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedTable#reduce`
    */
-  def reduce(adder: (V, V) => V, subtractor: (V, V) => V, named: Named)(
-    implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]
+  def reduce(adder: (V, V) => V, subtractor: (V, V) => V, named: Named)(implicit
+    materialized: Materialized[K, V, ByteArrayKeyValueStore]
   ): KTable[K, V] =
     new KTable(inner.reduce(adder.asReducer, subtractor.asReducer, named, materialized))
 
@@ -109,8 +110,8 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedTable#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(adder: (K, V, VR) => VR, subtractor: (K, V, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  def aggregate[VR](initializer: => VR)(adder: (K, V, VR) => VR, subtractor: (K, V, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
     new KTable(
       inner.aggregate((() => initializer).asInitializer, adder.asAggregator, subtractor.asAggregator, materialized)
@@ -129,14 +130,16 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedTable#aggregate`
    */
-  def aggregate[VR](initializer: => VR, named: Named)(adder: (K, V, VR) => VR, subtractor: (K, V, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  def aggregate[VR](initializer: => VR, named: Named)(adder: (K, V, VR) => VR, subtractor: (K, V, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
     new KTable(
-      inner.aggregate((() => initializer).asInitializer,
-                      adder.asAggregator,
-                      subtractor.asAggregator,
-                      named,
-                      materialized)
+      inner.aggregate(
+        (() => initializer).asInitializer,
+        adder.asAggregator,
+        subtractor.asAggregator,
+        named,
+        materialized
+      )
     )
 }
