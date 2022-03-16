@@ -35,6 +35,7 @@ class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository 
     val configTypeForZk = configResource.`type` match {
       case Type.TOPIC => ConfigType.Topic
       case Type.BROKER => ConfigType.Broker
+      case Type.CLIENT_METRICS => ConfigType.ClientMetrics
       case tpe => throw new IllegalArgumentException(s"Unsupported config type: $tpe")
     }
     // ZK stores cluster configs under "<default>".

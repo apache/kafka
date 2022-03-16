@@ -18,14 +18,13 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Log4jController
 import kafka.utils._
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
@@ -153,6 +152,8 @@ class ConfigAdminManager(nodeId: Int,
               validateBrokerConfigChange(resource, configResource)
             case TOPIC =>
             // Nothing to do.
+            case CLIENT_METRICS =>
+            // Nothing to do.
             case _ =>
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
@@ -252,6 +253,8 @@ class ConfigAdminManager(nodeId: Int,
               }
               validateBrokerConfigChange(resource, configResource)
             case TOPIC =>
+            // Nothing to do.
+            case CLIENT_METRICS=>
             // Nothing to do.
             case _ =>
               // Since legacy AlterConfigs does not support BROKER_LOGGER, any attempt to use it

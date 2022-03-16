@@ -226,6 +226,15 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
   }
 }
 
+/**
+ * The ClientMetricsConfigHandler will process individual client metrics subscription changes.
+ */
+class ClientMetricsConfigHandler() extends ConfigHandler with Logging {
+  def processConfigChanges(subscriptionGroupId: String, properties: Properties): Unit = {
+    ClientMetricsManager.getInstance.updateSubscription(subscriptionGroupId, properties)
+  }
+}
+
 object ThrottledReplicaListValidator extends Validator {
   def ensureValidString(name: String, value: String): Unit =
     ensureValid(name, value.split(",").map(_.trim).toSeq)

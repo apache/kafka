@@ -405,6 +405,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             this.apiVersions = new ApiVersions();
             this.transactionManager = configureTransactionState(config, logContext);
+            //TODO: configureAcks method is removed in the recent versions, so following is the temp code to get the acks.
+            // make sure this is the right method to get the acks.
+            short acks = Short.parseShort(config.getString(ProducerConfig.ACKS_CONFIG));
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.compressionType,
@@ -417,7 +420,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG), metrics, time, PRODUCER_METRIC_GROUP_NAME),
-                    configureAcks(config, log),
+                    acks,
                     clientTelemetry);
 
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(

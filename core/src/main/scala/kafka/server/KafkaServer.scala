@@ -441,6 +441,7 @@ class KafkaServer(
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, Some(kafkaController)),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
+                                                           ConfigType.ClientMetrics -> new ClientMetricsConfigHandler,
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
                                                            ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas))

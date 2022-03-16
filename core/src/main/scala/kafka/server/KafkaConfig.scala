@@ -235,6 +235,7 @@ object Defaults {
   val MetricSampleWindowMs = 30000
   val MetricReporterClasses = ""
   val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString()
+  val ClientMetricsDeltaTemporality = true
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
@@ -977,7 +978,6 @@ object KafkaConfig {
   val MetricNumSamplesDoc = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC
   val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
   val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
-
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
   val KafkaMetricsReporterClassesDoc = "A list of classes to use as Yammer metrics custom reporters." +

@@ -26,6 +26,9 @@ import java.util.concurrent.ExecutionException
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig._
+import kafka.metrics.ClientMetricsTestUtils
+import kafka.metrics.clientmetrics.ClientMetricsConfig.ClientMatchingParams.{CLIENT_SOFTWARE_NAME, CLIENT_SOFTWARE_VERSION}
+import kafka.metrics.clientmetrics.ClientMetricsConfig
 import kafka.utils._
 import kafka.server.Constants._
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -377,6 +380,92 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val logProps = new Properties()
     logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
     assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.changeTopicConfig(topic, logProps))
+  }
+
+  private def updateClientSubscription(subscriptionId :String,
+                                       properties: Properties, waitingCondition: () => Boolean): Unit = {
+    // Update the properties.
+    adminZkClient.changeClientMetricsConfig(subscriptionId, properties)
+
+    // Wait until notification is delivered and processed
+    val maxWaitTime = 60 * 1000 // 1 minute wait time
+    TestUtils.waitUntilTrue(waitingCondition, "Failed to update the client metrics subscription", maxWaitTime)
+  }
+
+  @Test
+  def testClientMetricsConfigChange(): Unit = {
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.ClientMetrics),
+      "Should contain a ConfigHandler for " + ConfigType.ClientMetrics)
+
+    val configEntityName: String = "subscription-2"
+    val metrics =
+      "org.apache.kafka/client.producer.partition.queue.,org.apache.kafka/client.producer.partition.latency"
+    val pushInterval = 30 * 1000 // 30 seconds
+    val pattern1 = CLIENT_SOFTWARE_NAME + " = Java       "
+    val pattern2 = CLIENT_SOFTWARE_VERSION + " =     11.*   "
+    val patternsList = List(pattern1, pattern2)
+
+    val props = ClientMetricsTestUtils.getDefaultProperties()
+
+    // ********  Test Create the new client subscription with multiple client matching patterns *********
+    updateClientSubscription(configEntityName, props,
+      () =>  ClientMetricsConfig.getClientSubscriptionInfo(configEntityName) != null)
+    val cmSubscription = ClientMetricsConfig.getClientSubscriptionInfo(configEntityName)
+    assertTrue(cmSubscription.getPushIntervalMs == pushInterval)
+    assertTrue(cmSubscription.getSubscribedMetrics.size == 2 &&
+      cmSubscription.getSubscribedMetrics.mkString(",").equals(metrics))
+    assertTrue(cmSubscription.getClientMatchingPatterns.size == patternsList.size)
+  }
+
+  @Test
+  def testClientMetricsConfigMultipleUpdates(): Unit = {
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.ClientMetrics),
+      "Should contain a ConfigHandler for " + ConfigType.ClientMetrics)
+
+    val configEntityName: String = "subscription-1"
+    val metrics =
+      "org.apache.kafka/client.producer.partition.queue.,org.apache.kafka/client.producer.partition.latency"
+    val clientMatchingPattern = "client_instance_id=b69cc35a-7a54-4790-aa69-cc2bd4ee4538"
+    val pushInterval = 30 * 1000 // 30 seconds
+
+    val props = ClientMetricsTestUtils.getDefaultProperties()
+    props.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, clientMatchingPattern)
+
+    // ********  Test-1 Create the new client subscription *********
+    updateClientSubscription(configEntityName, props,
+      () => ClientMetricsConfig.getClientSubscriptionInfo(configEntityName) != null)
+    val cmSubscription = ClientMetricsConfig.getClientSubscriptionInfo(configEntityName)
+    assertTrue(cmSubscription.getPushIntervalMs == pushInterval)
+    assertTrue(cmSubscription.getSubscribedMetrics.size == 2 &&
+      cmSubscription.getSubscribedMetrics.mkString(",").equals(metrics))
+    val res = cmSubscription.getClientMatchingPatterns.mkString(",").replace(" -> ", "=")
+    assertTrue(cmSubscription.getClientMatchingPatterns.size == 1 && res.equals(clientMatchingPattern))
+
+    // *******  Test-2 Update the existing metric subscriptions  *********
+    val updatedMetrics = "org.apache.kafka/client.producer.partition.latency"
+    props.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, updatedMetrics)
+    updateClientSubscription(configEntityName, props,
+      () => ClientMetricsConfig.getClientSubscriptionInfo(configEntityName).getSubscribedMetrics.size == 1)
+    assertTrue(ClientMetricsConfig.getClientSubscriptionInfo(configEntityName)
+      .getSubscribedMetrics.mkString(",").equals(updatedMetrics))
+
+    // ****** Test-3 restart the server and make sure that client metric subscription data is intact
+    ClientMetricsConfig.clearClientSubscriptions()
+    assertTrue(ClientMetricsConfig.getSubscriptionsCount == 0)
+
+    val server = servers.head
+    server.shutdown()
+    server.startup()
+    assertTrue(ClientMetricsConfig.getSubscriptionsCount != 0)
+    assertTrue(ClientMetricsConfig.getClientSubscriptionInfo(configEntityName) != null)
+    assertTrue(ClientMetricsConfig.getClientSubscriptionInfo(configEntityName)
+      .getSubscribedMetrics.mkString(",").equals(updatedMetrics))
+
+    // *******  Test-4 Delete the metric subscriptions  *********
+    props.put(ClientMetricsConfig.ClientMetrics.DeleteSubscription, "true")
+    updateClientSubscription(configEntityName, props,
+      () => ClientMetricsConfig.getClientSubscriptionInfo(configEntityName) == null)
+    assertTrue(ClientMetricsConfig.getClientSubscriptionInfo(configEntityName) == null)
   }
 
   @ParameterizedTest

@@ -18,19 +18,21 @@
 package kafka.server
 
 import java.util.{Collections, Properties}
-
 import kafka.log.LogConfig
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.{Log4jController, Logging}
+import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
+import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResourceResult
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -93,6 +95,24 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
+
+          case ConfigResource.Type.CLIENT_METRICS =>
+            val entityName = resource.resourceName
+            if (resource.resourceName == null || resource.resourceName.isEmpty) {
+              throw new InvalidRequestException("Client metrics subscription id must not be empty")
+            } else {
+              val entityProps = configRepository.config(new ConfigResource(Type.CLIENT_METRICS, entityName))
+              val configEntries = new  ListBuffer[DescribeConfigsResourceResult]()
+                entityProps.forEach((name, value) => {
+                  configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+                    .setName(name.toString) .setValue(value.toString) .setConfigSource(ConfigSource.UNKNOWN.id())
+                })
+
+              new DescribeConfigsResponseData.DescribeConfigsResult()
+                .setErrorCode(Errors.NONE.code)
+                .setConfigs(configEntries.asJava)
+            }
+
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
         configResult.setResourceName(resource.resourceName).setResourceType(resource.resourceType)

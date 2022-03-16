@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import java.util.Properties
-
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
 
