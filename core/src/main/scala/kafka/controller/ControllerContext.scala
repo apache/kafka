@@ -285,7 +285,7 @@ class ControllerContext {
       val partition = new TopicPartition(topic, partitionId)
       for (replica <- assignment.replicas) {
         val partitionAndReplica = PartitionAndReplica(partition, replica)
-        if (snapshot.isReplicaOnline(replica, partition))
+        if (snapshot.isReplicaOnline(replica, partition, includeShuttingDownBrokers = true))
           onlineReplicas.add(partitionAndReplica)
         else
           offlineReplicas.add(partitionAndReplica)

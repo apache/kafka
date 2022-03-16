@@ -535,6 +535,64 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testControllerChangeDoesNotPutReplicasOffline(): Unit = {
+    val expectedReplicaAssignment = Map(0  -> List(0, 1))
+    val topic = "test"
+    val partition = 0
+
+    // create brokers
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false)
+      .map { props => {
+        props.setProperty(KafkaConfig.ControlledShutdownMaxRetriesProp, "2147483640")
+        KafkaConfig.fromProps(props)
+      }
+      }
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
+
+    var controllerId = zkClient.getControllerId.get
+    var controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+
+    val broker1 = servers.find(_.config.brokerId == 1).get
+    broker1.shutdown()
+
+    var activeServers = servers.filter(s => s != broker1)
+    // wait for the update metadata request to trickle to the brokers
+    TestUtils.waitUntilTrue(() =>
+      activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.isr.size == 1),
+      "ISR did not get reduced after controlled shutdown of broker 1")
+
+    controllerId = zkClient.getControllerId.get
+    controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+
+    val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
+    val controlledShutdownCallback = (controlledShutdownResult: Try[collection.Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
+
+    controller.controlledShutdown(0, servers.find(_.config.brokerId == 0).get.kafkaController.brokerEpoch, controlledShutdownCallback)
+
+    var partitionsRemaining = resultQueue.take().get
+    assertEquals(1, partitionsRemaining.size)
+    // leader doesn't change since all the other replicas are shut down
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
+
+  // Now ensure that after the controller moves, shutdown is still rejected.
+    zkClient.deleteController(controller.controllerContext.epochZkVersion)
+    TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "New controller failed to start")
+
+    val newControllerId = zkClient.getControllerId.get
+    val newController = servers.find(p => p.config.brokerId == newControllerId).get.kafkaController
+
+    newController.controlledShutdown(0, servers.find(_.config.brokerId == 0).get.kafkaController.brokerEpoch, controlledShutdownCallback)
+    partitionsRemaining = resultQueue.take().get
+    assertEquals(1, partitionsRemaining.size)
+    // leader should still not change
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
+  }
+
+  @Test
   def testControlledShutdown(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
