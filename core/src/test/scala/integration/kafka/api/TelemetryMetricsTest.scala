@@ -50,7 +50,7 @@ class TelemetryMetricsTest extends IntegrationTestHarness {
   @Test
   def testDisableMetricsPush(): Unit = {
     val properties = new Properties()
-    properties.put(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, false)
+    properties.put(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, "false")
     val producer = createProducer(configOverrides = properties)
     assertNull(producer.asInstanceOf[KafkaProducer[ByteArraySerializer, ByteArraySerializer]].clientTelemetry())
     val record = new ProducerRecord(topicName, "key".getBytes, "value".getBytes)

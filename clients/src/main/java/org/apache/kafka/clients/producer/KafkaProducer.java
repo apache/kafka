@@ -445,7 +445,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG), metrics, time, PRODUCER_METRIC_GROUP_NAME),
-                    configureAcks(config, log),
                     clientTelemetry);
 
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
@@ -498,6 +497,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.log = logContext.logger(KafkaProducer.class);
         this.metrics = metrics;
         this.producerMetrics = new KafkaProducerMetrics(metrics);
+        this.clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
         this.partitioner = partitioner;
         this.keySerializer = keySerializer;
         this.valueSerializer = valueSerializer;

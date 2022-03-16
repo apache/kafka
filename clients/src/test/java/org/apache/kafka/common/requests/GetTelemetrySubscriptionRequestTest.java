@@ -44,6 +44,7 @@ public class GetTelemetrySubscriptionRequestTest {
         GetTelemetrySubscriptionResponse response = new GetTelemetrySubscriptionResponse(data);
         assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts());
     }
+
     @Test
     public void testErrorCountsReturnsOneError() {
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()

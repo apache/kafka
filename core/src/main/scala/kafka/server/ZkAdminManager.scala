@@ -400,6 +400,7 @@ class ZkAdminManager(val config: KafkaConfig,
         resource.`type` match {
           case ConfigResource.Type.TOPIC => alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
           case ConfigResource.Type.BROKER => alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
+          case ConfigResource.Type.CLIENT_METRICS => alterClientMetricsSubscriptions(resource, validateOnly, configProps, configEntriesMap)
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
@@ -466,6 +467,19 @@ class ZkAdminManager(val config: KafkaConfig,
     resource -> ApiError.NONE
   }
 
+  private def alterClientMetricsSubscriptions(resource: ConfigResource,
+                                              validateOnly: Boolean,
+                                              configProps: Properties,
+                                              configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+    val subscriptionName = resource.name
+    if (!validateOnly) {
+      info(s"Updating client metrics subscription ${subscriptionName} with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+      adminZkClient.changeClientMetricsConfig(subscriptionName,
+        this.config.dynamicConfig.toPersistentProps(configProps, false))
+    }
+    resource -> ApiError.NONE
+  }
+
   private def getBrokerId(resource: ConfigResource) = {
     if (resource.name == null || resource.name.isEmpty)
       None
@@ -499,6 +513,11 @@ class ZkAdminManager(val config: KafkaConfig,
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
             prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
+
+          case ConfigResource.Type.CLIENT_METRICS =>
+            val configProps = adminZkClient.fetchEntityConfig(ConfigType.ClientMetrics, resource.name)
+            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            alterClientMetricsSubscriptions(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
             val brokerId = getBrokerId(resource)
