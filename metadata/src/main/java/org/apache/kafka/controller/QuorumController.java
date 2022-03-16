@@ -351,7 +351,7 @@ public final class QuorumController implements Controller {
                                            OptionalLong startProcessingTimeNs,
                                            Throwable exception) {
         if (!startProcessingTimeNs.isPresent()) {
-            log.info("unable to start processing {} because of {}.", name,
+            log.error("{}: unable to start processing because of {}.", name,
                 exception.getClass().getSimpleName());
             if (exception instanceof ApiException) {
                 return exception;
@@ -369,7 +369,7 @@ public final class QuorumController implements Controller {
         }
         log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
             "Reverting to last committed offset {}.",
-            this, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
+            name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
         raftClient.resign(curClaimEpoch);
         renounce();
@@ -977,29 +977,25 @@ public final class QuorumController implements Controller {
     private static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
     private void maybeScheduleNextBalancePartitionLeaders() {
-
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
             leaderImbalanceCheckIntervalNs.isPresent() &&
             replicationControl.arePartitionLeadersImbalanced()) {
 
             log.debug(
-                "Scheduling deferred event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
+                "Scheduling write event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
                 MAYBE_BALANCE_PARTITION_LEADERS,
                 imbalancedScheduled,
-                leaderImbalanceCheckIntervalNs.getAsLong(),
+                leaderImbalanceCheckIntervalNs,
                 replicationControl.arePartitionLeadersImbalanced()
             );
-            long delayNs = time.nanoseconds();
-            if (imbalancedScheduled == ImbalanceSchedule.DEFERRED) {
-                delayNs += leaderImbalanceCheckIntervalNs.getAsLong();
-            }
-            scheduleDeferredWriteEvent(MAYBE_BALANCE_PARTITION_LEADERS, delayNs, () -> {
+
+            ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_BALANCE_PARTITION_LEADERS, () -> {
                 ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
 
                 // reschedule the operation after the leaderImbalanceCheckIntervalNs interval.
                 // Mark the imbalance event as completed and reschedule if necessary
                 if (result.response()) {
-                    imbalancedScheduled = ImbalanceSchedule.IMMIDIATELY;
+                    imbalancedScheduled = ImbalanceSchedule.IMMEDIATELY;
                 } else {
                     imbalancedScheduled = ImbalanceSchedule.DEFERRED;
                 }
@@ -1010,6 +1006,13 @@ public final class QuorumController implements Controller {
 
                 return result;
             });
+
+            long delayNs = time.nanoseconds();
+            if (imbalancedScheduled == ImbalanceSchedule.DEFERRED) {
+                delay += leaderImbalanceCheckIntervalNs.getAsLong();
+            }
+
+            queue.scheduleDeferred(MAYBE_BALANCE_PARTITION_LEADERS, new EarliestDeadlineFunction(delayNs), event);
 
             imbalancedScheduled = ImbalanceSchedule.SCHEDULED;
         }
@@ -1269,12 +1272,12 @@ public final class QuorumController implements Controller {
     private final OptionalLong leaderImbalanceCheckIntervalNs;
 
     private enum ImbalanceSchedule {
-        // Leader balancing has been scheduled
+        // The leader balancing operation has been scheduled
         SCHEDULED,
-        // Leader balancing should be scheduled in the future
+        // If the leader balancing operation should be schedued, schedule it with a delay
         DEFERRED,
-        // Leader balancing should be scheduled immediately
-        IMMIDIATELY
+        // If the leader balancing operation should be schedued, schdule it immediately
+        IMMEDIATELY
     }
 
     /**
