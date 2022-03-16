@@ -465,6 +465,36 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldNotPurgeBeforeThePurgeInterval() {
+        final long commitInterval = 1000L;
+        final long purgeInterval = 2000L;
+        final Properties props = configProps(false);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+        props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        final TaskManager taskManager = mockTaskManagerPurge(1);
+        taskManager.maybePurgeCommittedRecords();
+        EasyMock.replay(consumer, consumerGroupMetadata);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+        mockTime.sleep(purgeInterval - 10L);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        verify(taskManager);
+    }
+
+    @Test
     public void shouldEnforceRebalanceAfterNextScheduledProbingRebalanceTime() throws InterruptedException {
         final StreamsConfig config = new StreamsConfig(configProps(false));
         internalTopologyBuilder.buildTopology();
@@ -756,6 +786,41 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         assertTrue(committed.get());
+    }
+
+    @Test
+    public void shouldPurgeAfterPurgeInterval() {
+        final long commitInterval = 100L;
+        final long purgeInterval = 200L;
+
+        final Properties props = configProps(false);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+        props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+
+        final TaskManager taskManager = mockTaskManagerPurge(2);
+
+        EasyMock.replay(consumer, consumerGroupMetadata);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
+
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        mockTime.sleep(purgeInterval + 1);
+
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        verify(taskManager);
     }
 
     @Test
@@ -2747,6 +2812,22 @@ public class StreamThreadTest {
 
         final Metric failedThreads = StreamsTestUtils.getMetricByName(metrics.metrics(), "failed-stream-threads", "stream-metrics");
         assertThat(failedThreads.metricValue(), is(shouldFail ? 1.0 : 0.0));
+    }
+
+    private TaskManager mockTaskManagerPurge(final int numberOfPurges) {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Task runningTask = mock(Task.class);
+        final TaskId taskId = new TaskId(0, 0);
+
+        expect(runningTask.state()).andReturn(Task.State.RUNNING).anyTimes();
+        expect(runningTask.id()).andReturn(taskId).anyTimes();
+        expect(taskManager.tasks())
+                .andReturn(Collections.singletonMap(taskId, runningTask)).anyTimes();
+        expect(taskManager.commit(Collections.singleton(runningTask))).andReturn(1).anyTimes();
+        taskManager.maybePurgeCommittedRecords();
+        EasyMock.expectLastCall().times(numberOfPurges);
+        EasyMock.replay(taskManager, runningTask);
+        return taskManager;
     }
 
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer,

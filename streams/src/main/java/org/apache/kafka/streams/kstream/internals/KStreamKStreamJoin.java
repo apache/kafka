@@ -51,6 +51,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private final long joinAfterMs;
     private final long joinGraceMs;
     private final boolean enableSpuriousResultFix;
+    private final long joinSpuriousLookBackTimeMs;
 
     private final boolean outer;
     private final boolean isLeftSide;
@@ -71,9 +72,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         if (isLeftSide) {
             this.joinBeforeMs = windows.beforeMs;
             this.joinAfterMs = windows.afterMs;
+            this.joinSpuriousLookBackTimeMs = windows.beforeMs;
         } else {
             this.joinBeforeMs = windows.afterMs;
             this.joinAfterMs = windows.beforeMs;
+            this.joinSpuriousLookBackTimeMs = windows.afterMs;
         }
         this.joinGraceMs = windows.gracePeriodMs();
         this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
@@ -211,7 +214,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             // to reduce runtime cost, we try to avoid paying those cost
 
             // only try to emit left/outer join results if there _might_ be any result records
-            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinAfterMs - joinGraceMs) {
+            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinSpuriousLookBackTimeMs - joinGraceMs) {
                 return;
             }
             // throttle the emit frequency to a (configurable) interval;

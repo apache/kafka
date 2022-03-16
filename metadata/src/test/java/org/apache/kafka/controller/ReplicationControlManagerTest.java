@@ -143,8 +143,12 @@ public class ReplicationControlManagerTest {
             new StripedReplicaPlacer(random),
             metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, KafkaConfigSchema.EMPTY, Optional.empty(),
-                (__, ___) -> { });
+            new LogContext(),
+            snapshotRegistry,
+            KafkaConfigSchema.EMPTY,
+            __ -> { },
+            Optional.empty(),
+            (__, ___) -> { });
         final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {

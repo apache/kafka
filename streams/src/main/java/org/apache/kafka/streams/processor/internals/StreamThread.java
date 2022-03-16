@@ -261,6 +261,7 @@ public class StreamThread extends Thread {
     public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
+    private final long purgeTimeMs;
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
@@ -288,6 +289,7 @@ public class StreamThread extends Thread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPurgeMs;
     private long lastPartitionAssignedMs = -1L;
     private int numIterations;
     private volatile State state = State.CREATED;
@@ -517,6 +519,7 @@ public class StreamThread extends Thread {
         this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
             .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.purgeTimeMs = config.getLong(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
@@ -1067,9 +1070,10 @@ public class StreamThread extends Thread {
                     .collect(Collectors.toSet())
             );
 
-            if (committed > 0) {
+            if (committed > 0 && (now - lastPurgeMs) > purgeTimeMs) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
+                lastPurgeMs = now;
             }
 
             if (committed == -1) {
