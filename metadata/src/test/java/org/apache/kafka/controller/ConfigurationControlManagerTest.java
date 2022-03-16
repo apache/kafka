@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -40,6 +41,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -51,7 +53,6 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SUBTRACT;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
-import static org.apache.kafka.controller.ConfigurationControlManager.NO_OP_EXISTENCE_CHECKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -76,6 +77,17 @@ public class ConfigurationControlManagerTest {
     static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
     static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
 
+    static class TestExistenceChecker implements Consumer<ConfigResource> {
+        static final TestExistenceChecker INSTANCE = new TestExistenceChecker();
+
+        @Override
+        public void accept(ConfigResource resource) {
+            if (!resource.name().startsWith("Existing")) {
+                throw new UnknownTopicOrPartitionException("Unknown resource.");
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static <A, B> Map<A, B> toMap(Entry... entries) {
         Map<A, B> map = new LinkedHashMap<>();
@@ -89,12 +101,26 @@ public class ConfigurationControlManagerTest {
         return new SimpleImmutableEntry<>(a, b);
     }
 
+    static ConfigurationControlManager newConfigurationControlManager() {
+        return newConfigurationControlManager(Optional.empty());
+    }
+
+    static ConfigurationControlManager newConfigurationControlManager(
+        Optional<AlterConfigPolicy> alterConfigPolicy
+    ) {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        return new ConfigurationControlManager(logContext,
+                snapshotRegistry,
+                SCHEMA,
+                TestExistenceChecker.INSTANCE,
+                alterConfigPolicy,
+                ConfigurationValidator.NO_OP);
+    }
+
     @Test
     public void testReplay() throws Exception {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, SCHEMA,
-                Optional.empty(), ConfigurationValidator.NO_OP);
+        ConfigurationControlManager manager = newConfigurationControlManager();
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
@@ -125,17 +151,14 @@ public class ConfigurationControlManagerTest {
 
     @Test
     public void testIncrementalAlterConfigs() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, SCHEMA,
-                Optional.empty(), ConfigurationValidator.NO_OP);
+        ConfigurationControlManager manager = newConfigurationControlManager();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
                 entry("baz", entry(SUBTRACT, "abc")),
                 entry("quux", entry(SET, "abc")))),
                 entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
-                NO_OP_EXISTENCE_CHECKER);
+                true);
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -152,7 +175,26 @@ public class ConfigurationControlManagerTest {
                 toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("abc", entry(DELETE, "xyz"))))),
-                NO_OP_EXISTENCE_CHECKER));
+                true));
+    }
+
+    @Test
+    public void testIncrementalAlterConfigsWithoutExistence() {
+        ConfigurationControlManager manager = newConfigurationControlManager();
+        ConfigResource existingTopic = new ConfigResource(TOPIC, "ExistingTopic");
+
+        ControllerResult<Map<ConfigResource, ApiError>> result = manager.
+            incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
+                entry("quux", entry(SET, "1")))),
+                entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
+                false);
+
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
+                    setName("def").setValue("newVal"), (short) 0)),
+            toMap(entry(BROKER0, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                    "Unknown resource.")),
+                entry(existingTopic, ApiError.NONE))), result);
     }
 
     private static class MockAlterConfigsPolicy implements AlterConfigPolicy {
@@ -190,14 +232,12 @@ public class ConfigurationControlManagerTest {
 
     @Test
     public void testIncrementalAlterConfigsWithPolicy() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(asList(
             new RequestMetadata(MYTOPIC, Collections.emptyMap()),
             new RequestMetadata(BROKER0, toMap(entry("foo.bar", "123"),
                 entry("quux", "456")))));
-        ConfigurationControlManager manager = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, SCHEMA, Optional.of(policy),
-            ConfigurationValidator.NO_OP);
+
+        ConfigurationControlManager manager = newConfigurationControlManager(Optional.of(policy));
 
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
@@ -215,15 +255,12 @@ public class ConfigurationControlManagerTest {
                 entry(BROKER0, toMap(
                 entry("foo.bar", entry(SET, "123")),
                 entry("quux", entry(SET, "456"))))),
-                NO_OP_EXISTENCE_CHECKER));
+                true));
     }
 
     @Test
     public void testLegacyAlterConfigs() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, SCHEMA,
-                Optional.empty(), ConfigurationValidator.NO_OP);
+        ConfigurationControlManager manager = newConfigurationControlManager();
         List<ApiMessageAndVersion> expectedRecords1 = asList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -235,7 +272,7 @@ public class ConfigurationControlManagerTest {
                 expectedRecords1, toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(
                 toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
-                NO_OP_EXISTENCE_CHECKER));
+                true));
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
@@ -249,6 +286,6 @@ public class ConfigurationControlManagerTest {
                 (short) 0)),
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
-                NO_OP_EXISTENCE_CHECKER));
+                true));
     }
 }

@@ -223,14 +223,6 @@ public class AbstractConfig {
     public Set<String> unused() {
         Set<String> keys = new HashSet<>(originals.keySet());
         keys.removeAll(used);
-        keys.removeAll(unknown());
-        return keys;
-    }
-
-    public Set<String> unknown() {
-        Set<String> keys = new HashSet<>(originals.keySet());
-        keys.removeAll(values.keySet());
-        keys.removeAll(used);
         return keys;
     }
 
@@ -384,24 +376,11 @@ public class AbstractConfig {
         log.info(b.toString());
     }
 
-    public void logUnusedAndUnknown() {
-        logUnused();
-        logUnknown();
-    }
-
     /**
-     * Log infos for any unused configurations to user, exclude unknown configurations
+     * Log warnings for any unused configurations
      */
-    private void logUnused() {
+    public void logUnused() {
         for (String key : unused())
-            log.info("The configuration '{}' was supplied but isn't a used config since the corresponding feature is not enabled.", key);
-    }
-
-    /**
-     * Log warnings for any unknown configurations
-     */
-    private void logUnknown() {
-        for (String key : unknown())
             log.warn("The configuration '{}' was supplied but isn't a known config.", key);
     }
 
