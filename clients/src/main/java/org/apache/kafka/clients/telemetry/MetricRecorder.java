@@ -133,7 +133,7 @@ public abstract class MetricRecorder implements ClientMetricRecorder {
 
         @Override
         public void record(MetricConfig config, double value, long now) {
-            value = value;
+            this.value = value;
         }
 
         @Override
