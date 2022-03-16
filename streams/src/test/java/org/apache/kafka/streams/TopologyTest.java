@@ -88,7 +88,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void shouldNotAllowNullTopicsWhenAddingSoureWithTopic() {
+    public void shouldNotAllowNullTopicsWhenAddingSourceWithTopic() {
         assertThrows(NullPointerException.class, () -> topology.addSource("source", (String[]) null));
     }
 

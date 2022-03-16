@@ -87,11 +87,7 @@ public class MaterializedInternalTest {
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
 
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
-            new TopologyConfig(
-            "my-topology",
-                config,
-                topologyOverrides)
-        );
+            new TopologyConfig("my-topology", config, topologyOverrides));
 
         final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder);
 

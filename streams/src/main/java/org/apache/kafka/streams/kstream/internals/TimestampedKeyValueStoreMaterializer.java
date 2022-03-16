@@ -40,8 +40,11 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
                 case IN_MEMORY:
                     supplier = Stores.inMemoryKeyValueStore(materialized.storeName());
                     break;
-                default:
+                case ROCKS_DB:
                     supplier = Stores.persistentTimestampedKeyValueStore(materialized.storeName());
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
             }
         }
 

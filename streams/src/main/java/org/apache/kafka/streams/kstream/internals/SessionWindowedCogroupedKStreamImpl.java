@@ -129,11 +129,14 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                         Duration.ofMillis(retentionPeriod)
                     );
                     break;
-                default:
+                case ROCKS_DB:
                     supplier = Stores.persistentSessionStore(
                         materialized.storeName(),
                         Duration.ofMillis(retentionPeriod)
                     );
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
             }
         }
 

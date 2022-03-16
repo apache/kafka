@@ -277,9 +277,9 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
-        final long retenationMs = validateMillisecondDuration(retention, msgPrefix);
+        final long retentionMs = validateMillisecondDuration(retention, msgPrefix);
 
-        if (retenationMs < 0) {
+        if (retentionMs < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
         this.retention = retention;
@@ -291,9 +291,13 @@ public class Materialized<K, V, S extends StateStore> {
      *
      * @param storeType  the store type {@link StoreType} to use.
      * @return itself
+     * @throws IllegalArgumentException if store supplier is also pre-configured
      */
     public Materialized<K, V, S> withStoreType(final StoreType storeType) throws IllegalArgumentException {
         Objects.requireNonNull(storeType, "store type can't be null");
+        if (storeSupplier != null) {
+            throw new IllegalArgumentException("Cannot set store type when store supplier is pre-configured.");
+        }
         this.storeType = storeType;
         return this;
     }
