@@ -117,8 +117,8 @@ public class RackAwarenessIntegrationTest {
 
     @Test
     public void shouldDoRebalancingWithMaximumNumberOfClientTags() throws Exception {
-        initTopology(100, 2);
-        final Duration timeout = Duration.ofMinutes(3);
+        initTopology(50, 4);
+        final Duration timeout = Duration.ofMinutes(1).plus(Duration.ofSeconds(30));
         final int numberOfStandbyReplicas = 1;
 
         final List<String> clientTagKeys = new ArrayList<>();
@@ -143,17 +143,16 @@ public class RackAwarenessIntegrationTest {
                                                   clientTags.size()));
 
         createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
+        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
         createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning(timeout);
         assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
 
         stopKafkaStreamsInstanceWithIndex(0);
-        waitUntilAllKafkaStreamsClientsAreRunning(timeout);
-
-        createAndStart(clientTags1, clientTagKeys, numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning(timeout);
+
         assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
     }
 
