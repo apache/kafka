@@ -30,7 +30,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -51,32 +50,46 @@ public class PartitionChangeBuilder {
         return true;
     }
 
+    /**
+     * Election types.
+     */
+    public enum Election {
+        /**
+         * Perform leader election to keep the partition online or if the preferred replica is in the ISR.
+         */
+        PREFERRED,
+        /**
+         * Perform leader election from the ISR to keep the partition online.
+         */
+        ONLINE,
+        /**
+         * Prefer replicas in the ISR but keep the partition online even if it requires picking a leader that is not in the ISR.
+         */
+        UNCLEAN
+    }
+
     private final PartitionRegistration partition;
     private final Uuid topicId;
     private final int partitionId;
     private final Function<Integer, Boolean> isAcceptableLeader;
-    private final Supplier<Boolean> uncleanElectionOk;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
     private List<Integer> targetAdding;
-    private boolean alwaysElectPreferredIfPossible;
+    private Election election = Election.ONLINE;
 
     public PartitionChangeBuilder(PartitionRegistration partition,
                                   Uuid topicId,
                                   int partitionId,
-                                  Function<Integer, Boolean> isAcceptableLeader,
-                                  Supplier<Boolean> uncleanElectionOk) {
+                                  Function<Integer, Boolean> isAcceptableLeader) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
-        this.uncleanElectionOk = uncleanElectionOk;
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
         this.targetAdding = Replicas.toList(partition.addingReplicas);
-        this.alwaysElectPreferredIfPossible = false;
     }
 
     public PartitionChangeBuilder setTargetIsr(List<Integer> targetIsr) {
@@ -89,8 +102,8 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    public PartitionChangeBuilder setAlwaysElectPreferredIfPossible(boolean alwaysElectPreferredIfPossible) {
-        this.alwaysElectPreferredIfPossible = alwaysElectPreferredIfPossible;
+    public PartitionChangeBuilder setElection(Election election) {
+        this.election = election;
         return this;
     }
 
@@ -104,53 +117,73 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    boolean shouldTryElection() {
-        // If the new isr doesn't have the current leader, we need to try to elect a new
-        // one. Note: this also handles the case where the current leader is NO_LEADER,
-        // since that value cannot appear in targetIsr.
-        if (!targetIsr.contains(partition.leader)) return true;
-
-        // Check if we want to try to get away from a non-preferred leader.
-        if (alwaysElectPreferredIfPossible && !partition.hasPreferredLeader()) return true;
-
-        return false;
-    }
-
-    class BestLeader {
+    // VisibleForTesting
+    static class ElectionResult {
         final int node;
         final boolean unclean;
 
-        BestLeader() {
-            for (int replica : targetReplicas) {
-                if (targetIsr.contains(replica) && isAcceptableLeader.apply(replica)) {
-                    this.node = replica;
-                    this.unclean = false;
-                    return;
-                }
-            }
-            if (uncleanElectionOk.get()) {
-                for (int replica : targetReplicas) {
-                    if (isAcceptableLeader.apply(replica)) {
-                        this.node = replica;
-                        this.unclean = true;
-                        return;
-                    }
-                }
-            }
-            this.node = NO_LEADER;
-            this.unclean = false;
+        private ElectionResult(int node, boolean unclean) {
+            this.node = node;
+            this.unclean = unclean;
         }
     }
 
+    // VisibleForTesting
+    /**
+     * Perform leader election based on the partition state and leader election type.
+     *
+     * See documentation for the Election type to see more details on the election types supported.
+     */
+    ElectionResult electLeader() {
+        // 1. Check if the election is not PREFERRED and we already have a valid leader
+        if (election != Election.PREFERRED && targetIsr.contains(partition.leader) && isAcceptableLeader.apply(partition.leader)) {
+            // Don't consider a new leader since the current leader meets all the constraints
+            return new ElectionResult(partition.leader, false);
+        }
+
+        // 2. Attempt preferred replica election
+        int preferredReplica = targetReplicas.get(0);
+        if (targetIsr.contains(preferredReplica) && isAcceptableLeader.apply(preferredReplica)) {
+            return new ElectionResult(preferredReplica, false);
+        }
+
+        // 3. Preferred replica was not elected, only continue if the current leader is not a valid leader
+        if (targetIsr.contains(partition.leader) && isAcceptableLeader.apply(partition.leader)) {
+            // Don't consider a new leader since the current leader meets all the constraints
+            return new ElectionResult(partition.leader, false);
+        }
+
+        // 4. Attempt to keep the partition online based on the ISR
+        Optional<Integer> bestLeader = targetReplicas.stream()
+            .skip(1)
+            .filter(replica -> targetIsr.contains(replica) && isAcceptableLeader.apply(replica))
+            .findFirst();
+        if (bestLeader.isPresent()) {
+            return new ElectionResult(bestLeader.get(), false);
+        }
+
+        if (election == Election.UNCLEAN) {
+            // 5. Attempt unclean leader election
+            Optional<Integer> uncleanLeader = targetReplicas.stream()
+                .filter(replica -> isAcceptableLeader.apply(replica))
+                .findFirst();
+            if (uncleanLeader.isPresent()) {
+                return new ElectionResult(uncleanLeader.get(), true);
+            }
+        }
+
+        return new ElectionResult(NO_LEADER, false);
+    }
+
     private void tryElection(PartitionChangeRecord record) {
-        BestLeader bestLeader = new BestLeader();
-        if (bestLeader.node != partition.leader) {
-            log.debug("Setting new leader for topicId {}, partition {} to {}", topicId, partitionId, bestLeader.node);
-            record.setLeader(bestLeader.node);
-            if (bestLeader.unclean) {
+        ElectionResult electionResult = electLeader();
+        if (electionResult.node != partition.leader) {
+            log.debug("Setting new leader for topicId {}, partition {} to {}", topicId, partitionId, electionResult.node);
+            record.setLeader(electionResult.node);
+            if (electionResult.unclean) {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
-                record.setIsr(Collections.singletonList(bestLeader.node));
+                record.setIsr(Collections.singletonList(electionResult.node));
             }
         } else {
             log.debug("Failed to find a new leader with current state: {}", this);
@@ -222,9 +255,7 @@ public class PartitionChangeBuilder {
 
         completeReassignmentIfNeeded();
 
-        if (shouldTryElection()) {
-            tryElection(record);
-        }
+        tryElection(record);
 
         triggerLeaderEpochBumpIfNeeded(record);
 
@@ -255,12 +286,11 @@ public class PartitionChangeBuilder {
             ", topicId=" + topicId +
             ", partitionId=" + partitionId +
             ", isAcceptableLeader=" + isAcceptableLeader +
-            ", uncleanElectionOk=" + uncleanElectionOk +
             ", targetIsr=" + targetIsr +
             ", targetReplicas=" + targetReplicas +
             ", targetRemoving=" + targetRemoving +
             ", targetAdding=" + targetAdding +
-            ", alwaysElectPreferredIfPossible=" + alwaysElectPreferredIfPossible +
+            ", election=" + election +
             ')';
     }
 }

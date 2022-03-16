@@ -164,7 +164,7 @@ public class ReplicationControlManager {
     private final int defaultNumPartitions;
 
     /**
-     * Maximum number of leader elections to perform during one partion leader balancing operation.
+     * Maximum number of leader elections to perform during one partition leader balancing operation.
      */
     private final int maxElectionsPerImbalance;
 
@@ -771,8 +771,10 @@ public class ReplicationControlManager {
                 PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
                     topic.id,
                     partitionId,
-                    r -> clusterControl.unfenced(r),
-                    () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name()));
+                    r -> clusterControl.unfenced(r));
+                if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name())) {
+                    builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
+                }
                 builder.setTargetIsr(partitionData.newIsr());
                 Optional<ApiMessageAndVersion> record = builder.build();
                 Errors result = Errors.NONE;
@@ -961,13 +963,15 @@ public class ReplicationControlManager {
             return new ApiError(Errors.ELECTION_NOT_NEEDED);
         }
 
+        PartitionChangeBuilder.Election election = PartitionChangeBuilder.Election.PREFERRED;
+        if (electionType == ElectionType.UNCLEAN) {
+            election = PartitionChangeBuilder.Election.UNCLEAN;
+        }
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
             topicId,
             partitionId,
-            r -> clusterControl.unfenced(r),
-            () -> electionType == ElectionType.UNCLEAN);
-
-        builder.setAlwaysElectPreferredIfPossible(electionType == ElectionType.PREFERRED);
+            r -> clusterControl.unfenced(r));
+        builder.setElection(election);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
             if (electionType == ElectionType.PREFERRED) {
@@ -1047,7 +1051,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Attempt to elect a preferred leader for all topic partitions that a leader that is not the preferred replica.
+     * Attempt to elect a preferred leader for all topic partitions which have a leader that is not the preferred replica.
      *
      * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
      * The quorum controlller should reschedule this operation immediately if it is true.
@@ -1081,10 +1085,9 @@ public class ReplicationControlManager {
                 partition,
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
-                r -> clusterControl.unfenced(r),
-                () -> false
+                r -> clusterControl.unfenced(r)
             );
-            builder.setAlwaysElectPreferredIfPossible(true);
+            builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
             builder.build().ifPresent(records::add);
         }
 
@@ -1280,8 +1283,10 @@ public class ReplicationControlManager {
             PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
-                isAcceptableLeader,
-                () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name));
+                isAcceptableLeader);
+            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+                builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
+            }
 
             // Note: if brokerToRemove was passed as NO_LEADER, this is a no-op (the new
             // target ISR will be the same as the old one).
@@ -1387,8 +1392,10 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
             tp.topicId(),
             tp.partitionId(),
-            r -> clusterControl.unfenced(r),
-            () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topicName));
+            r -> clusterControl.unfenced(r));
+        if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
+            builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
+        }
         builder.setTargetIsr(revert.isr()).
             setTargetReplicas(revert.replicas()).
             setTargetRemoving(Collections.emptyList()).
@@ -1436,8 +1443,7 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
             tp.topicId(),
             tp.partitionId(),
-            r -> clusterControl.unfenced(r),
-            () -> false);
+            r -> clusterControl.unfenced(r));
         if (!reassignment.merged().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.merged());
         }

@@ -147,7 +147,7 @@ public final class QuorumController implements Controller {
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
-        private long leaderImbalanceCheckIntervalNs = -1;
+        private long leaderImbalanceCheckIntervalNs = -1L;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
@@ -1262,7 +1262,7 @@ public final class QuorumController implements Controller {
      */
     private final long leaderImbalanceCheckIntervalNs;
 
-    private static enum ImbalanceSchedule {
+    private enum ImbalanceSchedule {
         // Leader balancing has been scheduled
         SCHEDULED,
         // Leader balancing should be scheduled in the future
