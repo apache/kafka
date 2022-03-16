@@ -1121,6 +1121,27 @@ public class ConfigDef {
         }
     }
 
+    public static class ListSize implements Validator {
+        final int maxSize;
+
+        private ListSize(final int maxSize) {
+            this.maxSize = maxSize;
+        }
+
+        public static ListSize atMostOfSize(final int maxSize) {
+            return new ListSize(maxSize);
+        }
+
+        @Override
+        public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
+            List<String> values = (List<String>) value;
+            if (values.size() > maxSize) {
+                throw new ConfigException(name, value, "exceeds maximum list size of [" + maxSize + "].");
+            }
+        }
+    }
+
     public static class ConfigKey {
         public final String name;
         public final Type type;

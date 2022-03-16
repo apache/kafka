@@ -48,12 +48,16 @@ import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
+import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -148,6 +152,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
+    // We impose these limitations because client tags are encoded into the subscription info,
+    // which is part of the group metadata message that is persisted into the internal topic.
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE = 5;
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH = 20;
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH = 30;
+
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
      * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
@@ -211,6 +221,15 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
+
+    /**
+     * Prefix used to add arbitrary tags to a Kafka Stream's instance as key-value pairs.
+     * Example:
+     * client.tag.zone=zone1
+     * client.tag.cluster=cluster1
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
     /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
@@ -511,6 +530,13 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
 
+    /** {@code rack.aware.assignment.tags} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "rack.aware.assignment.tags";
+    private static final String RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances." +
+                                                                 " When configured, Kafka Streams will make a best-effort to distribute" +
+                                                                 " the standby tasks over each client tag dimension.";
+
     /** {@code reconnect.backoff.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -726,6 +752,12 @@ public class StreamsConfig extends AbstractConfig {
                     in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    Type.LIST,
+                    Collections.emptyList(),
+                    atMostOfSize(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
+                    Importance.MEDIUM,
+                    RACK_AWARE_ASSIGNMENT_TAGS_DOC)
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
                     -1,
@@ -1041,6 +1073,16 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
+     * Prefix a client tag key with {@link #CLIENT_TAG_PREFIX}.
+     *
+     * @param clientTagKey client tag key
+     * @return {@link #CLIENT_TAG_PREFIX} + {@code clientTagKey}
+     */
+    public static String clientTagPrefix(final String clientTagKey) {
+        return CLIENT_TAG_PREFIX + clientTagKey;
+    }
+
+    /**
      * Prefix a property with {@link #GLOBAL_CONSUMER_PREFIX}. This is used to isolate {@link ConsumerConfig global consumer configs}
      * from other client configs.
      *
@@ -1159,7 +1201,41 @@ public class StreamsConfig extends AbstractConfig {
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
 
+        validateRackAwarenessConfiguration();
+
         return configUpdates;
+    }
+
+    private void validateRackAwarenessConfiguration() {
+        final List<String> rackAwareAssignmentTags = getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        final Map<String, String> clientTags = getClientTags();
+
+        if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
+            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
+                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+        }
+
+        for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            if (!clientTags.containsKey(rackAwareAssignmentTag)) {
+                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                                          rackAwareAssignmentTags,
+                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
+                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+            }
+        }
+
+        clientTags.forEach((tagKey, tagValue) -> {
+            if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
+                throw new ConfigException(CLIENT_TAG_PREFIX,
+                                          tagKey,
+                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
+            }
+            if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
+                throw new ConfigException(CLIENT_TAG_PREFIX,
+                                          tagValue,
+                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
+            }
+        });
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
@@ -1295,6 +1371,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(PROBING_REBALANCE_INTERVAL_MS_CONFIG, getLong(PROBING_REBALANCE_INTERVAL_MS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
+        consumerProps.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
 
         // disable auto topic creation
         consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
@@ -1439,6 +1516,21 @@ public class StreamsConfig extends AbstractConfig {
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
         return props;
+    }
+
+    /**
+     * Get the configured client tags set with {@link #CLIENT_TAG_PREFIX} prefix.
+     *
+     * @return Map of the client tags.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public Map<String, String> getClientTags() {
+        return originalsWithPrefix(CLIENT_TAG_PREFIX).entrySet().stream().collect(
+            Collectors.toMap(
+                Map.Entry::getKey,
+                tagEntry -> Objects.toString(tagEntry.getValue())
+            )
+        );
     }
 
     private Map<String, Object> getClientPropsWithPrefix(final String prefix,

@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.ListSize;
 import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.ValidString;
@@ -38,6 +39,8 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -426,7 +429,7 @@ public class ConfigDefTest {
     public void testMissingDependentConfigs() {
         // Should not be possible to parse a config if a dependent config has not been defined
         final ConfigDef configDef = new ConfigDef()
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"));
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"));
         assertThrows(ConfigException.class, () -> configDef.parse(Collections.emptyMap()));
     }
 
@@ -438,7 +441,7 @@ public class ConfigDefTest {
         assertEquals(new HashSet<>(Arrays.asList("a")), baseConfigDef.getConfigsWithNoParent());
 
         final ConfigDef configDef = new ConfigDef(baseConfigDef)
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"))
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"))
                 .define("child", Type.STRING, Importance.HIGH, "docs");
 
         assertEquals(new HashSet<>(Arrays.asList("a", "parent")), configDef.getConfigsWithNoParent());
@@ -541,7 +544,7 @@ public class ConfigDefTest {
                 .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
                         "Group Two", 1, Width.NONE, "..", Collections.<String>emptyList())
                 .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
-                        "Group Two", 0, Width.NONE, "..", Collections.singletonList("some.option"))
+                        "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
                 .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
 
         final String expectedRst = "" +
@@ -720,6 +723,39 @@ public class ConfigDefTest {
 
         assertEquals(" (7 days)", ConfigDef.niceTimeUnits(Duration.ofDays(7).toMillis()));
         assertEquals(" (365 days)", ConfigDef.niceTimeUnits(Duration.ofDays(365).toMillis()));
+    }
+
+    @Test
+    public void testThrowsExceptionWhenListSizeExceedsLimit() {
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
+                                                                                                           Type.LIST,
+                                                                                                           asList("a", "b"),
+                                                                                                           ListSize.atMostOfSize(1),
+                                                                                                           Importance.HIGH,
+                                                                                                           "lst doc"));
+        assertEquals("Invalid value [a, b] for configuration lst: exceeds maximum list size of [1].",
+                     exception.getMessage());
+    }
+
+    @Test
+    public void testNoExceptionIsThrownWhenListSizeEqualsTheLimit() {
+        final List<String> lst = asList("a", "b", "c");
+        assertDoesNotThrow(() -> new ConfigDef().define("lst",
+                                                        Type.LIST,
+                                                        lst,
+                                                        ListSize.atMostOfSize(lst.size()),
+                                                        Importance.HIGH,
+                                                        "lst doc"));
+    }
+
+    @Test
+    public void testNoExceptionIsThrownWhenListSizeIsBelowTheLimit() {
+        assertDoesNotThrow(() -> new ConfigDef().define("lst",
+                                                        Type.LIST,
+                                                        asList("a", "b"),
+                                                        ListSize.atMostOfSize(3),
+                                                        Importance.HIGH,
+                                                        "lst doc"));
     }
 
 }
