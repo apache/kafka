@@ -43,9 +43,11 @@ def get_broker_features(broker_version):
     if broker_version < V_0_11_0_0:
         features["describe-acls-supported"] = False
         features["describe-configs-supported"] = False
+        features["idempotent-producer-supported"] = False
     else:
         features["describe-acls-supported"] = True
         features["describe-configs-supported"] = True
+        features["idempotent-producer-supported"] = True
     return features
 
 def run_command(node, cmd, ssh_log_file):
