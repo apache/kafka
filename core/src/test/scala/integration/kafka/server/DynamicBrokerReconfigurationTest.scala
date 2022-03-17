@@ -727,6 +727,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   @Test
   def testThreadPoolResize(): Unit = {
+    System.err.println("threadP start")
     val requestHandlerPrefix = "data-plane-kafka-request-handler-"
     val networkThreadPrefix = "data-plane-kafka-network-thread-"
     val fetcherThreadPrefix = "ReplicaFetcherThread-"
@@ -770,6 +771,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     def resizeThreadPool(propName: String, newSize: Int, threadPrefix: String): Unit = {
+      System.err.print(" size:" + newSize)
+      System.err.flush()
       val props = new Properties
       props.put(propName, newSize.toString)
       reconfigureServers(props, perBrokerConfig = false, (propName, newSize.toString))
@@ -777,6 +780,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     def verifyThreadPoolResize(propName: String, currentSize: => Int, threadPrefix: String, mayReceiveDuplicates: Boolean): Unit = {
+      System.err.print(" prop:" + propName)
+      System.err.flush()
       maybeVerifyThreadPoolSize(propName, currentSize, threadPrefix)
       val numRetries = if (mayReceiveDuplicates) 100 else 0
       val (producerThread, consumerThread) = startProduceConsume(retries = numRetries)
@@ -1496,6 +1501,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def waitForConfigOnServer(server: KafkaServer, propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
+    System.err.print("wait:" + server + ";prop:" + propName + ";v:" + propValue)
+    System.err.flush()
     TestUtils.retry(maxWaitMs) {
       assertEquals(propValue, server.config.originals.get(propName))
     }

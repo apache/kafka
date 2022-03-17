@@ -245,7 +245,7 @@ public class AdminMetadataManager {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
-            System.err.println("update meta:" + cluster.nodes());
+//            System.err.println("update meta:" + cluster.nodes());
             this.lastMetadataUpdateMs = now;
         }
 

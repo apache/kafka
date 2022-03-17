@@ -2499,6 +2499,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 AlterConfigsResponse response = (AlterConfigsResponse) abstractResponse;
+                System.err.println("alter:" + response);
                 for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
                     KafkaFutureImpl<Void> future = entry.getValue();
                     ApiException exception = response.errors().get(entry.getKey()).exception();
@@ -2512,6 +2513,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
+                System.err.println("alter fail:" + throwable);
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
