@@ -121,10 +121,10 @@ object GetOffsetShell {
       new Properties
     config.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     config.setProperty(AdminClientConfig.CLIENT_ID_CONFIG, clientId)
-    val client = Admin.create(config)
+    val adminClient = Admin.create(config)
 
     try {
-      val partitionInfos = listPartitionInfos(client, topicPartitionFilter, excludeInternalTopics)
+      val partitionInfos = listPartitionInfos(adminClient, topicPartitionFilter, excludeInternalTopics)
 
       if (partitionInfos.isEmpty) {
         throw new IllegalArgumentException("Could not match any topic-partitions with the specified filters")
@@ -132,7 +132,7 @@ object GetOffsetShell {
 
       val timestampsToSearch = partitionInfos.map(tp => tp -> offsetSpec).toMap.asJava
 
-      val listOffsetsResult = client.listOffsets(timestampsToSearch)
+      val listOffsetsResult = adminClient.listOffsets(timestampsToSearch)
       val partitionOffsets = partitionInfos.flatMap { tp =>
         try {
           val partitionInfo = listOffsetsResult.partitionResult(tp).get
@@ -141,7 +141,7 @@ object GetOffsetShell {
           case e: ExecutionException =>
             e.getCause match {
               case _: LeaderNotAvailableException =>
-                System.err.println(s"Error: topic-partition ${tp.topic}:${tp.partition} does not have a leader. Skip getting offsets")
+                System.err.println(s"Skip getting offsets for: topic-partition ${tp.topic}:${tp.partition} since it does not have a leader right now.")
               case _ =>
                 System.err.println(s"Error while getting offset for topic-partition ${tp.topic}:${tp.partition}")
                 e.printStackTrace()
@@ -154,7 +154,7 @@ object GetOffsetShell {
         case (tp, offset) => println(s"${tp.topic}:${tp.partition}:${Option(offset).getOrElse("")}")
       }
     } finally {
-      client.close()
+      adminClient.close()
     }
   }
 
@@ -271,10 +271,11 @@ object GetOffsetShell {
   }
 }
 
-/**
- * Used to filter partitions after describing them
- */
 trait PartitionFilter {
+
+  /**
+   * Used to filter partitions based on a certain criteria, for example, a set of partition ids.
+   */
   def isPartitionAllowed(partition: Int): Boolean
 }
 
@@ -293,12 +294,12 @@ case class PartitionRangeFilter(lowerRange: Int, upperRange: Int) extends Partit
 trait TopicPartitionFilter {
 
   /**
-   * Used to filter topics before describing them
+   * Used to filter topics based on a certain criteria, for example, a set of topic names or a regular expression.
    */
   def isTopicAllowed(topic: String): Boolean
 
   /**
-   * Used to filter topics and topic-partitions after describing them
+   * Used to filter topic-partitions based on a certain criteria, for example, a topic pattern and a set of partition ids.
    */
   def isTopicPartitionAllowed(partition: TopicPartition): Boolean
 }
