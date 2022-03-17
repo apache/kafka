@@ -27,7 +27,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collections;

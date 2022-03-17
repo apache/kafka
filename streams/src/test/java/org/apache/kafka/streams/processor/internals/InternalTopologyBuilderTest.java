@@ -25,12 +25,13 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -948,6 +949,7 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
         topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
@@ -963,6 +965,7 @@ public class InternalTopologyBuilderTest {
         assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, equalTo(15));
         assertThat(topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass(), equalTo(MockTimestampExtractor.class));
         assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
+        assertThat(topologyBuilder.topologyConfigs().parseStoreType(), equalTo(Materialized.StoreType.IN_MEMORY));
     }
 
     @Test

@@ -415,6 +415,14 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
+    /** {@code default.dsl.store} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_DSL_STORE_CONFIG = "default.dsl.store";
+    public static final String DEFAULT_DSL_STORE_DOC = "The default state store type used by DSL operators.";
+
+    public static final String ROCKS_DB = "rocksDB";
+    public static final String IN_MEMORY = "in_memory";
+
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
@@ -818,6 +826,12 @@ public class StreamsConfig extends AbstractConfig {
                     9 * 60 * 1000L,
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+            .define(DEFAULT_DSL_STORE_CONFIG,
+                    Type.STRING,
+                    ROCKS_DB,
+                    in(ROCKS_DB, IN_MEMORY),
+                    Importance.LOW,
+                    DEFAULT_DSL_STORE_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     5 * 60 * 1000L,

@@ -60,6 +60,10 @@ public class Topology {
         this(new InternalTopologyBuilder());
     }
 
+    public Topology(final TopologyConfig topologyConfigs) {
+        this(new InternalTopologyBuilder(topologyConfigs));
+    }
+
     protected Topology(final InternalTopologyBuilder internalTopologyBuilder) {
         this.internalTopologyBuilder = internalTopologyBuilder;
     }

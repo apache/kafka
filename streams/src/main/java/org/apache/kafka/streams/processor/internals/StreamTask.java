@@ -43,7 +43,7 @@ import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;

@@ -29,8 +29,8 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 
 import java.util.ArrayList;
 import java.util.Collection;
