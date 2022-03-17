@@ -407,7 +407,7 @@ public class ReplicationControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
         // Check the topic names.
-        validateNewTopicNames(topicErrors, request.topics());
+        validateNewTopicNames(topicErrors, request.topics(), topicsByName.keySet());
 
         // Identify topics that already exist and mark them with the appropriate error
         request.topics().stream().filter(creatableTopic -> topicsByName.containsKey(creatableTopic.name()))
@@ -598,7 +598,8 @@ public class ReplicationControlManager {
     }
 
     static void validateNewTopicNames(Map<String, ApiError> topicErrors,
-                                      CreatableTopicCollection topics) {
+                                      CreatableTopicCollection topics,
+                                      Collection<String> topicAlreadyExists) {
         for (CreatableTopic topic : topics) {
             if (topicErrors.containsKey(topic.name())) continue;
             try {
@@ -606,6 +607,15 @@ public class ReplicationControlManager {
             } catch (InvalidTopicException e) {
                 topicErrors.put(topic.name(),
                     new ApiError(Errors.INVALID_TOPIC_EXCEPTION, e.getMessage()));
+            }
+            if (Topic.hasCollisionChars(topic.name())) {
+                List<String> collidingTopics = topicAlreadyExists.stream()
+                    .filter(topicExists -> Topic.hasCollision(topic.name(), topicExists)).collect(Collectors.toList());
+                if (!collidingTopics.isEmpty()) {
+                    topicErrors.put(topic.name(),
+                        new ApiError(Errors.INVALID_TOPIC_EXCEPTION,
+                            "Topic '" + topic.name() + "' collides with existing topics: " + Utils.join(collidingTopics, ", ")));
+                }
             }
         }
     }
