@@ -259,7 +259,8 @@ public class PartitionChangeBuilder {
 
         triggerLeaderEpochBumpIfNeeded(record);
 
-        if (!targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
+        if (record.isr() == null && !targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
+            // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
             record.setIsr(targetIsr);
         }
         if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {

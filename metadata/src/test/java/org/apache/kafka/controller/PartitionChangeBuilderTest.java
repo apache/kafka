@@ -84,6 +84,16 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true);
     }
 
+    private final static PartitionRegistration OFFLINE = new PartitionRegistration(
+        new int[] {2, 1, 3}, new int[] {3}, Replicas.NONE, Replicas.NONE,
+        -1, 100, 200);
+
+    private final static Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
+
+    private static PartitionChangeBuilder createOfflineBuilder() {
+        return new PartitionChangeBuilder(OFFLINE, OFFLINE_ID, 0, r -> r == 1);
+    }
+
     private static void assertElectLeaderEquals(PartitionChangeBuilder builder,
                                                int expectedNode,
                                                boolean expectedUnclean) {
@@ -247,5 +257,38 @@ public class PartitionChangeBuilderTest {
                 setTargetReplicas(replicas.merged()).
                 setTargetAdding(replicas.adding()).
                 build());
+    }
+
+    @Test
+    public void testUncleanLeaderElection() {
+        ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(
+            new PartitionChangeRecord()
+                .setTopicId(FOO_ID)
+                .setPartitionId(0)
+                .setIsr(Arrays.asList(2))
+                .setLeader(2),
+            PARTITION_CHANGE_RECORD.highestSupportedVersion()
+        );
+        assertEquals(
+            Optional.of(expectedRecord),
+            createFooBuilder().setElection(Election.UNCLEAN).setTargetIsr(Arrays.asList(3)).build()
+        );
+
+        expectedRecord = new ApiMessageAndVersion(
+            new PartitionChangeRecord()
+                .setTopicId(OFFLINE_ID)
+                .setPartitionId(0)
+                .setIsr(Arrays.asList(1))
+                .setLeader(1),
+            PARTITION_CHANGE_RECORD.highestSupportedVersion()
+        );
+        assertEquals(
+            Optional.of(expectedRecord),
+            createOfflineBuilder().setElection(Election.UNCLEAN).build()
+        );
+        assertEquals(
+            Optional.of(expectedRecord),
+            createOfflineBuilder().setElection(Election.UNCLEAN).setTargetIsr(Arrays.asList(2)).build()
+        );
     }
 }

@@ -1009,7 +1009,7 @@ public final class QuorumController implements Controller {
 
             long delayNs = time.nanoseconds();
             if (imbalancedScheduled == ImbalanceSchedule.DEFERRED) {
-                delay += leaderImbalanceCheckIntervalNs.getAsLong();
+                delayNs += leaderImbalanceCheckIntervalNs.getAsLong();
             }
 
             queue.scheduleDeferred(MAYBE_BALANCE_PARTITION_LEADERS, new EarliestDeadlineFunction(delayNs), event);
@@ -1019,6 +1019,7 @@ public final class QuorumController implements Controller {
     }
 
     private void cancelMaybeBalancePartitionLeaders() {
+        imbalancedScheduled = ImbalanceSchedule.DEFERRED;
         queue.cancelDeferred(MAYBE_BALANCE_PARTITION_LEADERS);
     }
 
@@ -1274,9 +1275,9 @@ public final class QuorumController implements Controller {
     private enum ImbalanceSchedule {
         // The leader balancing operation has been scheduled
         SCHEDULED,
-        // If the leader balancing operation should be schedued, schedule it with a delay
+        // If the leader balancing operation should be scheduled, schedule it with a delay
         DEFERRED,
-        // If the leader balancing operation should be schedued, schdule it immediately
+        // If the leader balancing operation should be scheduled, schedule it immediately
         IMMEDIATELY
     }
 
