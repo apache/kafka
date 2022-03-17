@@ -175,12 +175,12 @@ public class ClientCompatibilityTest {
             .metavar("DESCRIBE_CONFIGS_SUPPORTED")
             .help("Whether describeConfigs is supported in the AdminClient.");
         parser.addArgument("--idempotent-producer-supported")
-                .action(store())
-                .required(true)
-                .type(Boolean.class)
-                .dest("idempotentProducerSupported")
-                .metavar("IDEMPOTENT_PRODUCER_SUPPORTED")
-                .help("Whether the producer supports idempotency.");
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("idempotentProducerSupported")
+            .metavar("IDEMPOTENT_PRODUCER_SUPPORTED")
+            .help("Whether the producer supports idempotency.");
 
         Namespace res = null;
         try {
