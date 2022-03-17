@@ -51,8 +51,6 @@ public class FileStreamSourceTaskTest {
     private SourceTaskContext context;
     private FileStreamSourceTask task;
 
-    private boolean verifyMocks = false;
-
     @BeforeEach
     public void setup() throws IOException {
         tempFile = File.createTempFile("file-stream-source-task-test", null);
@@ -69,19 +67,11 @@ public class FileStreamSourceTaskTest {
     @AfterEach
     public void teardown() {
         tempFile.delete();
-
-        if (verifyMocks)
-            verifyAll();
-    }
-
-    private void replay() {
-        verifyMocks = true;
     }
 
     @Test
     public void testNormalLifecycle() throws InterruptedException, IOException {
         expectOffsetLookupReturnNone();
-        replay();
 
         task.start(config);
 
@@ -129,12 +119,13 @@ public class FileStreamSourceTaskTest {
 
         os.close();
         task.stop();
+
+        verifyAll();
     }
 
     @Test
     public void testBatchSize() throws IOException, InterruptedException {
         expectOffsetLookupReturnNone();
-        replay();
 
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
         task.start(config);
@@ -155,13 +146,13 @@ public class FileStreamSourceTaskTest {
 
         os.close();
         task.stop();
+        verifyAll();
     }
 
     @Test
     public void testBufferResize() throws IOException, InterruptedException {
         int batchSize = 1000;
         expectOffsetLookupReturnNone();
-        replay();
 
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, Integer.toString(batchSize));
         task.start(config);
@@ -182,6 +173,8 @@ public class FileStreamSourceTaskTest {
         writeAndAssertBufferSize(batchSize, os, "9       \n".getBytes(), 2048);
         os.close();
         task.stop();
+
+        verifyAll();
     }
 
     private void writeAndAssertBufferSize(int batchSize, OutputStream os, byte[] bytes, int expectBufferSize)
