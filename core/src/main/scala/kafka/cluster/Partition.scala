@@ -1100,9 +1100,6 @@ class Partition(val topicPartition: TopicPartition,
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
-    // Check that the partition leader is recovering from an unclean leader election.
-    validateLeaderRecoveryState()
-
     // Note we use the log end offset prior to the read. This ensures that any appends following
     // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark
@@ -1482,17 +1479,6 @@ class Partition(val topicPartition: TopicPartition,
 
       // we may need to increment high watermark since ISR could be down to 1
       leaderLogIfLocal.exists(log => maybeIncrementLeaderHW(log))
-    }
-  }
-
-  /**
-   * Throws a NotLeaderOrFollowerException exception if the leader is recovering.
-   */
-  private def validateLeaderRecoveryState(): Unit = {
-    if (partitionState.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
-      throw new NotLeaderOrFollowerException(
-        s"Topic partition $topicPartition is not yet available because the leader is recovering from an unclean leader election"
-      )
     }
   }
 

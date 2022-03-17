@@ -2068,61 +2068,6 @@ class PartitionTest extends AbstractPartitionTest {
     verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
   }
 
-  @Test
-  def testReadFromFollowerWhileRecoveringLeader(): Unit = {
-    val controllerEpoch = 3
-    val leaderEpoch = 5
-    val leaderId = brokerId + 1
-    val topicId = Uuid.randomUuid()
-    val replicas = List[Integer](brokerId, leaderId).asJava
-    val leaderRecoveringState = new LeaderAndIsrPartitionState()
-      .setControllerEpoch(controllerEpoch)
-      .setLeader(leaderId)
-      .setLeaderEpoch(leaderEpoch)
-      .setIsr(replicas)
-      .setZkVersion(1)
-      .setReplicas(replicas)
-      .setIsNew(false)
-      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value)
-
-    partition.makeFollower(leaderRecoveringState, offsetCheckpoints, Some(topicId))
-
-    assertThrows(
-      classOf[NotLeaderOrFollowerException],
-      () => partition.readRecords(
-        lastFetchedEpoch = Optional.empty(),
-        fetchOffset = 0,
-        currentLeaderEpoch = Optional.of(leaderEpoch),
-        maxBytes = Int.MaxValue,
-        fetchIsolation = FetchHighWatermark,
-        fetchOnlyFromLeader = false,
-        minOneMessage = false
-      )
-    )
-
-    val leaderRecoveredState = new LeaderAndIsrPartitionState()
-      .setControllerEpoch(controllerEpoch)
-      .setLeader(leaderId)
-      .setLeaderEpoch(leaderEpoch)
-      .setIsr(replicas)
-      .setZkVersion(2)
-      .setReplicas(replicas)
-      .setIsNew(false)
-      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value)
-
-    partition.makeFollower(leaderRecoveredState, offsetCheckpoints, Some(topicId))
-
-    val _ = partition.readRecords(
-      lastFetchedEpoch = Optional.empty(),
-      fetchOffset = 0,
-      currentLeaderEpoch = Optional.of(leaderEpoch),
-      maxBytes = Int.MaxValue,
-      fetchIsolation = FetchHighWatermark,
-      fetchOnlyFromLeader = false,
-      minOneMessage = false
-    )
-  }
-
   private def makeLeader(
     topicId: Option[Uuid],
     controllerEpoch: Int,
