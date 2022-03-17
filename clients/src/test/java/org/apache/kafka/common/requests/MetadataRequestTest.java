@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -74,20 +75,30 @@ public class MetadataRequestTest {
     @Test
     public void testTopicIdAndNullTopicNameRequests() {
         // Construct invalid MetadataRequestTopics. We will build each one separately and ensure the error is thrown.
-        List<MetadataRequestData.MetadataRequestTopic> topics = Arrays.asList(
+        List<MetadataRequestData.MetadataRequestTopic> invalidTopics = Arrays.asList(
                 new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid()),
                 new MetadataRequestData.MetadataRequestTopic().setName(null),
                 new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
                 new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(Uuid.randomUuid()));
 
+        List<MetadataRequestData.MetadataRequestTopic> validTopics = Arrays.asList(
+                new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(Uuid.ZERO_UUID),
+                new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(new Uuid(0L, 0L)),
+                new MetadataRequestData.MetadataRequestTopic().setName("topic"));
+
         // if version is 10 or 11, the invalid topic metadata should return an error
         List<Short> invalidVersions = Arrays.asList((short) 10, (short) 11);
-        invalidVersions.forEach(version ->
-            topics.forEach(topic -> {
+        invalidVersions.forEach(version -> {
+            invalidTopics.forEach(topic -> {
                 MetadataRequestData metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic));
                 MetadataRequest.Builder builder = new MetadataRequest.Builder(metadataRequestData);
                 assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
-            })
-        );
+            });
+            validTopics.forEach(topic -> {
+                MetadataRequestData metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic));
+                MetadataRequest.Builder builder = new MetadataRequest.Builder(metadataRequestData);
+                assertDoesNotThrow(() -> builder.build(version));
+            });
+        });
     }
 }
