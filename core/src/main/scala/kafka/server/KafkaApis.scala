@@ -2643,13 +2643,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ => handleInvalidVersionsDuringForwarding(request)
       }
     }
+//    println("!!! remaining:" + remaining)
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new AlterConfigsResponseData()))
     } else if ((!request.isForwarded) && metadataSupport.canForward()) {
+//      println("!!! canforward")
       metadataSupport.forwardingManager.get.forwardRequest(request,
         new AlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     } else {
+//      println("!!! no forward")
       sendResponse(Some(processLegacyAlterConfigsRequest(request, remaining)))
     }
   }

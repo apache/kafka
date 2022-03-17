@@ -517,21 +517,29 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
+//    System.err.print(" newP:" + newProps)
 
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false, doLog)
+//    println("!!! newConfig:" + newConfig.dynamicConfig.)
+//    println("!!! brokerReconfigurablesToUpdate:" + brokerReconfigurablesToUpdate.)
     if (newConfig ne currentConfig) {
       currentConfig = newConfig
       kafkaConfig.updateCurrentConfig(newConfig)
 
       // Process BrokerReconfigurable updates after current config is updated
       brokerReconfigurablesToUpdate.foreach(_.reconfigure(oldConfig, newConfig))
+    } else {
+      System.err.print(" nodiff:" + newConfig.get(KafkaConfig.NumNetworkThreadsProp))
+      System.err.flush()
     }
   }
 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean, doLog: Boolean = false): (KafkaConfig, List[BrokerReconfigurable]) = {
     val newConfig = new KafkaConfig(newProps.asJava, doLog, None)
     val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
+    System.err.print(" changeMap:" + changeMap)
+    System.err.flush()
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
@@ -715,6 +723,7 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+//    println("!!! threadpool ")
     if (newConfig.numIoThreads != oldConfig.numIoThreads)
       server.dataPlaneRequestHandlerPool.resizeThreadPool(newConfig.numIoThreads)
     if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
@@ -931,6 +940,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
   }
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+//    println("!!! dynamic listener")
     val newListeners = newConfig.listeners
     val newListenerMap = listenersToMap(newListeners)
     val oldListeners = oldConfig.listeners

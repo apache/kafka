@@ -1477,6 +1477,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
 
   private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
+    System.err.print(" updateCur:" + newConfig.get(KafkaConfig.NumNetworkThreadsProp))
+    System.err.flush()
     this.currentConfig = newConfig
   }
 

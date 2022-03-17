@@ -1500,10 +1500,10 @@ class DynamicBrokerReconfigurationTest2 extends QuorumTestHarness with SaslSetup
     servers.foreach { server => waitForConfigOnServer(server, propName, propValue, maxWaitMs) }
   }
 
-  private def waitForConfigOnServer(server: KafkaServer, propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
-    System.err.print("wait:" + server + ";prop:" + propName + ";v:" + propValue)
+  private def waitForConfigOnServer(server: KafkaServer, propName: String, propValue: String, maxWaitMs: Long = 20000): Unit = {
+    System.err.print(" wait")
     System.err.flush()
-    TestUtils.retry(maxWaitMs) {
+    TestUtils.retry(30000) {
       assertEquals(propValue, server.config.originals.get(propName))
     }
   }

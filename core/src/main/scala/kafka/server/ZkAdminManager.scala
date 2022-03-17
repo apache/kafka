@@ -452,8 +452,11 @@ class ZkAdminManager(val config: KafkaConfig,
 
       if (perBrokerConfig)
         info(s"Updating broker ${brokerId.get} with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
-      else
+      else {
+        System.err.print(s" update bro:${toLoggableProps(resource, configProps).mkString(",")}" )
+        System.err.flush()
         info(s"Updating brokers with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+      }
 
       adminZkClient.changeBrokerConfig(brokerId,
         this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
