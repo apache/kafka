@@ -135,31 +135,52 @@ public class PartitionChangeBuilder {
      * See documentation for the Election type to see more details on the election types supported.
      */
     ElectionResult electLeader() {
-        // 1. Check if the election is not PREFERRED and we already have a valid leader
-        if (election != Election.PREFERRED && targetIsr.contains(partition.leader) && isAcceptableLeader.apply(partition.leader)) {
-            // Don't consider a new leader since the current leader meets all the constraints
-            return new ElectionResult(partition.leader, false);
+        if (election == Election.PREFERRED) {
+            return electPreferredLeader();
         }
 
-        // 2. Attempt preferred replica election
+        return electAnyLeader();
+    }
+
+    /**
+     * Assumes that the election type is Election.PREFERRED
+     */
+    private ElectionResult electPreferredLeader() {
         int preferredReplica = targetReplicas.get(0);
         if (targetIsr.contains(preferredReplica) && isAcceptableLeader.apply(preferredReplica)) {
             return new ElectionResult(preferredReplica, false);
         }
 
-        // 3. Preferred replica was not elected, only continue if the current leader is not a valid leader
         if (targetIsr.contains(partition.leader) && isAcceptableLeader.apply(partition.leader)) {
             // Don't consider a new leader since the current leader meets all the constraints
             return new ElectionResult(partition.leader, false);
         }
 
-        // 4. Attempt to keep the partition online based on the ISR
-        Optional<Integer> bestLeader = targetReplicas.stream()
+        Optional<Integer> onlineLeader = targetReplicas.stream()
             .skip(1)
             .filter(replica -> targetIsr.contains(replica) && isAcceptableLeader.apply(replica))
             .findFirst();
-        if (bestLeader.isPresent()) {
-            return new ElectionResult(bestLeader.get(), false);
+        if (onlineLeader.isPresent()) {
+            return new ElectionResult(onlineLeader.get(), false);
+        }
+
+        return new ElectionResult(NO_LEADER, false);
+    }
+
+    /**
+     * Assumes that the election type is either Election.ONLINE or Election.UNCLEAN
+     */
+    private ElectionResult electAnyLeader() {
+        if (targetIsr.contains(partition.leader) && isAcceptableLeader.apply(partition.leader)) {
+            // Don't consider a new leader since the current leader meets all the constraints
+            return new ElectionResult(partition.leader, false);
+        }
+
+        Optional<Integer> onlineLeader = targetReplicas.stream()
+            .filter(replica -> targetIsr.contains(replica) && isAcceptableLeader.apply(replica))
+            .findFirst();
+        if (onlineLeader.isPresent()) {
+            return new ElectionResult(onlineLeader.get(), false);
         }
 
         if (election == Election.UNCLEAN) {
