@@ -21,8 +21,7 @@ package kafka.tools
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ListTopicsOptions, OffsetSpec}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.LeaderNotAvailableException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.utils.Utils
 
@@ -140,11 +139,10 @@ object GetOffsetShell {
         } catch {
           case e: ExecutionException =>
             e.getCause match {
-              case _: LeaderNotAvailableException =>
-                System.err.println(s"Skip getting offsets for: topic-partition ${tp.topic}:${tp.partition} since it does not have a leader right now.")
+              case cause: KafkaException =>
+                System.err.println(s"Skip getting offsets for topic-partition ${tp.topic}:${tp.partition} due to error: ${cause.getMessage}")
               case _ =>
-                System.err.println(s"Error while getting offset for topic-partition ${tp.topic}:${tp.partition}")
-                e.printStackTrace()
+                throw e
             }
             None
         }
