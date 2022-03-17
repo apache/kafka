@@ -114,7 +114,6 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
-import static org.apache.kafka.controller.ConfigurationControlManager.NO_OP_EXISTENCE_CHECKER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -378,7 +377,7 @@ public class ReplicationControlManager {
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges =
             computeConfigChanges(topicErrors, request.topics());
         ControllerResult<Map<ConfigResource, ApiError>> configResult =
-            configurationControl.incrementalAlterConfigs(configChanges, NO_OP_EXISTENCE_CHECKER);
+            configurationControl.incrementalAlterConfigs(configChanges, true);
         for (Entry<ConfigResource, ApiError> entry : configResult.response().entrySet()) {
             if (entry.getValue().isFailure()) {
                 topicErrors.put(entry.getKey().name(), entry.getValue());

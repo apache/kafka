@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
-import java.util.Properties;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -79,6 +77,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -86,6 +85,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.UUID;
@@ -105,6 +105,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.assignTasksToThreads;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -195,6 +196,7 @@ public class StreamsPartitionAssignorTest {
     private StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
     private final Class<? extends TaskAssignor> taskAssignor;
+    private Map<String, String> clientTags;
 
     private final ReferenceContainer referenceContainer = new ReferenceContainer();
     private final MockTime time = new MockTime();
@@ -209,6 +211,7 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
+        referenceContainer.clientTags = clientTags != null ? clientTags : EMPTY_CLIENT_TAGS;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         return configurationMap;
@@ -2189,6 +2192,21 @@ public class StreamsPartitionAssignorTest {
                    equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
     }
 
+    @Test
+    public void testClientTags() {
+        clientTags = mkMap(mkEntry("cluster", "cluster1"), mkEntry("zone", "az1"));
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+        final Set<String> topics = mkSet("input");
+        final Subscription subscription = new Subscription(new ArrayList<>(topics),
+                                                           partitionAssignor.subscriptionUserData(topics));
+        final SubscriptionInfo info = getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, uniqueField, clientTags);
+
+        assertEquals(singletonList("input"), subscription.topics());
+        assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
+        assertEquals(clientTags, partitionAssignor.clientTags());
+    }
+
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {
         private Map<Subtopology, TopicsInfo> corruptedTopicGroups;
 
@@ -2332,7 +2350,7 @@ public class StreamsPartitionAssignorTest {
                                                            final Set<TaskId> prevTasks,
                                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0);
+            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

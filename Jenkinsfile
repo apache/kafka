@@ -178,6 +178,24 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for ARM build'
           }
         }
+
+        stage('PowerPC') {
+          agent { label 'ppc64le' }
+          options {
+            timeout(time: 2, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            doValidation()
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+              doTest(env, 'unitTest')
+            }
+            echo 'Skipping Kafka Streams archetype test for PowerPC build'
+          }
+        }
         
         // To avoid excessive Jenkins resource usage, we only run the stages
         // above at the PR stage. The ones below are executed after changes

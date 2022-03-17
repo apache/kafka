@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -1259,13 +1259,14 @@ public class InternalTopologyBuilder {
         } else if (maybeDecorateInternalSourceTopics(latestResetTopics).contains(topic) ||
             latestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
             return LATEST;
-        } else if (maybeDecorateInternalSourceTopics(rawSourceTopicNames).contains(topic)
-                || !hasNamedTopology()
-                || (usesPatternSubscription() && Pattern.compile(sourceTopicPatternString).matcher(topic).matches())) {
+        } else if (containsTopic(topic)) {
             return NONE;
         } else {
-            // return null if the topic wasn't found at all while using NamedTopologies as it's likely in another
-            return null;
+            throw new IllegalStateException(String.format(
+                "Unable to lookup offset reset strategy for the following topic as it does not exist in the topology%s: %s",
+                hasNamedTopology() ? topologyName : "",
+                topic)
+            );
         }
     }
 
@@ -1416,13 +1417,19 @@ public class InternalTopologyBuilder {
         return fullSourceTopicNames;
     }
 
-    synchronized String sourceTopicsPatternString() {
+    synchronized String sourceTopicPatternString() {
         // With a NamedTopology, it may be that this topology does not use pattern subscription but another one does
         // in which case we would need to initialize the pattern string where we would otherwise have not
-        if (sourceTopicPatternString == null && hasNamedTopology()) {
+        if (sourceTopicPatternString == null) {
             sourceTopicPatternString = buildSourceTopicsPatternString();
         }
         return sourceTopicPatternString;
+    }
+
+    public boolean containsTopic(final String topic) {
+        return fullSourceTopicNames().contains(topic)
+            || (usesPatternSubscription() && Pattern.compile(sourceTopicPatternString()).matcher(topic).matches())
+            || changelogTopicToStore.containsKey(topic);
     }
 
     public boolean hasNoLocalTopology() {

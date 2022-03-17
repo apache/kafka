@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -250,7 +249,7 @@ public final class AssignorConfiguration {
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
-            rackAwareAssignmentTags = Collections.emptyList();
+            rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
@@ -262,7 +261,7 @@ public final class AssignorConfiguration {
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
-            this.rackAwareAssignmentTags = rackAwareAssignmentTags;
+            this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
         }
 
         private static <T> T validated(final String configKey, final T value) {
@@ -280,6 +279,7 @@ public final class AssignorConfiguration {
                 "\n  maxWarmupReplicas=" + maxWarmupReplicas +
                 "\n  numStandbyReplicas=" + numStandbyReplicas +
                 "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
+                "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
                 "\n}";
         }
     }

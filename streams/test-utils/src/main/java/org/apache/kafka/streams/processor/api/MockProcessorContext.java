@@ -285,6 +285,16 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     }
 
     @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public Serde<?> keySerde() {
         return config.defaultKeySerde();
     }
