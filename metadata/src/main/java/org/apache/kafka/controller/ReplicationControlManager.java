@@ -217,6 +217,23 @@ public class ReplicationControlManager {
     private final TimelineHashMap<String, Uuid> topicsByName;
 
     /**
+     * We try to prevent topics from being created if their names would collide with
+     * existing topics when periods in the topic name are replaced with underscores.
+     * The reason for this is that some per-topic metrics do replace periods with
+     * underscores, and would therefore be ambiguous otherwise.
+     *
+     * This map is from normalized topic name to a set of topic names. So if we had two
+     * topics named foo.bar and foo_bar this map would contain
+     * a mapping from foo_bar to a set containing foo.bar and foo_bar.
+     *
+     * Since we reject topic creations that would collide, under normal conditions the
+     * sets in this map should only have a size of 1. However, if the cluster was
+     * upgraded from a version prior to KAFKA-13743, it may be possible to have more
+     * values here, since collidiing topic names will be "grandfathered in."
+     */
+    private final TimelineHashMap<String, TimelineHashSet<String>> topicsWithCollisionChars;
+
+    /**
      * Maps topic UUIDs to structures containing topic information, including partitions.
      */
     private final TimelineHashMap<Uuid, TopicControlInfo> topics;
@@ -258,6 +275,7 @@ public class ReplicationControlManager {
         this.clusterControl = clusterControl;
         this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.topicsWithCollisionChars = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
         this.reassigningTopics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -266,6 +284,15 @@ public class ReplicationControlManager {
 
     public void replay(TopicRecord record) {
         topicsByName.put(record.name(), record.topicId());
+        if (Topic.hasCollisionChars(record.name())) {
+            String normalizedName = Topic.unifyCollisionChars(record.name());
+            TimelineHashSet<String> topicNames = topicsWithCollisionChars.get(normalizedName);
+            if (topicNames == null) {
+                topicNames = new TimelineHashSet<>(snapshotRegistry, 1);
+                topicsWithCollisionChars.put(normalizedName, topicNames);
+            }
+            topicNames.add(record.name());
+        }
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
         controllerMetrics.setGlobalTopicsCount(topics.size());
@@ -374,6 +401,16 @@ public class ReplicationControlManager {
                 " to remove.");
         }
         topicsByName.remove(topic.name);
+        if (Topic.hasCollisionChars(topic.name)) {
+            String normalizedName = Topic.unifyCollisionChars(topic.name);
+            TimelineHashSet<String> colliding = topicsWithCollisionChars.get(normalizedName);
+            if (colliding != null) {
+                colliding.remove(topic.name);
+                if (colliding.isEmpty()) {
+                    topicsWithCollisionChars.remove(topic.name);
+                }
+            }
+        }
         reassigningTopics.remove(record.topicId());
 
         // Delete the configurations associated with this topic.
@@ -407,7 +444,7 @@ public class ReplicationControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
         // Check the topic names.
-        validateNewTopicNames(topicErrors, request.topics());
+        validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
 
         // Identify topics that already exist and mark them with the appropriate error
         request.topics().stream().filter(creatableTopic -> topicsByName.containsKey(creatableTopic.name()))
@@ -598,7 +635,8 @@ public class ReplicationControlManager {
     }
 
     static void validateNewTopicNames(Map<String, ApiError> topicErrors,
-                                      CreatableTopicCollection topics) {
+                                      CreatableTopicCollection topics,
+                                      Map<String, ? extends Set<String>> topicsWithCollisionChars) {
         for (CreatableTopic topic : topics) {
             if (topicErrors.containsKey(topic.name())) continue;
             try {
@@ -606,6 +644,15 @@ public class ReplicationControlManager {
             } catch (InvalidTopicException e) {
                 topicErrors.put(topic.name(),
                     new ApiError(Errors.INVALID_TOPIC_EXCEPTION, e.getMessage()));
+            }
+            if (Topic.hasCollisionChars(topic.name())) {
+                String normalizedName = Topic.unifyCollisionChars(topic.name());
+                Set<String> colliding = topicsWithCollisionChars.get(normalizedName);
+                if (colliding != null) {
+                    topicErrors.put(topic.name(), new ApiError(Errors.INVALID_TOPIC_EXCEPTION,
+                        "Topic '" + topic.name() + "' collides with existing topic: " +
+                            colliding.iterator().next()));
+                }
             }
         }
     }

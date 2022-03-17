@@ -68,6 +68,17 @@ public class Topic {
     }
 
     /**
+     * Unify topic name with a period ('.') or underscore ('_'), this is only used to check collision and will not
+     * be used to really change topic name.
+     *
+     * @param topic A topic to unify
+     * @return A unified topic name
+     */
+    public static String unifyCollisionChars(String topic) {
+        return topic.replace('.', '_');
+    }
+
+    /**
      * Returns true if the topicNames collide due to a period ('.') or underscore ('_') in the same position.
      *
      * @param topicA A topic to check for collision
@@ -75,7 +86,7 @@ public class Topic {
      * @return true if the topics collide
      */
     public static boolean hasCollision(String topicA, String topicB) {
-        return topicA.replace('.', '_').equals(topicB.replace('.', '_'));
+        return unifyCollisionChars(topicA).equals(unifyCollisionChars(topicB));
     }
 
     /**
