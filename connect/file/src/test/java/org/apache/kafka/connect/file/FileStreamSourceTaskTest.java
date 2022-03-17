@@ -129,8 +129,6 @@ public class FileStreamSourceTaskTest {
 
         os.close();
         task.stop();
-
-        verifyAll();
     }
 
     @Test
@@ -157,7 +155,6 @@ public class FileStreamSourceTaskTest {
 
         os.close();
         task.stop();
-        verifyAll();
     }
 
     @Test
@@ -185,8 +182,6 @@ public class FileStreamSourceTaskTest {
         writeAndAssertBufferSize(batchSize, os, "9       \n".getBytes(), 2048);
         os.close();
         task.stop();
-
-        verifyAll();
     }
 
     private void writeAndAssertBufferSize(int batchSize, OutputStream os, byte[] bytes, int expectBufferSize)
@@ -209,7 +204,7 @@ public class FileStreamSourceTaskTest {
     }
 
     @Test
-    public void testMissingFile() throws InterruptedException {
+    public void testUsingSystemInputSourceOnMissingFile() throws InterruptedException {
         String data = "line\n";
         System.setIn(new ByteArrayInputStream(data.getBytes()));
 
