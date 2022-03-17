@@ -80,6 +80,7 @@ class ControllerContext {
   val skipShutdownSafetyCheck = mutable.Map.empty[Int, Long]
   private val liveBrokers = mutable.Set.empty[Broker]
   private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
+  private val leaderAndIsrRequestSent = mutable.Map.empty[Int, Boolean]
   var epoch: Int = KafkaController.InitialControllerEpoch
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
@@ -215,6 +216,7 @@ class ControllerContext {
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
     liveBrokers --= liveBrokers.filter(broker => brokerIds.contains(broker.id))
     liveBrokerEpochs --= brokerIds
+    leaderAndIsrRequestSent --= brokerIds
   }
 
   def updateBrokerMetadata(oldMetadata: Broker, newMetadata: Broker): Unit = {
@@ -226,6 +228,10 @@ class ControllerContext {
     livePreferredControllerIds = preferredControllerIds
   }
 
+  def markLeaderAndIsrSent(brokerId: Int): Unit = {
+    leaderAndIsrRequestSent.put(brokerId, true)
+  }
+
   // getter
   def liveBrokerIds: Set[Int] = liveBrokerEpochs.filter(b => b._2 > shuttingDownBrokerIds.getOrElse(b._1, -1L)).keySet
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
@@ -233,6 +239,8 @@ class ControllerContext {
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
   def maxBrokerEpoch: Long = liveBrokerEpochs.values.max
   def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
+  // send full LeaderAndIsr request when it's the first LeaderAndIsr request
+  def shouldSendFullLeaderAndIsr(brokerId: Int): Boolean = !leaderAndIsrRequestSent.get(brokerId).exists(_ == true)
 
   def getLivePreferredControllerIds : Set[Int] = livePreferredControllerIds
 

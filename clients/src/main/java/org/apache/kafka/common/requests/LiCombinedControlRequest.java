@@ -272,6 +272,10 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
         return -1;
     }
 
+    public byte leaderAndIsrType() {
+        return data.leaderAndIsrType();
+    }
+
     public Iterable<LiCombinedControlRequestData.LeaderAndIsrPartitionState> leaderAndIsrPartitionStates() {
         return () -> new FlattenedIterator<>(data.leaderAndIsrTopicStates().iterator(),
             topicState -> topicState.partitionStates().iterator());

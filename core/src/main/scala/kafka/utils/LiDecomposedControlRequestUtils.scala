@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.LiCombinedControlRequestData
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataPartitionState}
-import org.apache.kafka.common.requests.{LeaderAndIsrRequest, LiCombinedControlRequest, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{LeaderAndIsrRequest, LeaderAndIsrRequestType, LiCombinedControlRequest, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
 
 import scala.collection.JavaConverters._
@@ -72,8 +72,10 @@ object LiDecomposedControlRequestUtils {
         if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 5
         else throw new IllegalStateException("The inter.broker.protocol.version config should not be smaller than 2.4-IV1")
 
+      // the LiCombinedControl request will only include incremental LeaderAndIsr requests
       Some(new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, request.controllerId(), request.controllerEpoch(), request.brokerEpoch(),
-        request.maxBrokerEpoch(), effectivePartitionStates, util.Collections.emptyMap(), leaderNodes).build())
+        request.maxBrokerEpoch(), effectivePartitionStates, util.Collections.emptyMap(), leaderNodes
+      ).build())
     }
   }
 

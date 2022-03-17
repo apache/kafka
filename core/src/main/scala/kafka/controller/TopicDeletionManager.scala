@@ -322,7 +322,6 @@ class TopicDeletionManager(config: KafkaConfig,
   private def onPartitionDeletion(topicsToBeDeleted: Set[String]): Unit = {
     val allDeadReplicas = mutable.ListBuffer.empty[PartitionAndReplica]
     val allReplicasForDeletionRetry = mutable.ListBuffer.empty[PartitionAndReplica]
-    val allTopicsIneligibleForDeletion = mutable.Set.empty[String]
     val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
 
     topicsToBeDeleted.foreach { topic =>
@@ -338,19 +337,14 @@ class TopicDeletionManager(config: KafkaConfig,
 
       if (deadReplicas.nonEmpty) {
         debug(s"Dead Replicas (${deadReplicas.mkString(",")}) found for topic $topic")
-        allTopicsIneligibleForDeletion += topic
       }
     }
 
-    // move dead replicas directly to failed state
-    replicaStateMachine.handleStateChanges(allDeadReplicas, ReplicaDeletionIneligible)
+    // move dead replicas directly to deletion successful state
+    replicaStateMachine.handleStateChanges(allDeadReplicas, ReplicaDeletionSuccessful)
     // send stop replica to all followers that are not in the OfflineReplica state so they stop sending fetch requests to the leader
     replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, OfflineReplica)
     replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, ReplicaDeletionStarted)
-
-    if (allTopicsIneligibleForDeletion.nonEmpty) {
-      markTopicIneligibleForDeletion(allTopicsIneligibleForDeletion, reason = "offline replicas")
-    }
   }
 
   private def resumeDeletions(): Unit = {

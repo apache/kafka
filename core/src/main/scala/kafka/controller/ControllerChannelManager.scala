@@ -253,6 +253,8 @@ class RequestSendThread(val controllerId: Int,
 
   private var firstUpdateMetadataWithPartitionsSent = false
 
+  private var firstFullLeaderAndIsrSent = false
+
   @volatile private var latestRequestStatus = LatestRequestStatus(isInFlight = false, isInQueue = false, 0)
 
   // This metric reports the queued time of the latest request from the queue
@@ -283,7 +285,8 @@ class RequestSendThread(val controllerId: Int,
     if (controllerRequestMerger.hasPendingRequests() ||
       (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1 &&
         config.liCombinedControlRequestEnable &&
-        firstUpdateMetadataWithPartitionsSent)) {
+        firstUpdateMetadataWithPartitionsSent &&
+        firstFullLeaderAndIsrSent)) {
       // Only start the merging logic after the first UpdateMetadata request with partitions,
       // since the first UpdateMetadata request with partitions may contain hundreds of thousands of partitions,
       // and thus needs to be cached and shared by all brokers in order to prevent OOM
@@ -373,6 +376,10 @@ class RequestSendThread(val controllerId: Int,
 
         if (api == ApiKeys.UPDATE_METADATA && !requestBuilder.asInstanceOf[UpdateMetadataRequest.Builder].partitionStates().isEmpty) {
           firstUpdateMetadataWithPartitionsSent = true
+        }
+        if (api == ApiKeys.LEADER_AND_ISR &&
+          requestBuilder.asInstanceOf[LeaderAndIsrRequest.Builder].`type`() == LeaderAndIsrRequestType.FULL) {
+          firstFullLeaderAndIsrSent = true
         }
 
         val response = clientResponse.responseBody
@@ -618,12 +625,22 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           .toSet[String]
           .map(topic => (topic, controllerContext.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, brokerEpoch, maxBrokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava)
+        val leaderAndIsrRequestBuilder = if (leaderAndIsrRequestVersion >= 6) {
+          // LeaderAndIsr.Type is supported since version 6
+          new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
+          controllerEpoch, brokerEpoch, maxBrokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava,
+          controllerContext.shouldSendFullLeaderAndIsr(broker))
+        } else {
+          new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
+            controllerEpoch, brokerEpoch, maxBrokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava)
+        }
+
+
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
           val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
           sendEvent(LeaderAndIsrResponseReceived(leaderAndIsrResponse, broker))
         })
+        controllerContext.markLeaderAndIsrSent(broker)
       }
     }
     leaderAndIsrRequestMap.clear()
