@@ -523,6 +523,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false, doLog)
 //    println("!!! newConfig:" + newConfig.dynamicConfig.)
 //    println("!!! brokerReconfigurablesToUpdate:" + brokerReconfigurablesToUpdate.)
+    System.err.print(" newconfig:" + newConfig.get(KafkaConfig.NumNetworkThreadsProp))
+    System.err.flush()
     if (newConfig ne currentConfig) {
       currentConfig = newConfig
       kafkaConfig.updateCurrentConfig(newConfig)
@@ -530,7 +532,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       // Process BrokerReconfigurable updates after current config is updated
       brokerReconfigurablesToUpdate.foreach(_.reconfigure(oldConfig, newConfig))
     } else {
-      System.err.print(" nodiff:" + newConfig.get(KafkaConfig.NumNetworkThreadsProp))
+      System.err.print(" nodiff")
       System.err.flush()
     }
   }
@@ -538,8 +540,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean, doLog: Boolean = false): (KafkaConfig, List[BrokerReconfigurable]) = {
     val newConfig = new KafkaConfig(newProps.asJava, doLog, None)
     val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
-    System.err.print(" changeMap:" + changeMap)
-    System.err.flush()
+    if (changeMap.contains(KafkaConfig.NumNetworkThreadsProp)) {
+      System.err.print(" changeMap:" + changeMap)
+      System.err.flush()
+    }
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
@@ -564,6 +568,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         (newConfig, brokerReconfigurablesToUpdate.toList)
       } catch {
         case e: Exception =>
+          System.err.print(s"update failed: $e")
+          System.err.flush()
           if (!validateOnly)
             error(s"Failed to update broker configuration with configs : " +
                   s"${ConfigUtils.configMapToRedactedString(newConfig.originalsFromThisConfig, KafkaConfig.configDef)}", e)

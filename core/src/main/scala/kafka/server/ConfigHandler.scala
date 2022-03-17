@@ -209,7 +209,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
                           private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
 
   def processConfigChanges(brokerId: String, properties: Properties): Unit = {
-    System.err.print(" processConfigCh:" + brokerId + ";" + properties)
+//    System.err.print(" processConfigCh:" + brokerId + ";" + properties)
     System.err.flush()
     def getOrDefault(prop: String): Long = {
       if (properties.containsKey(prop))
