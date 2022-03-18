@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -72,24 +73,29 @@ public class PartitionChangeBuilder {
     private final Uuid topicId;
     private final int partitionId;
     private final Function<Integer, Boolean> isAcceptableLeader;
+    private final boolean isLeaderRecoverySupported;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
     private List<Integer> targetAdding;
     private Election election = Election.ONLINE;
+    private LeaderRecoveryState targetLeaderRecoveryState;
 
     public PartitionChangeBuilder(PartitionRegistration partition,
                                   Uuid topicId,
                                   int partitionId,
-                                  Function<Integer, Boolean> isAcceptableLeader) {
+                                  Function<Integer, Boolean> isAcceptableLeader,
+                                  boolean isLeaderRecoverySupported) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
+        this.isLeaderRecoverySupported = isLeaderRecoverySupported;
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
         this.targetAdding = Replicas.toList(partition.addingReplicas);
+        this.targetLeaderRecoveryState = partition.leaderRecoveryState;
     }
 
     public PartitionChangeBuilder setTargetIsr(List<Integer> targetIsr) {
@@ -114,6 +120,11 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetAdding(List<Integer> targetAdding) {
         this.targetAdding = targetAdding;
+        return this;
+    }
+
+    public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
+        this.targetLeaderRecoveryState = targetLeaderRecoveryState;
         return this;
     }
 
@@ -205,6 +216,11 @@ public class PartitionChangeBuilder {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
                 record.setIsr(Collections.singletonList(electionResult.node));
+                if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING &&
+                    isLeaderRecoverySupported) {
+                    // And mark the leader recovery state as RECOVERING
+                    record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
+                }
             }
         } else {
             log.debug("Failed to find a new leader with current state: {}", this);
@@ -293,6 +309,10 @@ public class PartitionChangeBuilder {
         if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
             record.setAddingReplicas(targetAdding);
         }
+        if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
+            record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
+        }
+
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
@@ -313,6 +333,7 @@ public class PartitionChangeBuilder {
             ", targetRemoving=" + targetRemoving +
             ", targetAdding=" + targetAdding +
             ", election=" + election +
+            ", targetLeaderRecoveryState=" + targetLeaderRecoveryState +
             ')';
     }
 }

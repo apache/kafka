@@ -21,6 +21,7 @@ import java.io.File
 
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
@@ -87,7 +88,8 @@ class HighwatermarkPersistenceTest {
         assignment = Seq(configs.head.brokerId, configs.last.brokerId),
         isr = Set(configs.head.brokerId),
         addingReplicas = Seq.empty,
-        removingReplicas = Seq.empty
+        removingReplicas = Seq.empty,
+        leaderRecoveryState = LeaderRecoveryState.RECOVERED
       )
 
       replicaManager.checkpointHighWatermarks()

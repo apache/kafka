@@ -406,7 +406,7 @@ subprojects {
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*", "**/WorkerTest.*",
+      "**/WorkerTaskTest.*",
       // streams tests
       "**/KafkaStreamsTest.*"
     ])
@@ -2439,7 +2439,7 @@ project(':connect:runtime') {
     testImplementation libs.junitVintageEngine
     testImplementation libs.powermockJunit4
     testImplementation libs.powermockEasymock
-    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2517,9 +2517,8 @@ project(':connect:file') {
     implementation project(':connect:api')
     implementation libs.slf4jApi
 
-    testImplementation libs.easymock
     testImplementation libs.junitJupiter
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output

@@ -244,11 +244,11 @@ class TransactionsTest extends KafkaServerTestHarness {
     String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit) = {
 
     // The basic plan for the test is as follows:
-    //  1. Seed topic1 with 1000 unique, numbered, messages.
+    //  1. Seed topic1 with 500 unique, numbered, messages.
     //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
     //     offsets as part of the transaction.
     //  3. Randomly abort transactions in step2.
-    //  4. Validate that we have 1000 unique committed messages in topic2. If the offsets were committed properly with the
+    //  4. Validate that we have 500 unique committed messages in topic2. If the offsets were committed properly with the
     //     transactions, we should not have any duplicates or missing messages since we should process in the input
     //     messages exactly once.
 
@@ -295,7 +295,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       consumer.close()
     }
 
-    // In spite of random aborts, we should still have exactly 1000 messages in topic2. I.e. we should not
+    // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
     val verifyingConsumer = transactionalConsumers(0)
     verifyingConsumer.subscribe(List(topic2).asJava)

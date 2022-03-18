@@ -154,8 +154,6 @@ public class KafkaProducerTest {
     private static final int DEFAULT_METADATA_IDLE_MS = 5 * 60 * 1000;
     private static final Node NODE = new Node(0, "host1", 1000);
 
-    public final String unknownTestConfig = "unknown.test.config";
-
     private static <K, V> KafkaProducer<K, V> kafkaProducer(Map<String, Object> configs,
                   Serializer<K> keySerializer,
                   Serializer<V> valueSerializer,
@@ -1876,45 +1874,6 @@ public class KafkaProducerTest {
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
                 null, null, null, Time.SYSTEM)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
-        }
-    }
-
-    @Test
-    public void testUnknownConfigs() {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.put(unknownTestConfig, "my_value");
-        ProducerConfig config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(props,
-                new StringSerializer(), new StringSerializer()));
-
-        assertTrue(config.unknown().contains(unknownTestConfig));
-
-        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
-                null, null, null, Time.SYSTEM)) {
-            assertTrue(config.unknown().contains(unknownTestConfig));
-            assertEquals(1, config.unknown().size());
-            assertEquals(0, config.unused().size());
-        }
-    }
-
-    @Test
-    public void testUnusedAndUnknownConfigs() {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLS");
-        props.put(unknownTestConfig, "my_value");
-        ProducerConfig config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(props,
-                new StringSerializer(), new StringSerializer()));
-
-        assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
-        assertTrue(config.unknown().contains(unknownTestConfig));
-
-        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
-                null, null, null, Time.SYSTEM)) {
-            assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
-            assertTrue(config.unknown().contains(unknownTestConfig));
-            assertEquals(1, config.unknown().size());
-            assertEquals(1, config.unused().size());
         }
     }
 

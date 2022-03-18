@@ -20,6 +20,8 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, TimeUnit}
 
+import kafka.api.ApiVersion
+import kafka.api.KAFKA_3_2_IV0
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
@@ -27,18 +29,20 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OperationNotAttemptedException
-import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
+import org.apache.kafka.common.message.AlterPartitionRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
+import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.LeaderRecoveryState
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
- * Handles updating the ISR by sending AlterIsr requests to the controller (as of 2.7) or by updating ZK directly
+ * Handles updating the ISR by sending AlterPartition requests to the controller (as of 2.7) or by updating ZK directly
  * (prior to 2.7). Updating the ISR is an asynchronous operation, so partitions will learn about the result of their
  * request through a callback.
  *
@@ -65,7 +69,7 @@ case class AlterIsrItem(topicPartition: TopicPartition,
 object AlterIsrManager {
 
   /**
-   * Factory to AlterIsr based implementation, used when IBP >= 2.7-IV2
+   * Factory to AlterPartition based implementation, used when IBP >= 2.7-IV2
    */
   def apply(
     config: KafkaConfig,
@@ -74,8 +78,7 @@ object AlterIsrManager {
     time: Time,
     metrics: Metrics,
     threadNamePrefix: Option[String],
-    brokerEpochSupplier: () => Long,
-    brokerId: Int
+    brokerEpochSupplier: () => Long
   ): AlterIsrManager = {
     val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
 
@@ -84,7 +87,7 @@ object AlterIsrManager {
       time = time,
       metrics = metrics,
       config = config,
-      channelName = "alterIsr",
+      channelName = "alterPartition",
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )
@@ -92,8 +95,9 @@ object AlterIsrManager {
       controllerChannelManager = channelManager,
       scheduler = scheduler,
       time = time,
-      brokerId = brokerId,
-      brokerEpochSupplier = brokerEpochSupplier
+      brokerId = config.brokerId,
+      brokerEpochSupplier = brokerEpochSupplier,
+      ibpVersion = config.interBrokerProtocolVersion
     )
   }
 
@@ -115,7 +119,8 @@ class DefaultAlterIsrManager(
   val scheduler: Scheduler,
   val time: Time,
   val brokerId: Int,
-  val brokerEpochSupplier: () => Long
+  val brokerEpochSupplier: () => Long,
+  ibpVersion: ApiVersion
 ) extends AlterIsrManager with Logging with KafkaMetricsGroup {
 
   // Used to allow only one pending ISR update per partition (visible for testing)
@@ -154,28 +159,28 @@ class DefaultAlterIsrManager(
     if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
       // Copy current unsent ISRs but don't remove from the map, they get cleared in the response handler
       val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
-      unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
+      unsentIsrUpdates.values.forEach(item => inflightAlterIsrItems.append(item))
       sendRequest(inflightAlterIsrItems.toSeq)
     }
   }
 
   private[server] def clearInFlightRequest(): Unit = {
     if (!inflightRequest.compareAndSet(true, false)) {
-      warn("Attempting to clear AlterIsr in-flight flag when no apparent request is in-flight")
+      warn("Attempting to clear AlterPartition in-flight flag when no apparent request is in-flight")
     }
   }
 
   private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
     val message = buildRequest(inflightAlterIsrItems)
-    debug(s"Sending AlterIsr to controller $message")
+    debug(s"Sending AlterPartition to controller $message")
 
-    // We will not timeout AlterISR request, instead letting it retry indefinitely
+    // We will not timeout AlterPartition request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
     // which causes the response for those partitions to be ignored.
-    controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
+    controllerChannelManager.sendRequest(new AlterPartitionRequest.Builder(message),
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
-          debug(s"Received AlterIsr response $response")
+          debug(s"Received AlterPartition response $response")
           val error = try {
             if (response.authenticationException != null) {
               // For now we treat authentication errors as retriable. We use the
@@ -186,8 +191,8 @@ class DefaultAlterIsrManager(
             } else if (response.versionMismatch != null) {
               Errors.UNSUPPORTED_VERSION
             } else {
-              val body = response.responseBody().asInstanceOf[AlterIsrResponse]
-              handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+              val body = response.responseBody().asInstanceOf[AlterPartitionResponse]
+              handleAlterPartitionResponse(body, message.brokerEpoch, inflightAlterIsrItems)
             }
           } finally {
             // clear the flag so future requests can proceed
@@ -201,72 +206,91 @@ class DefaultAlterIsrManager(
                 maybePropagateIsrChanges()
               case _ =>
                 // If we received a top-level error from the controller, retry the request in the near future
-                scheduler.schedule("send-alter-isr", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
+                scheduler.schedule("send-alter-partition", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
             }
         }
 
         override def onTimeout(): Unit = {
-          throw new IllegalStateException("Encountered unexpected timeout when sending AlterIsr to the controller")
+          throw new IllegalStateException("Encountered unexpected timeout when sending AlterPartition to the controller")
         }
       })
   }
 
-  private def buildRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): AlterIsrRequestData = {
-    val message = new AlterIsrRequestData()
+  private def buildRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): AlterPartitionRequestData = {
+    val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(brokerEpochSupplier.apply())
-      .setTopics(new util.ArrayList())
 
-    inflightAlterIsrItems.groupBy(_.topicPartition.topic).foreach(entry => {
-      val topicPart = new AlterIsrRequestData.TopicData()
-        .setName(entry._1)
-        .setPartitions(new util.ArrayList())
-      message.topics().add(topicPart)
-      entry._2.foreach(item => {
-        topicPart.partitions().add(new AlterIsrRequestData.PartitionData()
+      inflightAlterIsrItems.groupBy(_.topicPartition.topic).foreach { case (topic, items) => 
+      val topicData = new AlterPartitionRequestData.TopicData()
+        .setName(topic)
+      message.topics.add(topicData)
+      items.foreach { item => 
+        val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
           .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-          .setCurrentIsrVersion(item.leaderAndIsr.zkVersion)
-        )
-      })
-    })
+          .setPartitionEpoch(item.leaderAndIsr.zkVersion)
+
+        if (ibpVersion >= KAFKA_3_2_IV0) {
+          partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
+        }
+
+        topicData.partitions.add(partitionData)
+      }
+    }
     message
   }
 
-  def handleAlterIsrResponse(alterIsrResponse: AlterIsrResponse,
-                             sentBrokerEpoch: Long,
-                             inflightAlterIsrItems: Seq[AlterIsrItem]): Errors = {
-    val data: AlterIsrResponseData = alterIsrResponse.data
+  def handleAlterPartitionResponse(
+    alterPartitionResp: AlterPartitionResponse,
+    sentBrokerEpoch: Long,
+    inflightAlterIsrItems: Seq[AlterIsrItem]
+  ): Errors = {
+    val data = alterPartitionResp.data
 
     Errors.forCode(data.errorCode) match {
       case Errors.STALE_BROKER_EPOCH =>
         warn(s"Broker had a stale broker epoch ($sentBrokerEpoch), retrying.")
+
       case Errors.CLUSTER_AUTHORIZATION_FAILED =>
-        error(s"Broker is not authorized to send AlterIsr to controller",
-          Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterIsr to controller"))
+        error(s"Broker is not authorized to send AlterPartition to controller",
+          Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"))
+
       case Errors.NONE =>
         // Collect partition-level responses to pass to the callbacks
-        val partitionResponses: mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] =
-          new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+        val partitionResponses = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
         data.topics.forEach { topic =>
-          topic.partitions().forEach(partition => {
+          topic.partitions.forEach { partition =>
             val tp = new TopicPartition(topic.name, partition.partitionIndex)
-            val error = Errors.forCode(partition.errorCode())
-            debug(s"Controller successfully handled AlterIsr request for $tp: $partition")
-            if (error == Errors.NONE) {
-              val newLeaderAndIsr = new LeaderAndIsr(partition.leaderId, partition.leaderEpoch,
-                partition.isr.asScala.toList.map(_.toInt), partition.currentIsrVersion)
-              partitionResponses(tp) = Right(newLeaderAndIsr)
+            val apiError = Errors.forCode(partition.errorCode)
+            debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
+            if (apiError == Errors.NONE) {
+              LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
+                case Some(leaderRecoveryState) =>
+                  partitionResponses(tp) = Right(
+                    LeaderAndIsr(
+                      partition.leaderId,
+                      partition.leaderEpoch,
+                      partition.isr.asScala.toList.map(_.toInt),
+                      leaderRecoveryState,
+                      partition.partitionEpoch
+                    )
+                  )
+
+                case None =>
+                  error(s"Controller returned an invalid leader recovery state (${partition.leaderRecoveryState}) for $tp: $partition")
+                  partitionResponses(tp) = Left(Errors.UNKNOWN_SERVER_ERROR)
+              }
             } else {
-              partitionResponses(tp) = Left(error)
+              partitionResponses(tp) = Left(apiError)
             }
-          })
+          }
         }
 
         // Iterate across the items we sent rather than what we received to ensure we run the callback even if a
         // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
-        // the leaderIsrUpdateLock write lock in Partition#sendAlterIsrRequest
+        // the leaderIsrUpdateLock write lock in Partition#sendAlterPartitionRequest
         inflightAlterIsrItems.foreach { inflightAlterIsr =>
           partitionResponses.get(inflightAlterIsr.topicPartition) match {
             case Some(leaderAndIsrOrError) =>
@@ -285,8 +309,8 @@ class DefaultAlterIsrManager(
           }
         }
 
-      case e: Errors =>
-        warn(s"Controller returned an unexpected top-level error when handling AlterIsr request: $e")
+      case e =>
+        warn(s"Controller returned an unexpected top-level error when handling AlterPartition request: $e")
     }
 
     Errors.forCode(data.errorCode)

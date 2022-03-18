@@ -22,6 +22,7 @@ import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 
+import kafka.api.KAFKA_3_2_IV0
 import kafka.cluster.Broker.ServerInfo
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
@@ -173,6 +174,7 @@ class ControllerServer(
           setRaftClient(raftManager.client).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
+          setIsLeaderRecoverySupported(config.interBrokerProtocolVersion >= KAFKA_3_2_IV0).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).

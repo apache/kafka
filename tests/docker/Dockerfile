@@ -35,7 +35,7 @@ LABEL ducker.creator=$ducker_creator
 # we have to install git since it is included in openjdk:8 but not openjdk:11
 RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 && apt-get -y clean
 RUN python3 -m pip install -U pip==21.1.1;
-RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy && pip3 install --upgrade ducktape==0.8.1
+RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy && pip3 install --upgrade "ducktape>0.8"
 
 # Set up ssh
 COPY ./ssh-config /root/.ssh/config
@@ -63,7 +63,7 @@ RUN mkdir -p "/opt/kafka-2.5.1" && chmod a+rw /opt/kafka-2.5.1 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-2.6.2" && chmod a+rw /opt/kafka-2.6.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.6.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.6.2"
 RUN mkdir -p "/opt/kafka-2.7.1" && chmod a+rw /opt/kafka-2.7.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.7.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.7.1"
 RUN mkdir -p "/opt/kafka-2.8.1" && chmod a+rw /opt/kafka-2.8.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.8.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.8.1"
-RUN mkdir -p "/opt/kafka-3.0.0" && chmod a+rw /opt/kafka-3.0.0 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.0.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.0.0"
+RUN mkdir -p "/opt/kafka-3.0.1" && chmod a+rw /opt/kafka-3.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.0.1"
 RUN mkdir -p "/opt/kafka-3.1.0" && chmod a+rw /opt/kafka-3.1.0 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.1.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.1.0"
 
 # Streams test dependencies
@@ -82,7 +82,7 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.5.1-test.jar" -o /opt/kafka-2.5.1/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.6.2-test.jar" -o /opt/kafka-2.6.2/libs/kafka-streams-2.6.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.7.1-test.jar" -o /opt/kafka-2.7.1/libs/kafka-streams-2.7.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.8.1-test.jar" -o /opt/kafka-2.8.1/libs/kafka-streams-2.8.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.0.0-test.jar" -o /opt/kafka-3.0.0/libs/kafka-streams-3.0.0-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.0.1-test.jar" -o /opt/kafka-3.0.1/libs/kafka-streams-3.0.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.1.0-test.jar" -o /opt/kafka-3.1.0/libs/kafka-streams-3.1.0-test.jar
 
 # The version of Kibosh to use for testing.

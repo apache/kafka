@@ -27,7 +27,9 @@
   // Version 4 is the first flexible version.
   //
   // Version 5 adds Topic ID and Type to the TopicStates, as described in KIP-516.
-  "validVersions": "0-5",
+  //
+  // Version 6 adds ElectionState as described in KIP-704.
+  "validVersions": "0-6",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -85,7 +87,9 @@
       { "name": "RemovingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true, "entityType": "brokerId",
         "about": "The replica IDs that we are removing this partition from, or null if no replicas are being removed." },
       { "name": "IsNew", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
-        "about": "Whether the replica should have existed on the broker or not." }
+        "about": "Whether the replica should have existed on the broker or not." },
+      { "name": "LeaderRecoveryState", "type": "int8", "versions": "6+", "default": "0",
+        "about": "1 if the partition is recovering from an unclean leader election; 0 otherwise." }
     ]}
   ]
 }

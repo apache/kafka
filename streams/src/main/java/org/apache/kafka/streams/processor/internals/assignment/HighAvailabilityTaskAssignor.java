@@ -129,7 +129,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final StandbyTaskAssignor standbyTaskAssignor = createStandbyTaskAssignor(configs);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(configs);
 
         standbyTaskAssignor.assign(clientStates, allTaskIds, statefulTasks, configs);
 
@@ -140,15 +140,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             ClientState::assignStandby,
             standbyTaskAssignor::isAllowedTaskMovement
         );
-    }
-
-    // Visible for testing
-    static StandbyTaskAssignor createStandbyTaskAssignor(final AssignmentConfigs configs) {
-        if (!configs.rackAwareAssignmentTags.isEmpty()) {
-            return new ClientTagAwareStandbyTaskAssignor();
-        } else {
-            return new DefaultStandbyTaskAssignor();
-        }
     }
 
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,

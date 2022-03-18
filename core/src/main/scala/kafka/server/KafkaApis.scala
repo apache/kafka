@@ -221,7 +221,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForwardToController(request, handleAlterClientQuotasRequest)
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForwardToController(request, handleAlterUserScramCredentialsRequest)
-        case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
+        case ApiKeys.ALTER_PARTITION => handleAlterPartitionRequest(request)
         case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
         case ApiKeys.ENVELOPE => handleEnvelope(request, requestLocal)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
@@ -3289,17 +3289,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
+  def handleAlterPartitionRequest(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    val alterIsrRequest = request.body[AlterIsrRequest]
+    val alterPartitionRequest = request.body[AlterPartitionRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     if (!zkSupport.controller.isActive)
-      requestHelper.sendResponseExemptThrottle(request, alterIsrRequest.getErrorResponse(
+      requestHelper.sendResponseExemptThrottle(request, alterPartitionRequest.getErrorResponse(
         AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
     else
-      zkSupport.controller.alterIsrs(alterIsrRequest.data, alterIsrResp =>
-        requestHelper.sendResponseExemptThrottle(request, new AlterIsrResponse(alterIsrResp))
+      zkSupport.controller.alterPartitions(alterPartitionRequest.data, alterPartitionResp =>
+        requestHelper.sendResponseExemptThrottle(request, new AlterPartitionResponse(alterPartitionResp))
       )
   }
 
