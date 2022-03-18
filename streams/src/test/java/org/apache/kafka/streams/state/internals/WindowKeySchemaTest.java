@@ -130,7 +130,7 @@ public class WindowKeySchemaTest {
     final private KeySchema keySchema;
     final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, Long.MAX_VALUE);
     final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
-    final private SchemaType schemaType;
+    final public SchemaType schemaType;
 
     private enum SchemaType {
         WindowKeySchema,
@@ -141,13 +141,13 @@ public class WindowKeySchemaTest {
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> data() {
         return asList(new Object[][] {
-            {"WindowKeySchema", SchemaType.WindowKeySchema},
-            {"PrefixedTimeFirstSchema", SchemaType.PrefixedTimeFirstSchema},
-            {"PrefixedKeyFirstSchema", SchemaType.PrefixedKeyFirstSchema}
+            {SchemaType.WindowKeySchema},
+            {SchemaType.PrefixedTimeFirstSchema},
+            {SchemaType.PrefixedKeyFirstSchema}
         });
     }
 
-    public WindowKeySchemaTest(final String name, final SchemaType type) {
+    public WindowKeySchemaTest(final SchemaType type) {
         schemaType = type;
         keySchema = SCHEMA_TYPE_MAP.get(type);
     }

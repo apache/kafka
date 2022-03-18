@@ -19,12 +19,13 @@ package org.apache.kafka.streams.state.internals;
 import static java.util.Arrays.asList;
 
 import java.util.Collection;
+import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.KeyFirstSessionKeySchema;
+import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.TimeFirstSessionKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
 
 @RunWith(Parameterized.class)
 public class RocksDBTimeOrderedSegmentedBytesStoreTest
@@ -32,28 +33,55 @@ public class RocksDBTimeOrderedSegmentedBytesStoreTest
 
     private final static String METRICS_SCOPE = "metrics-scope";
 
-    @Parameter
-    public String name;
+    private enum SchemaType {
+        WindowSchemaWithIndex,
+        WindowSchemaWithoutIndex,
+        SessionSchemaWithIndex,
+        SessionSchemaWithoutIndex
+    }
 
-    @Parameter(1)
-    public boolean hasIndex;
+    private boolean hasIndex;
+    private SchemaType schemaType;
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> getKeySchema() {
         return asList(new Object[][] {
-            {"WindowSchemaWithIndex", true},
-            {"WindowSchemaWithoutIndex", false}
+            {SchemaType.WindowSchemaWithIndex, true},
+            {SchemaType.WindowSchemaWithoutIndex, false},
+            {SchemaType.SessionSchemaWithIndex, true},
+            {SchemaType.SessionSchemaWithoutIndex, false}
         });
     }
 
+    public RocksDBTimeOrderedSegmentedBytesStoreTest(final SchemaType schemaType, final boolean hasIndex) {
+        this.schemaType = schemaType;
+        this.hasIndex = hasIndex;
+    }
+
+
     AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
-        return new RocksDBTimeOrderedSegmentedBytesStore(
-            storeName,
-            METRICS_SCOPE,
-            retention,
-            segmentInterval,
-            hasIndex
-        );
+        switch (schemaType) {
+            case WindowSchemaWithIndex:
+            case WindowSchemaWithoutIndex:
+                return new RocksDBTimeOrderedSegmentedBytesStore(
+                    storeName,
+                    METRICS_SCOPE,
+                    retention,
+                    segmentInterval,
+                    hasIndex
+                );
+            case SessionSchemaWithIndex:
+            case SessionSchemaWithoutIndex:
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
+                    storeName,
+                    METRICS_SCOPE,
+                    retention,
+                    segmentInterval,
+                    hasIndex
+                );
+            default:
+                throw new IllegalStateException("Unknown SchemaType: " + schemaType);
+        }
     }
 
     @Override
@@ -63,12 +91,31 @@ public class RocksDBTimeOrderedSegmentedBytesStoreTest
 
     @Override
     KeySchema getBaseSchema() {
-        return new TimeFirstWindowKeySchema();
+        switch (schemaType) {
+            case WindowSchemaWithIndex:
+            case WindowSchemaWithoutIndex:
+                return new TimeFirstWindowKeySchema();
+            case SessionSchemaWithIndex:
+            case SessionSchemaWithoutIndex:
+                return new TimeFirstSessionKeySchema();
+            default:
+                throw new IllegalStateException("Unknown SchemaType: " + schemaType);
+        }
     }
 
     @Override
     KeySchema getIndexSchema() {
-        return hasIndex ? new KeyFirstWindowKeySchema() : null;
+        if (!hasIndex) {
+            return null;
+        }
+        switch (schemaType) {
+            case WindowSchemaWithIndex:
+                return new KeyFirstWindowKeySchema();
+            case SessionSchemaWithIndex:
+                return new KeyFirstSessionKeySchema();
+            default:
+                throw new IllegalStateException("Unknown SchemaType: " + schemaType);
+        }
     }
 
 }
