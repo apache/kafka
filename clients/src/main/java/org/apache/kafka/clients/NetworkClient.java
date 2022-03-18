@@ -1344,11 +1344,11 @@ public class NetworkClient implements KafkaClient {
         }
 
         public void handleSuccessfulGetTelemetrySubscriptionResponse(GetTelemetrySubscriptionResponse response) {
-            clientTelemetry.telemetrySubscriptionSucceeded(response.data());
+            clientTelemetry.telemetrySubscriptionReceived(response.data());
         }
 
         public void handleSuccessfulPushTelemetryResponse(PushTelemetryResponse response) {
-            clientTelemetry.pushTelemetrySucceeded(response.data());
+            clientTelemetry.pushTelemetryReceived(response.data());
         }
 
     }

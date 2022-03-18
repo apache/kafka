@@ -17,7 +17,15 @@
 package org.apache.kafka.clients.telemetry;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.PushTelemetryResponseData;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
@@ -26,6 +34,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class DefaultClientTelemetryTest extends BaseClientTelemetryTest {
+    // state transition
+    private static Map<TelemetryState, TelemetryState> stateMap;
+    static {
+        stateMap = new HashMap<>();
+        stateMap.put(TelemetryState.subscription_needed, TelemetryState.subscription_in_progress);
+        stateMap.put(TelemetryState.subscription_in_progress, TelemetryState.push_needed);
+        stateMap.put(TelemetryState.push_needed, TelemetryState.push_in_progress);
+        stateMap.put(TelemetryState.push_in_progress, TelemetryState.terminating_push_needed);
+        stateMap.put(TelemetryState.terminating_push_needed, TelemetryState.terminating_push_in_progress);
+        stateMap.put(TelemetryState.terminating_push_in_progress, TelemetryState.terminated);
+    }
 
     @Test
     public void testSingleClose() {
@@ -102,4 +121,38 @@ public class DefaultClientTelemetryTest extends BaseClientTelemetryTest {
         }
     }
 
+    @Test
+    public void testTelemetrySubscriptionReceivedStateTransition() {
+        DefaultClientTelemetry clientTelemetry = newClientTelemetry();
+        clientTelemetry.setSubscription(new TelemetrySubscription(
+                0,
+                0,
+                Uuid.randomUuid(),
+                42,
+                Collections.singletonList(CompressionType.NONE),
+                10000,
+                true,
+                MetricSelector.ALL));
+        transitionState(TelemetryState.push_in_progress, clientTelemetry);
+        assertEquals(TelemetryState.push_in_progress, clientTelemetry.state().get());
+        PushTelemetryResponseData data = new PushTelemetryResponseData();
+        data.setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+        clientTelemetry.pushTelemetryReceived(data);
+        assertEquals(TelemetryState.subscription_needed, clientTelemetry.state().orElseThrow(() -> new RuntimeException("unable to make state transition")));
+
+        clientTelemetry.close();
+    }
+
+    // an utility function that transition the current state to a target state
+    private void transitionState(final TelemetryState toState, ClientTelemetry clientTelemetry) {
+        TelemetryState currentState = clientTelemetry.state().orElseThrow(
+                () -> new RuntimeException("null state should not happen"));
+
+        TelemetryState nextState;
+        while (currentState != toState) {
+            nextState = stateMap.get(currentState);
+            clientTelemetry.setState(nextState);
+            currentState = nextState;
+        }
+    }
 }

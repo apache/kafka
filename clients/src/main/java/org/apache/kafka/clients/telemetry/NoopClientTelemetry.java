@@ -61,11 +61,11 @@ public class NoopClientTelemetry implements ClientTelemetry {
     }
 
     @Override
-    public void telemetrySubscriptionSucceeded(GetTelemetrySubscriptionsResponseData data) {
+    public void telemetrySubscriptionReceived(GetTelemetrySubscriptionsResponseData data) {
     }
 
     @Override
-    public void pushTelemetrySucceeded(PushTelemetryResponseData data) {
+    public void pushTelemetryReceived(PushTelemetryResponseData data) {
     }
 
     @Override
