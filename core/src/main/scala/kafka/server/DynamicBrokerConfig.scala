@@ -228,6 +228,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     dynamicBrokerConfigs.clear()
     dynamicDefaultConfigs.clear()
     reconfigurables.clear()
+    System.err.print(" clear")
+    System.err.flush()
     brokerReconfigurables.clear()
   }
 
@@ -260,6 +262,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
     verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs.asScala)
     reconfigurables += reconfigurable
+    System.err.print(" add:" + reconfigurable)
+    System.err.flush()
   }
 
   def addBrokerReconfigurable(reconfigurable: BrokerReconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -269,6 +273,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   def removeReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
     reconfigurables -= reconfigurable
+    System.err.print(" rm:" + reconfigurable)
+    System.err.flush()
   }
 
   private def verifyReconfigurableConfigs(configNames: Set[String]): Unit = CoreUtils.inWriteLock(lock) {
@@ -531,9 +537,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
       // Process BrokerReconfigurable updates after current config is updated
       brokerReconfigurablesToUpdate.foreach(_.reconfigure(oldConfig, newConfig))
-    } else {
-      System.err.print(" nodiff")
-      System.err.flush()
     }
   }
 
@@ -568,7 +571,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         (newConfig, brokerReconfigurablesToUpdate.toList)
       } catch {
         case e: Exception =>
-          System.err.print(s"update failed: ${e.printStackTrace()}")
+          System.err.print(s"update failed: $e")
           System.err.flush()
           if (!validateOnly)
             error(s"Failed to update broker configuration with configs : " +
