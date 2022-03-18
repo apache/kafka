@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
@@ -28,6 +30,7 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.CloseableConnectorContext;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.runtime.ConnectorConfigTest;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
@@ -45,6 +48,7 @@ import org.apache.kafka.connect.runtime.distributed.DistributedHerder.HerderMetr
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.PluginsTest;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -53,12 +57,15 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResourceTest;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.MemoryOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.easymock.Capture;
@@ -72,6 +79,8 @@ import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.internal.creation.MockSettingsImpl;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -111,13 +120,18 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.refEq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -207,13 +221,13 @@ public class DistributedHerderTest {
     private MockTime time;
     private DistributedHerder herder;
     private MockConnectMetrics metrics;
-    private Worker worker = mock(Worker.class);
+    private Worker worker;
     private WorkerConfigTransformer transformer = mock(WorkerConfigTransformer.class);
 
     @Mock
     private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
     @Captor
-    ArgumentCaptor<Callback<TargetState>> onStart;
+    private ArgumentCaptor<Callback<TargetState>> onStart;
 
     private Plugins plugins = mock(Plugins.class);
     private PluginClassLoader pluginLoader = mock(PluginClassLoader.class);
@@ -236,30 +250,40 @@ public class DistributedHerderTest {
         closeable = MockitoAnnotations.openMocks(this);
         time = new MockTime();
         metrics = new MockConnectMetrics(time);
-        worker = mock(Worker.class);
-        when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
         AutoCloseable uponShutdown = () -> shutdownCalled.countDown();
 
         // Default to the old protocol unless specified otherwise
         connectProtocolVersion = CONNECT_PROTOCOL_V0;
 
-        herder = mock(DistributedHerder.class,
-                new MockSettingsImpl<>().useConstructor(
-                new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
-                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time, noneConnectorClientConfigOverridePolicy,
-                new AutoCloseable[]{uponShutdown}).defaultAnswer(Answers.RETURNS_SMART_NULLS));
+        worker = mock(Worker.class);
+        doNothing().when(member).poll(anyLong());
+        doNothing().when(member).wakeup();
 
-        when(herder.herderMetrics()).thenCallRealMethod();
-        doCallRealMethod().when(herder).stopServices();
+        when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
+        herder = mock(DistributedHerder.class, new MockSettingsImpl<>().useConstructor(
+                        new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
+                        statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time,
+                        noneConnectorClientConfigOverridePolicy, new AutoCloseable[] {uponShutdown})
+                    .defaultAnswer(Answers.RETURNS_SMART_NULLS));
 
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener(time);
-        plugins = mock(Plugins.class);
+
+        doCallRealMethod().when(herder).tick();
+        doCallRealMethod().when(herder).stopServices();
+        when(herder.herderMetrics()).thenCallRealMethod();
+        when(herder.connectorTypeForClass(BogusSourceConnector.class.getName())).thenReturn(ConnectorType.SOURCE);
+
+        when(plugins.newConnector(BogusSourceConnector.class.getName())).thenReturn(mock(BogusSourceConnector.class));
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(anyString())).thenReturn(getClass().getClassLoader());
         conn1SinkConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
         conn1SinkConfigUpdated = new SinkConnectorConfig(plugins, CONN1_CONFIG_UPDATED);
-        when(herder.connectorTypeForClass(BogusSourceConnector.class.getName())).thenReturn(ConnectorType.SOURCE);
-        pluginLoader = mock(PluginClassLoader.class);
-        delegatingLoader = mock(DelegatingClassLoader.class);
+    }
+
+    private static void setMemberExpectations(WorkerGroupMember member, String memberId, short protocolVersion) {
+        when(member.memberId()).thenReturn(memberId);
+        when(member.currentProtocolVersion()).thenReturn(protocolVersion);
     }
 
     @After
@@ -275,17 +299,14 @@ public class DistributedHerderTest {
     @Test
     public void testJoinAssignment() throws Exception {
         // Join group and get assignment
-
-        when(member.memberId()).thenReturn("member");
-        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        setMemberExpectations(member, "member", CONNECT_PROTOCOL_V0);
         when(worker.getPlugins()).thenReturn(plugins);
 
         expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1));
         expectPostRebalanceCatchup(SNAPSHOT);
 
         doNothing().when(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
-                // TODO: actually need to capture onStart?
-                any(ConnectorStatus.Listener.class), any(TargetState.class), onStart.capture());
+                eq(herder), any(TargetState.class), any());
 
         when(worker.isRunning(CONN1)).thenReturn(true);
         when(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).thenReturn(TASK_CONFIGS);
@@ -294,9 +315,15 @@ public class DistributedHerderTest {
         when(worker.startTask(eq(TASK1), any(ClusterConfigState.class), anyMap(), anyMap(),
                         refEq(herder), eq(TargetState.STARTED))).thenReturn(true);
         doNothing().when(member).poll(anyInt());
-        doCallRealMethod().when(herder).tick();
 
         herder.tick();
+
+        verify(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class), eq(herder),
+                any(TargetState.class), onStart.capture());
+        onStart.getValue().onCompletion(null, TargetState.STARTED);
+        verify(worker).startTask(eq(TASK1), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED));
+
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
 
@@ -305,56 +332,28 @@ public class DistributedHerderTest {
         verify(member).ensureActive();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
     @Test
     public void testRebalance() throws Exception {
         // Join group and get assignment
-        EasyMock.expect(member.memberId()).andStubReturn("member");
-        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins);
+        setMemberExpectations(member, "member", CONNECT_PROTOCOL_V0);
+        when(worker.getPlugins()).thenReturn(plugins);
         expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1));
         expectPostRebalanceCatchup(SNAPSHOT);
-        Capture<Callback<TargetState>> onFirstStart = newCapture();
-        worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onFirstStart));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            onFirstStart.getValue().onCompletion(null, TargetState.STARTED);
-            return true;
-        });
-        member.wakeup();
-        PowerMock.expectLastCall();
-        EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
-        worker.startTask(EasyMock.eq(TASK1), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
-        PowerMock.expectLastCall().andReturn(true);
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
+        doNothing().when(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
+                refEq(herder), any(TargetState.class), any());
 
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins);
-        expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
-                1, Arrays.asList(CONN1), Arrays.asList());
-
-        // and the new assignment started
-        Capture<Callback<TargetState>> onSecondStart = newCapture();
-        worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onSecondStart));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            onSecondStart.getValue().onCompletion(null, TargetState.STARTED);
-            return true;
-        });
-        member.wakeup();
-        PowerMock.expectLastCall();
-        EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
-
-        PowerMock.replayAll();
+        when(worker.isRunning(CONN1)).thenReturn(true);
+        when(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).thenReturn(TASK_CONFIGS);
+        when(worker.startTask(eq(TASK1), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED))).thenReturn(true);
+        when(worker.isRunning(CONN1)).thenReturn(true);
 
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
+
+        expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1), ConnectProtocol.Assignment.NO_ERROR,
+                1, Arrays.asList(CONN1), Arrays.asList());
 
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
@@ -363,50 +362,39 @@ public class DistributedHerderTest {
         time.sleep(3000L);
         assertStatistics(3, 2, 100, 3000);
 
-        PowerMock.verifyAll();
+        verify(member, times(2)).wakeup();
+        verify(member, times(2)).poll(anyLong());
+        verify(worker, times(2)).startConnector(eq(CONN1), anyMap(),
+                any(CloseableConnectorContext.class), refEq(herder), any(TargetState.class), onStart.capture());
+        onStart.getValue().onCompletion(null, TargetState.STARTED);
+        verify(worker).startTask(eq(TASK1), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED));
+
+        verify(herder, times(2)).tick();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
     @Test
     public void testIncrementalCooperativeRebalanceForNewMember() throws Exception {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
         // Join group. First rebalance contains revocations from other members. For the new
         // member the assignment should be empty
-        EasyMock.expect(member.memberId()).andStubReturn("member");
-        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V1);
+        setMemberExpectations(member, "member", CONNECT_PROTOCOL_V1);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectPostRebalanceCatchup(SNAPSHOT);
-
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
 
         // The new member got its assignment
         expectRebalance(Collections.emptyList(), Collections.emptyList(),
                 ConnectProtocol.Assignment.NO_ERROR,
                 1, Arrays.asList(CONN1), Arrays.asList(TASK1), 0);
 
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins);
         // and the new assignment started
-        Capture<Callback<TargetState>> onStart = newCapture();
-        worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onStart));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            onStart.getValue().onCompletion(null, TargetState.STARTED);
-            return true;
-        });
-        member.wakeup();
-        PowerMock.expectLastCall();
-        EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
+        doNothing().when(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
+                refEq(herder), any(TargetState.class), any());
+        when(worker.isRunning(CONN1)).thenReturn(true);
+        when(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).thenReturn(TASK_CONFIGS);
 
-        worker.startTask(EasyMock.eq(TASK1), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
-        PowerMock.expectLastCall().andReturn(true);
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
-
-        PowerMock.replayAll();
-
+        when(worker.startTask(eq(TASK1), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED))).thenReturn(true);
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
@@ -418,10 +406,18 @@ public class DistributedHerderTest {
         time.sleep(3000L);
         assertStatistics(3, 2, 100, 3000);
 
-        PowerMock.verifyAll();
+        verify(member, times(2)).wakeup();
+        verify(member, times(2)).poll(anyLong());
+        verify(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
+                refEq(herder), any(TargetState.class), onStart.capture());
+        onStart.getValue().onCompletion(null, TargetState.STARTED);
+        verify(worker).startTask(eq(TASK1), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED));
+
+        verify(herder, times(2)).tick();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testIncrementalCooperativeRebalanceForExistingMember() {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
@@ -458,7 +454,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testIncrementalCooperativeRebalanceWithDelay() throws Exception {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
@@ -526,7 +522,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRebalanceFailedConnector() throws Exception {
         // Join group and get assignment
@@ -585,13 +581,13 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRevoke() throws TimeoutException {
         revokeAndReassign(false);
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testIncompleteRebalanceBeforeRevoke() throws TimeoutException {
         revokeAndReassign(true);
@@ -688,7 +684,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testHaltCleansUpWorker() {
         EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
@@ -713,7 +709,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testCreateConnector() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -769,7 +765,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testCreateConnectorFailedValidation() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -826,7 +822,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @SuppressWarnings("unchecked")
     @Test
     public void testConnectorNameConflictsWithWorkerGroupId() {
@@ -845,7 +841,7 @@ public class DistributedHerderTest {
         assertFalse(nameConfig.errorMessages().isEmpty());
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testCreateConnectorAlreadyExists() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -893,7 +889,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testDestroyConnector() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -956,7 +952,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartConnector() throws Exception {
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andStubReturn(TASK_CONFIGS);
@@ -1013,7 +1009,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartUnknownConnector() throws Exception {
         // get the initial assignment
@@ -1048,7 +1044,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartConnectorRedirectToLeader() throws Exception {
         // get the initial assignment
@@ -1084,7 +1080,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartConnectorRedirectToOwner() throws Exception {
         // get the initial assignment
@@ -1131,7 +1127,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartConnectorAndTasksUnknownConnector() throws Exception {
         String connectorName = "UnknownConnector";
@@ -1166,7 +1162,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartConnectorAndTasksNotLeader() throws Exception {
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
@@ -1199,7 +1195,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartConnectorAndTasksUnknownStatus() throws Exception {
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
@@ -1236,7 +1232,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartConnectorAndTasksSuccess() throws Exception {
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
@@ -1275,7 +1271,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testDoRestartConnectorAndTasksEmptyPlan() {
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
@@ -1287,7 +1283,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testDoRestartConnectorAndTasksNoAssignments() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
@@ -1305,7 +1301,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testDoRestartConnectorAndTasksOnlyConnector() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
@@ -1337,7 +1333,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testDoRestartConnectorAndTasksOnlyTasks() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
@@ -1369,7 +1365,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testDoRestartConnectorAndTasksBoth() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
@@ -1412,7 +1408,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartTask() throws Exception {
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andStubReturn(TASK_CONFIGS);
@@ -1453,7 +1449,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartUnknownTask() throws Exception {
         // get the initial assignment
@@ -1488,7 +1484,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRequestProcessingOrder() {
         final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, null, null);
@@ -1502,7 +1498,7 @@ public class DistributedHerderTest {
         assertEquals(req4, herder.requests.pollFirst());
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartTaskRedirectToLeader() throws Exception {
         // get the initial assignment
@@ -1538,7 +1534,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testRestartTaskRedirectToOwner() throws Exception {
         // get the initial assignment
@@ -1578,7 +1574,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testConnectorConfigAdded() {
         // If a connector was added, we need to rebalance
@@ -1628,7 +1624,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testConnectorConfigUpdate() throws Exception {
         // Connector config can be applied without any rebalance
@@ -1696,7 +1692,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testConnectorPaused() throws Exception {
         // ensure that target state changes are propagated to the worker
@@ -1759,7 +1755,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testConnectorResumed() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("member");
@@ -1823,7 +1819,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testUnknownConnectorPaused() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("member");
@@ -1860,7 +1856,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testConnectorPausedRunningTaskOnly() throws Exception {
         // even if we don't own the connector, we should still propagate target state
@@ -1909,7 +1905,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testConnectorResumedRunningTaskOnly() throws Exception {
         // even if we don't own the connector, we should still propagate target state
@@ -1967,7 +1963,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testTaskConfigAdded() {
         // Task config always requires rebalance
@@ -2008,7 +2004,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testJoinLeaderCatchUpFails() throws Exception {
         // Join group and as leader fail to do assignment
@@ -2076,7 +2072,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testJoinLeaderCatchUpRetriesForIncrementalCooperative() throws Exception {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
@@ -2168,7 +2164,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testJoinLeaderCatchUpFailsForIncrementalCooperative() throws Exception {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
@@ -2267,7 +2263,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testAccessors() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -2325,7 +2321,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testPutConnectorConfig() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -2420,7 +2416,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testKeyRotationWhenWorkerBecomesLeader() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("member");
@@ -2466,7 +2462,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testKeyRotationDisabledWhenWorkerBecomesFollower() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("member");
@@ -2501,7 +2497,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testPutTaskConfigsSignatureNotRequiredV0() {
         Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
@@ -2516,7 +2512,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testPutTaskConfigsSignatureNotRequiredV1() {
         Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
@@ -2531,7 +2527,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testPutTaskConfigsMissingRequiredSignature() {
         Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
@@ -2548,7 +2544,7 @@ public class DistributedHerderTest {
         assertTrue(errorCapture.getValue() instanceof BadRequestException);
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testPutTaskConfigsDisallowedSignatureAlgorithm() {
         Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
@@ -2569,7 +2565,7 @@ public class DistributedHerderTest {
         assertTrue(errorCapture.getValue() instanceof BadRequestException);
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testPutTaskConfigsInvalidSignature() {
         Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
@@ -2592,7 +2588,7 @@ public class DistributedHerderTest {
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testPutTaskConfigsValidRequiredSignature() {
         Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
@@ -2612,7 +2608,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testFailedToWriteSessionKey() throws Exception {
         // First tick -- after joining the group, we try to write a new
@@ -2644,7 +2640,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testFailedToReadBackNewlyWrittenSessionKey() throws Exception {
         SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
@@ -2691,7 +2687,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testKeyExceptionDetection() {
         assertFalse(herder.isPossibleExpiredKeyException(
@@ -2712,14 +2708,14 @@ public class DistributedHerderTest {
         ));
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testInconsistentConfigs() {
         // FIXME: if we have inconsistent configs, we need to request forced reconfig + write of the connector's task configs
         // This requires inter-worker communication, so needs the REST API
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testThreadNames() {
         assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "herderExecutor").
@@ -2859,7 +2855,7 @@ public class DistributedHerderTest {
         }
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void processRestartRequestsFailureSuppression() {
         member.wakeup();
@@ -2877,7 +2873,7 @@ public class DistributedHerderTest {
         assertTrue(herder.pendingRestartRequests.isEmpty());
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void processRestartRequestsDequeue() {
         member.wakeup();
@@ -2896,7 +2892,7 @@ public class DistributedHerderTest {
         assertTrue(herder.pendingRestartRequests.isEmpty());
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done")
+    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void preserveHighestImpactRestartRequest() {
         member.wakeup();
@@ -2924,7 +2920,7 @@ public class DistributedHerderTest {
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
-    private abstract class BogusSourceConnector extends SourceConnector {
+    private static abstract class BogusSourceConnector extends SourceConnector {
     }
 
     private abstract class BogusSourceTask extends SourceTask {
