@@ -285,12 +285,16 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def append_filestream_connectors_to_classpath(self):
         if self.include_filestream_connectors:
             cwd = os.getcwd()
-            self.logger.info("Including filestream connectors when starting Connect from: %s", cwd)
-            lib_dir = cwd + "/connect/file/build/libs/"
-            for pwd, dirs, files in os.walk(lib_dir):
+            self.logger.info("Including filestream connectors when starting Connect. "
+                             "Looking for jar locally in: %s" % cwd)
+            relative_path = "/connect/file/build/libs/"
+            local_dir = cwd + relative_path
+            lib_dir = self.path.home() + relative_path
+            for pwd, dirs, files in os.walk(local_dir):
                 for file in files:
                     if file.startswith("connect-file") and file.endswith(".jar"):
-                        file_path = os.path.abspath(os.path.join(pwd, file))
+                        # Use the expected directory on the node instead of the path in the driver node
+                        file_path = lib_dir + file
                         self.logger.debug("Appending %s to Connect worker's CLASSPATH" % file_path)
                         return "export CLASSPATH=${CLASSPATH}:%s; " % file_path
             self.logger.info("Jar with filestream connectors was not found under %s" % lib_dir)
@@ -378,11 +382,11 @@ class ConnectDistributedService(ConnectServiceBase):
                           self.logs["connect_heap_dump_file"]["path"]
         other_kafka_opts = self.security_config.kafka_opts.strip('\"')
         cmd += "export KAFKA_OPTS=\"%s %s\"; " % (heap_kafka_opts, other_kafka_opts)
-        classpath = self.append_filestream_connectors_to_classpath()
-        cmd += classpath if classpath else ""
-
         for envvar in self.environment:
             cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
+
+        classpath = self.append_filestream_connectors_to_classpath()
+        cmd += classpath if classpath else ""
         cmd += "%s %s " % (self.path.script("connect-distributed.sh", node), self.CONFIG_FILE)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
