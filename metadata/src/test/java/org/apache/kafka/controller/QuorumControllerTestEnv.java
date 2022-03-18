@@ -19,7 +19,7 @@ package org.apache.kafka.controller;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.controller.QuorumController.Builder;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -45,13 +45,14 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv logEnv,
         Consumer<QuorumController.Builder> builderConsumer
     ) throws Exception {
-        this(logEnv, builderConsumer, Optional.empty());
+        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty());
     }
 
     public QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
         Consumer<Builder> builderConsumer,
-        Optional<Long> sessionTimeoutMillis
+        OptionalLong sessionTimeoutMillis,
+        OptionalLong leaderImbalanceCheckIntervalNs
     ) throws Exception {
         this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
@@ -60,10 +61,10 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(i));
-                if (sessionTimeoutMillis.isPresent()) {
-                    builder.setSessionTimeoutNs(NANOSECONDS.convert(
-                        sessionTimeoutMillis.get(), TimeUnit.MILLISECONDS));
-                }
+                sessionTimeoutMillis.ifPresent(timeout -> {
+                    builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
+                });
+                builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
             }
