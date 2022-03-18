@@ -52,6 +52,56 @@ class LogCaptureContext(listAppender: ListAppender, prevLevelMap: Map[String, Le
   }
 }
 
+/**
+ * This class provides an isolated logging context for logging tests. You can also set the logging
+ * level of the loggers for a given context differently.
+ *
+ * By default, the context uses the definition in src/test/resources/log4j2.properties:
+ *
+ * {{{
+ *     // Creates a logging context with default configurations
+ *     val logCaptureContext = LogCaptureContext(Map(classOf[AppInfoParser].getName -> "WARN"))
+ *     try {
+ *         ...
+ *     } finally {
+ *         logCaptureContext.close
+ *     }
+ * }}}
+ *
+ * You can override the default logging levels by passing a map from the logger name to the desired level, like:
+ *
+ * {{{
+ *     // A logging context with default configuration, but 'foo.bar' logger's level is set to WARN.
+ *     val logCaptureContext = LogCaptureContext(Map("foo.bar" -> "WARN"))
+ *     try {
+ *         ...
+ *     } finally {
+ *         logCaptureContext.close
+ *     }
+ * }}}
+ *
+ * Since the logging messages are appended asynchronously, you should wait until the appender process
+ * the given messages with [[LogCaptureContext.setLatch(Int)]] and [[LogCaptureContext.await(Long, TimeUnit)]] methods, like:
+ *
+ * {{{
+ *     // A logging context with default configuration, but 'foo.bar' logger's level is set to WARN.
+ *     val logCaptureContext = LogCaptureContext()
+ *     try {
+ *         // We expect there will be at least 5 logging messages.
+ *         logCaptureContext.setLatch(5);
+ *
+ *         // The routine to test ...
+ *
+ *         // Wait for the appender to finish processing the logging messages, 10 seconds in maximum.
+ *         logCaptureContext.await(10, TimeUnit.SECONDS)
+ *         val event = logCaptureContext.getMessages.find(...)
+ *     } finally {
+ *         logCaptureContext.close
+ *     }
+ * }}}
+ *
+ * Note: The tests may hang up if you set the messages count too high.
+ */
 object LogCaptureContext {
   def apply(levelMap: Map[String, String] = Map()): LogCaptureContext = {
     val loggerContext = LoggerContext.getContext(false)

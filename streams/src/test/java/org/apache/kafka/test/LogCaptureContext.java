@@ -28,6 +28,47 @@ import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.apache.logging.log4j.test.appender.ListAppender;
 
+/**
+ * <p>This class provides an isolated logging context for logging tests. You can also set the logging
+ * level of the loggers for a given context differently.
+ *
+ * <p>By default, the context uses the definition in src/test/resources/log4j2.properties:
+ * <pre>
+ *     // Creates a logging context with default configurations
+ *     try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
+ *         ...
+ *     }
+ * </pre>
+ *
+ * <p>You can override the default logging levels by passing a map from the logger name to the desired level, like:
+ * <pre>
+ *     // A logging context with default configuration, but 'foo.bar' logger's level is set to WARN.
+ *     try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+ *         Collections.singletonMap("foo.bar", "WARN")
+ *     )) {
+ *         ...
+ *     }
+ * </pre>
+ *
+ * <p>Since the logging messages are appended asynchronously, you should wait until the appender process
+ * the given messages with {@link #setLatch(int)} and {@link #await(long, TimeUnit)} methods, like:
+ * <pre>
+ *     try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(...)) {
+ *         // We expect there will be at least 5 logging messages.
+ *         logCaptureContext.setLatch(5);
+ *
+ *         // The routine to test ...
+ *
+ *         // Wait for the appender to finish processing the logging messages, 10 seconds in maximum.
+ *         logCaptureContext.await(10L, TimeUnit.SECONDS);
+ *         assertThat(
+ *             logCaptureContext.getMessages(),
+ *             hasItem("the logging message is appended"));
+ *     }
+ * </pre>
+ *
+ * <p>Note: The tests may hang up if you set the messages count too high.
+ */
 public class LogCaptureContext implements AutoCloseable {
     private final ListAppender listAppender;
     private final Map<String, Level> prevLevelMap = new HashMap<>();
