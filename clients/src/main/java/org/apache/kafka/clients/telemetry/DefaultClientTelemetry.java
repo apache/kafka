@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
@@ -45,12 +46,37 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * The default implementation of the client telemetry agent.  The full life-cycle of the metric collection process is
+ * defined by a state machine in the {@link TelemetryState}.  Each state is assciate with a different set of operations.
+ * For example, the agent will attempt to fetch the subscription from the broker when in the subscription_needed state.
+ * If the push operation failed, the state machine might attempt to refetch the subscription information, and set the
+ * state back to subscription_needed.
+ *
+ * In an unlikely scenario, if a bad state transition is detected, an {@link IllegalTelemetryStateException}  will be
+ * thrown.
+ *
+ * The state transition follows the following steps in order:
+ * <ol>
+ *     <li>subscription_needed
+ *     <li>subscription_in_progress
+ *     <li>push_needed
+ *     <li>push_in_progress
+ *     <li>terminating_push_needed
+ *     <li>terminating_push_in_progress
+ *     <li>terminated
+ * </ol>
+ * For more detail in state transition, see {@link TelemetryState}.VALID_NEXT_STATES, or
+ * {@code TelemetryState.validateTransition}.
+ *
+ */
 public class DefaultClientTelemetry implements ClientTelemetry {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultClientTelemetry.class);
@@ -339,7 +365,7 @@ public class DefaultClientTelemetry implements ClientTelemetry {
     }
 
     @Override
-    public void telemetrySubscriptionSucceeded(GetTelemetrySubscriptionsResponseData data) {
+    public void telemetrySubscriptionReceived(GetTelemetrySubscriptionsResponseData data) {
         List<String> requestedMetrics = data.requestedMetrics();
 
         // TODO: TELEMETRY_TODO: this is temporary until we get real data back from broker...
@@ -385,8 +411,13 @@ public class DefaultClientTelemetry implements ClientTelemetry {
     }
 
     @Override
-    public void pushTelemetrySucceeded(PushTelemetryResponseData data) {
-        log.debug("Successfully pushed telemetry; response: {}", data);
+    public void pushTelemetryReceived(PushTelemetryResponseData data) {
+        // TODO: validate the state as push in prog or teminating pushn prog
+        if (data.errorCode() != Errors.NONE.code()) {
+            handlePushTelemetryResponseDataErrors(data);
+        } else {
+            log.debug("Successfully pushed telemetry; response: {}", data);
+        }
 
         TelemetryState state = stateInternal();
 
@@ -396,6 +427,45 @@ public class DefaultClientTelemetry implements ClientTelemetry {
             setState(TelemetryState.terminated);
         else
             throw new IllegalTelemetryStateException(String.format("Could not transition state after successful push telemetry from state %s", state));
+    }
+
+    /**
+     * Examine the response data and handle different error code accordingly.
+     *  - Authorization Failed: Retry 30min later
+     *  - Invalid Record: Retry 5min later
+     *  - UnknownSubscription or Unsupported Compression: Retry
+     *  After a new subscription is created, the current state is transitioned to push_needed to wait for another push.
+     *
+     * @param data pushTelemetryResponseData
+     * @throws IllegalTelemetryStateException when subscription is mull
+     */
+    private void handlePushTelemetryResponseDataErrors(final PushTelemetryResponseData data) {
+        TelemetrySubscription currentSubscription = subscription().orElseThrow(
+        () -> new IllegalTelemetryStateException(String.format("Subscription cannot be null.  Aborting.")));
+
+        final long retryMs;
+        // We might want to wait and retry or retry after some failures are received
+        if (isAuthorizationFailedError(data.errorCode())) {
+            retryMs = 30 * 60 * 1000;
+            log.warn("Error code: {}. Reason: Client is permitted to send metrics.  Retry automatically in {}ms.", data.errorCode(), retryMs);
+            setSubscription(currentSubscription.alterPushIntervalMs(retryMs, time));
+        } else if (data.errorCode() == Errors.INVALID_RECORD.code()) {
+            retryMs = 5 * 60 * 1000;
+            log.warn("Error code: {}.  Reason: Broker failed to decode or validate the client’s encoded metrics.  Retry automatically in {}ms", data.errorCode(), retryMs);
+            setSubscription(currentSubscription.alterPushIntervalMs(retryMs, time));
+        } else if (data.errorCode() == -1 ||
+                data.errorCode() == Errors.UNSUPPORTED_COMPRESSION_TYPE.code()) {
+            log.warn("Error code: {}.  Reason: {}.  Retrying automatically.", data.errorCode(), Errors.forCode(data.errorCode()).message());
+            setSubscription(currentSubscription.alterPushIntervalMs(0, time));
+        }
+    }
+
+    private static boolean isAuthorizationFailedError(short errorCode) {
+        return errorCode == Errors.CLUSTER_AUTHORIZATION_FAILED.code() ||
+                errorCode == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code() ||
+                errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code() ||
+                errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code() ||
+                errorCode == Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED.code();
     }
 
     @Override
