@@ -568,7 +568,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         (newConfig, brokerReconfigurablesToUpdate.toList)
       } catch {
         case e: Exception =>
-          System.err.print(s"update failed: $e")
+          System.err.print(s"update failed: ${e.printStackTrace()}")
           System.err.flush()
           if (!validateOnly)
             error(s"Failed to update broker configuration with configs : " +
