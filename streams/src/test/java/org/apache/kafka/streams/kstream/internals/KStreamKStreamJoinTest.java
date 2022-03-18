@@ -278,9 +278,6 @@ public class KStreamKStreamJoinTest {
     @Test
     public void shouldBuildJoinWithCustomStoresAndCorrectWindowSettings() {
         // Case where everything matches up
-        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
-        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
-
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));

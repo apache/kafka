@@ -99,14 +99,10 @@ public class LoggingResource {
             List<Logger> en = currentLoggers();
             Optional<Logger> found = en.stream().filter(existingLogger -> loggerName.equals(existingLogger.getName())).findAny();
 
-            logger = found.orElse(null);
+            logger = found.orElseThrow(() -> new NotFoundException("Logger " + loggerName + " not found."));
         }
 
-        if (logger == null) {
-            throw new NotFoundException("Logger " + loggerName + " not found.");
-        } else {
-            return Response.ok(effectiveLevelToMap(logger)).build();
-        }
+        return Response.ok(effectiveLevelToMap(logger)).build();
     }
 
     /**
