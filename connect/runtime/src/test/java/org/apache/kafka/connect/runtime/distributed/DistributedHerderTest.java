@@ -263,7 +263,7 @@ public class DistributedHerderTest {
         herder = mock(DistributedHerder.class, new MockSettingsImpl<>().useConstructor(
                         new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
                         statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time,
-                        noneConnectorClientConfigOverridePolicy, new AutoCloseable[] {uponShutdown})
+                        noneConnectorClientConfigOverridePolicy, uponShutdown)
                     .defaultAnswer(Answers.RETURNS_SMART_NULLS));
 
         configUpdateListener = herder.new ConfigUpdateListener();

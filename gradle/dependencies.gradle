@@ -103,7 +103,7 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.8.4",
   metrics: "2.2.0",
-  mockito: "4.3.1",
+  mockito: "4.4.0",
   netty: "4.1.73.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",

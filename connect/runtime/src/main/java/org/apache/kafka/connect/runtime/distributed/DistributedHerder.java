@@ -229,6 +229,25 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     // visible for testing
+    // HACK: get rid of this (and update DistributedHerderTest) once
+    // https://github.com/mockito/mockito/issues/2601 is resolved or worked around
+    DistributedHerder(DistributedConfig config,
+                      Worker worker,
+                      String workerId,
+                      String kafkaClusterId,
+                      StatusBackingStore statusBackingStore,
+                      ConfigBackingStore configBackingStore,
+                      WorkerGroupMember member,
+                      String restUrl,
+                      ConnectMetrics metrics,
+                      Time time,
+                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                      AutoCloseable uponShutdown) {
+        this(config, worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, member, restUrl, metrics,
+                time, connectorClientConfigOverridePolicy, new AutoCloseable[] {uponShutdown});
+    }
+
+    // visible for testing
     DistributedHerder(DistributedConfig config,
                       Worker worker,
                       String workerId,
