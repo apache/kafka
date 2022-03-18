@@ -56,7 +56,7 @@ public class PartitionChangeBuilder {
      */
     public enum Election {
         /**
-         * Perform leader election to keep the partition online or if the preferred replica is in the ISR.
+         * Perform leader election to keep the partition online. Elect the preferred replica if it is in the ISR.
          */
         PREFERRED,
         /**
@@ -158,18 +158,18 @@ public class PartitionChangeBuilder {
      */
     private ElectionResult electPreferredLeader() {
         int preferredReplica = targetReplicas.get(0);
-        if (targetIsr.contains(preferredReplica) && isAcceptableLeader.apply(preferredReplica)) {
+        if (isValidNewLeader(preferredReplica)) {
             return new ElectionResult(preferredReplica, false);
         }
 
-        if (targetIsr.contains(partition.leader) && isAcceptableLeader.apply(partition.leader)) {
+        if (isValidNewLeader(partition.leader)) {
             // Don't consider a new leader since the current leader meets all the constraints
             return new ElectionResult(partition.leader, false);
         }
 
         Optional<Integer> onlineLeader = targetReplicas.stream()
             .skip(1)
-            .filter(replica -> targetIsr.contains(replica) && isAcceptableLeader.apply(replica))
+            .filter(this::isValidNewLeader)
             .findFirst();
         if (onlineLeader.isPresent()) {
             return new ElectionResult(onlineLeader.get(), false);
@@ -182,13 +182,13 @@ public class PartitionChangeBuilder {
      * Assumes that the election type is either Election.ONLINE or Election.UNCLEAN
      */
     private ElectionResult electAnyLeader() {
-        if (targetIsr.contains(partition.leader) && isAcceptableLeader.apply(partition.leader)) {
+        if (isValidNewLeader(partition.leader)) {
             // Don't consider a new leader since the current leader meets all the constraints
             return new ElectionResult(partition.leader, false);
         }
 
         Optional<Integer> onlineLeader = targetReplicas.stream()
-            .filter(replica -> targetIsr.contains(replica) && isAcceptableLeader.apply(replica))
+            .filter(this::isValidNewLeader)
             .findFirst();
         if (onlineLeader.isPresent()) {
             return new ElectionResult(onlineLeader.get(), false);
@@ -207,10 +207,20 @@ public class PartitionChangeBuilder {
         return new ElectionResult(NO_LEADER, false);
     }
 
+    private boolean isValidNewLeader(int replica) {
+        return targetIsr.contains(replica) && isAcceptableLeader.apply(replica);
+    }
+
     private void tryElection(PartitionChangeRecord record) {
         ElectionResult electionResult = electLeader();
         if (electionResult.node != partition.leader) {
-            log.debug("Setting new leader for topicId {}, partition {} to {}", topicId, partitionId, electionResult.node);
+            log.debug(
+                "Setting new leader for topicId {}, partition {} to {} using {} election",
+                topicId,
+                partitionId,
+                electionResult.node,
+                electionResult.unclean ? "an unclean" : "a clean"
+            );
             record.setLeader(electionResult.node);
             if (electionResult.unclean) {
                 // If the election was unclean, we have to forcibly set the ISR to just the

@@ -1016,6 +1016,11 @@ public final class QuorumController implements Controller {
             long delayNs = time.nanoseconds();
             if (imbalancedScheduled == ImbalanceSchedule.DEFERRED) {
                 delayNs += leaderImbalanceCheckIntervalNs.getAsLong();
+            } else {
+                // The current implementation of KafkaEventQueue always picks from the deferred collection of operations
+                // before picking from the non-deferred collection of operations. This can result in some unfairness if
+                // deferred operation are scheduled for immediate execution. This delays them by a small amount of time.
+                delayNs += NANOSECONDS.convert(10, TimeUnit.MILLISECONDS);
             }
 
             queue.scheduleDeferred(MAYBE_BALANCE_PARTITION_LEADERS, new EarliestDeadlineFunction(delayNs), event);
