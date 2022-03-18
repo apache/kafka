@@ -41,7 +41,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
@@ -756,7 +756,7 @@ public class QuorumControllerTest {
             ).get().topics().find(topicName).topicId();
 
             // Create a lot of alter isr
-            List<AlterIsrRequestData.PartitionData> alterIsrs = IntStream
+            List<AlterPartitionRequestData.PartitionData> alterPartitions = IntStream
                 .range(0, numPartitions)
                 .mapToObj(partitionIndex -> {
                     PartitionRegistration partitionRegistration = controller.replicationControl().getPartition(
@@ -764,30 +764,30 @@ public class QuorumControllerTest {
                         partitionIndex
                     );
 
-                    return new AlterIsrRequestData.PartitionData()
+                    return new AlterPartitionRequestData.PartitionData()
                         .setPartitionIndex(partitionIndex)
                         .setLeaderEpoch(partitionRegistration.leaderEpoch)
-                        .setCurrentIsrVersion(partitionRegistration.partitionEpoch)
+                        .setPartitionEpoch(partitionRegistration.partitionEpoch)
                         .setNewIsr(Arrays.asList(0, 1));
                 })
                 .collect(Collectors.toList());
 
-            AlterIsrRequestData.TopicData topicData = new AlterIsrRequestData.TopicData()
+            AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
                 .setName(topicName);
-            topicData.partitions().addAll(alterIsrs);
+            topicData.partitions().addAll(alterPartitions);
 
             int leaderId = 0;
-            AlterIsrRequestData alterIsrRequest = new AlterIsrRequestData()
+            AlterPartitionRequestData alterPartitionRequest = new AlterPartitionRequestData()
                 .setBrokerId(leaderId)
                 .setBrokerEpoch(brokerEpochs.get(leaderId));
-            alterIsrRequest.topics().add(topicData);
+            alterPartitionRequest.topics().add(topicData);
 
             logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
 
             int oldClaimEpoch = controller.curClaimEpoch();
             assertThrows(
                 ExecutionException.class,
-                () -> controller.alterIsr(alterIsrRequest).get()
+                () -> controller.alterPartition(alterPartitionRequest).get()
             );
 
             // Wait for the controller to become active again
@@ -797,7 +797,7 @@ public class QuorumControllerTest {
                 String.format("oldClaimEpoch = %s, newClaimEpoch = %s", oldClaimEpoch, controller.curClaimEpoch())
             );
 
-            // Since the alterIsr partially failed we expect to see
+            // Since the alterPartition partially failed we expect to see
             // some partitions to still have 2 in the ISR.
             int partitionsWithReplica2 = Utils.toList(
                 controller

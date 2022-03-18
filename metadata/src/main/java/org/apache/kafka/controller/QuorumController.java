@@ -30,8 +30,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
-import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -145,6 +145,7 @@ public final class QuorumController implements Controller {
         private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
+        private boolean isLeaderRecoverySupported = false;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
@@ -196,6 +197,11 @@ public final class QuorumController implements Controller {
 
         public Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
+            return this;
+        }
+
+        public Builder setIsLeaderRecoverySupported(boolean isLeaderRecoverySupported) {
+            this.isLeaderRecoverySupported = isLeaderRecoverySupported;
             return this;
         }
 
@@ -259,8 +265,8 @@ public final class QuorumController implements Controller {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, clusterId, queue, time,
                     configSchema, raftClient, supportedFeatures, defaultReplicationFactor,
-                    defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
-                    sessionTimeoutNs, controllerMetrics, createTopicPolicy,
+                    defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer,
+                    snapshotMaxNewRecordBytes, sessionTimeoutNs, controllerMetrics, createTopicPolicy,
                     alterConfigPolicy, configurationValidator, authorizer);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1207,6 +1213,7 @@ public final class QuorumController implements Controller {
                              Map<String, VersionRange> supportedFeatures,
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
+                             boolean isLeaderRecoverySupported,
                              ReplicaPlacer replicaPlacer,
                              long snapshotMaxNewRecordBytes,
                              long sessionTimeoutNs,
@@ -1238,7 +1245,7 @@ public final class QuorumController implements Controller {
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
-            logContext, defaultReplicationFactor, defaultNumPartitions,
+            logContext, defaultReplicationFactor, defaultNumPartitions, isLeaderRecoverySupported,
             configurationControl, clusterControl, controllerMetrics, createTopicPolicy);
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));
@@ -1254,12 +1261,12 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {
+    public CompletableFuture<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request) {
         if (request.topics().isEmpty()) {
-            return CompletableFuture.completedFuture(new AlterIsrResponseData());
+            return CompletableFuture.completedFuture(new AlterPartitionResponseData());
         }
-        return appendWriteEvent("alterIsr", () ->
-            replicationControl.alterIsr(request));
+        return appendWriteEvent("alterPartition", () ->
+            replicationControl.alterPartition(request));
     }
 
     @Override

@@ -21,12 +21,11 @@ import kafka.log.UnifiedLog
 import kafka.server.metadata.BrokerMetadataPublisher
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
-
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito
-
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataPublisherTest {
@@ -127,6 +126,7 @@ class BrokerMetadataPublisherTest {
         Array.empty[Int],
         Array.empty[Int],
         replicas.head,
+        LeaderRecoveryState.RECOVERED,
         0,
         0
       )

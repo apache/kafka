@@ -20,11 +20,14 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.controller.PartitionChangeBuilder.BestLeader;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,22 +58,22 @@ public class PartitionChangeBuilderTest {
 
     private final static PartitionRegistration FOO = new PartitionRegistration(
         new int[] {2, 1, 3}, new int[] {2, 1, 3}, Replicas.NONE, Replicas.NONE,
-        1, 100, 200);
+        1, LeaderRecoveryState.RECOVERED, 100, 200);
 
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
     private static PartitionChangeBuilder createFooBuilder(boolean allowUnclean) {
-        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, () -> allowUnclean);
+        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, () -> allowUnclean, true);
     }
 
     private final static PartitionRegistration BAR = new PartitionRegistration(
         new int[] {1, 2, 3, 4}, new int[] {1, 2, 3}, new int[] {1}, new int[] {4},
-        1, 100, 200);
+        1, LeaderRecoveryState.RECOVERED, 100, 200);
 
     private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static PartitionChangeBuilder createBarBuilder(boolean allowUnclean) {
-        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, () -> allowUnclean);
+        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, () -> allowUnclean, true);
     }
 
     private static void assertBestLeaderEquals(PartitionChangeBuilder builder,
@@ -251,5 +254,123 @@ public class PartitionChangeBuilderTest {
                 setTargetReplicas(replicas.merged()).
                 setTargetAdding(replicas.adding()).
                 build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported) {
+        final byte noChange = (byte) -1;
+        int leaderId = 1;
+        LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
+        PartitionRegistration registration = new PartitionRegistration(
+            new int[] {leaderId, leaderId + 1, leaderId + 2},
+            new int[] {leaderId},
+            Replicas.NONE,
+            Replicas.NONE,
+            leaderId,
+            recoveryState,
+            100,
+            200
+        );
+
+        // Change the partition so that there is no leader
+        PartitionChangeBuilder offlineBuilder = new PartitionChangeBuilder(
+            registration,
+            FOO_ID,
+            0,
+            brokerId -> false,
+            () -> false,
+            isLeaderRecoverySupported
+        );
+        // Set the target ISR to empty to indicate that the last leader is offline
+        offlineBuilder.setTargetIsr(Collections.emptyList());
+
+        // The partition should stay as recovering
+        PartitionChangeRecord changeRecord = (PartitionChangeRecord) offlineBuilder
+            .build()
+            .get()
+            .message();
+        assertEquals(noChange, changeRecord.leaderRecoveryState());
+        assertEquals(NO_LEADER, changeRecord.leader());
+
+        registration = registration.merge(changeRecord);
+
+        assertEquals(NO_LEADER, registration.leader);
+        assertEquals(leaderId, registration.isr[0]);
+        assertEquals(recoveryState, registration.leaderRecoveryState);
+
+        // Bring the leader back online
+        PartitionChangeBuilder onlineBuilder = new PartitionChangeBuilder(
+            registration,
+            FOO_ID,
+            0,
+            brokerId -> true,
+            () -> false,
+            isLeaderRecoverySupported
+        );
+
+        // The only broker in the ISR is elected leader and stays in the recovering
+        changeRecord = (PartitionChangeRecord) onlineBuilder.build().get().message();
+        assertEquals(noChange, changeRecord.leaderRecoveryState());
+
+        registration = registration.merge(changeRecord);
+
+        assertEquals(leaderId, registration.leader);
+        assertEquals(leaderId, registration.isr[0]);
+        assertEquals(recoveryState, registration.leaderRecoveryState);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported) {
+        final byte noChange = (byte) -1;
+        int leaderId = 1;
+        PartitionRegistration registration = new PartitionRegistration(
+            new int[] {leaderId, leaderId + 1, leaderId + 2},
+            new int[] {leaderId + 1, leaderId + 2},
+            Replicas.NONE,
+            Replicas.NONE,
+            NO_LEADER,
+            LeaderRecoveryState.RECOVERED,
+            100,
+            200
+        );
+
+        // Change the partition using unclean leader election
+        PartitionChangeBuilder onlineBuilder = new PartitionChangeBuilder(
+            registration,
+            FOO_ID,
+            0,
+            brokerId -> brokerId == leaderId,
+            () -> true,
+            isLeaderRecoverySupported
+        );
+
+        // The partition should stay as recovering
+        PartitionChangeRecord changeRecord = (PartitionChangeRecord) onlineBuilder
+            .build()
+            .get()
+            .message();
+
+        byte expectedRecoveryChange = noChange;
+        if (isLeaderRecoverySupported) {
+            expectedRecoveryChange = LeaderRecoveryState.RECOVERING.value();
+        }
+
+        assertEquals(expectedRecoveryChange, changeRecord.leaderRecoveryState());
+        assertEquals(leaderId, changeRecord.leader());
+        assertEquals(1, changeRecord.isr().size());
+        assertEquals(leaderId, changeRecord.isr().get(0));
+
+        registration = registration.merge(changeRecord);
+
+        LeaderRecoveryState expectedRecovery = LeaderRecoveryState.RECOVERED;
+        if (isLeaderRecoverySupported) {
+            expectedRecovery = LeaderRecoveryState.RECOVERING;
+        }
+
+        assertEquals(leaderId, registration.leader);
+        assertEquals(leaderId, registration.isr[0]);
+        assertEquals(expectedRecovery, registration.leaderRecoveryState);
     }
 }
