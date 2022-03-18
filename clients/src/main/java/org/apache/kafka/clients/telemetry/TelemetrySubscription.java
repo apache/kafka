@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.StringJoiner;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.utils.Time;
 
 /**
  * Simple, in-memory representation of the telemetry subscription that is retrieved from the cluster
@@ -99,5 +100,22 @@ public class TelemetrySubscription {
             .add("deltaTemporality=" + deltaTemporality)
             .add("metricSelector=" + metricSelector)
             .toString();
+    }
+
+    /**
+     * Create a new TelemetrySubscription object with the given {@code pushIntervalMs} parameter.
+     * @param pushIntervalMs time interval in millisecond of the next push
+     * @return a new TelemetrySubscription
+     */
+    public TelemetrySubscription alterPushIntervalMs(long pushIntervalMs, Time time) {
+        return new TelemetrySubscription(
+                time.milliseconds(), // update fetch ms to get the correct next push time
+                this.throttleTimeMs,
+                this.clientInstanceId(),
+                this.subscriptionId(),
+                this.acceptedCompressionTypes(),
+                pushIntervalMs,
+                this.deltaTemporality(),
+                this.metricSelector());
     }
 }
