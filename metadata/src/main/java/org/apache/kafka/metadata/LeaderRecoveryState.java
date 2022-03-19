@@ -36,7 +36,7 @@ public enum LeaderRecoveryState {
      * A special value used to represent that the LeaderRecoveryState field of a
      * PartitionChangeRecord didn't change.
      */
-    private static final byte NO_CHANGE = (byte) -1;
+    public static final byte NO_CHANGE = (byte) -1;
 
     public static LeaderRecoveryState of(byte value) {
         return optionalOf(value)

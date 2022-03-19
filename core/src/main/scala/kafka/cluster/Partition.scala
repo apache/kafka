@@ -549,7 +549,7 @@ class Partition(val topicPartition: TopicPartition,
       val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
 
-      if (partitionState.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
+      if (partitionState.leaderRecoveryState == LeaderRecoveryState.RECOVERING.value()) {
         stateChangeLogger.info(
           s"The topic partition $topicPartition was marked as RECOVERING. Leader log recovery is not implemented. " +
           "Marking the topic partition as RECOVERED."
