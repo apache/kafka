@@ -794,21 +794,21 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       servers.foreach { server => TestUtils.retry(maxWaitMs) {
           val value = server.config.originals.get(propName)
           if (propName == "num.network.threads") {
-            println(s"Using maxWaitMs of $maxWaitMs")
+//            println(s"Using maxWaitMs of $maxWaitMs")
           // Check if using admin.describeConfigs returns expected value.
           // Limiting this to num.network.threads as it is where the CI is breaking currently
 
-            val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
-            val config = adminClients.head.describeConfigs(List(brokerResource).asJava).values().get(brokerResource).get()
-            val adminValue = if (config.get(propName) != null) config.get(propName).value() else "null"
-            println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: ${ server.config.get(propName) } serverOriginalsConf: $value, adminConf: $adminValue")
+//            val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
+//            val config = adminClients.head.describeConfigs(List(brokerResource).asJava).values().get(brokerResource).get()
+//            val adminValue = if (config.get(propName) != null) config.get(propName).value() else "null"
+//            println(s"Server: ${server.config.brokerId}, prop: $propName, expected: $newSize, serverConf: ${ server.config.get(propName) } serverOriginalsConf: $value, adminConf: $adminValue")
           }
 
           assertEquals(newSize.toString, value)
         }
       }
 
-      // reconfigureServers(props, perBrokerConfig = false, (propName, newSize.toString))
+      reconfigureServers(props, perBrokerConfig = false, (propName, newSize.toString))
       maybeVerifyThreadPoolSize(propName, newSize, threadPrefix)
     }
 

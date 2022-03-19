@@ -35,6 +35,7 @@ import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.annotation.nowarn
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -198,38 +199,53 @@ object DynamicBrokerConfig {
 
 class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
 
-  class LoggingBuffer extends ArrayBuffer[Reconfigurable] {
+  class LoggingBuffer[T](val name: String) extends ArrayBuffer[T] {
+
+    private val iteratorInUse = new AtomicBoolean(false)
     override def clear(): Unit = {
-      println("Reconfigurables: cleared")
+//      println(s"Buffer $name cleared")
       super.clear()
     }
 
-    override def addOne(elem: Reconfigurable): this.type = {
-//      elem match {
-//        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Broker ${x.config.brokerId}, Adding data plane acceptor for ${x.listenerName()}")
-//        case _ =>
-//      }
-
+    override def addOne(elem: T): this.type = {
+      checkForModificationWhileIterating(elem)
       super.addOne(elem)
     }
 
-    override def subtractOne(elem: Reconfigurable): LoggingBuffer.this.type = {
-      elem match {
-        case x: DataPlaneAcceptor =>    println(s"Reconfigurables: Broker ${x.config.brokerId}, Removing data plane acceptor for ${x.listenerName()}")
-        case _ =>
-      }
+    override def subtractOne(elem: T): LoggingBuffer.this.type = {
+      checkForModificationWhileIterating(elem)
       super.subtractOne(elem)
     }
 
+    private def checkForModificationWhileIterating(elem: T): Unit = {
+      if (!iteratorInUse.get()) return
 
+      val st = Thread.currentThread().getStackTrace.mkString("\n")
+      println(s"Buffer $name modfied during iteration, element: $elem, st: $st")
+    }
+
+    override def iterator: Iterator[T] = {
+      val iter = super.iterator
+//      iteratorInUse.set(true)
+//      new Iterator[T] {
+//        override def hasNext: Boolean = {
+//            val next = iter.hasNext
+//            if (!next) iteratorInUse.set(false)
+//            next
+//        }
+//
+//        override def next(): T = iter.next()
+//      }
+      iter
+    }
   }
 
   private[server] val staticBrokerConfigs = ConfigDef.convertToStringMapWithPasswordValues(kafkaConfig.originalsFromThisConfig).asScala
   private[server] val staticDefaultConfigs = ConfigDef.convertToStringMapWithPasswordValues(KafkaConfig.defaultValues.asJava).asScala
   private val dynamicBrokerConfigs = mutable.Map[String, String]()
   private val dynamicDefaultConfigs = mutable.Map[String, String]()
-  private val reconfigurables: mutable.Buffer[Reconfigurable] = new LoggingBuffer()
-  private val brokerReconfigurables = mutable.Buffer[BrokerReconfigurable]()
+  private val reconfigurables = new LoggingBuffer[Reconfigurable]("reconfigurables")
+  private val brokerReconfigurables = new LoggingBuffer[BrokerReconfigurable]("brokerReconfigurables")
   private val lock = new ReentrantReadWriteLock
   private var currentConfig: KafkaConfig = null
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
@@ -563,23 +579,38 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
         newConfig.valuesFromThisConfig.keySet.forEach(customConfigs.remove(_))
-        reconfigurables.foreach {
-          case listenerReconfigurable: ListenerReconfigurable =>
-            processListenerReconfigurable(listenerReconfigurable, newConfig, customConfigs, validateOnly, reloadOnly = false)
-          case reconfigurable =>
-            if (needsReconfiguration(reconfigurable.reconfigurableConfigs, changeMap.keySet, deletedKeySet))
-              processReconfigurable(reconfigurable, changeMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
+        try {
+          reconfigurables.foreach {
+            case listenerReconfigurable: ListenerReconfigurable =>
+              processListenerReconfigurable(listenerReconfigurable, newConfig, customConfigs, validateOnly, reloadOnly = false)
+            case reconfigurable =>
+              if (needsReconfiguration(reconfigurable.reconfigurableConfigs, changeMap.keySet, deletedKeySet))
+                processReconfigurable(reconfigurable, changeMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
+          }
+        } catch {
+          case e: Exception => {
+            println(s"Exception on reconfigurables, $e")
+            throw e
+          }
         }
 
         // BrokerReconfigurable updates are processed after config is updated. Only do the validation here.
         val brokerReconfigurablesToUpdate = mutable.Buffer[BrokerReconfigurable]()
-        brokerReconfigurables.foreach { reconfigurable =>
-          if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, changeMap.keySet, deletedKeySet)) {
-            reconfigurable.validateReconfiguration(newConfig)
-            if (!validateOnly)
-              brokerReconfigurablesToUpdate += reconfigurable
+
+        try {
+          brokerReconfigurables.foreach { reconfigurable =>
+            if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, changeMap.keySet, deletedKeySet)) {
+              reconfigurable.validateReconfiguration(newConfig)
+              if (!validateOnly)
+                brokerReconfigurablesToUpdate += reconfigurable
+            }
           }
+        }  catch {
+        case e: Exception => {
+          println(s"Exception on brokerReconfigurables, $e")
+          throw e
         }
+      }
         (newConfig, brokerReconfigurablesToUpdate.toList)
       } catch {
         case e: Exception =>
@@ -604,9 +635,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                             validateOnly: Boolean,
                                             reloadOnly:  Boolean): Unit = {
     val listenerName = listenerReconfigurable.listenerName
-    val brokerId = newConfig.brokerId
+//    val brokerId = newConfig.brokerId
 
-    val printf = newConfig.numNetworkThreads == 2
+//    val printf = newConfig.numNetworkThreads == 2
     val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
     val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
     val (changeMap, deletedKeys) = updatedConfigs(newValues, oldValues)
@@ -615,11 +646,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
     if (reloadOnly != configsChanged) {
-      if (printf) {
-        val stackTrace = "nop" //util.Arrays.toString(Thread.currentThread().getStackTrace.asInstanceOf[Array[Object]])
-        println(s"processListenerReconfigurable brokerId, $brokerId, listenerName: $listenerName, thread: ${Thread.currentThread()}, stack: $stackTrace")
-        println(s"Updated keys: $updatedKeys, ${changeMap.get("num.network.threads")}")
-      }
+//      if (printf) {
+//        val stackTrace = "nop" //util.Arrays.toString(Thread.currentThread().getStackTrace.asInstanceOf[Array[Object]])
+//        println(s"processListenerReconfigurable brokerId, $brokerId, listenerName: $listenerName, thread: ${Thread.currentThread()}, stack: $stackTrace")
+//        println(s"Updated keys: $updatedKeys, ${changeMap.get("num.network.threads")}")
+//      }
       processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
     }
   }
@@ -630,23 +661,23 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                     newCustomConfigs: util.Map[String, Object],
                                     validateOnly: Boolean): Unit = {
 
-    var lr: ListenerReconfigurable = null
-    val printf = reconfigurable match {
-      case _: ListenerReconfigurable =>
-        allNewConfigs.get("num.network.threads").asInstanceOf[Int] == 2
-      case _ => false
-    }
-
-    if (printf) lr = reconfigurable.asInstanceOf[ListenerReconfigurable]
-    if (lr != null) println(s"processReconfigurable for ${lr.listenerName()}")
+//    var lr: ListenerReconfigurable = null
+//    val printf = reconfigurable match {
+//      case _: ListenerReconfigurable =>
+//        allNewConfigs.get("num.network.threads").asInstanceOf[Int] == 2
+//      case _ => false
+//    }
+//
+//    if (printf) lr = reconfigurable.asInstanceOf[ListenerReconfigurable]
+//    if (lr != null) println(s"processReconfigurable for ${lr.listenerName()}")
 
     val newConfigs = new util.HashMap[String, Object]
     allNewConfigs.forEach { (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
     newConfigs.putAll(newCustomConfigs)
     try {
-      if (lr != null) println(s"validateReconfig for ${lr.listenerName()}, validateOnly = $validateOnly")
+//      if (lr != null) println(s"validateReconfig for ${lr.listenerName()}, validateOnly = $validateOnly")
       reconfigurable.validateReconfiguration(newConfigs)
-      if (lr != null) println(s"validateReconfig success for ${lr.listenerName()}")
+//      if (lr != null) println(s"validateReconfig success for ${lr.listenerName()}")
     } catch {
       case e: ConfigException => throw e
       case _: Exception =>
@@ -654,13 +685,13 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
 
     if (!validateOnly) {
-      if (printf && lr != null) {
-        println(s"Reconfiguring ${lr.listenerName()}, updated configs: $updatedConfigNames " +
-          s"custom configs: ${ConfigUtils.configMapToRedactedString(newCustomConfigs, KafkaConfig.configDef)}")
-      }
+//      if (printf && lr != null) {
+//        println(s"Reconfiguring ${lr.listenerName()}, updated configs: $updatedConfigNames " +
+//          s"custom configs: ${ConfigUtils.configMapToRedactedString(newCustomConfigs, KafkaConfig.configDef)}")
+//      }
       reconfigurable.reconfigure(newConfigs)
     } else {
-      if (lr != null) println(s"${lr.listenerName()} was validatedOnly")
+//      if (lr != null) println(s"${lr.listenerName()} was validatedOnly")
     }
   }
 }

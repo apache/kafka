@@ -268,7 +268,7 @@ class SocketServer(val config: KafkaConfig,
       config.addReconfigurable(dataPlaneAcceptor)
       dataPlaneAcceptor.configure(parsedConfigs)
       dataPlaneAcceptors.put(endpoint, dataPlaneAcceptor)
-      println(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
+//      println(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
     }
   }
 
@@ -589,18 +589,18 @@ class DataPlaneAcceptor(socketServer: SocketServer,
   override def reconfigure(configs: util.Map[String, _]): Unit = {
     val brokerId = configs.get(KafkaConfig.BrokerIdProp).asInstanceOf[Int]
     val newNumNetworkThreads = configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int]
-    val printf = newNumNetworkThreads == 2
+//    val printf = newNumNetworkThreads == 2
 
-    if (printf)  println(s"DataAcceptor $listenerName on $brokerId - newThreads: $newNumNetworkThreads, currentProcessors: ${processors.length}, thread: ${Thread.currentThread()}")
+//    if (printf)  println(s"DataAcceptor $listenerName on $brokerId - newThreads: $newNumNetworkThreads, currentProcessors: ${processors.length}, thread: ${Thread.currentThread()}")
     if (newNumNetworkThreads != processors.length) {
-      if (printf) println(s"DataAcceptor $listenerName on $brokerId - Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
+//      if (printf) println(s"DataAcceptor $listenerName on $brokerId - Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
       if (newNumNetworkThreads > processors.length) {
-        addProcessors(newNumNetworkThreads - processors.length, brokerId, printf)
+        addProcessors(newNumNetworkThreads - processors.length, brokerId, false)
       } else if (newNumNetworkThreads < processors.length) {
         removeProcessors(processors.length - newNumNetworkThreads)
       }
     }
-    if (printf) println(s"DataAcceptor $listenerName on $brokerId reconfigure complete")
+//    if (printf) println(s"DataAcceptor $listenerName on $brokerId reconfigure complete")
   }
 
   /**
