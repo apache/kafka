@@ -45,45 +45,6 @@ should_include_file() {
   fi
 }
 
-# As of present, the migration to log4j2 is not completed, so some modules are using log4j 1.x, and
-# the others are using 2.x. This is why log4j 1.x artifacts and 2.x artifacts
-# (with their corresponding slf4j bindings) are mixed in the dependency directories.
-#
-# To exclude unused artifacts from the classpath, we use the `USE_LOG4J2_JAR` variable. If this
-# variable is set to 'true', 1.x dependencies are excluded. If 'false', 2.x dependencies are excluded.
-#
-# We should remove this variable with log4j 1.x dependencies as soon as the migration into log4j 2.x is completed.
-
-if [ -z "$USE_LOG4J2_JAR" ]; then
-  USE_LOG4J2_JAR=true
-fi
-
-log4j_pattern="(log4j-1\.2\.17\.jar)$"
-log4j2_pattern="(log4j-[api|core]-.*\.jar)$"
-slf4j_log4j_pattern="(slf4j-log4j12-.*\.jar)$"
-slf4j_log4j2_pattern="(log4j-slf4j-impl-.*\.jar)$"
-should_include_jar() {
-  file=$1
-
-  if [ "$USE_LOG4J2_JAR" = false ] && [ -n "$(echo "$file" | egrep "$slf4j_log4j2_pattern")" ]; then
-    return 1
-  fi
-
-  if [ "$USE_LOG4J2_JAR" = false ] && [ -n "$(echo "$file" | egrep "$log4j2_pattern")" ]; then
-    return 1
-  fi
-
-  if [ "$USE_LOG4J2_JAR" = true ] && [ -n "$(echo "$file" | egrep "$slf4j_log4j_pattern")" ]; then
-    return 1
-  fi
-
-  if [ "$USE_LOG4J2_JAR" = true ] && [ -n "$(echo "$file" | egrep "$log4j_pattern")" ]; then
-    return 1
-  fi
-
-  return 0
-}
-
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
@@ -104,9 +65,7 @@ if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   do
     for file in "$dir"/*;
     do
-      if should_include_jar "$file"; then
-        CLASSPATH="$CLASSPATH":"$file"
-      fi
+      CLASSPATH="$CLASSPATH":"$file"
     done
   done
 fi
@@ -190,9 +149,7 @@ for dir in "$base_dir"/shell/build/dependant-libs-${SCALA_VERSION}*;
 do
   for file in "$dir"/*;
   do
-    if should_include_jar "$file"; then
-      CLASSPATH="$CLASSPATH":"$file"
-    fi
+    CLASSPATH="$CLASSPATH":"$file"
   done
 done
 
@@ -207,9 +164,7 @@ for dir in "$base_dir"/tools/build/dependant-libs-${SCALA_VERSION}*;
 do
   for file in "$dir"/*;
   do
-    if should_include_jar "$file"; then
-      CLASSPATH="$CLASSPATH":"$file"
-    fi
+    CLASSPATH="$CLASSPATH":"$file"
   done
 done
 
@@ -236,9 +191,7 @@ do
   if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
     for file in "$base_dir"/connect/${cc_pkg}/build/dependant-libs/*;
     do
-      if should_include_jar "$file"; then
-        CLASSPATH="$CLASSPATH":"$file"
-      fi
+      CLASSPATH="$CLASSPATH":"$file"
     done
   fi
 done
@@ -247,9 +200,7 @@ done
 for file in "$base_dir"/libs/*;
 do
   if should_include_file "$file"; then
-    if should_include_jar "$file"; then
-      CLASSPATH="$CLASSPATH":"$file"
-    fi
+    CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
