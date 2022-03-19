@@ -56,6 +56,7 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_
 /**
  * A log4j appender that produces log messages to Kafka
  */
+@Deprecated
 public class KafkaLog4jAppender extends AppenderSkeleton {
 
     private String brokerList;
