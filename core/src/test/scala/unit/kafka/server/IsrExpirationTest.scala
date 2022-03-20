@@ -27,6 +27,7 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{atLeastOnce, mock, verify, when}
@@ -228,7 +229,8 @@ class IsrExpirationTest {
       assignment = configs.map(_.brokerId),
       isr = configs.map(_.brokerId).toSet,
       addingReplicas = Seq.empty,
-      removingReplicas = Seq.empty
+      removingReplicas = Seq.empty,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERED
     )
 
     // set lastCaughtUpTime to current time

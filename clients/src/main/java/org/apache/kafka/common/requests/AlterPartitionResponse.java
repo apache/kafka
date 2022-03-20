@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,17 +26,17 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class AlterIsrResponse extends AbstractResponse {
+public class AlterPartitionResponse extends AbstractResponse {
 
-    private final AlterIsrResponseData data;
+    private final AlterPartitionResponseData data;
 
-    public AlterIsrResponse(AlterIsrResponseData data) {
-        super(ApiKeys.ALTER_ISR);
+    public AlterPartitionResponse(AlterPartitionResponseData data) {
+        super(ApiKeys.ALTER_PARTITION);
         this.data = data;
     }
 
     @Override
-    public AlterIsrResponseData data() {
+    public AlterPartitionResponseData data() {
         return data;
     }
 
@@ -55,7 +55,7 @@ public class AlterIsrResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
-    public static AlterIsrResponse parse(ByteBuffer buffer, short version) {
-        return new AlterIsrResponse(new AlterIsrResponseData(new ByteBufferAccessor(buffer), version));
+    public static AlterPartitionResponse parse(ByteBuffer buffer, short version) {
+        return new AlterPartitionResponse(new AlterPartitionResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

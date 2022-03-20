@@ -17,25 +17,25 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.AlterIsrRequestData;
-import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 
-public class AlterIsrRequest extends AbstractRequest {
+public class AlterPartitionRequest extends AbstractRequest {
 
-    private final AlterIsrRequestData data;
+    private final AlterPartitionRequestData data;
 
-    public AlterIsrRequest(AlterIsrRequestData data, short apiVersion) {
-        super(ApiKeys.ALTER_ISR, apiVersion);
+    public AlterPartitionRequest(AlterPartitionRequestData data, short apiVersion) {
+        super(ApiKeys.ALTER_PARTITION, apiVersion);
         this.data = data;
     }
 
     @Override
-    public AlterIsrRequestData data() {
+    public AlterPartitionRequestData data() {
         return data;
     }
 
@@ -44,27 +44,27 @@ public class AlterIsrRequest extends AbstractRequest {
      */
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new AlterIsrResponse(new AlterIsrResponseData()
+        return new AlterPartitionResponse(new AlterPartitionResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(Errors.forException(e).code()));
     }
 
-    public static AlterIsrRequest parse(ByteBuffer buffer, short version) {
-        return new AlterIsrRequest(new AlterIsrRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static AlterPartitionRequest parse(ByteBuffer buffer, short version) {
+        return new AlterPartitionRequest(new AlterPartitionRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
-    public static class Builder extends AbstractRequest.Builder<AlterIsrRequest> {
+    public static class Builder extends AbstractRequest.Builder<AlterPartitionRequest> {
 
-        private final AlterIsrRequestData data;
+        private final AlterPartitionRequestData data;
 
-        public Builder(AlterIsrRequestData data) {
-            super(ApiKeys.ALTER_ISR);
+        public Builder(AlterPartitionRequestData data) {
+            super(ApiKeys.ALTER_PARTITION);
             this.data = data;
         }
 
         @Override
-        public AlterIsrRequest build(short version) {
-            return new AlterIsrRequest(data, version);
+        public AlterPartitionRequest build(short version) {
+            return new AlterPartitionRequest(data, version);
         }
 
         @Override
