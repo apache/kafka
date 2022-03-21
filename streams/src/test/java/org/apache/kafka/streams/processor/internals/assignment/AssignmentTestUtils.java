@@ -166,6 +166,15 @@ public final class AssignmentTestUtils {
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, EMPTY_CLIENT_TAGS);
     }
 
+    public static SubscriptionInfo getInfo(final UUID processId,
+                                           final Set<TaskId> prevTasks,
+                                           final Set<TaskId> standbyTasks,
+                                           final byte uniqueField,
+                                           final Map<String, String> clientTags) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, clientTags);
+    }
+
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets
     private static Map<TaskId, Long> getTaskOffsetSums(final Collection<TaskId> activeTasks, final Collection<TaskId> standbyTasks) {
         final Map<TaskId, Long> taskOffsetSums = activeTasks.stream().collect(Collectors.toMap(t -> t, t -> Task.LATEST_OFFSET));

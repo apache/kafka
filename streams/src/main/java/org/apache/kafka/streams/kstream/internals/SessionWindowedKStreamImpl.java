@@ -237,11 +237,25 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                                        + " grace=[" + windows.gracePeriodMs() + "],"
                                                        + " retention=[" + retentionPeriod + "]");
             }
-            supplier = Stores.persistentSessionStore(
-                materialized.storeName(),
-                Duration.ofMillis(retentionPeriod)
-            );
+
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemorySessionStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod)
+                    );
+                    break;
+                case ROCKS_DB:
+                    supplier = Stores.persistentSessionStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod)
+                    );
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
+            }
         }
+
         final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
             supplier,
             materialized.keySerde(),

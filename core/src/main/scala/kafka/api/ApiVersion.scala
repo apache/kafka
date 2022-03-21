@@ -107,7 +107,7 @@ object ApiVersion {
     KAFKA_2_7_IV0,
     // Bup Fetch protocol for Raft protocol (KIP-595)
     KAFKA_2_7_IV1,
-    // Introduced AlterIsr (KIP-497)
+    // Introduced AlterPartition (KIP-497)
     KAFKA_2_7_IV2,
     // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
     KAFKA_2_8_IV0,
@@ -119,7 +119,9 @@ object ApiVersion {
     // Assume message format version is 3.0 (KIP-724)
     KAFKA_3_0_IV1,
     // Adds topic IDs to Fetch requests/responses (KIP-516)
-    KAFKA_3_1_IV0
+    KAFKA_3_1_IV0,
+    // Support for leader recovery for unclean leader election (KIP-704)
+    KAFKA_3_2_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -475,6 +477,13 @@ case object KAFKA_3_1_IV0 extends DefaultApiVersion {
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 35
+}
+
+case object KAFKA_3_2_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "3.2"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 36
 }
 
 object ApiVersionValidator extends Validator {

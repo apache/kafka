@@ -16,45 +16,45 @@
 */
 package kafka.zk
 
-import java.util.{Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.{Collections, Properties}
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.log.LogConfig
+import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, KafkaConfig, QuorumTestHarness}
 import kafka.utils.CoreUtils
-import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.security.token.delegation.TokenInformation
-import org.apache.kafka.common.utils.{SecurityUtils, Time}
-import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
-
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Seq, mutable}
-import scala.util.Random
-import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.security.authorizer.AclEntry
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.token.delegation.TokenInformation
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.Stat
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Seq, mutable}
+import scala.jdk.CollectionConverters._
+import scala.util.Random
 
 class KafkaZkClientTest extends QuorumTestHarness {
 
@@ -922,10 +922,10 @@ class KafkaZkClientTest extends QuorumTestHarness {
   private def leaderIsrAndControllerEpochs(state: Int, zkVersion: Int): Map[TopicPartition, LeaderIsrAndControllerEpoch] =
     Map(
       topicPartition10 -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(leader = 1, leaderEpoch = state, isr = List(2 + state, 3 + state), zkVersion = zkVersion),
+        LeaderAndIsr(leader = 1, leaderEpoch = state, isr = List(2 + state, 3 + state), LeaderRecoveryState.RECOVERED, zkVersion = zkVersion),
         controllerEpoch = 4),
       topicPartition11 -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(leader = 0, leaderEpoch = state + 1, isr = List(1 + state, 2 + state), zkVersion = zkVersion),
+        LeaderAndIsr(leader = 0, leaderEpoch = state + 1, isr = List(1 + state, 2 + state), LeaderRecoveryState.RECOVERED, zkVersion = zkVersion),
         controllerEpoch = 4))
 
   val initialLeaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch] =
@@ -1014,9 +1014,9 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     // Trigger successful, to be retried and failed partitions in same call
     val mixedState = Map(
-      topicPartition10 -> LeaderAndIsr(leader = 1, leaderEpoch = 2, isr = List(4, 5), zkVersion = 1),
-      topicPartition11 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), zkVersion = 0),
-      topicPartition20 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), zkVersion = 0))
+      topicPartition10 -> LeaderAndIsr(leader = 1, leaderEpoch = 2, isr = List(4, 5), LeaderRecoveryState.RECOVERED, zkVersion = 1),
+      topicPartition11 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, zkVersion = 0),
+      topicPartition20 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, zkVersion = 0))
 
     checkUpdateLeaderAndIsrResult(
       leaderIsrs(state = 2, zkVersion = 2).filter { case (tp, _) => tp == topicPartition10 },

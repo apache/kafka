@@ -24,15 +24,19 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
@@ -41,7 +45,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
@@ -70,7 +74,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -193,14 +196,15 @@ public class QuorumControllerTest {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3, 4, 5);
         List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
         List<Integer> brokersToFence = Arrays.asList(2, 3, 4, 5);
-        short replicationFactor = 5;
+        short replicationFactor = (short) allBrokers.size();
+        short numberOfPartitions = (short) allBrokers.size();
         long sessionTimeoutMillis = 1000;
 
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, Optional.of(sessionTimeoutMillis));
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty());
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -227,7 +231,7 @@ public class QuorumControllerTest {
             sendBrokerheartbeat(active, allBrokers, brokerEpochs);
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Collections.singleton(
-                    new CreatableTopic().setName("foo").setNumPartitions(1).
+                    new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
                         setReplicationFactor(replicationFactor)).iterator()));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
@@ -269,6 +273,139 @@ public class QuorumControllerTest {
 
             int fooLeader = active.replicationControl().getPartition(topicIdFoo, 0).leader;
             assertEquals(expectedIsr[0], fooLeader);
+
+            // Check that there are imbalaned partitions
+            assertTrue(active.replicationControl().arePartitionLeadersImbalanced());
+        }
+    }
+
+    @Test
+    public void testBalancePartitionLeaders() throws Throwable {
+        List<Integer> allBrokers = Arrays.asList(1, 2, 3);
+        List<Integer> brokersToKeepUnfenced = Arrays.asList(1, 2);
+        List<Integer> brokersToFence = Arrays.asList(3);
+        short replicationFactor = (short) allBrokers.size();
+        short numberOfPartitions = (short) allBrokers.size();
+        long sessionTimeoutMillis = 1000;
+        long leaderImbalanceCheckIntervalNs = 1_000_000_000;
+
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs));
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+            Map<Integer, Long> brokerEpochs = new HashMap<>();
+
+            for (Integer brokerId : allBrokers) {
+                CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(brokerId).
+                        setClusterId(active.clusterId()).
+                        setIncarnationId(Uuid.randomUuid()).
+                        setListeners(listeners));
+                brokerEpochs.put(brokerId, reply.get().epoch());
+            }
+
+            // Brokers are only registered and should still be fenced
+            allBrokers.forEach(brokerId -> {
+                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
+
+            // Unfence all brokers and create a topic foo
+            sendBrokerheartbeat(active, allBrokers, brokerEpochs);
+            CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
+                new CreatableTopicCollection(Collections.singleton(
+                    new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
+                        setReplicationFactor(replicationFactor)).iterator()));
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
+            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
+            Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
+
+            // Fence some of the brokers
+            TestUtils.waitForCondition(
+                () -> {
+                    sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                    for (Integer brokerId : brokersToFence) {
+                        if (active.replicationControl().isBrokerUnfenced(brokerId)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                },
+                sessionTimeoutMillis * 3,
+                "Fencing of brokers did not process within expected time"
+            );
+
+            // Send another heartbeat to the brokers we want to keep alive
+            sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+
+            // At this point only the brokers we want fenced should be fenced.
+            brokersToKeepUnfenced.forEach(brokerId -> {
+                assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been unfenced");
+            });
+            brokersToFence.forEach(brokerId -> {
+                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
+
+            // Check that there are imbalaned partitions
+            assertTrue(active.replicationControl().arePartitionLeadersImbalanced());
+
+            // Re-register all fenced brokers
+            for (Integer brokerId : brokersToFence) {
+                CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(brokerId).
+                        setClusterId(active.clusterId()).
+                        setIncarnationId(Uuid.randomUuid()).
+                        setListeners(listeners));
+                brokerEpochs.put(brokerId, reply.get().epoch());
+            }
+
+            // Unfence all brokers
+            sendBrokerheartbeat(active, allBrokers, brokerEpochs);
+
+            // Let the unfenced broker, 3, join the ISR partition 2
+            Set<TopicIdPartition> imbalancedPartitions = active.replicationControl().imbalancedPartitions();
+            assertEquals(1, imbalancedPartitions.size());
+            int imbalancedPartitionId = imbalancedPartitions.iterator().next().partitionId();
+            PartitionRegistration partitionRegistration = active.replicationControl().getPartition(topicIdFoo, imbalancedPartitionId);
+            AlterPartitionRequestData.PartitionData partitionData = new AlterPartitionRequestData.PartitionData()
+                .setPartitionIndex(imbalancedPartitionId)
+                .setLeaderEpoch(partitionRegistration.leaderEpoch)
+                .setPartitionEpoch(partitionRegistration.partitionEpoch)
+                .setNewIsr(Arrays.asList(1, 2, 3));
+
+            AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
+                .setName("foo");
+            topicData.partitions().add(partitionData);
+
+            AlterPartitionRequestData alterPartitionRequest = new AlterPartitionRequestData()
+                .setBrokerId(partitionRegistration.leader)
+                .setBrokerEpoch(brokerEpochs.get(partitionRegistration.leader));
+            alterPartitionRequest.topics().add(topicData);
+
+            active.alterPartition(alterPartitionRequest).get();
+
+            // Check that partitions are balanced
+            AtomicLong lastHeartbeat = new AtomicLong(active.time().milliseconds());
+            TestUtils.waitForCondition(
+                () -> {
+                    if (active.time().milliseconds() > lastHeartbeat.get() + (sessionTimeoutMillis / 2)) {
+                        lastHeartbeat.set(active.time().milliseconds());
+                        sendBrokerheartbeat(active, allBrokers, brokerEpochs);
+                    }
+                    return !active.replicationControl().arePartitionLeadersImbalanced();
+                },
+                TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 10, TimeUnit.NANOSECONDS),
+                "Leaders where not balanced after unfencing all of the brokers"
+            );
         }
     }
 
@@ -756,7 +893,7 @@ public class QuorumControllerTest {
             ).get().topics().find(topicName).topicId();
 
             // Create a lot of alter isr
-            List<AlterIsrRequestData.PartitionData> alterIsrs = IntStream
+            List<AlterPartitionRequestData.PartitionData> alterPartitions = IntStream
                 .range(0, numPartitions)
                 .mapToObj(partitionIndex -> {
                     PartitionRegistration partitionRegistration = controller.replicationControl().getPartition(
@@ -764,30 +901,30 @@ public class QuorumControllerTest {
                         partitionIndex
                     );
 
-                    return new AlterIsrRequestData.PartitionData()
+                    return new AlterPartitionRequestData.PartitionData()
                         .setPartitionIndex(partitionIndex)
                         .setLeaderEpoch(partitionRegistration.leaderEpoch)
-                        .setCurrentIsrVersion(partitionRegistration.partitionEpoch)
+                        .setPartitionEpoch(partitionRegistration.partitionEpoch)
                         .setNewIsr(Arrays.asList(0, 1));
                 })
                 .collect(Collectors.toList());
 
-            AlterIsrRequestData.TopicData topicData = new AlterIsrRequestData.TopicData()
+            AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
                 .setName(topicName);
-            topicData.partitions().addAll(alterIsrs);
+            topicData.partitions().addAll(alterPartitions);
 
             int leaderId = 0;
-            AlterIsrRequestData alterIsrRequest = new AlterIsrRequestData()
+            AlterPartitionRequestData alterPartitionRequest = new AlterPartitionRequestData()
                 .setBrokerId(leaderId)
                 .setBrokerEpoch(brokerEpochs.get(leaderId));
-            alterIsrRequest.topics().add(topicData);
+            alterPartitionRequest.topics().add(topicData);
 
             logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
 
             int oldClaimEpoch = controller.curClaimEpoch();
             assertThrows(
                 ExecutionException.class,
-                () -> controller.alterIsr(alterIsrRequest).get()
+                () -> controller.alterPartition(alterPartitionRequest).get()
             );
 
             // Wait for the controller to become active again
@@ -797,7 +934,7 @@ public class QuorumControllerTest {
                 String.format("oldClaimEpoch = %s, newClaimEpoch = %s", oldClaimEpoch, controller.curClaimEpoch())
             );
 
-            // Since the alterIsr partially failed we expect to see
+            // Since the alterPartition partially failed we expect to see
             // some partitions to still have 2 in the ISR.
             int partitionsWithReplica2 = Utils.toList(
                 controller

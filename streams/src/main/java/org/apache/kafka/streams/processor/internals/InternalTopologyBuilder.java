@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;

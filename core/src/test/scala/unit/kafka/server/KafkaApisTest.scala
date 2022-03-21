@@ -4003,9 +4003,9 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldNeverHandleAlterIsrRequest(): Unit = {
+  def testRaftShouldNeverHandleAlterPartitionRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleAlterIsrRequest)
+    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleAlterPartitionRequest)
   }
 
   @Test

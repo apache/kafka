@@ -20,10 +20,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -31,7 +29,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -68,7 +65,6 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class HighAvailabilityTaskAssignorTest {
@@ -812,27 +808,6 @@ public class HighAvailabilityTaskAssignorTest {
         );
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertThat(probingRebalanceNeeded, is(false));
-    }
-
-    @Test
-    public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
-        final StandbyTaskAssignor standbyTaskAssignor = HighAvailabilityTaskAssignor.createStandbyTaskAssignor(newAssignmentConfigs(1, singletonList("az")));
-        assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
-    }
-
-    @Test
-    public void shouldReturnDefaultStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty() {
-        final StandbyTaskAssignor standbyTaskAssignor = HighAvailabilityTaskAssignor.createStandbyTaskAssignor(newAssignmentConfigs(1, Collections.emptyList()));
-        assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
-    }
-
-    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,
-                                                                                final List<String> rackAwareAssignmentTags) {
-        return new AssignorConfiguration.AssignmentConfigs(0L,
-                                                           1,
-                                                           numStandbyReplicas,
-                                                           60000L,
-                                                           rackAwareAssignmentTags);
     }
 
     private static void assertHasNoActiveTasks(final ClientState... clients) {
