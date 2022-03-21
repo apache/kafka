@@ -323,6 +323,10 @@
       <allow pkg="org.apache.kafka.server.log" />
       <allow pkg="org.apache.kafka.test" />
 
+      <subpackage name="policy">
+        <allow pkg="org.apache.kafka.server.policy" />
+      </subpackage>
+
       <subpackage name="remote">
         <allow pkg="scala.collection" />
       </subpackage>
