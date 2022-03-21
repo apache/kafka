@@ -25,6 +25,195 @@
             which meant that idempotence remained disabled unless the user had explicitly set <code>enable.idempotence</code> to true
             (See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details).
             This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
+        <li>
+            <p>The log4j 1.x based log4j-appender is now deprecated and no longer recommended. This artifact will be released for a while, but will be removed at the next major release.</p>
+            <p>It is strongly recommended for the log4j-appender users to migrate into log4j 2.x (aka log4j2) based Kafka appender, provided by the log4j community. For the details of the log4j2
+                Kafka appender, see <a href="https://logging.apache.org/log4j/2.x/manual/appenders.html#KafkaAppender">here</a>.</p>
+            <p>To upgrade from log4j-appender to log4j2 Kafka appender, you need to:</p>
+            <ul>
+                <ol>Replace log4j-appender dependency into <code>org.apache.logging.log4j:log4j-core</code>.</ol>
+                <ol>Update the configuration file with the 2.x configuration syntax.</ol>
+                <ol>(Optional) If you are using <a href="https://logging.apache.org/log4j/log4j-2.0/log4j-1.2-api/project-info.html">Apache Log4j 1.x Compatibility API</a> for backward
+                    compatibility with the 1.x configurations, the log4j2 will not <a href="https://logging.apache.org/log4j/2.x/manual/configuration.html#AutomaticConfiguration">detect the configuration automatically</a>,
+                    so you should manually point the process to the log4j2 configurations with <code>-Dlog4j2.configurationFile</code> JVM parameter. (note the 'File' postfix.)</ol>
+            </ul>
+            <p>The following is the comparison table between log4j-appender and log4j2 Kafka appender:</p>
+            <table>
+                <tr>
+                    <th colspan="2">log4j-appender</th>
+                    <th colspan="2">log4j2 Kafka appender</th>
+                    <th rowspan="2">Description</th>
+                </tr>
+                <tr>
+                    <th>Attribute</th>
+                    <th>Type</th>
+                    <th>Attribute</th>
+                    <th>Type</th>
+                </tr>
+                <tr>
+                    <th><code>Topic</code></th>
+                    <th><code>String</code></th>
+                    <th><code>topic</code></th>
+                    <th><code>String</code></th>
+                    <th>The Kafka topic to use. (required)</th>
+                </tr>
+                <tr>
+                    <th><code>-</code></th>
+                    <th><code>-</code></th>
+                    <th><code>key</code></th>
+                    <th><code>String</code></th>
+                    <th>Message Key. With log4-appender, the message key is fixed to <code>null</code>. With the log4j2 Kafka appender, you can set custom key value.</th>
+                </tr>
+                <tr>
+                    <th><code>IgnoreExceptions</code></th>
+                    <th><code>boolean</code></th>
+                    <th><code>ignoreExceptions</code></th>
+                    <th><code>boolean</code></th>
+                    <th>Whether to ignore the exceptions encountered while producing events (default: <code>true</code>). If set to <code>false</code>, the exception is propagated to the caller.</th>
+                </tr>
+                <tr>
+                    <th><code>SyncSend</code></th>
+                    <th><code>boolean</code></th>
+                    <th><code>syncSend</code></th>
+                    <th><code>boolean</code></th>
+                    <th>Event sending is blocked until being acknowledged by the Kafka server. (default: <code>false</code>(log4-appender), <code>true</code>(log4j2 Kafka appender))</th>
+                </tr>
+                <tr>
+                    <th><code>BrokerList</code></th>
+                    <th><code>String</code></th>
+                    <th rowspan="18"><code>properties</code></th>
+                    <th rowspan="18"><code>Property[]</code></th>
+                    <th><code>bootstrap.servers</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>RequiredNumAcks</code></th>
+                    <th><code>integer</code></th>
+                    <th><code>acks</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>LingerMs</code></th>
+                    <th><code>integer</code></th>
+                    <th><code>linger.ms</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>BatchSize</code></th>
+                    <th><code>integer</code></th>
+                    <th><code>batch.size</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>Retries</code></th>
+                    <th><code>integer</code></th>
+                    <th><code>retries</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>DeliveryTimeoutMs</code></th>
+                    <th><code>integer</code></th>
+                    <th><code>delivery.timeout.ms</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>CompressionType</code></th>
+                    <th><code>String</code></th>
+                    <th><code>compression.type</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>MaxBlockMs</code></th>
+                    <th><code>integer</code></th>
+                    <th><code>max.block.ms</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SecurityProtocol</code></th>
+                    <th><code>String</code></th>
+                    <th><code>security.protocol</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SslEngineFactoryClass</code></th>
+                    <th><code>String</code></th>
+                    <th><code>ssl.engine.factory.class</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SslTruststoreLocation</code></th>
+                    <th><code>String</code></th>
+                    <th><code>ssl.truststore.location</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SslTruststorePassword</code></th>
+                    <th><code>String</code></th>
+                    <th><code>ssl.truststore.password</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SslKeystoreType</code></th>
+                    <th><code>String</code></th>
+                    <th><code>ssl.keystore.type</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SslKeystoreLocation</code></th>
+                    <th><code>String</code></th>
+                    <th><code>ssl.keystore.location</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SslKeystorePassword</code></th>
+                    <th><code>String</code></th>
+                    <th><code>ssl.keystore.password</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SaslKerberosServiceName</code></th>
+                    <th><code>String</code></th>
+                    <th><code>sasl.kerberos.service.name</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>SaslMechanism</code></th>
+                    <th><code>String</code></th>
+                    <th><code>sasl.mechanism</code> property of the underlying producer.</th>
+                </tr>
+                <tr>
+                    <th><code>ClientJaasConf</code></th>
+                    <th><code>String</code></th>
+                    <th><code>sasl.jaas.config</code> property of the underlying producer.</th>
+                </tr>
+            </table>
+            <p>(Note: <code>ssl.truststore.type</code> is fixed to <code>JKS</code> in log4j-appender.)</p>
+            <p>For example, the following configurations are equivalent:</p>
+            <table>
+                <tr>
+                    <th>log4j-appender</th>
+                    <th>log4j2 Kafka appender</th>
+                </tr>
+                <tr>
+                    <th>
+                        <code>
+                            log4j.appender.KAFKA=org.apache.kafka.log4jappender.KafkaLog4jAppender
+                            log4j.appender.KAFKA.layout=org.apache.log4j.PatternLayout
+                            log4j.appender.KAFKA.layout.ConversionPattern=%-5p: %c - %m%n
+                            log4j.appender.KAFKA.Topic=example_topic
+                            log4j.appender.KAFKA.SyncSend=true
+                            log4j.appender.KAFKA.BrokerList=bootstrap.servers
+                            log4j.appender.KAFKA.RequiredNumAcks=all
+                        </code>
+                    </th>
+                    <th>
+                        <code>
+                            status=OFF
+                            name=ExamplarLog4jAppenderConfig
+
+                            appenders=kafkaAppender
+                            appender.kafkaAppender.type=Kafka
+                            appender.kafkaAppender.name=KAFKA_APPENDER
+                            appender.kafkaAppender.layout.type=PatternLayout
+                            appender.kafkaAppender.layout.pattern=%-5p: %c - %m%n
+                            appender.kafkaAppender.topic=example_topic
+                            appender.kafkaAppender.syncSend=true
+                            appender.kafkaAppender.bootstrap_servers.type=Property
+                            appender.kafkaAppender.bootstrap_servers.name=bootstrap.servers
+                            appender.kafkaAppender.bootstrap_servers.value=kafka-1:9092,kafka-2:9092,kafka-3:9092
+                            appender.kafkaAppender.acks.type=Property
+                            appender.kafkaAppender.acks.name=acks
+                            appender.kafkaAppender.acks.value=all
+                        </code>
+                    </th>
+                </tr>
+            </table>
+        <code></code>
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_1_0" href="#upgrade_3_1_0">Upgrading to 3.1.0 from any version 0.8.x through 3.0.x</a></h4>
