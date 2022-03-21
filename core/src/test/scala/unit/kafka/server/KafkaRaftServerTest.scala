@@ -19,9 +19,10 @@ package kafka.server
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException, KafkaException}
+
+import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException}
 import kafka.log.UnifiedLog
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
