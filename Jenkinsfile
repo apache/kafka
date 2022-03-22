@@ -199,9 +199,6 @@ pipeline {
         
         stage('s390x') {
           agent { label 's390x' }
-          tools {
-            jdk 'jdk_11_latest'
-          }
           options {
             timeout(time: 2, unit: 'HOURS') 
             timestamps()
@@ -211,7 +208,7 @@ pipeline {
           }
           steps {
             doValidation()
-            doTest(env)
+            doTest(env, 'unitTest')
             echo 'Skipping Kafka Streams archetype test for s390x'
           }
         }
