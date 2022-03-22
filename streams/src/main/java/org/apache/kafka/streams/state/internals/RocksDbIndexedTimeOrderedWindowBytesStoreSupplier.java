@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
+
+import java.time.Duration;
+import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -32,6 +37,38 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
     private final long windowSize;
     private final boolean retainDuplicates;
     private final WindowStoreTypes windowStoreType;
+
+    public static RocksDbIndexedTimeOrderedWindowBytesStoreSupplier create(final String name,
+                                                                           final Duration retentionPeriod,
+                                                                           final Duration windowSize,
+                                                                           final boolean retainDuplicates,
+                                                                           final boolean hasIndex) {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
+
+        final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
+
+        if (retentionMs < 0L) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (windowSizeMs < 0L) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
+        if (defaultSegmentInterval < 1L) {
+            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
+        }
+        if (windowSizeMs > retentionMs) {
+            throw new IllegalArgumentException("The retention period of the window store "
+                + name + " must be no smaller than its window size. Got size=["
+                + windowSizeMs + "], retention=[" + retentionMs + "]");
+        }
+
+        return new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(name, retentionMs,
+            defaultSegmentInterval, windowSizeMs, retainDuplicates, hasIndex);
+    }
 
     public RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(final String name,
                                            final long retentionPeriod,

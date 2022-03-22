@@ -23,8 +23,6 @@ import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDBSegmentedBytesStore;
 import org.apache.kafka.streams.state.internals.RocksDBSessionStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSegmentedBytesStore;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
@@ -39,9 +37,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 public class StoresTest {
 
@@ -177,24 +173,6 @@ public class StoresTest {
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(RocksDBWindowStore.class));
         assertThat(wrapped, instanceOf(RocksDBTimestampedSegmentedBytesStore.class));
-    }
-
-    @Test
-    public void shouldCreateRocksDbTimeOrderedWindowStoreWithIndex() {
-        final WindowStore store = Stores.persistentTimeOrderedWindowStore("store", ofMillis(1L), ofMillis(1L), false, true).get();
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(RocksDBTimeOrderedWindowStore.class));
-        assertThat(wrapped, instanceOf(RocksDBTimeOrderedSegmentedBytesStore.class));
-        assertTrue(((RocksDBTimeOrderedSegmentedBytesStore) wrapped).hasIndex());
-    }
-
-    @Test
-    public void shouldCreateRocksDbTimeOrderedWindowStoreWithoutIndex() {
-        final WindowStore store = Stores.persistentTimeOrderedWindowStore("store", ofMillis(1L), ofMillis(1L), false, false).get();
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(RocksDBTimeOrderedWindowStore.class));
-        assertThat(wrapped, instanceOf(RocksDBTimeOrderedSegmentedBytesStore.class));
-        assertFalse(((RocksDBTimeOrderedSegmentedBytesStore) wrapped).hasIndex());
     }
 
     @Test

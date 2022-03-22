@@ -24,7 +24,6 @@ import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplie
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
-import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
@@ -165,35 +164,6 @@ public final class Stores {
      * Create a persistent {@link WindowBytesStoreSupplier}.
      * <p>
      * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
-     * This store has a underlying key schema which is ordered by timestamp which can support more efficient time range
-     * lookups.
-     *
-     * @param name                  name of the store (cannot be {@code null})
-     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
-     *                              (note that the retention period must be at least long enough to contain the
-     *                              windowed data's entire life cycle, from window-start through window-end,
-     *                              and for the entire grace period)
-     * @param windowSize            size of the windows (cannot be negative)
-     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
-     *                              caching and means that null values will be ignored.
-     * @param hasIndex              indicate whether the store is also indexed by record key which can support
-     *                              more efficient record key range lookup
-     * @return an instance of {@link WindowBytesStoreSupplier}
-     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
-     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
-     */
-    public static WindowBytesStoreSupplier persistentTimeOrderedWindowStore(final String name,
-                                                                 final Duration retentionPeriod,
-                                                                 final Duration windowSize,
-                                                                 final boolean retainDuplicates,
-                                                                 final boolean hasIndex) throws IllegalArgumentException {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, false, true, hasIndex);
-    }
-
-    /**
-     * Create a persistent {@link WindowBytesStoreSupplier}.
-     * <p>
-     * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
      * If you want to create a {@link TimestampedWindowStore} you should use
      * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
      *
@@ -248,16 +218,6 @@ public final class Stores {
                                                                   final Duration windowSize,
                                                                   final boolean retainDuplicates,
                                                                   final boolean timestampedStore) {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, timestampedStore, false, false);
-    }
-
-    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
-                                                                  final Duration retentionPeriod,
-                                                                  final Duration windowSize,
-                                                                  final boolean retainDuplicates,
-                                                                  final boolean timestampedStore,
-                                                                  final boolean timeOrdered,
-                                                                  final boolean hasIndex) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -266,7 +226,7 @@ public final class Stores {
 
         final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
 
-        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval, timestampedStore, timeOrdered, hasIndex);
+        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval, timestampedStore);
     }
 
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
@@ -274,9 +234,7 @@ public final class Stores {
                                                                   final long windowSize,
                                                                   final boolean retainDuplicates,
                                                                   final long segmentInterval,
-                                                                  final boolean timestampedStore,
-                                                                  final boolean timeOrdered,
-                                                                  final boolean hasIndex) {
+                                                                  final boolean timestampedStore) {
         Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
@@ -291,17 +249,6 @@ public final class Stores {
             throw new IllegalArgumentException("The retention period of the window store "
                 + name + " must be no smaller than its window size. Got size=["
                 + windowSize + "], retention=[" + retentionPeriod + "]");
-        }
-
-        // Time Ordered precedes timestamp setting
-        if (timeOrdered) {
-            return new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(
-                name,
-                retentionPeriod,
-                segmentInterval,
-                windowSize,
-                retainDuplicates,
-                hasIndex);
         }
 
         return new RocksDbWindowBytesStoreSupplier(
