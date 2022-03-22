@@ -94,6 +94,17 @@ class KafkaServer(
   actions: KafkaActions = NoOpKafkaActions
 ) extends KafkaBroker with Server {
 
+  // Visible for testing from linkedin-kafka-clients for backwards compatibility.
+  @deprecated
+  def this(
+    config: KafkaConfig,
+    time: Time,
+    threadNamePrefix: Option[String],
+    kafkaMetricsReporters: Seq[KafkaMetricsReporter],
+    actions: KafkaActions) {
+    this(config, time, threadNamePrefix, enableForwarding = false, actions = actions)
+  }
+
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
