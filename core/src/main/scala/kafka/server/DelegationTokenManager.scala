@@ -140,7 +140,7 @@ object DelegationTokenManager {
 
     val allow =
     //exclude tokens which are not requested
-      if (!owners.isEmpty && !owners.get.exists(owner => token.ownerOrRenewer(owner))) {
+      if (owners.isDefined && !owners.get.exists(owner => token.ownerOrRenewer(owner))) {
         false
         //Owners and the renewers can describe their own tokens
       } else if (token.ownerOrRenewer(requestedPrincipal)) {
@@ -306,7 +306,7 @@ class DelegationTokenManager(val config: KafkaConfig,
             val now = time.milliseconds
             val tokenInfo =  token.tokenInfo
 
-            if (!allowedToRenew(principal, tokenInfo)) {
+            if (!allowedToRenewOrExpire(principal, tokenInfo)) {
               renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
             } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
               renewCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
@@ -361,7 +361,7 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param tokenInfo
    * @return
    */
-  private def allowedToRenew(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean = {
+  private def allowedToRenewOrExpire(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean = {
     if (principal.equals(tokenInfo.owner) || tokenInfo.renewers.asScala.toList.contains(principal)) true else false
   }
 
@@ -406,7 +406,7 @@ class DelegationTokenManager(val config: KafkaConfig,
             val tokenInfo =  token.tokenInfo
             val now = time.milliseconds
 
-            if (!allowedToRenew(principal, tokenInfo)) {
+            if (!allowedToRenewOrExpire(principal, tokenInfo)) {
               expireResponseCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
             } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
               expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
