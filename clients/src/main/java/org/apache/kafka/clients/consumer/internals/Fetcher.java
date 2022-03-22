@@ -839,7 +839,11 @@ public class Fetcher<K, V> implements Closeable {
                     });
 
                     if (!truncationWithoutResetPolicy.isEmpty()) {
-                        throw new LogTruncationException(truncationWithoutResetPolicy);
+                        LogTruncationException e = new LogTruncationException(truncationWithoutResetPolicy);
+                        // cache the LogTruncationException to ensure it can be thrown and caught
+                        if (!cachedOffsetForLeaderException.compareAndSet(null, e)) {
+                            log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
+                        }
                     }
                 }
 
