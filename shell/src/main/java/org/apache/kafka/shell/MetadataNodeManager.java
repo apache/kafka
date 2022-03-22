@@ -59,6 +59,8 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import static org.apache.kafka.metadata.LeaderRecoveryState.NO_CHANGE;
+
 /**
  * Maintains the in-memory metadata for the metadata tool.
  */
@@ -279,6 +281,9 @@ public final class MetadataNodeManager implements AutoCloseable {
                 if (record.leader() != NO_LEADER_CHANGE) {
                     partition.setLeader(record.leader());
                     partition.setLeaderEpoch(partition.leaderEpoch() + 1);
+                }
+                if (record.leaderRecoveryState() != NO_CHANGE) {
+                    partition.setLeaderRecoveryState(record.leaderRecoveryState());
                 }
                 partition.setPartitionEpoch(partition.partitionEpoch() + 1);
                 file.setContents(PartitionRecordJsonConverter.write(partition,
