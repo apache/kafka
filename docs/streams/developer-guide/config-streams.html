@@ -384,6 +384,13 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), 1);</code></pre>
             <td colspan="2">The amount of time in milliseconds to block waiting for input.</td>
             <td>100 milliseconds</td>
           </tr>
+          <tr class="row-even"><td>rack.aware.assignment.tags</td>
+            <td>Medium</td>
+            <td colspan="2">List of tag keys used to distribute standby replicas across Kafka Streams
+              instances. When configured, Kafka Streams will make a best-effort to distribute the standby tasks over
+              each client tag dimension.</td>
+            <td>the empty list</td>
+          </tr>
           <tr class="row-even"><td>replication.factor</td>
             <td>Medium</td>
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.
