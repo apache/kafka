@@ -50,9 +50,9 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
     }
 
     public NoOffsetForPartitionException(Map<TopicPartition, SubscriptionState.FetchState> partitionFetchStates) {
-        super("Undefined offset with no reset policy for partitionss with states: " + partitionFetchStates);
+        super("Undefined offset with no reset policy for partitions with states: " + partitionFetchStates);
         this.partitionFetchStates = Collections.unmodifiableMap(new HashMap<>(partitionFetchStates));
-        this.partitions = Collections.emptySet();
+        this.partitions = Collections.unmodifiableSet(partitionFetchStates.keySet());
     }
 
     /**
