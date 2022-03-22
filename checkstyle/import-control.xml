@@ -310,6 +310,9 @@
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
 
+    <!-- This is required to make AlterConfigPolicyTest work. -->
+    <allow pkg="org.apache.kafka.server.policy" />
+
     <subpackage name="common">
       <allow pkg="org.apache.kafka.server.common" />
     </subpackage>
