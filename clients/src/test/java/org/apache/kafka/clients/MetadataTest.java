@@ -99,6 +99,8 @@ public class MetadataTest {
         //bootstrap the metadata cache with some valid nodes
         clusterMetadata.bootstrap(addresses);
 
+        clusterMetadata.requestClusterMetadataUpdateFromBootstrap();
+
         //first time call leastLoadedNode on the created NetworkClient should pass since nodesTriedSinceLastSuccessfulRefresh is 0
         clusterClient.leastLoadedNode(time.milliseconds());
 
