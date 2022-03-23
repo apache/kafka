@@ -283,6 +283,7 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>default.api.timeout.ms</code> */
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_DOC = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
