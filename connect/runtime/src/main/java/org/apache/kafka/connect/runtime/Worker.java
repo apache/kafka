@@ -649,7 +649,7 @@ public class Worker {
         // but this may compromise the delivery guarantees of Kafka Connect.
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         // By default, producers that are instantiated and used by Connect have idempotency disabled even after idempotency became
-        // default for Kafka producers. This is chosen to avoid breaking changes when Connect contacts Kafka brokers that do not support
+        // default for Kafka producers. This ensures Connect continues to work with many Kafka broker versions, including older brokers that do not support
         // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
         // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
         // gets approved and scheduled for release.
