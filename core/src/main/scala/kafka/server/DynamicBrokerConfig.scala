@@ -202,7 +202,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] val staticDefaultConfigs = ConfigDef.convertToStringMapWithPasswordValues(KafkaConfig.defaultValues.asJava).asScala
   private val dynamicBrokerConfigs = mutable.Map[String, String]()
   private val dynamicDefaultConfigs = mutable.Map[String, String]()
-  
+
   // Use COWArrayList to prevent concurrent modification exception when reconfigurable added while iteration over list occurring
   private val reconfigurables = new CopyOnWriteArrayList[Reconfigurable]()
   private val brokerReconfigurables = mutable.Buffer[BrokerReconfigurable]()
