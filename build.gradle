@@ -1219,9 +1219,11 @@ project(':clients') {
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
         commitId: commitId,
@@ -1335,9 +1337,11 @@ project(':raft') {
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
         commitId: commitId,
@@ -1414,9 +1418,11 @@ project(':server-common') {
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
@@ -1470,9 +1476,11 @@ project(':storage:api') {
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
@@ -1536,9 +1544,11 @@ project(':storage') {
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
@@ -1812,9 +1822,11 @@ project(':streams') {
   }
 
   task createStreamsVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
