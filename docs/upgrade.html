@@ -25,6 +25,10 @@
             which meant that idempotence remained disabled unless the user had explicitly set <code>enable.idempotence</code> to true
             (See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details).
             This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
+        <li>A notable exception is Connect that by default currently disables idempotence for its
+            producers in order to support connecting to older versions of the Kafka broker without
+            explicit changes. Enabling idempotence is still possible via configuration and this
+            default might change in a major version upgrade in the future.</li>
     </ul>
 
 <h4><a id="upgrade_3_1_0" href="#upgrade_3_1_0">Upgrading to 3.1.0 from any version 0.8.x through 3.0.x</a></h4>
@@ -75,6 +79,10 @@
         A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
 	<code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details.
         This issue was fixed and the default is properly applied.</li>
+    <li>A notable exception is Connect that by default currently disables idempotence for its
+        producers in order to support connecting to older versions of the Kafka broker without
+        explicit changes. Enabling idempotence is still possible via configuration and this
+        default might change in a major version upgrade in the future.</li>
 </ul>
 
 <h5><a id="upgrade_310_notable" href="#upgrade_310_notable">Notable changes in 3.1.0</a></h5>
