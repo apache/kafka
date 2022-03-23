@@ -25,10 +25,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
@@ -224,7 +222,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
     @Test
     public void shouldMatchPositionAfterPutWithFlushListener() {
-        store.setFlushListener(record -> {}, false);
+        store.setFlushListener(record -> { }, false);
         shouldMatchPositionAfterPut();
     }
 

@@ -147,7 +147,7 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPutWithFlushListener() {
-        cachingStore.setFlushListener(record -> {}, false);
+        cachingStore.setFlushListener(record -> { }, false);
         shouldMatchPositionAfterPut();
     }
 
