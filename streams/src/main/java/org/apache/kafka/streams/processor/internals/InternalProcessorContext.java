@@ -121,9 +121,9 @@ public interface InternalProcessorContext<KOut, VOut>
 
     String changelogFor(final String storeName);
 
-    void addGlobalProcessorMetadata(final Bytes key, final byte[] value);
+    void addProcessorMetadataKeyValue(final String key, final long value);
 
-    byte[] getGlobalProcessorMetadata(final Bytes key);
+    Long getProcessorMetadataForKey(final String key);
 
     void setProcessorMetadata(final ProcessorMetadata metadata);
 

@@ -103,7 +103,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
@@ -130,7 +129,6 @@ public class StreamTaskTest {
 
     private static final String APPLICATION_ID = "stream-task-test";
     private static final File BASE_DIR = TestUtils.tempDirectory();
-    private static final long DEFAULT_TIMESTAMP = 1000;
 
     private final LogContext logContext = new LogContext("[test] ");
     private final String topic1 = "topic1";
@@ -172,6 +170,10 @@ public class StreamTaskTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0);
+    private final ProcessorMetadata processorMetadata = ProcessorMetadata.with(mkMap(
+        mkEntry("key1", 1L),
+        mkEntry("key2", 2L)
+    ));
 
     private MockTime time = new MockTime();
     private Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
@@ -406,12 +408,12 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldReadCommittedStreamTimeOnInitialize() {
+    public void shouldReadCommittedStreamTimeAndProcessorMetadataOnInitialize() {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.replay(stateDirectory);
 
         consumer.commitSync(partitions.stream()
-            .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, encodeTimestamp(10L)))));
+            .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, TopicPartitionMetadata.with(10L, processorMetadata).encode()))));
 
         task = createStatelessTask(createConfig("100"));
 
@@ -421,6 +423,8 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
 
         assertEquals(10L, task.streamTime());
+        assertEquals(1L, task.processorContext().getProcessorMetadataForKey("key1").longValue());
+        assertEquals(2L, task.processorContext().getProcessorMetadataForKey("key2").longValue());
     }
 
     @Test
@@ -1096,7 +1100,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldCommitNextOffsetFromQueueIfAvailable() {
+    public void shouldCommitNextOffsetAndProcessorMetadataFromQueueIfAvailable() {
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1107,11 +1111,21 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition1, 5L)));
 
         task.process(0L);
+        processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
         task.process(0L);
+        processorSystemTime.mockProcessor.addProcessorMetadata("key2", 200L);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
+        final TopicPartitionMetadata expected = TopicPartitionMetadata.with(3L,
+            ProcessorMetadata.with(
+                mkMap(
+                    mkEntry("key1", 100L),
+                    mkEntry("key2", 200L)
+                )
+            )
+        );
 
-        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(3L))))));
+        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, expected.encode())))));
     }
 
     @Test
@@ -1129,9 +1143,18 @@ public class StreamTaskTest {
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L)));
         task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L)));
         task.process(0L);
+        processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
+
+        final TopicPartitionMetadata expectedMetadata = TopicPartitionMetadata.with(0L,
+            ProcessorMetadata.with(
+                mkMap(
+                    mkEntry("key1", 100L)
+                )
+            )
+        );
 
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(), equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+        assertThat(task.prepareCommit(), equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, expectedMetadata.encode())))));
         task.postCommit(false);
 
         // the task should still be committed since the processed records have not reached the consumer position
@@ -1140,9 +1163,76 @@ public class StreamTaskTest {
         consumer.poll(Duration.ZERO);
         task.process(0L);
 
+        final TopicPartitionMetadata expectedMetadata1 = TopicPartitionMetadata.with(0L, ProcessorMetadata.emptyMetadata());
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(), equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))),
-                                                       mkEntry(partition2, new OffsetAndMetadata(1L, encodeTimestamp(0L))))));
+        assertThat(task.prepareCommit(), equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, expectedMetadata.encode())),
+                                                       mkEntry(partition2, new OffsetAndMetadata(1L, expectedMetadata1.encode())))));
+        task.postCommit(false);
+
+        assertFalse(task.commitNeeded());
+    }
+
+    @Test
+    public void shouldCommitProcessorMetadataWhenMetaPartitionDonotNeedCommitFirst() {
+        task = createStatelessTask(createConfig());
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L));
+        consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L));
+        consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition2, 1L));
+        consumer.poll(Duration.ZERO);
+
+        task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L)));
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L)));
+
+        task.process(0L);
+        processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
+
+        final TopicPartitionMetadata expectedMetadata1 = TopicPartitionMetadata.with(-1L,
+            ProcessorMetadata.with(
+                mkMap(
+                    mkEntry("key1", 100L)
+                )
+            )
+        );
+
+        final TopicPartitionMetadata expectedMetadata2 = TopicPartitionMetadata.with(0L,
+            ProcessorMetadata.emptyMetadata()
+        );
+
+        assertTrue(task.commitNeeded());
+
+        // partition 1 not processed but we still commit it because there's metadata to be committed
+        // and the metadata needs to be committed to partition1 since partition1 is smaller than
+        // partition2
+        assertThat(task.prepareCommit(), equalTo(
+            mkMap(
+                mkEntry(partition1, new OffsetAndMetadata(0L, expectedMetadata1.encode())),
+                mkEntry(partition2, new OffsetAndMetadata(2L, expectedMetadata2.encode()))
+            )));
+        task.postCommit(false);
+
+        // the task should still be committed since the processed records have not reached the consumer position
+        assertTrue(task.commitNeeded());
+
+        consumer.poll(Duration.ZERO);
+        task.process(0L);
+
+        final TopicPartitionMetadata expectedMetadata3 = TopicPartitionMetadata.with(0L,
+            ProcessorMetadata.with(
+                mkMap(
+                    mkEntry("key1", 100L)
+                )
+            )
+        );
+        assertTrue(task.commitNeeded());
+        assertThat(task.prepareCommit(), equalTo(
+            mkMap(
+                mkEntry(partition1, new OffsetAndMetadata(1L, expectedMetadata3.encode())),
+                mkEntry(partition2, new OffsetAndMetadata(2L, expectedMetadata2.encode()))
+                )
+        ));
         task.postCommit(false);
 
         assertFalse(task.commitNeeded());
@@ -1170,35 +1260,6 @@ public class StreamTaskTest {
 
         task.requestCommit();
         assertTrue(task.commitRequested());
-    }
-
-    @Test
-    public void shouldEncodeAndDecodeMetadata() {
-        task = createStatelessTask(createConfig("100"));
-        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(encodeTimestamp(DEFAULT_TIMESTAMP)));
-    }
-
-    @Test
-    public void shouldReturnUnknownTimestampIfUnknownVersion() {
-        task = createStatelessTask(createConfig("100"));
-
-        final byte[] emptyMessage = {StreamTask.LATEST_MAGIC_BYTE + 1};
-        final String encodedString = Base64.getEncoder().encodeToString(emptyMessage);
-        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(encodedString));
-    }
-
-    @Test
-    public void shouldReturnUnknownTimestampIfEmptyMessage() {
-        task = createStatelessTask(createConfig("100"));
-
-        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(""));
-    }
-
-    @Test
-    public void shouldReturnUnknownTimestampIfInvalidMetadata() {
-        task = createStatelessTask(createConfig("100"));
-        final String invalidBase64String = "{}";
-        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(invalidBase64String));
     }
 
     @Test
@@ -2096,6 +2157,26 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldCommitProcessorMetadataInNewPartionAfterUpdateAndRestoration() {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.replay(stateDirectory);
+
+        consumer.commitSync(partitions.stream()
+            .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, TopicPartitionMetadata.with(10L, processorMetadata).encode()))));
+
+        task = createStatelessTask(createConfig("100"));
+
+        assertEquals(RecordQueue.UNKNOWN, task.streamTime());
+
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        assertEquals(10L, task.streamTime());
+        assertEquals(1L, task.processorContext().getProcessorMetadataForKey("key1").longValue());
+        assertEquals(2L, task.processorContext().getProcessorMetadataForKey("key2").longValue());
+    }
+
+    @Test
     public void shouldThrowIfCleanClosingDirtyTask() {
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
@@ -2263,7 +2344,8 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, encodeTimestamp(-1)))))
+            equalTo(mkMap(mkEntry(partition1,
+                new OffsetAndMetadata(offset + 1, TopicPartitionMetadata.with(-1, ProcessorMetadata.emptyMetadata()).encode()))))
         );
     }
 
@@ -2291,7 +2373,7 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, encodeTimestamp(offset)))))
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, TopicPartitionMetadata.with(offset, ProcessorMetadata.emptyMetadata()).encode()))))
         );
     }
 
@@ -2318,14 +2400,14 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, encodeTimestamp(0)))))
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, TopicPartitionMetadata.with(0, ProcessorMetadata.emptyMetadata()).encode()))))
         );
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, encodeTimestamp(0)))))
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, TopicPartitionMetadata.with(0, ProcessorMetadata.emptyMetadata()).encode()))))
         );
     }
 

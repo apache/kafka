@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Bytes;
+import java.util.Objects;
 
 /**
  * ProcessorMetadata to be access and populated by processor node. This will be committed along with
@@ -27,33 +28,99 @@ import org.apache.kafka.common.utils.Bytes;
  */
 public class ProcessorMetadata {
 
-    // Does this need to be thread safe? I think not since there's one per task
-    private final Map<Bytes, byte[]> globalMetadata;
+    private final Map<String, Long> metadata;
+    private boolean committed;
 
-    public ProcessorMetadata() {
-        globalMetadata = new HashMap<>();
+    public static ProcessorMetadata emptyMetadata() {
+        return new ProcessorMetadata();
     }
 
-    public static ProcessorMetadata deserialize(final byte[] ProcessorMetadata, final TopicPartition partition) {
-        // TODO: deserialize
-        return null;
+    public static ProcessorMetadata with(final Map<String, Long> metadata) {
+        return new ProcessorMetadata(metadata);
     }
 
-    public void merge(final ProcessorMetadata other) {
-        // TODO: merge with other data
+    private ProcessorMetadata() {
+        this(new HashMap<>());
     }
 
-    public byte[] serialize(final TopicPartition partition) {
-        // TODO: serialize for partition
-        return null;
+    private ProcessorMetadata(final Map<String, Long> metadata) {
+        this.metadata = metadata;
+        committed = false;
     }
 
-    public void addGlobalMetadata(final Bytes key, final byte[] value) {
-      globalMetadata.put(key, value);
+    public static ProcessorMetadata deserialize(final byte[] metaData) {
+        if (metaData == null || metaData.length == 0) {
+            return new ProcessorMetadata();
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(metaData);
+        final int entrySize = buffer.getInt();
+        final Map<String, Long> metadata = new HashMap<>(entrySize);
+        for (int i = 0; i < entrySize; i++) {
+            final int keySize = buffer.getInt();
+            final byte[] keyBytes = new byte[keySize];
+            buffer.get(keyBytes);
+            final Long value = buffer.getLong();
+            metadata.put(new String(keyBytes, StandardCharsets.UTF_8), value);
+        }
+        return new ProcessorMetadata(metadata);
     }
 
-    public byte[] getGlobalMetadata(final Bytes key) {
-      return globalMetadata.get(key);
+    public byte[] serialize() {
+        if (metadata.isEmpty()) {
+            return new byte[0];
+        }
+
+        int kvSize = 0;
+        for (final Map.Entry<String, Long> entry : metadata.entrySet()) {
+            kvSize += Integer.BYTES;
+            kvSize += entry.getKey().getBytes().length;
+            kvSize += Long.BYTES;
+        }
+
+        final int capacity = Integer.BYTES + kvSize;
+        final ByteBuffer buffer = ByteBuffer.allocate(capacity).putInt(metadata.size());
+        for (final Map.Entry<String, Long> entry : metadata.entrySet()) {
+            final byte[] keyBytes = entry.getKey().getBytes(StandardCharsets.UTF_8);
+            final int keyLen = keyBytes.length;
+            buffer.putInt(keyLen)
+                .put(keyBytes)
+                .putLong(entry.getValue());
+        }
+        return buffer.array();
     }
 
+    public void addMetadata(final String key, final long value) {
+        metadata.put(key, value);
+        committed = false;
+    }
+
+    public Long getMetadata(final String key) {
+        return metadata.get(key);
+    }
+
+    public void commit() {
+        committed = true;
+    }
+
+    public boolean needCommit() {
+        return !committed;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(metadata);
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (obj == null || obj.getClass() != getClass()) {
+            return false;
+        }
+        if (this == obj) {
+            return true;
+        }
+
+        return metadata.equals(((ProcessorMetadata) obj).metadata);
+    }
 }

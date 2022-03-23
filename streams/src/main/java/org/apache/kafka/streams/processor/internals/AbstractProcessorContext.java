@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -62,6 +61,7 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
         valueSerde = null;
         keySerde = null;
         this.cache = cache;
+        processorMetadata = ProcessorMetadata.emptyMetadata();
     }
 
     protected abstract StateManager stateManager();
@@ -258,17 +258,18 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
     }
 
     @Override
-    public void addGlobalProcessorMetadata(final Bytes key, final byte[] value) {
-        processorMetadata.addGlobalMetadata(key, value);
+    public void addProcessorMetadataKeyValue(final String key, final long value) {
+        processorMetadata.addMetadata(key, value);
     }
 
     @Override
-    public byte[] getGlobalProcessorMetadata(final Bytes key) {
-        return processorMetadata.getGlobalMetadata(key);
+    public Long getProcessorMetadataForKey(final String key) {
+        return processorMetadata.getMetadata(key);
     }
 
     @Override
     public void setProcessorMetadata(final ProcessorMetadata metadata) {
+        Objects.requireNonNull(metadata);
         processorMetadata = metadata;
     }
 
