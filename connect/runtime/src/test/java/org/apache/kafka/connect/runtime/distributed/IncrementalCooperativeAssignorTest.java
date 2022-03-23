@@ -173,11 +173,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -244,11 +240,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(1, 4, 0, 0, "worker1");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -332,11 +324,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(1, 4, 0, 0, "worker1", "worker2");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -393,11 +381,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 0, 0, "worker2", "worker3");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -469,11 +453,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 2, 0, 0, "worker1", "worker2", "worker3");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -515,11 +495,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -577,11 +553,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 0, 2, "worker1", "worker2", "worker3");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -637,11 +609,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 0, 2, "worker1", "worker2", "worker3");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -675,11 +643,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 1, 4, "worker1", "worker2");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -1157,11 +1121,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     @Test
@@ -1230,11 +1190,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
 
-        verify(coordinator, times(rebalanceNum)).configSnapshot();
-        verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(2 * rebalanceNum)).generationId();
-        verify(coordinator, times(rebalanceNum)).memberId();
-        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+        verifyCoordinatorInteractions();
     }
 
     private WorkerLoad emptyWorkerLoad(String worker) {
@@ -1466,4 +1422,13 @@ public class IncrementalCooperativeAssignorTest {
                 .thenReturn(assignor.previousGenerationId + 1);
         when(coordinator.lastCompletedGenerationId()).thenReturn(assignor.previousGenerationId);
     }
+
+    private void verifyCoordinatorInteractions() {
+        verify(coordinator, times(rebalanceNum)).configSnapshot();
+        verify(coordinator, times(rebalanceNum)).leaderState(any());
+        verify(coordinator, times(2 * rebalanceNum)).generationId();
+        verify(coordinator, times(rebalanceNum)).memberId();
+        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+    }
+
 }
