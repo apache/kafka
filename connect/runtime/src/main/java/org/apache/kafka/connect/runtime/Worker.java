@@ -648,7 +648,7 @@ public class Worker {
         // These settings will execute infinite retries on retriable exceptions. They *may* be overridden via configs passed to the worker,
         // but this may compromise the delivery guarantees of Kafka Connect.
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
-        // By default, producers that are instantiated and used by Connect have idempotency disabled even after idempotency became
+        // By default, producers that are instantiated and used by Connect have idempotence disabled even after idempotence became
         // default for Kafka producers. This ensures Connect continues to work with many Kafka broker versions, including older brokers that do not support
         // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
         // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
