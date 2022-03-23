@@ -203,9 +203,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val dynamicBrokerConfigs = mutable.Map[String, String]()
   private val dynamicDefaultConfigs = mutable.Map[String, String]()
 
-  // Use COWArrayList to prevent concurrent modification exception when reconfigurable added while iteration over list occurring
+  // Use COWArrayList to prevent concurrent modification exception when an item is added by one thread to these
+  // collections, while another thread is iterating over them
   private val reconfigurables = new CopyOnWriteArrayList[Reconfigurable]()
-  private val brokerReconfigurables = mutable.Buffer[BrokerReconfigurable]()
+  private val brokerReconfigurables = new CopyOnWriteArrayList[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
   private var currentConfig: KafkaConfig = null
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
@@ -267,7 +268,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   def addBrokerReconfigurable(reconfigurable: BrokerReconfigurable): Unit = CoreUtils.inWriteLock(lock) {
     verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs)
-    brokerReconfigurables += reconfigurable
+    brokerReconfigurables.add(reconfigurable)
   }
 
   def removeReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -549,13 +550,13 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
         // BrokerReconfigurable updates are processed after config is updated. Only do the validation here.
         val brokerReconfigurablesToUpdate = mutable.Buffer[BrokerReconfigurable]()
-        brokerReconfigurables.foreach { reconfigurable =>
+        brokerReconfigurables.forEach({ reconfigurable =>
           if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, changeMap.keySet, deletedKeySet)) {
             reconfigurable.validateReconfiguration(newConfig)
             if (!validateOnly)
               brokerReconfigurablesToUpdate += reconfigurable
           }
-        }
+        })
         (newConfig, brokerReconfigurablesToUpdate.toList)
       } catch {
         case e: Exception =>
