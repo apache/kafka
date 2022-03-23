@@ -67,6 +67,11 @@ public final class ClientQuotaImage {
         out.accept(records);
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return quotas.size();
+    }
+
     public static List<EntityData> entityToData(ClientQuotaEntity entity) {
         List<EntityData> entityData = new ArrayList<>(entity.entries().size());
         for (Entry<String, String> entry : entity.entries().entrySet()) {

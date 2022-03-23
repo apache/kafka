@@ -25,6 +25,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -82,5 +83,12 @@ public class ProducerIdControlManager {
                 (short) 0));
         }
         return Collections.singleton(records).iterator();
+    }
+
+    long numRecords(long epoch) {
+        if (nextProducerId.get(epoch) > 0) {
+            return 1;
+        }
+        return 0;
     }
 }

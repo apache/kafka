@@ -80,6 +80,11 @@ public final class TopicsImage {
         }
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return topicsById.values().stream().map(TopicImage::totalRecords).reduce(Long::sum).orElse(0L);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof TopicsImage)) return false;

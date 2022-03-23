@@ -62,6 +62,11 @@ public final class AclsImage {
         out.accept(batch);
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return acls.size();
+    }
+
     @Override
     public int hashCode() {
         return acls.hashCode();

@@ -306,8 +306,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void updateListenersProgress(long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts.values()) {
+            // TODO use cache compute
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
-                if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
+                if (log.preferLoadSnapshot(nextExpectedOffset) && nextExpectedOffset < highWatermark) {
                     SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
                         String.format(
                             "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
@@ -2347,7 +2348,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public Optional<SnapshotWriter<T>> createSnapshot(
         long committedOffset,
         int committedEpoch,
-        long lastContainedLogTime
+        long lastContainedLogTime,
+        long totalRecords
     ) {
         return RecordsSnapshotWriter.createWithHeader(
                 () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
@@ -2355,6 +2357,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 memoryPool,
                 time,
                 lastContainedLogTime,
+                totalRecords,
                 CompressionType.NONE,
                 serde
             );

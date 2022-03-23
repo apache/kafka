@@ -29,7 +29,9 @@ import org.apache.kafka.snapshot.SnapshotWriter
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
             committedEpoch: Int,
-            lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion]
+            lastContainedLogTime: Long,
+            totalRecords: Long
+           ): SnapshotWriter[ApiMessageAndVersion]
 }
 
 class BrokerMetadataSnapshotter(
@@ -57,7 +59,8 @@ class BrokerMetadataSnapshotter(
       val writer = writerBuilder.build(
         image.highestOffsetAndEpoch().offset,
         image.highestOffsetAndEpoch().epoch,
-        lastContainedLogTime
+        lastContainedLogTime,
+        image.totalRecords()
       )
       _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
       info(s"Creating a new snapshot at offset ${_currentSnapshotOffset}...")

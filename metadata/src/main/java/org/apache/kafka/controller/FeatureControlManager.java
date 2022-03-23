@@ -153,4 +153,8 @@ public class FeatureControlManager {
     FeatureControlIterator iterator(long epoch) {
         return new FeatureControlIterator(epoch);
     }
+
+    long numRecords(long epoch) {
+        return finalizedVersions.entrySet(epoch).size();
+    }
 }

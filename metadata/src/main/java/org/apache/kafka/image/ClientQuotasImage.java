@@ -75,6 +75,11 @@ public final class ClientQuotasImage {
         }
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return entities.values().stream().map(ClientQuotaImage::totalRecords).reduce(Long::sum).orElse(0L);
+    }
+
     public DescribeClientQuotasResponseData describe(DescribeClientQuotasRequestData request) {
         DescribeClientQuotasResponseData response = new DescribeClientQuotasResponseData();
         Map<String, String> exactMatch = new HashMap<>();

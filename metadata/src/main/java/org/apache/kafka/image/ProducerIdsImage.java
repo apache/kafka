@@ -54,6 +54,14 @@ public final class ProducerIdsImage {
         }
     }
 
+    // TODO tests
+    public long totalRecords() {
+        if (nextProducerId >= 0) {
+            return 1;
+        }
+        return 0;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof ProducerIdsImage)) return false;

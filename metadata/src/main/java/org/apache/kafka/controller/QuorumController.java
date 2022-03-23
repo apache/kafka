@@ -444,7 +444,14 @@ public final class QuorumController implements Controller {
             Optional<SnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
                 committedOffset,
                 committedEpoch,
-                committedTimestamp
+                committedTimestamp,
+                featureControl.numRecords(committedOffset)
+                    + clusterControl.numRecords(committedOffset)
+                    + replicationControl.numRecords(committedOffset)
+                    + configurationControl.numRecords(committedOffset)
+                    + clientQuotaControlManager.numRecords(committedOffset)
+                    + producerIdControlManager.numRecords(committedOffset)
+                    + aclControlManager.numRecords(committedOffset)
             );
             if (writer.isPresent()) {
                 generator = new SnapshotGenerator(

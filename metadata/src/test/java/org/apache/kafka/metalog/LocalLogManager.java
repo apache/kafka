@@ -706,7 +706,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
         long committedOffset,
         int committedEpoch,
-        long lastContainedLogTimestamp
+        long lastContainedLogTimestamp,
+        long totalRecords
     ) {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
         return RecordsSnapshotWriter.createWithHeader(
@@ -715,6 +716,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             MemoryPool.NONE,
             new MockTime(),
             lastContainedLogTimestamp,
+            totalRecords,
             CompressionType.NONE,
             new MetadataRecordSerde()
         );

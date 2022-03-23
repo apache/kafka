@@ -309,6 +309,13 @@ public interface ReplicatedLog extends AutoCloseable {
     Optional<OffsetAndEpoch> earliestSnapshotId();
 
     /**
+     * TODO docs
+     * @param nextExpectedOffset
+     * @return
+     */
+    boolean preferLoadSnapshot(long nextExpectedOffset);
+
+    /**
      * Notifies the replicated log when a new snapshot is available.
      */
     void onSnapshotFrozen(OffsetAndEpoch snapshotId);

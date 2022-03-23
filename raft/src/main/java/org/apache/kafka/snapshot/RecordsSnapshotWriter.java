@@ -37,6 +37,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
     final private BatchAccumulator<T> accumulator;
     final private Time time;
     final private long lastContainedLogTimestamp;
+    final private long totalRecords;
 
     private RecordsSnapshotWriter(
         RawSnapshotWriter snapshot,
@@ -44,12 +45,14 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         MemoryPool memoryPool,
         Time time,
         long lastContainedLogTimestamp,
+        long totalRecords,
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
         this.time = time;
         this.lastContainedLogTimestamp = lastContainedLogTimestamp;
+        this.totalRecords = totalRecords;
 
         this.accumulator = new BatchAccumulator<>(
             snapshot.snapshotId().epoch,
@@ -79,7 +82,8 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
 
         SnapshotHeaderRecord headerRecord = new SnapshotHeaderRecord()
             .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION)
-            .setLastContainedLogTimestamp(lastContainedLogTimestamp);
+            .setLastContainedLogTimestamp(lastContainedLogTimestamp)
+            .setRecordsCount(totalRecords);
         accumulator.appendSnapshotHeaderMessage(headerRecord, time.milliseconds());
         accumulator.forceDrain();
     }
@@ -115,18 +119,20 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         MemoryPool memoryPool,
         Time snapshotTime,
         long lastContainedLogTimestamp,
+        long totalRecords,
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
         return supplier.get().map(snapshot -> {
             RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
-                    snapshot,
-                    maxBatchSize,
-                    memoryPool,
-                    snapshotTime,
-                    lastContainedLogTimestamp,
-                    compressionType,
-                    serde);
+                snapshot,
+                maxBatchSize,
+                memoryPool,
+                snapshotTime,
+                lastContainedLogTimestamp,
+                totalRecords,
+                compressionType,
+                serde);
             writer.initializeSnapshotWithHeader();
 
             return writer;

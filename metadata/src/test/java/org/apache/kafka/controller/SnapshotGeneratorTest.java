@@ -71,11 +71,11 @@ public class SnapshotGeneratorTest {
 
     @Test
     public void testGenerateBatches() throws Exception {
-        SnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0);
+        SnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0, 5);
         List<Section> sections = Arrays.asList(new Section("replication",
-                Arrays.asList(BATCHES.get(0), BATCHES.get(1), BATCHES.get(2)).iterator()),
+                Arrays.asList(BATCHES.get(0), BATCHES.get(1), BATCHES.get(2)).iterator(), 3),
             new Section("configuration",
-                Arrays.asList(BATCHES.get(3), BATCHES.get(4)).iterator()));
+                Arrays.asList(BATCHES.get(3), BATCHES.get(4)).iterator(), 2));
         SnapshotGenerator generator = new SnapshotGenerator(new LogContext(),
             writer, 2, sections);
         assertFalse(writer.isFrozen());
@@ -90,7 +90,8 @@ public class SnapshotGeneratorTest {
 
     private SnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(
         long committedOffset,
-        long lastContainedLogTime
+        long lastContainedLogTime,
+        long totalRecords
     ) {
         return RecordsSnapshotWriter.createWithHeader(
             () -> createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, 1)),
@@ -98,6 +99,7 @@ public class SnapshotGeneratorTest {
             MemoryPool.NONE,
             new MockTime(),
             lastContainedLogTime,
+            totalRecords,
             CompressionType.NONE,
             new MetadataRecordSerde()
         ).get();

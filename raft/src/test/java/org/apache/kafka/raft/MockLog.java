@@ -19,7 +19,9 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
@@ -27,6 +29,8 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
@@ -504,6 +508,30 @@ public class MockLog implements ReplicatedLog {
     public Optional<OffsetAndEpoch> earliestSnapshotId() {
         return Optional.ofNullable(snapshots.firstEntry())
             .map(Map.Entry::getKey);
+    }
+
+    @Override
+    public boolean preferLoadSnapshot(long nextExpectedOffset) {
+        if (nextExpectedOffset < startOffset()) {
+            return true;
+        }
+        return latestSnapshotId().map(snapshotId -> {
+            return readSnapshotTimestamp(snapshotId)
+                .map(header -> snapshotId.offset - nextExpectedOffset > header.recordsCount())
+                .orElse(false);
+        }).orElse(false);
+    }
+
+    /**
+     * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
+     */
+    private  Optional<SnapshotHeaderRecord> readSnapshotTimestamp(OffsetAndEpoch snapshotId) {
+        return readSnapshot(snapshotId).map(reader -> {
+            RecordBatch firstBatch = reader.records().batchIterator().next();
+
+            CloseableIterator<Record> records = firstBatch.streamingIterator(new BufferSupplier.GrowableBufferSupplier());
+            return ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next());
+        });
     }
 
     @Override

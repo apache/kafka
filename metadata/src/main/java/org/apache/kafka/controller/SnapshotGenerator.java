@@ -79,7 +79,7 @@ final class SnapshotGenerator {
         return writer.lastContainedLogOffset();
     }
 
-    SnapshotWriter writer() {
+    SnapshotWriter<ApiMessageAndVersion> writer() {
         return writer;
     }
 
