@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util
 import java.util.{Collections, Properties}
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager}
@@ -35,7 +36,6 @@ import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
-import java.util.concurrent.CopyOnWriteArrayList
 import scala.annotation.nowarn
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -204,7 +204,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val dynamicDefaultConfigs = mutable.Map[String, String]()
 
   // Use COWArrayList to prevent concurrent modification exception when an item is added by one thread to these
-  // collections, while another thread is iterating over them
+  // collections, while another thread is iterating over them.
   private val reconfigurables = new CopyOnWriteArrayList[Reconfigurable]()
   private val brokerReconfigurables = new CopyOnWriteArrayList[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
@@ -540,23 +540,23 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
         newConfig.valuesFromThisConfig.keySet.forEach(k => customConfigs.remove(k))
-        reconfigurables.forEach( {
+        reconfigurables.forEach {
           case listenerReconfigurable: ListenerReconfigurable =>
             processListenerReconfigurable(listenerReconfigurable, newConfig, customConfigs, validateOnly, reloadOnly = false)
           case reconfigurable =>
             if (needsReconfiguration(reconfigurable.reconfigurableConfigs, changeMap.keySet, deletedKeySet))
               processReconfigurable(reconfigurable, changeMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
-        })
+        }
 
         // BrokerReconfigurable updates are processed after config is updated. Only do the validation here.
         val brokerReconfigurablesToUpdate = mutable.Buffer[BrokerReconfigurable]()
-        brokerReconfigurables.forEach({ reconfigurable =>
+        brokerReconfigurables.forEach { reconfigurable =>
           if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, changeMap.keySet, deletedKeySet)) {
             reconfigurable.validateReconfiguration(newConfig)
             if (!validateOnly)
               brokerReconfigurablesToUpdate += reconfigurable
           }
-        })
+        }
         (newConfig, brokerReconfigurablesToUpdate.toList)
       } catch {
         case e: Exception =>
