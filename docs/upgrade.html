@@ -67,6 +67,11 @@
         A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
         <code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details.
         This issue was fixed and the default is properly applied.</li>
+    <li>A notable exception is Connect that by default disables idempotent behavior for all of its
+        producers in order to uniformly support using a wide range of Kafka broker versions.
+        Users can change this behavior to enable idempotence for some or all producers
+        via Connect worker and/or connector configuration. Connect may enable idempotent producers
+        by default in a future major release.</li>
 </ul>
 
 <h5><a id="upgrade_310_notable" href="#upgrade_310_notable">Notable changes in 3.1.0</a></h5>
