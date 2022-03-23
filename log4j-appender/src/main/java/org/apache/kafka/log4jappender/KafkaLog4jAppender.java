@@ -291,8 +291,8 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
         props.put(LINGER_MS_CONFIG, lingerMs);
         props.put(BATCH_SIZE_CONFIG, batchSize);
-        // Disabling idempotence as a temporary workaround for KAFKA-13761. This is to avoid deadlock when producer
-        // network thread appends to log while interacting with TransactionManager.
+        // Disable idempotence to avoid deadlock when the producer network thread writes a log line while interacting
+        // with the TransactionManager, see KAFKA-13761 for more information.
         props.put(ENABLE_IDEMPOTENCE_CONFIG, false);
 
         if (securityProtocol != null) {
