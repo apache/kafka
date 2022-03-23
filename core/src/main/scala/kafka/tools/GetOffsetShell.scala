@@ -22,7 +22,7 @@ import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ListTopicsOptions, OffsetSpec}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.requests.ListOffsetsRequest
+import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.Utils
 
 import java.util.Properties
@@ -135,7 +135,11 @@ object GetOffsetShell {
       val partitionOffsets = partitionInfos.flatMap { tp =>
         try {
           val partitionInfo = listOffsetsResult.partitionResult(tp).get
-          Some((tp, partitionInfo.offset))
+          if (partitionInfo.offset != ListOffsetsResponse.UNKNOWN_OFFSET) {
+            Some((tp, partitionInfo.offset))
+          } else {
+            None
+          }
         } catch {
           case e: ExecutionException =>
             e.getCause match {
