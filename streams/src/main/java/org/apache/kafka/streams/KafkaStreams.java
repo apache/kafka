@@ -1782,6 +1782,9 @@ public class KafkaStreams implements AutoCloseable {
      * This method allows callers outside of the Streams runtime to access the internal state of
      * stateful processors. See https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html
      * for more information.
+     * <p>
+     * NOTICE: This functionality is {@link Evolving} and subject to change in minor versions.
+     * Once it is stabilized, this notice and the evolving annotation will be removed.
      *
      * @param <R> The result type specified by the query.
      * @throws StreamsNotStartedException If Streams has not yet been started. Just call {@link
