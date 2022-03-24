@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import com.yammer.metrics.core.Timer
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
-import kafka.controller.KafkaController.AlterIsrCallback
+import kafka.controller.KafkaController.AlterPartitionCallback
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
@@ -31,6 +31,7 @@ import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -874,57 +875,69 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs.get(otherBroker.config.brokerId).get
     // When re-sending the current ISR, we should not get and error or any ISR changes
-    controller.eventManager.put(AlterIsrReceived(otherBroker.config.brokerId, brokerEpoch, Map(tp -> newLeaderAndIsr), callback))
+    controller.eventManager.put(AlterPartitionReceived(otherBroker.config.brokerId, brokerEpoch, Map(tp -> newLeaderAndIsr), callback))
     latch.await()
   }
 
   @Test
   def testAlterIsrErrors(): Unit = {
-    servers = makeServers(1)
+    servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val tp = new TopicPartition("t", 0)
-    val assignment = Map(tp.partition -> Seq(controllerId))
+    val replicas = controllerId :: servers.map(_.config.nodeId).filter(_ != controllerId).take(1).toList
+    val assignment = Map(tp.partition -> replicas)
+
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     val controller = getController().kafkaController
     var future = captureAlterIsrError(controllerId, controller.brokerEpoch - 1,
-      Map(tp -> LeaderAndIsr(controllerId, List(controllerId))))
+      Map(tp -> LeaderAndIsr(controllerId, replicas)))
     var capturedError = future.get(5, TimeUnit.SECONDS)
     assertEquals(Errors.STALE_BROKER_EPOCH, capturedError)
 
     future = captureAlterIsrError(99, controller.brokerEpoch,
-      Map(tp -> LeaderAndIsr(controllerId, List(controllerId))))
+      Map(tp -> LeaderAndIsr(controllerId, replicas)))
     capturedError = future.get(5, TimeUnit.SECONDS)
     assertEquals(Errors.STALE_BROKER_EPOCH, capturedError)
 
     val unknownTopicPartition = new TopicPartition("unknown", 99)
     future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
-      Map(unknownTopicPartition -> LeaderAndIsr(controllerId, List(controllerId))), unknownTopicPartition)
+      Map(unknownTopicPartition -> LeaderAndIsr(controllerId, replicas)), unknownTopicPartition)
     capturedError = future.get(5, TimeUnit.SECONDS)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, capturedError)
 
     future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
-      Map(tp -> LeaderAndIsr(controllerId, 1, List(controllerId), 99)), tp)
+      Map(tp -> LeaderAndIsr(controllerId, 1, replicas, LeaderRecoveryState.RECOVERED, 99)), tp)
     capturedError = future.get(5, TimeUnit.SECONDS)
     assertEquals(Errors.INVALID_UPDATE_VERSION, capturedError)
+
+    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
+      Map(tp -> LeaderAndIsr(controllerId, 1, replicas, LeaderRecoveryState.RECOVERING, 1)), tp)
+    capturedError = future.get(5, TimeUnit.SECONDS)
+    assertEquals(Errors.INVALID_REQUEST, capturedError)
+
+    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
+      Map(tp -> LeaderAndIsr(controllerId, 1, List(controllerId), LeaderRecoveryState.RECOVERING, 1)), tp)
+    capturedError = future.get(5, TimeUnit.SECONDS)
+    assertEquals(Errors.INVALID_REQUEST, capturedError)
   }
 
   def captureAlterIsrError(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr]): CompletableFuture[Errors] = {
     val future = new CompletableFuture[Errors]()
     val controller = getController().kafkaController
-    val callback: AlterIsrCallback = {
+    val callback: AlterPartitionCallback = {
       case Left(_: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
         future.completeExceptionally(new AssertionError(s"Should have seen top-level error"))
       case Right(error: Errors) =>
         future.complete(error)
     }
-    controller.eventManager.put(AlterIsrReceived(brokerId, brokerEpoch, isrsToAlter, callback))
+    controller.eventManager.put(AlterPartitionReceived(brokerId, brokerEpoch, isrsToAlter, callback))
     future
   }
 
   def captureAlterIsrPartitionError(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr], tp: TopicPartition): CompletableFuture[Errors] = {
     val future = new CompletableFuture[Errors]()
     val controller = getController().kafkaController
-    val callback: AlterIsrCallback = {
+    val callback: AlterPartitionCallback = {
       case Left(partitionResults: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
         partitionResults.get(tp) match {
           case Some(Left(error: Errors)) => future.complete(error)
@@ -934,7 +947,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       case Right(_: Errors) =>
         future.completeExceptionally(new AssertionError(s"Should not seen top-level error"))
     }
-    controller.eventManager.put(AlterIsrReceived(brokerId, brokerEpoch, isrsToAlter, callback))
+    controller.eventManager.put(AlterPartitionReceived(brokerId, brokerEpoch, isrsToAlter, callback))
     future
   }
 
@@ -1376,7 +1389,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
                           controlPlaneListenerName : Option[String] = None,
                           interBrokerProtocolVersion: Option[ApiVersion] = None,
                           logDirCount: Int = 1,
-                          startingIdNumber: Int = 0) = {
+                          startingIdNumber: Int = 0): Seq[KafkaServer] = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)

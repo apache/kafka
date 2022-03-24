@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.List;

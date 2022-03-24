@@ -98,7 +98,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(key, key, from, to),
+                keySchema.hasNextCondition(key, key, from, to, forward),
                 binaryFrom,
                 binaryTo,
                 forward);
@@ -140,7 +140,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(keyFrom, keyTo, from, to),
+                keySchema.hasNextCondition(keyFrom, keyTo, from, to, forward),
                 binaryFrom,
                 binaryTo,
                 forward);
@@ -152,7 +152,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true),
                 null,
                 null,
                 true);
@@ -164,7 +164,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, false),
                 null,
                 null,
                 false);
@@ -177,7 +177,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+                keySchema.hasNextCondition(null, null, timeFrom, timeTo, true),
                 null,
                 null,
                 true);
@@ -190,7 +190,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+                keySchema.hasNextCondition(null, null, timeFrom, timeTo, false),
                 null,
                 null,
                 false);

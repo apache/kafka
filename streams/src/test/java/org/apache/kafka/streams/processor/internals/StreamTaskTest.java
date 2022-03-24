@@ -59,7 +59,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
@@ -230,6 +230,7 @@ public class StreamTaskTest {
         return createConfig(eosConfig, enforcedProcessingValue, LogAndFailExceptionHandler.class.getName());
     }
 
+    @SuppressWarnings("deprecation")
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,

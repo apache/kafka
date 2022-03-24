@@ -76,21 +76,21 @@ public class SessionKeySchemaTest {
     @Test
     public void shouldFetchExactKeysSkippingLongerKeys() {
         final Bytes key = Bytes.wrap(new byte[]{0});
-        final List<Integer> result = getValues(sessionKeySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE));
+        final List<Integer> result = getValues(sessionKeySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true));
         assertThat(result, equalTo(Arrays.asList(2, 4)));
     }
 
     @Test
     public void shouldFetchExactKeySkippingShorterKeys() {
         final Bytes key = Bytes.wrap(new byte[]{0, 0});
-        final HasNextCondition hasNextCondition = sessionKeySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE);
+        final HasNextCondition hasNextCondition = sessionKeySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
         assertThat(results, equalTo(Arrays.asList(1, 5)));
     }
 
     @Test
     public void shouldFetchAllKeysUsingNullKeys() {
-        final HasNextCondition hasNextCondition = sessionKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
+        final HasNextCondition hasNextCondition = sessionKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
         assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
     }

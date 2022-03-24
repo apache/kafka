@@ -254,6 +254,7 @@
   <subpackage name="metadata">
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common.annotation" />
+    <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
@@ -308,6 +309,9 @@
 
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
+
+    <!-- This is required to make AlterConfigPolicyTest work. -->
+    <allow pkg="org.apache.kafka.server.policy" />
 
     <subpackage name="common">
       <allow pkg="org.apache.kafka.server.common" />

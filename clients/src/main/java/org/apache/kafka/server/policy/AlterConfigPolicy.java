@@ -71,7 +71,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
         @Override
         public boolean equals(Object o) {
-            if (o == null || o.getClass() != o.getClass()) return false;
+            if ((o == null) || (!o.getClass().equals(getClass()))) return false;
             RequestMetadata other = (RequestMetadata) o;
             return resource.equals(other.resource) &&
                 configs.equals(other.configs);

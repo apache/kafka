@@ -110,6 +110,9 @@ object ConsoleProducer {
       props, ProducerConfig.SEND_BUFFER_CONFIG, config.options, config.socketBufferSizeOpt)
     CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.BUFFER_MEMORY_CONFIG, config.options, config.maxMemoryBytesOpt)
+    // We currently have 2 options to set the batch.size value. We'll deprecate/remove one of them in KIP-717.
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.BATCH_SIZE_CONFIG, config.options, config.batchSizeOpt)
     CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.BATCH_SIZE_CONFIG, config.options, config.maxPartitionMemoryBytesOpt)
     CommandLineUtils.maybeMergeOptions(
@@ -140,11 +143,12 @@ object ConsoleProducer {
                                     .withOptionalArg()
                                     .describedAs("compression-codec")
                                     .ofType(classOf[String])
-    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously.")
+    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously. "+
+       "please note that this option will be replaced if max-partition-memory-bytes is also set")
       .withRequiredArg
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
-      .defaultsTo(200)
+      .defaultsTo(16 * 1024)
     val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, " +
       "and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message. " +
       "This is the option to control `retries` in producer configs.")
@@ -267,7 +271,6 @@ object ConsoleProducer {
                                DefaultCompressionCodec.name
                              else compressionCodecOptionValue
                            else NoCompressionCodec.name
-    val batchSize = options.valueOf(batchSizeOpt)
     val readerClass = options.valueOf(messageReaderOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)

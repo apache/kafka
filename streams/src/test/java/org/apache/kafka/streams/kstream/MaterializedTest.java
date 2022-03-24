@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.junit.Test;
 
@@ -65,6 +66,14 @@ public class MaterializedTest {
     }
 
     @Test
+    public void shouldThrowNullPointerIfStoreTypeIsNull() {
+        final NullPointerException e = assertThrows(NullPointerException.class,
+            () -> Materialized.as((Materialized.StoreType) null));
+
+        assertEquals(e.getMessage(), "store type can't be null");
+    }
+
+    @Test
     public void shouldThrowNullPointerIfSessionBytesStoreSupplierIsNull() {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((SessionBytesStoreSupplier) null));
@@ -78,6 +87,14 @@ public class MaterializedTest {
             () -> Materialized.as("valid-name").withRetention(Duration.of(-1, ChronoUnit.DAYS)));
 
         assertEquals(e.getMessage(), "Retention must not be negative.");
+    }
+
+    @Test
+    public void shouldThrowIllegalArgumentExceptionIfStoreSupplierAndStoreTypeBothSet() {
+        final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> Materialized.as(Stores.persistentKeyValueStore("test")).withStoreType(Materialized.StoreType.ROCKS_DB));
+
+        assertEquals(e.getMessage(), "Cannot set store type when store supplier is pre-configured.");
     }
 
     @Test

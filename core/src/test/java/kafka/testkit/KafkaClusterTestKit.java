@@ -184,7 +184,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         Option.apply(threadNamePrefix),
-                        connectFutureManager.future
+                        connectFutureManager.future,
+                        KafkaRaftServer.configSchema()
                     );
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {

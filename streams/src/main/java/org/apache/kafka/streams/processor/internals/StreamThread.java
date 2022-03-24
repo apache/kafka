@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -260,6 +261,7 @@ public class StreamThread extends Thread {
     public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
+    private final long purgeTimeMs;
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
@@ -287,6 +289,7 @@ public class StreamThread extends Thread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPurgeMs;
     private long lastPartitionAssignedMs = -1L;
     private int numIterations;
     private volatile State state = State.CREATED;
@@ -315,6 +318,7 @@ public class StreamThread extends Thread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicLong maxBufferSizeBytes = new AtomicLong(-1L);
     private final boolean eosEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
@@ -327,6 +331,7 @@ public class StreamThread extends Thread {
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
+                                      final long maxBufferSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
@@ -342,6 +347,7 @@ public class StreamThread extends Thread {
         referenceContainer.adminClient = adminClient;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
+        referenceContainer.clientTags = config.getClientTags();
 
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
@@ -428,7 +434,8 @@ public class StreamThread extends Thread {
             referenceContainer.nonFatalExceptionsToHandle,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cache::resize
+            cache::resize,
+            maxBufferSizeBytes
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -451,7 +458,8 @@ public class StreamThread extends Thread {
                         final Queue<StreamsException> nonFatalExceptionsToHandle,
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer) {
+                        final java.util.function.Consumer<Long> cacheResizer,
+                        final long maxBufferSizeBytes) {
         super(threadId);
         this.stateLock = new Object();
         this.adminClient = adminClient;
@@ -516,9 +524,11 @@ public class StreamThread extends Thread {
         this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
             .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.purgeTimeMs = config.getLong(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
+        this.maxBufferSizeBytes.set(maxBufferSizeBytes);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -548,6 +558,7 @@ public class StreamThread extends Thread {
             failedStreamThreadSensor.record();
             requestLeaveGroupDuringShutdown();
             streamsUncaughtExceptionHandler.accept(e, false);
+            // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
             completeShutdown(cleanRun);
         }
@@ -700,8 +711,17 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void resizeCache(final long size) {
-        cacheResizeSize.set(size);
+    public void resizeCacheAndBufferMemory(final long cacheSize, final long maxBufferSize) {
+        cacheResizeSize.set(cacheSize);
+        maxBufferSizeBytes.set(maxBufferSize);
+    }
+
+    public long getCacheSize() {
+        return cacheResizeSize.get();
+    }
+
+    public long getMaxBufferSize() {
+        return maxBufferSizeBytes.get();
     }
 
     /**
@@ -776,6 +796,10 @@ public class StreamThread extends Thread {
 
                     totalProcessed += processed;
                     totalRecordsProcessedSinceLastSummary += processed;
+                    final long bufferSize = taskManager.getInputBufferSizeInBytes();
+                    if (bufferSize <= maxBufferSizeBytes.get()) {
+                        mainConsumer.resume(mainConsumer.paused());
+                    }
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -880,22 +904,21 @@ public class StreamThread extends Thread {
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
         if (topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) {
+            log.info("StreamThread has detected an update to the topology");
+
             taskManager.handleTopologyUpdates();
-            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
-            if (topologyMetadata.isEmpty()) {
-                mainConsumer.unsubscribe();
-            }
-            topologyMetadata.maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(getName());
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             // We don't need to manually trigger a rebalance to pick up tasks from the new topology, as
             // a rebalance will always occur when the metadata is updated after a change in subscription
+            log.info("Updating consumer subscription following topology update");
             subscribeConsumer();
         }
     }
 
-    private long pollPhase() {
+    // Visible for testing
+    long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
@@ -941,6 +964,17 @@ public class StreamThread extends Thread {
         if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
+            // Check buffer size after adding records to tasks
+            final long bufferSize = taskManager.getInputBufferSizeInBytes();
+            // Pausing partitions as the buffer size now exceeds max buffer size
+            if (bufferSize > maxBufferSizeBytes.get()) {
+                log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes.get());
+                // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
+                // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
+                // and even lead to temporal deadlock. More explanation can be found here:
+                // https://issues.apache.org/jira/browse/KAFKA-13152?focusedCommentId=17400647&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-17400647
+                mainConsumer.pause(taskManager.nonEmptyPartitions());
+            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
@@ -977,24 +1011,30 @@ public class StreamThread extends Thread {
         final Set<TopicPartition> notReset = new HashSet<>();
 
         for (final TopicPartition partition : partitions) {
-            switch (topologyMetadata.offsetResetStrategy(partition.topic())) {
-                case EARLIEST:
-                    addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
-                    break;
-                case LATEST:
-                    addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
-                    break;
-                case NONE:
-                    if ("earliest".equals(originalReset)) {
-                        addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                    } else if ("latest".equals(originalReset)) {
-                        addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
-                    } else {
-                        notReset.add(partition);
-                    }
-                    break;
-                default:
-                    throw new IllegalStateException("Unable to locate topic " + partition.topic() + " in the topology");
+            final OffsetResetStrategy offsetResetStrategy = topologyMetadata.offsetResetStrategy(partition.topic());
+
+            // This may be null if the task we are currently processing was apart of a named topology that was just removed.
+            // TODO KAFKA-13713: keep the StreamThreads and TopologyMetadata view of named topologies in sync until final thread has acked
+            if (offsetResetStrategy != null) {
+                switch (offsetResetStrategy) {
+                    case EARLIEST:
+                        addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
+                        break;
+                    case LATEST:
+                        addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
+                        break;
+                    case NONE:
+                        if ("earliest".equals(originalReset)) {
+                            addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
+                        } else if ("latest".equals(originalReset)) {
+                            addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
+                        } else {
+                            notReset.add(partition);
+                        }
+                        break;
+                    default:
+                        throw new IllegalStateException("Unable to locate topic " + partition.topic() + " in the topology");
+                }
             }
         }
 
@@ -1061,9 +1101,10 @@ public class StreamThread extends Thread {
                     .collect(Collectors.toSet())
             );
 
-            if (committed > 0) {
+            if (committed > 0 && (now - lastPurgeMs) > purgeTimeMs) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
+                lastPurgeMs = now;
             }
 
             if (committed == -1) {
@@ -1116,14 +1157,14 @@ public class StreamThread extends Thread {
         log.info("Shutting down");
 
         try {
-            topologyMetadata.unregisterThread(threadMetadata.threadName());
-        } catch (final Throwable e) {
-            log.error("Failed to unregister thread due to the following error:", e);
-        }
-        try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
             log.error("Failed to close task manager due to the following error:", e);
+        }
+        try {
+            topologyMetadata.unregisterThread(threadMetadata.threadName());
+        } catch (final Throwable e) {
+            log.error("Failed to unregister thread due to the following error:", e);
         }
         try {
             changelogReader.clear();

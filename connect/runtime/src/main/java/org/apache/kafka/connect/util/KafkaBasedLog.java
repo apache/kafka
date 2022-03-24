@@ -76,6 +76,10 @@ public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
     private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(30);
     private static final long MAX_SLEEP_MS = TimeUnit.SECONDS.toMillis(1);
+    // 15min of admin retry duration to ensure successful metadata propagation.  10 seconds of backoff
+    // in between retries
+    private static final Duration ADMIN_CLIENT_RETRY_DURATION = Duration.ofMinutes(15);
+    private static final long ADMIN_CLIENT_RETRY_BACKOFF_MS = TimeUnit.SECONDS.toMillis(10);
 
     private final Time time;
     private final String topic;
@@ -194,7 +198,7 @@ public class KafkaBasedLog<K, V> {
         // when a 'group.id' is specified (if offsets happen to have been committed unexpectedly).
         consumer.seekToBeginning(partitions);
 
-        readToLogEnd();
+        readToLogEnd(true);
 
         thread = new WorkThread();
         thread.start();
@@ -319,9 +323,16 @@ public class KafkaBasedLog<K, V> {
         }
     }
 
-    private void readToLogEnd() {
+    /**
+     * This method finds the end offsets of the Kafka log's topic partitions, optionally retrying
+     * if the {@code listOffsets()} method of the admin client throws a {@link RetriableException}.
+     *
+     * @param shouldRetry Boolean flag to enable retry for the admin client {@code listOffsets()} call.
+     * @see TopicAdmin#retryEndOffsets
+     */
+    private void readToLogEnd(boolean shouldRetry) {
         Set<TopicPartition> assignment = consumer.assignment();
-        Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment);
+        Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment, shouldRetry);
         log.trace("Reading to end of log offsets {}", endOffsets);
 
         while (!endOffsets.isEmpty()) {
@@ -345,7 +356,7 @@ public class KafkaBasedLog<K, V> {
     }
 
     // Visible for testing
-    Map<TopicPartition, Long> readEndOffsets(Set<TopicPartition> assignment) {
+    Map<TopicPartition, Long> readEndOffsets(Set<TopicPartition> assignment, boolean shouldRetry) {
         log.trace("Reading to end of offset log");
 
         // Note that we'd prefer to not use the consumer to find the end offsets for the assigned topic partitions.
@@ -360,6 +371,12 @@ public class KafkaBasedLog<K, V> {
             // Use the admin client to immediately find the end offsets for the assigned topic partitions.
             // Unlike using the consumer
             try {
+                if (shouldRetry) {
+                    return admin.retryEndOffsets(assignment,
+                            ADMIN_CLIENT_RETRY_DURATION,
+                            ADMIN_CLIENT_RETRY_BACKOFF_MS);
+                }
+
                 return admin.endOffsets(assignment);
             } catch (UnsupportedVersionException e) {
                 // This may happen with really old brokers that don't support the auto topic creation
@@ -395,7 +412,7 @@ public class KafkaBasedLog<K, V> {
 
                     if (numCallbacks > 0) {
                         try {
-                            readToLogEnd();
+                            readToLogEnd(false);
                             log.trace("Finished read to end log for topic {}", topic);
                         } catch (TimeoutException e) {
                             log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +

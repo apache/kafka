@@ -21,6 +21,8 @@ import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -76,11 +78,12 @@ import java.util.stream.Collectors;
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
-    private static final String UNDEFINED_VERSION = "undefined";
+    public static final String UNDEFINED_VERSION = "undefined";
 
     private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final ConcurrentMap<String, String> aliases;
-    private final SortedSet<PluginDesc<Connector>> connectors;
+    private final SortedSet<PluginDesc<SinkConnector>> sinkConnectors;
+    private final SortedSet<PluginDesc<SourceConnector>> sourceConnectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation<?>>> transformations;
@@ -109,7 +112,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.pluginPaths = pluginPaths;
         this.pluginLoaders = new ConcurrentHashMap<>();
         this.aliases = new ConcurrentHashMap<>();
-        this.connectors = new TreeSet<>();
+        this.sinkConnectors = new TreeSet<>();
+        this.sourceConnectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
         this.transformations = new TreeSet<>();
@@ -127,8 +131,19 @@ public class DelegatingClassLoader extends URLClassLoader {
         this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public Set<PluginDesc<Connector>> connectors() {
+        Set<PluginDesc<Connector>> connectors = new TreeSet<>((Set) sinkConnectors);
+        connectors.addAll((Set) sourceConnectors);
         return connectors;
+    }
+
+    public Set<PluginDesc<SinkConnector>> sinkConnectors() {
+        return sinkConnectors;
+    }
+
+    public Set<PluginDesc<SourceConnector>> sourceConnectors() {
+        return sourceConnectors;
     }
 
     public Set<PluginDesc<Converter>> converters() {
@@ -232,8 +247,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             if (CLASSPATH_NAME.equals(path)) {
                 scanUrlsAndAddPlugins(
                         getParent(),
-                        ClasspathHelper.forJavaClassPath().toArray(new URL[0]),
-                        null
+                        ClasspathHelper.forJavaClassPath().toArray(new URL[0])
                 );
             } else {
                 Path pluginPath = Paths.get(path).toAbsolutePath();
@@ -254,7 +268,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         } catch (IOException e) {
             log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
         } catch (ReflectiveOperationException e) {
-            log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
+            log.error("Could not instantiate plugins in: {}. Ignoring.", path, e);
         }
     }
 
@@ -274,19 +288,20 @@ public class DelegatingClassLoader extends URLClassLoader {
                 urls,
                 this
         );
-        scanUrlsAndAddPlugins(loader, urls, pluginLocation);
+        scanUrlsAndAddPlugins(loader, urls);
     }
 
     private void scanUrlsAndAddPlugins(
             ClassLoader loader,
-            URL[] urls,
-            Path pluginLocation
+            URL[] urls
     ) throws ReflectiveOperationException {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
         if (!plugins.isEmpty()) {
-            addPlugins(plugins.connectors(), loader);
-            connectors.addAll(plugins.connectors());
+            addPlugins(plugins.sinkConnectors(), loader);
+            sinkConnectors.addAll(plugins.sinkConnectors());
+            addPlugins(plugins.sourceConnectors(), loader);
+            sourceConnectors.addAll(plugins.sourceConnectors());
             addPlugins(plugins.converters(), loader);
             converters.addAll(plugins.converters());
             addPlugins(plugins.headerConverters(), loader);
@@ -348,7 +363,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         Reflections reflections = new InternalReflections(builder);
 
         return new PluginScanResult(
-                getPluginDesc(reflections, Connector.class, loader),
+                getPluginDesc(reflections, SinkConnector.class, loader),
+                getPluginDesc(reflections, SourceConnector.class, loader),
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
                 getTransformationPluginDesc(loader, reflections),
@@ -419,7 +435,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : UNDEFINED_VERSION;
     }
 
-    private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
+    public static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         // Temporary workaround until all the plugins are versioned.
         return Connector.class.isAssignableFrom(pluginKlass) ?
             versionFor(pluginKlass.getDeclaredConstructor().newInstance()) : UNDEFINED_VERSION;
@@ -438,7 +454,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     private void addAllAliases() {
-        addAliases(connectors);
+        addAliases(connectors());
         addAliases(converters);
         addAliases(headerConverters);
         addAliases(transformations);
@@ -503,7 +519,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     @Override
     public Enumeration<URL> getResources(String name) throws IOException {
         if (serviceLoaderManifestForPlugin(name)) {
-            // Default implementation of getResources searches the parent class loader and and also its own URL paths. This will enable the
+            // Default implementation of getResources searches the parent class loader and also its own URL paths. This will enable the
             // PluginClassLoader to limit its resource search to only its own URL paths.
             return null;
         } else {

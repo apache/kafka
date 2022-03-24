@@ -1416,7 +1416,7 @@ public final class Utils {
     }
 
     /**
-     * Get an array containing all of the {@link Object#toString names} of a given enumerable type.
+     * Get an array containing all of the {@link Object#toString string representations} of a given enumerable type.
      * @param enumClass the enum class; may not be null
      * @return an array with the names of every value for the enum class; never null, but may be empty
      * if there are no values defined for the enum

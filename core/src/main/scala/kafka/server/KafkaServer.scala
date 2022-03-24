@@ -308,7 +308,7 @@ class KafkaServer(
         socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
         socketServer.startup(startProcessingRequests = false)
 
-        /* start replica manager */
+        // Start alter partition manager based on the IBP version
         alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
           AlterIsrManager(
             config = config,
@@ -317,14 +317,14 @@ class KafkaServer(
             time = time,
             metrics = metrics,
             threadNamePrefix = threadNamePrefix,
-            brokerEpochSupplier = () => kafkaController.brokerEpoch,
-            config.brokerId
+            brokerEpochSupplier = () => kafkaController.brokerEpoch
           )
         } else {
           AlterIsrManager(kafkaScheduler, time, zkClient)
         }
         alterIsrManager.start()
 
+        /* start replica manager */
         _replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 

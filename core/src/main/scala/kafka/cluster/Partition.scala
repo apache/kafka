@@ -41,6 +41,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderRecoveryState
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -130,8 +131,7 @@ case class OngoingReassignmentState(addingReplicas: Seq[Int],
 case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
 
 
-
-sealed trait IsrState {
+sealed trait PartitionState {
   /**
    * Includes only the in-sync replicas which have been committed to ZK.
    */
@@ -147,28 +147,36 @@ sealed trait IsrState {
   def maximalIsr: Set[Int]
 
   /**
-   * Indicates if we have an AlterIsr request inflight.
+   * The leader recovery state. See the description for LeaderRecoveryState for details on the different values.
+   */
+  def leaderRecoveryState: LeaderRecoveryState
+
+  /**
+   * Indicates if we have an AlterPartition request inflight.
    */
   def isInflight: Boolean
 }
 
-sealed trait PendingIsrChange extends IsrState {
+sealed trait PendingPartitionChange extends PartitionState {
   def sentLeaderAndIsr: LeaderAndIsr
+
+  override val leaderRecoveryState: LeaderRecoveryState = LeaderRecoveryState.RECOVERED
 }
 
 case class PendingExpandIsr(
   isr: Set[Int],
   newInSyncReplicaId: Int,
   sentLeaderAndIsr: LeaderAndIsr
-) extends PendingIsrChange {
+) extends PendingPartitionChange {
   val maximalIsr = isr + newInSyncReplicaId
   val isInflight = true
 
   override def toString: String = {
     s"PendingExpandIsr(isr=$isr" +
-      s", newInSyncReplicaId=$newInSyncReplicaId" +
-      s", sentLeaderAndIsr=$sentLeaderAndIsr" +
-      ")"
+    s", newInSyncReplicaId=$newInSyncReplicaId" +
+    s", sentLeaderAndIsr=$sentLeaderAndIsr" +
+    s", leaderRecoveryState=$leaderRecoveryState" +
+    ")"
   }
 }
 
@@ -176,27 +184,30 @@ case class PendingShrinkIsr(
   isr: Set[Int],
   outOfSyncReplicaIds: Set[Int],
   sentLeaderAndIsr: LeaderAndIsr
-) extends PendingIsrChange  {
+) extends PendingPartitionChange  {
   val maximalIsr = isr
   val isInflight = true
 
   override def toString: String = {
     s"PendingShrinkIsr(isr=$isr" +
-      s", outOfSyncReplicaIds=$outOfSyncReplicaIds" +
-      s", sentLeaderAndIsr=$sentLeaderAndIsr" +
-      ")"
+    s", outOfSyncReplicaIds=$outOfSyncReplicaIds" +
+    s", sentLeaderAndIsr=$sentLeaderAndIsr" +
+    s", leaderRecoveryState=$leaderRecoveryState" +
+    ")"
   }
 }
 
-case class CommittedIsr(
-  isr: Set[Int]
-) extends IsrState {
+case class CommittedPartitionState(
+  isr: Set[Int],
+  override val leaderRecoveryState: LeaderRecoveryState
+) extends PartitionState {
   val maximalIsr = isr
   val isInflight = false
 
   override def toString: String = {
-    s"CommittedIsr(isr=$isr" +
-      ")"
+    s"CommittedPartitionState(isr=$isr" +
+    s", leaderRecoveryState=$leaderRecoveryState" +
+    ")"
   }
 }
 
@@ -246,7 +257,7 @@ class Partition(val topicPartition: TopicPartition,
   // defined when this broker is leader for partition
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
-  @volatile private[cluster] var isrState: IsrState = CommittedIsr(Set.empty)
+  @volatile private[cluster] var partitionState: PartitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
   @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty)
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
@@ -268,7 +279,7 @@ class Partition(val topicPartition: TopicPartition,
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
   newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
-  newGauge("InSyncReplicasCount", () => if (isLeader) isrState.isr.size else 0, tags)
+  newGauge("InSyncReplicasCount", () => if (isLeader) partitionState.isr.size else 0, tags)
   newGauge("UnderMinIsr", () => if (isUnderMinIsr) 1 else 0, tags)
   newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
   newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
@@ -276,11 +287,11 @@ class Partition(val topicPartition: TopicPartition,
 
   def hasLateTransaction(currentTimeMs: Long): Boolean = leaderLogIfLocal.exists(_.hasLateTransaction(currentTimeMs))
 
-  def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - isrState.isr.size) > 0
+  def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - partitionState.isr.size) > 0
 
-  def isUnderMinIsr: Boolean = leaderLogIfLocal.exists { isrState.isr.size < _.config.minInSyncReplicas }
+  def isUnderMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size < _.config.minInSyncReplicas }
 
-  def isAtMinIsr: Boolean = leaderLogIfLocal.exists { isrState.isr.size == _.config.minInSyncReplicas }
+  def isAtMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size == _.config.minInSyncReplicas }
 
   def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
 
@@ -288,7 +299,7 @@ class Partition(val topicPartition: TopicPartition,
 
   def isAddingReplica(replicaId: Int): Boolean = assignmentState.isAddingReplica(replicaId)
 
-  def inSyncReplicaIds: Set[Int] = isrState.isr
+  def inSyncReplicaIds: Set[Int] = partitionState.isr
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
@@ -510,7 +521,7 @@ class Partition(val topicPartition: TopicPartition,
       assignmentState = SimpleAssignmentState(Seq.empty)
       log = None
       futureLog = None
-      isrState = CommittedIsr(Set.empty)
+      partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
@@ -538,11 +549,18 @@ class Partition(val topicPartition: TopicPartition,
       val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
 
+      if (partitionState.leaderRecoveryState == LeaderRecoveryState.RECOVERING.value()) {
+        stateChangeLogger.info(
+          s"The topic partition $topicPartition was marked as RECOVERING. Leader log recovery is not implemented. " +
+          "Marking the topic partition as RECOVERED."
+        )
+      }
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.map(_.toInt),
         isr = isr,
         addingReplicas = addingReplicas,
-        removingReplicas = removingReplicas
+        removingReplicas = removingReplicas,
+        LeaderRecoveryState.RECOVERED
       )
       try {
         createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
@@ -577,7 +595,7 @@ class Partition(val topicPartition: TopicPartition,
       val curTimeMs = time.milliseconds
       // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.
       remoteReplicas.foreach { replica =>
-        val lastCaughtUpTimeMs = if (isrState.isr.contains(replica.brokerId)) curTimeMs else 0L
+        val lastCaughtUpTimeMs = if (partitionState.isr.contains(replica.brokerId)) curTimeMs else 0L
         replica.resetLastCaughtUpTime(leaderEpochStartOffset, curTimeMs, lastCaughtUpTimeMs)
       }
 
@@ -622,7 +640,8 @@ class Partition(val topicPartition: TopicPartition,
         assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
         isr = Set.empty[Int],
         addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
-        removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
+        removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt),
+        LeaderRecoveryState.of(partitionState.leaderRecoveryState)
       )
       try {
         createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
@@ -726,7 +745,8 @@ class Partition(val topicPartition: TopicPartition,
   def updateAssignmentAndIsr(assignment: Seq[Int],
                              isr: Set[Int],
                              addingReplicas: Seq[Int],
-                             removingReplicas: Seq[Int]): Unit = {
+                             removingReplicas: Seq[Int],
+                             leaderRecoveryState: LeaderRecoveryState): Unit = {
     val newRemoteReplicas = assignment.filter(_ != localBrokerId)
     val removedReplicas = remoteReplicasMap.keys.filter(!newRemoteReplicas.contains(_))
 
@@ -739,7 +759,7 @@ class Partition(val topicPartition: TopicPartition,
       assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, assignment)
     else
       assignmentState = SimpleAssignmentState(assignment)
-    isrState = CommittedIsr(isr)
+    partitionState = CommittedPartitionState(isr, leaderRecoveryState)
   }
 
   /**
@@ -757,21 +777,21 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica): Unit = {
-    val needsIsrUpdate = !isrState.isInflight && canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
+    val needsIsrUpdate = !partitionState.isInflight && canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
       needsExpandIsr(followerReplica)
     }
     if (needsIsrUpdate) {
       val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
         // check if this replica needs to be added to the ISR
-        if (!isrState.isInflight && needsExpandIsr(followerReplica)) {
+        if (!partitionState.isInflight && needsExpandIsr(followerReplica)) {
           Some(prepareIsrExpand(followerReplica.brokerId))
         } else {
           None
         }
       }
-      // Send the AlterIsr request outside of the LeaderAndIsr lock since the completion logic
+      // Send the AlterPartition request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
-      alterIsrUpdateOpt.foreach(submitAlterIsr)
+      alterIsrUpdateOpt.foreach(submitAlterPartition)
     }
   }
 
@@ -780,7 +800,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def canAddReplicaToIsr(followerReplicaId: Int): Boolean = {
-    val current = isrState
+    val current = partitionState
     !current.isInflight && !current.isr.contains(followerReplicaId)
   }
 
@@ -803,7 +823,7 @@ class Partition(val topicPartition: TopicPartition,
     leaderLogIfLocal match {
       case Some(leaderLog) =>
         // keep the current immutable replica list reference
-        val curMaximalIsr = isrState.maximalIsr
+        val curMaximalIsr = partitionState.maximalIsr
 
         if (isTraceEnabled) {
           def logEndOffsetString: ((Int, Long)) => String = {
@@ -851,7 +871,7 @@ class Partition(val topicPartition: TopicPartition,
    * follower's log end offset may keep falling behind the HW (determined by the leader's log end offset) and therefore
    * will never be added to ISR.
    *
-   * With the addition of AlterIsr, we also consider newly added replicas as part of the ISR when advancing
+   * With the addition of AlterPartition, we also consider newly added replicas as part of the ISR when advancing
    * the HW. These replicas have not yet been committed to the ISR by the controller, so we could revert to the previously
    * committed ISR. However, adding additional replicas to the ISR makes it more restrictive and therefor safe. We call
    * this set the "maximal" ISR. See KIP-497 for more details
@@ -867,7 +887,7 @@ class Partition(val topicPartition: TopicPartition,
     remoteReplicasMap.values.foreach { replica =>
       // Note here we are using the "maximal", see explanation above
       if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
-        (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || isrState.maximalIsr.contains(replica.brokerId))) {
+        (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || partitionState.maximalIsr.contains(replica.brokerId))) {
         newHighWatermark = replica.logEndOffsetMetadata
       }
     }
@@ -925,7 +945,7 @@ class Partition(val topicPartition: TopicPartition,
 
   def maybeShrinkIsr(): Unit = {
     def needsIsrUpdate: Boolean = {
-      !isrState.isInflight && inReadLock(leaderIsrUpdateLock) {
+      !partitionState.isInflight && inReadLock(leaderIsrUpdateLock) {
         needsShrinkIsr()
       }
     }
@@ -934,15 +954,15 @@ class Partition(val topicPartition: TopicPartition,
       val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
         leaderLogIfLocal.flatMap { leaderLog =>
           val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-          if (!isrState.isInflight && outOfSyncReplicaIds.nonEmpty) {
+          if (!partitionState.isInflight && outOfSyncReplicaIds.nonEmpty) {
             val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
               val logEndOffsetMessage = getReplica(replicaId)
                 .map(_.logEndOffset.toString)
                 .getOrElse("unknown")
               s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
             }.mkString(" ")
-            val newIsrLog = (isrState.isr -- outOfSyncReplicaIds).mkString(",")
-            info(s"Shrinking ISR from ${isrState.isr.mkString(",")} to $newIsrLog. " +
+            val newIsrLog = (partitionState.isr -- outOfSyncReplicaIds).mkString(",")
+            info(s"Shrinking ISR from ${partitionState.isr.mkString(",")} to $newIsrLog. " +
               s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
               s"endOffset: ${leaderLog.logEndOffset}). " +
               s"Out of sync replicas: $outOfSyncReplicaLog.")
@@ -952,9 +972,9 @@ class Partition(val topicPartition: TopicPartition,
           }
         }
       }
-      // Send the AlterIsr request outside of the LeaderAndIsr lock since the completion logic
+      // Send the AlterPartition request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
-      alterIsrUpdateOpt.foreach(submitAlterIsr)
+      alterIsrUpdateOpt.foreach(submitAlterPartition)
     }
   }
 
@@ -986,7 +1006,7 @@ class Partition(val topicPartition: TopicPartition,
    * If an ISR update is in-flight, we will return an empty set here
    **/
   def getOutOfSyncReplicas(maxLagMs: Long): Set[Int] = {
-    val current = isrState
+    val current = partitionState
     if (!current.isInflight) {
       val candidateReplicaIds = current.isr - localBrokerId
       val currentTimeMs = time.milliseconds()
@@ -1047,11 +1067,11 @@ class Partition(val topicPartition: TopicPartition,
       leaderLogIfLocal match {
         case Some(leaderLog) =>
           val minIsr = leaderLog.config.minInSyncReplicas
-          val inSyncSize = isrState.isr.size
+          val inSyncSize = partitionState.isr.size
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {
-            throw new NotEnoughReplicasException(s"The size of the current ISR ${isrState.isr} " +
+            throw new NotEnoughReplicasException(s"The size of the current ISR ${partitionState.isr} " +
               s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
@@ -1330,25 +1350,25 @@ class Partition(val topicPartition: TopicPartition,
     // reflect the updated ISR even if there is a delay before we receive the confirmation.
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
-    val isrToSend = isrState.isr + newInSyncReplicaId
-    val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, zkVersion)
-    val updatedState = PendingExpandIsr(isrState.isr, newInSyncReplicaId, newLeaderAndIsr)
-    isrState = updatedState
+    val isrToSend = partitionState.isr + newInSyncReplicaId
+    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, zkVersion)
+    val updatedState = PendingExpandIsr(partitionState.isr, newInSyncReplicaId, newLeaderAndIsr)
+    partitionState = updatedState
     updatedState
   }
 
   private[cluster] def prepareIsrShrink(outOfSyncReplicaIds: Set[Int]): PendingShrinkIsr = {
     // When shrinking the ISR, we cannot assume that the update will succeed as this could
-    // erroneously advance the HW if the `AlterIsr` were to fail. Hence the "maximal ISR"
+    // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
     // for `PendingShrinkIsr` is the the current ISR.
-    val isrToSend = isrState.isr -- outOfSyncReplicaIds
-    val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, zkVersion)
-    val updatedState = PendingShrinkIsr(isrState.isr, outOfSyncReplicaIds, newLeaderAndIsr)
-    isrState = updatedState
+    val isrToSend = partitionState.isr -- outOfSyncReplicaIds
+    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, zkVersion)
+    val updatedState = PendingShrinkIsr(partitionState.isr, outOfSyncReplicaIds, newLeaderAndIsr)
+    partitionState = updatedState
     updatedState
   }
 
-  private def submitAlterIsr(proposedIsrState: PendingIsrChange): CompletableFuture[LeaderAndIsr] = {
+  private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {
     debug(s"Submitting ISR state change $proposedIsrState")
     val future = alterIsrManager.submit(topicPartition, proposedIsrState.sentLeaderAndIsr, controllerEpoch)
     future.whenComplete { (leaderAndIsr, e) =>
@@ -1356,16 +1376,16 @@ class Partition(val topicPartition: TopicPartition,
       var shouldRetry = false
 
       inWriteLock(leaderIsrUpdateLock) {
-        if (isrState != proposedIsrState) {
-          // This means isrState was updated through leader election or some other mechanism
-          // before we got the AlterIsr response. We don't know what happened on the controller
+        if (partitionState != proposedIsrState) {
+          // This means partitionState was updated through leader election or some other mechanism
+          // before we got the AlterPartition response. We don't know what happened on the controller
           // exactly, but we do know this response is out of date so we ignore it.
           debug(s"Ignoring failed ISR update to $proposedIsrState since we have already " +
-            s"updated state to $isrState")
+            s"updated state to $partitionState")
         } else if (leaderAndIsr != null) {
-          hwIncremented = handleAlterIsrUpdate(proposedIsrState, leaderAndIsr)
+          hwIncremented = handleAlterPartitionUpdate(proposedIsrState, leaderAndIsr)
         } else {
-          shouldRetry = handleAlterIsrError(proposedIsrState, Errors.forException(e))
+          shouldRetry = handleAlterPartitionError(proposedIsrState, Errors.forException(e))
         }
       }
 
@@ -1373,45 +1393,48 @@ class Partition(val topicPartition: TopicPartition,
         tryCompleteDelayedRequests()
       }
 
-      // Send the AlterIsr request outside of the LeaderAndIsr lock since the completion logic
+      // Send the AlterPartition request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
       if (shouldRetry) {
-        submitAlterIsr(proposedIsrState)
+        submitAlterPartition(proposedIsrState)
       }
     }
   }
 
   /**
-   * Handle a failed `AlterIsr` request. For errors which are non-retriable, we simply give up.
-   * This leaves [[Partition.isrState]] in a pending state. Since the error was non-retriable,
+   * Handle a failed `AlterPartition` request. For errors which are non-retriable, we simply give up.
+   * This leaves [[Partition.partitionState]] in a pending state. Since the error was non-retriable,
    * we are okay staying in this state until we see new metadata from LeaderAndIsr (or an update
    * to the KRaft metadata log).
    *
    * @param proposedIsrState The ISR state change that was requested
    * @param error The error returned from [[AlterIsrManager]]
-   * @return true if the `AlterIsr` request should be retried, false otherwise
+   * @return true if the `AlterPartition` request should be retried, false otherwise
    */
-  private def handleAlterIsrError(
-    proposedIsrState: PendingIsrChange,
+  private def handleAlterPartitionError(
+    proposedIsrState: PendingPartitionChange,
     error: Errors
   ): Boolean = {
     isrChangeListener.markFailed()
     error match {
       case Errors.OPERATION_NOT_ATTEMPTED =>
         // Since the operation was not attempted, it is safe to reset back to the committed state.
-        isrState = CommittedIsr(proposedIsrState.isr)
-        debug(s"Failed to update ISR to $proposedIsrState since there is a pending ISR update still inflight. " +
-          s"ISR state has been reset to the latest committed state $isrState")
+        partitionState = CommittedPartitionState(proposedIsrState.isr, LeaderRecoveryState.RECOVERED)
+        debug(s"Failed to alter partition to $proposedIsrState since there is a pending AlterPartition still inflight. " +
+          s"partition state has been reset to the latest committed state $partitionState")
         false
       case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-        debug(s"Failed to update ISR to $proposedIsrState since the controller doesn't know about " +
+        debug(s"Failed to alter partition to $proposedIsrState since the controller doesn't know about " +
           "this topic or partition. Giving up.")
         false
       case Errors.FENCED_LEADER_EPOCH =>
-        debug(s"Failed to update ISR to $proposedIsrState since the leader epoch is old. Giving up.")
+        debug(s"Failed to alter partition to $proposedIsrState since the leader epoch is old. Giving up.")
         false
       case Errors.INVALID_UPDATE_VERSION =>
-        debug(s"Failed to update ISR to $proposedIsrState because the version is invalid. Giving up.")
+        debug(s"Failed to alter partition to $proposedIsrState because the partition epoch is invalid. Giving up.")
+        false
+      case Errors.INVALID_REQUEST =>
+        debug(s"Failed to alter partition to $proposedIsrState because the request is invalid. Giving up.")
         false
       case _ =>
         warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
@@ -1420,14 +1443,14 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   * Handle a successful `AlterIsr` response.
+   * Handle a successful `AlterPartition` response.
    *
    * @param proposedIsrState The ISR state change that was requested
    * @param leaderAndIsr The updated LeaderAndIsr state
    * @return true if the high watermark was successfully incremented following, false otherwise
    */
-  private def handleAlterIsrUpdate(
-    proposedIsrState: PendingIsrChange,
+  private def handleAlterPartitionUpdate(
+    proposedIsrState: PendingPartitionChange,
     leaderAndIsr: LeaderAndIsr
   ): Boolean = {
     // Success from controller, still need to check a few things
@@ -1445,9 +1468,9 @@ class Partition(val topicPartition: TopicPartition,
       //   2) leaderAndIsr.zkVersion == zkVersion: No update was performed since proposed and actual state are the same.
       // In both cases, we want to move from Pending to Committed state to ensure new updates are processed.
 
-      isrState = CommittedIsr(leaderAndIsr.isr.toSet)
+      partitionState = CommittedPartitionState(leaderAndIsr.isr.toSet, leaderAndIsr.leaderRecoveryState)
       zkVersion = leaderAndIsr.zkVersion
-      info(s"ISR updated to ${isrState.isr.mkString(",")} and version updated to $zkVersion")
+      info(s"ISR updated to ${partitionState.isr.mkString(",")} and version updated to $zkVersion")
 
       proposedIsrState match {
         case PendingExpandIsr(_, _, _) => isrChangeListener.markExpand()
@@ -1473,13 +1496,14 @@ class Partition(val topicPartition: TopicPartition,
     partitionString.append("; Partition: " + partitionId)
     partitionString.append("; Leader: " + leaderReplicaIdOpt)
     partitionString.append("; Replicas: " + assignmentState.replicas.mkString(","))
-    partitionString.append("; ISR: " + isrState.isr.mkString(","))
+    partitionString.append("; ISR: " + partitionState.isr.mkString(","))
     assignmentState match {
       case OngoingReassignmentState(adding, removing, _) =>
         partitionString.append("; AddingReplicas: " + adding.mkString(","))
         partitionString.append("; RemovingReplicas: " + removing.mkString(","))
       case _ =>
     }
+    partitionString.append("; LeaderRecoveryState: " + partitionState.leaderRecoveryState)
     partitionString.toString
   }
 }

@@ -246,12 +246,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     killBroker(findCoordinator(dynamicGroup))
     killBroker(findCoordinator(manualGroup))
 
-    val future1 = submitCloseAndValidate(consumer1, Long.MaxValue, None, gracefulCloseTimeMs)
-
-    val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, gracefulCloseTimeMs)
-
-    future1.get
-    future2.get
+    submitCloseAndValidate(consumer1, Long.MaxValue, None, gracefulCloseTimeMs).get
+    submitCloseAndValidate(consumer2, Long.MaxValue, None, gracefulCloseTimeMs).get
 
     restartDeadBrokers()
     checkClosedState(dynamicGroup, 0)
@@ -299,6 +295,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     * Then, 1 consumer should be left out of the group.
     */
   @Test
+  @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-13421)
   def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
     val group = "group-max-size-test"
     val topic = "group-max-size-test"

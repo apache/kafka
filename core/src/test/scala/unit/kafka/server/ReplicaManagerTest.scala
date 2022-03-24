@@ -3580,7 +3580,7 @@ class ReplicaManagerTest {
       brokerId = 0, aliveBrokersIds)
     try {
       val tp = new TopicPartition(topic, 0)
-      val leaderAndIsr = new LeaderAndIsr(1, 0, aliveBrokersIds.toList, 0)
+      val leaderAndIsr = LeaderAndIsr(1, aliveBrokersIds.toList)
 
       // This test either starts with a topic ID in the PartitionFetchState and removes it on the next request (startsWithTopicId)
       // or does not start with a topic ID in the PartitionFetchState and adds one on the next request (!startsWithTopicId)

@@ -17,6 +17,8 @@
 
 package kafka.api
 
+import org.apache.kafka.metadata.LeaderRecoveryState
+
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
@@ -25,7 +27,9 @@ object LeaderAndIsr {
   val LeaderDuringDelete: Int = -2
   val EpochDuringDelete: Int = -2
 
-  def apply(leader: Int, isr: List[Int]): LeaderAndIsr = LeaderAndIsr(leader, initialLeaderEpoch, isr, initialZKVersion)
+  def apply(leader: Int, isr: List[Int]): LeaderAndIsr = {
+    LeaderAndIsr(leader, initialLeaderEpoch, isr, LeaderRecoveryState.RECOVERED, initialZKVersion)
+  }
 
   def duringDelete(isr: List[Int]): LeaderAndIsr = LeaderAndIsr(LeaderDuringDelete, isr)
 }
@@ -33,14 +37,21 @@ object LeaderAndIsr {
 case class LeaderAndIsr(leader: Int,
                         leaderEpoch: Int,
                         isr: List[Int],
+                        leaderRecoveryState: LeaderRecoveryState,
                         zkVersion: Int) {
-  def withZkVersion(zkVersion: Int) = copy(zkVersion = zkVersion)
+  def withZkVersion(zkVersion: Int): LeaderAndIsr = copy(zkVersion = zkVersion)
 
-  def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
+  def newLeader(leader: Int): LeaderAndIsr = newLeaderAndIsr(leader, isr)
 
-  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion)
+  def newLeaderAndIsr(leader: Int, isr: List[Int]): LeaderAndIsr = {
+    LeaderAndIsr(leader, leaderEpoch + 1, isr, leaderRecoveryState, zkVersion)
+  }
 
-  def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
+  def newRecoveringLeaderAndIsr(leader: Int, isr: List[Int]): LeaderAndIsr = {
+    LeaderAndIsr(leader, leaderEpoch + 1, isr, LeaderRecoveryState.RECOVERING, zkVersion)
+  }
+
+  def newEpoch: LeaderAndIsr = newLeaderAndIsr(leader, isr)
 
   def leaderOpt: Option[Int] = {
     if (leader == LeaderAndIsr.NoLeader) None else Some(leader)
@@ -52,11 +63,12 @@ case class LeaderAndIsr(leader: Int,
     } else if (other == null) {
       false
     } else {
-      leader == other.leader && leaderEpoch == other.leaderEpoch && isr.equals(other.isr)
+      leader == other.leader && leaderEpoch == other.leaderEpoch && isr.equals(other.isr) &&
+        leaderRecoveryState == other.leaderRecoveryState
     }
   }
 
   override def toString: String = {
-    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"
+    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, leaderRecoveryState=$leaderRecoveryState, zkVersion=$zkVersion)"
   }
 }

@@ -38,19 +38,26 @@ import org.junit.Test;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
+import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
+import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
@@ -1007,7 +1014,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSpecifyOptimizationWhenNotExplicitlyAddedToConfigs() {
+    public void shouldSpecifyOptimizationWhenExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
@@ -1018,6 +1025,28 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
+        final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
+        final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
+        assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
+    }
+
+    @Test
+    public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
+        final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
+        props.put(DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
+        assertEquals("default.dsl.store should be \"in_memory\"", expectedDefaultStoreType, actualDefaultStoreType);
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
+        props.put(DEFAULT_DSL_STORE_CONFIG, "bad_config");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
@@ -1122,6 +1151,135 @@ public class StreamsConfigTest {
     public void shouldThrowConfigExceptionIfProbingRebalanceIntervalIsOutsideBounds() {
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, (60 * 1000L) - 1);
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldDefaultToEmptyListIfRackAwareAssignmentTagsIsNotSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG).isEmpty());
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagsExceedTheLimit() {
+        final int limit = StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1;
+        for (int i = 0; i < limit; i++) {
+            props.put(StreamsConfig.clientTagPrefix("k" + i), "v" + i);
+        }
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("At most %s client tags can be specified using %s prefix.",
+                          StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
+                          StreamsConfig.CLIENT_TAG_PREFIX
+            ), exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenRackAwareAssignmentTagsExceedsMaxListSize() {
+        final int limit = StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1;
+        final List<String> rackAwareAssignmentTags = new ArrayList<>();
+        for (int i = 0; i < limit; i++) {
+            final String clientTagKey = "k" + i;
+            rackAwareAssignmentTags.add(clientTagKey);
+            props.put(StreamsConfig.clientTagPrefix(clientTagKey), "v" + i);
+        }
+
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("Invalid value %s for configuration %s: exceeds maximum list size of [%s].",
+                          rackAwareAssignmentTags,
+                          StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                          StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldSetRackAwareAssignmentTags() {
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster,zone");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(new HashSet<>(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)),
+                     mkSet("cluster", "zone"));
+    }
+
+    @Test
+    public void shouldGetEmptyMapIfClientTagsAreNotSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.getClientTags().isEmpty());
+    }
+
+    @Test
+    public void shouldGetClientTagsMapWhenSet() {
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        final StreamsConfig config = new StreamsConfig(props);
+        final Map<String, String> clientTags = config.getClientTags();
+        assertEquals(clientTags.size(), 2);
+        assertEquals(clientTags.get("zone"), "eu-central-1a");
+        assertEquals(clientTags.get("cluster"), "cluster-1");
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithUnknownTags() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagKeyExceedMaxLimit() {
+        final String key = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + 1, "k"));
+        props.put(StreamsConfig.clientTagPrefix(key), "eu-central-1a");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("Invalid value %s for configuration %s: Tag key exceeds maximum length of %s.",
+                          key, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH),
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagValueExceedMaxLimit() {
+        final String value = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + 1, "v"));
+        props.put(StreamsConfig.clientTagPrefix("x"), value);
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            String.format("Invalid value %s for configuration %s: Tag value exceeds maximum length of %s.",
+                          value, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH),
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(config.getTotalCacheSize(), 100);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(config.getTotalCacheSize(), 10);
+    }
+
+    @Test
+    public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(config.getTotalCacheSize(), 10);
+    }
+
+    @Test
+    public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(config.getTotalCacheSize(), 10 * 1024 * 1024);
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

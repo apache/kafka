@@ -285,6 +285,7 @@ public class InternalStreamsBuilderTest {
         final String topicName = "topic-1";
 
         builder.table(topicName, consumed, materialized);
+        builder.buildAndOptimizeTopology();
 
         assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(OffsetResetStrategy.NONE));
     }
@@ -295,6 +296,7 @@ public class InternalStreamsBuilderTest {
         final String topic = "topic-5";
 
         builder.stream(topicPattern, consumed);
+        builder.buildAndOptimizeTopology();
 
         assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topic), equalTo(OffsetResetStrategy.NONE));
     }

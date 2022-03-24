@@ -207,7 +207,7 @@ if (file('.git').exists()) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -406,7 +406,7 @@ subprojects {
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*", "**/WorkerTest.*",
+      "**/WorkerTaskTest.*",
       // streams tests
       "**/KafkaStreamsTest.*"
     ])
@@ -434,6 +434,11 @@ subprojects {
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
+    }
+
+    // Allows devs to run tests in a loop to debug flaky tests. See README.
+    if (project.hasProperty("rerun-tests")) {
+      outputs.upToDateWhen { false }
     }
   }
 
@@ -467,6 +472,11 @@ subprojects {
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
+    }
+
+    // Allows devs to run tests in a loop to debug flaky tests. See README.
+    if (project.hasProperty("rerun-tests")) {
+      outputs.upToDateWhen { false }
     }
   }
 
@@ -1308,6 +1318,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
     include "**/org/apache/kafka/common/security/oauthbearer/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/secured/*"
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
@@ -2438,7 +2449,7 @@ project(':connect:runtime') {
     testImplementation libs.junitVintageEngine
     testImplementation libs.powermockJunit4
     testImplementation libs.powermockEasymock
-    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2516,9 +2527,8 @@ project(':connect:file') {
     implementation project(':connect:api')
     implementation libs.slf4jApi
 
-    testImplementation libs.easymock
     testImplementation libs.junitJupiter
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output

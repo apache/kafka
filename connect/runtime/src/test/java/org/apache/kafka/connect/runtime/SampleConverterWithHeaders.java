@@ -28,7 +28,7 @@ import org.apache.kafka.connect.storage.Converter;
 /**
  * This is a simple Converter implementation that uses "encoding" header to encode/decode strings via provided charset name
  */
-public class TestConverterWithHeaders implements Converter {
+public class SampleConverterWithHeaders implements Converter {
     private static final String HEADER_ENCODING = "encoding";
 
     @Override

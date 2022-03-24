@@ -252,7 +252,8 @@ class BrokerServer(
         scheduler = kafkaScheduler,
         time = time,
         brokerId = config.nodeId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
+        ibpVersion = config.interBrokerProtocolVersion
       )
       alterIsrManager.start()
 
