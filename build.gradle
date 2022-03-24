@@ -923,6 +923,9 @@ project(':core') {
              "-m", "MessageDataGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/kafka/internals/generated")
   }
 
@@ -1140,6 +1143,9 @@ project(':metadata') {
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator"
            ]
     inputs.dir("src/main/resources/common/metadata")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/common/metadata")
   }
 
@@ -1257,6 +1263,9 @@ project(':clients') {
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
            ]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
 
@@ -1269,6 +1278,9 @@ project(':clients') {
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
            ]
     inputs.dir("src/test/resources/common/message")
+        .withPropertyName("testMessages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
 
@@ -1362,6 +1374,9 @@ project(':raft') {
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
   }
 
@@ -1570,6 +1585,9 @@ project(':storage') {
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
     inputs.dir("src/main/resources/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
   }
 
@@ -1790,6 +1808,9 @@ project(':streams') {
              "-m", "MessageDataGenerator"
            ]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
   }
 
