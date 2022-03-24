@@ -20,12 +20,15 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
+import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -47,6 +50,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     private final Windows<W> windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
+    private EmitStrategy emitStrategy;
 
     TimeWindowedKStreamImpl(final Windows<W> windows,
                             final InternalStreamsBuilder builder,
@@ -59,6 +63,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = aggregateBuilder;
+        this.emitStrategy = EmitStrategy.onWindowUpdate(); // Default to onWindowUpdate for backward compatibility
     }
 
     @Override
@@ -206,6 +211,16 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());
+    }
+
+    @Override
+    public TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
+        if (this.windows instanceof UnlimitedWindows
+            && emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+            throw new IllegalArgumentException("ON_WINDOW_CLOSE emit strategy cannot be used for UnlimitedWindows");
+        }
+        this.emitStrategy = emitStrategy;
+        return this;
     }
 
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {

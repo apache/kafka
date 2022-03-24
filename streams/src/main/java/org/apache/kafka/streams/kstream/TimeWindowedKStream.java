@@ -648,4 +648,18 @@ public interface TimeWindowedKStream<K, V> {
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final Named named,
                                   final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+
+
+    /**
+     * Set the emit strategy for windowed stream.
+     *
+     * @see EmitStrategy
+     * @see org.apache.kafka.streams.kstream.internals.emitstrategy.WindowUpdateStrategy
+     * @see org.apache.kafka.streams.kstream.internals.emitstrategy.WindowCloseStrategy
+     *
+     * @param emitStrategy Emit strategy to be set
+     * @return TimeWindowedKStream with new emit strategy
+     */
+    TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
+
 }

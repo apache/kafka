@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -44,6 +45,7 @@ import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDU
 public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> implements TimeWindowedKStream<K, V> {
     private final SlidingWindows windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
+    private EmitStrategy emitStrategy;
 
     SlidingWindowedKStreamImpl(final SlidingWindows windows,
                                final InternalStreamsBuilder builder,
@@ -56,6 +58,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = aggregateBuilder;
+        this.emitStrategy = EmitStrategy.onWindowUpdate(); // Default to onWindowUpdate for backward compatibility
     }
 
     @Override
@@ -191,6 +194,12 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 materializedInternal.valueSerde());
     }
 
+    @Override
+    public TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
+        this.emitStrategy = emitStrategy;
+        return this;
+    }
+
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
@@ -250,4 +259,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
         return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
     }
+
+
+
 }
