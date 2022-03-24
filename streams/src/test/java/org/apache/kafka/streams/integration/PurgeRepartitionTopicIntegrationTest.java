@@ -139,11 +139,14 @@ public class PurgeRepartitionTopicIntegrationTest {
                 for (final LogDirDescription partitionInfo : logDirInfo) {
                     final ReplicaInfo replicaInfo =
                         partitionInfo.replicaInfos().get(new TopicPartition(REPARTITION_TOPIC, 0));
+                    System.err.print(" size:" + replicaInfo.size());
                     if (replicaInfo != null && verifier.verify(replicaInfo.size())) {
                         return true;
                     }
                 }
             } catch (final Exception e) {
+                System.err.print(" e:" + e);
+                System.err.flush();
                 // swallow
             }
 
@@ -186,6 +189,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     @Test
     public void shouldRestoreState() throws Exception {
+        System.err.println("rest start");
         // produce some data to input topic
         final List<KeyValue<Integer, Integer>> messages = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
@@ -200,15 +204,18 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         kafkaStreams.start();
 
+        System.err.println("create");
         TestUtils.waitForCondition(new RepartitionTopicCreatedWithExpectedConfigs(), 60000,
                 "Repartition topic " + REPARTITION_TOPIC + " not created with the expected configs after 60000 ms.");
 
+        System.err.println(">0");
         TestUtils.waitForCondition(
             new RepartitionTopicVerified(currentSize -> currentSize > 0),
             60000,
             "Repartition topic " + REPARTITION_TOPIC + " not received data after 60000 ms."
         );
 
+        System.err.println("<");
         // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side
         TestUtils.waitForCondition(
             new RepartitionTopicVerified(currentSize -> currentSize <= PURGE_SEGMENT_BYTES),

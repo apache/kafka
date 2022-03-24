@@ -13,10 +13,6 @@
 
 package kafka.api
 
-import java.time
-import java.util.concurrent._
-import java.util.{Collection, Collections, Properties}
-
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
@@ -27,16 +23,19 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.time
+import java.util.concurrent._
+import java.util.{Collection, Collections, Properties}
 import scala.annotation.nowarn
-import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
  */
-class ConsumerBounceTest extends AbstractConsumerTest with Logging {
+class ConsumerBounceTest2 extends AbstractConsumerTest with Logging {
   val maxGroupSize = 5
 
   // Time to process commit and leave group requests in tests when brokers are available
