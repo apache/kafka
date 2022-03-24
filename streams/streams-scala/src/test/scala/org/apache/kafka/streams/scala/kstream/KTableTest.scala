@@ -535,22 +535,4 @@ class KTableTest extends TestDriver {
     assertTrue(joinNodeRight.name().contains("my-name"))
   }
 
-  @Test
-  def testMapValuesWithValueMapperWithKeyAndWithMaterialized(): Unit = {
-    val builder = new StreamsBuilder()
-    val sourceTopic = "source"
-    val stateStore = "store"
-    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
-
-    val table = builder.stream[String, String](sourceTopic).toTable
-    table.mapValues((key, value) => key.length + value.length.toLong, materialized)
-
-    val testDriver = createTestDriver(builder)
-    val testInput = testDriver.createInput[String, String](sourceTopic)
-
-    testInput.pipeInput("1", "topic1value1")
-    assertEquals(13, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
-
-    testDriver.close()
-  }
 }
