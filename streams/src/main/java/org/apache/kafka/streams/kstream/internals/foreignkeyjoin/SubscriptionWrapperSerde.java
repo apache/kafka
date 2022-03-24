@@ -62,7 +62,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
 
         @Override
         public byte[] serialize(final String ignored, final SubscriptionWrapper<K> data) {
-            //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
+            //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{4-bytes-primaryPartition}{Optional-16-byte-Hash}{PK-serialized}
 
             //7-bit (0x7F) maximum for data version.
             if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
@@ -79,16 +79,27 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             );
 
             final ByteBuffer buf;
+            int dataLength = 2 + primaryKeySerializedData.length;
+            if (data.getVersion() > 0) {
+                dataLength += Integer.BYTES;
+            }
+
             if (data.getHash() != null) {
-                buf = ByteBuffer.allocate(2 + 2 * Long.BYTES + primaryKeySerializedData.length);
+                dataLength += 2 * Long.BYTES;
+                buf = ByteBuffer.allocate(dataLength);
                 buf.put(data.getVersion());
             } else {
                 //Don't store hash as it's null.
-                buf = ByteBuffer.allocate(2 + primaryKeySerializedData.length);
+                buf = ByteBuffer.allocate(dataLength);
                 buf.put((byte) (data.getVersion() | (byte) 0x80));
             }
 
             buf.put(data.getInstruction().getValue());
+
+            if (data.getVersion() > 0) {
+                buf.putInt(data.getPrimaryPartition());
+            }
+
             final long[] elem = data.getHash();
             if (data.getHash() != null) {
                 buf.putLong(elem[0]);
@@ -123,15 +134,23 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
 
         @Override
         public SubscriptionWrapper<K> deserialize(final String ignored, final byte[] data) {
-            //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
+            //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{4-bytes-primaryPartition}{Optional-16-byte-Hash}{PK-serialized}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
             final byte version = (byte) (0x7F & versionAndIsHashNull);
             final boolean isHashNull = (0x80 & versionAndIsHashNull) == 0x80;
             final SubscriptionWrapper.Instruction inst = SubscriptionWrapper.Instruction.fromValue(buf.get());
 
-            final long[] hash;
             int lengthSum = 2; //The first 2 bytes
+            final Integer primaryPartition;
+            if (version > 0) {
+                lengthSum += Integer.BYTES;
+                primaryPartition = buf.getInt();
+            } else {
+                primaryPartition = null;
+            }
+
+            final long[] hash;
             if (isHashNull) {
                 hash = null;
             } else {
@@ -151,7 +170,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             final K primaryKey = primaryKeyDeserializer.deserialize(primaryKeySerializationPseudoTopic,
                                                                     primaryKeyRaw);
 
-            return new SubscriptionWrapper<>(hash, inst, primaryKey, version);
+            return new SubscriptionWrapper<>(hash, inst, primaryKey, version, primaryPartition);
         }
 
     }
