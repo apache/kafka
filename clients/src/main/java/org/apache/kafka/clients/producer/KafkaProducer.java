@@ -894,6 +894,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throwIfProducerClosed();
             // first make sure the metadata for the topic is available
             long nowMs = time.milliseconds();
+            long nowNanos = time.nanoseconds();
             ClusterAndWaitTime clusterAndWaitTime;
             try {
                 clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, maxBlockTimeMs);
@@ -903,6 +904,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw e;
             }
             nowMs += clusterAndWaitTime.waitedOnMetadataMs;
+            producerMetrics.recordMetadataWait(time.nanoseconds() - nowNanos);
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
