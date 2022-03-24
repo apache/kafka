@@ -246,6 +246,7 @@ public class DistributedHerderTest {
         worker = mock(Worker.class);
         doNothing().when(member).poll(anyLong());
         doNothing().when(member).wakeup();
+        when(worker.getPlugins()).thenReturn(plugins);
 
         when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
         herder = mock(DistributedHerder.class, new MockSettingsImpl<>().useConstructor(
@@ -324,7 +325,6 @@ public class DistributedHerderTest {
     public void testRebalance() throws Exception {
         // Join group and get assignment
         setMemberExpectations(member, "member", CONNECT_PROTOCOL_V0);
-        when(worker.getPlugins()).thenReturn(plugins);
         expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1));
         expectPostRebalanceCatchup(SNAPSHOT);
         doNothing().when(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
@@ -370,11 +370,6 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectPostRebalanceCatchup(SNAPSHOT);
 
-        // The new member got its assignment
-        expectRebalance(Collections.emptyList(), Collections.emptyList(),
-                ConnectProtocol.Assignment.NO_ERROR,
-                1, Arrays.asList(CONN1), Arrays.asList(TASK1), 0);
-
         // and the new assignment started
         doNothing().when(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
                 refEq(herder), any(TargetState.class), any());
@@ -386,6 +381,11 @@ public class DistributedHerderTest {
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
+
+        // The new member got its assignment
+        expectRebalance(Collections.emptyList(), Collections.emptyList(),
+                ConnectProtocol.Assignment.NO_ERROR,
+                1, Arrays.asList(CONN1), Arrays.asList(TASK1), 0);
 
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
@@ -405,109 +405,101 @@ public class DistributedHerderTest {
         verify(herder, times(2)).tick();
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testIncrementalCooperativeRebalanceForExistingMember() {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
         // Join group. First rebalance contains revocations because a new member joined.
-        EasyMock.expect(member.memberId()).andStubReturn("member");
-        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V1);
+        setMemberExpectations(member, "member", CONNECT_PROTOCOL_V1);
         expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1),
                 ConnectProtocol.Assignment.NO_ERROR, 1,
                 Collections.emptyList(), Collections.emptyList(), 0);
-        member.requestRejoin();
-        PowerMock.expectLastCall();
-
-        // In the second rebalance the new member gets its assignment and this member has no
-        // assignments or revocations
-        expectRebalance(1, Collections.emptyList(), Collections.emptyList());
-
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
-
-        PowerMock.replayAll();
+        doNothing().when(member).requestRejoin();
 
         herder.configState = SNAPSHOT;
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
 
+        // In the second rebalance the new member gets its assignment and this member has no
+        // assignments or revocations
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList());
+
         time.sleep(2000L);
         assertStatistics(3, 1, 100, 2000);
         herder.tick();
 
+        doNothing().when(member).poll(anyInt());
+
         time.sleep(3000L);
         assertStatistics(3, 2, 100, 3000);
 
-        PowerMock.verifyAll();
+        verify(member).requestRejoin();
+        verify(herder, times(2)).tick();
+        verify(member).poll(anyLong());
     }
 
-    @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
     @Test
     public void testIncrementalCooperativeRebalanceWithDelay() throws Exception {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
         // Join group. First rebalance contains some assignments but also a delay, because a
         // member was detected missing
         int rebalanceDelay = 10_000;
+        setMemberExpectations(member, "member", CONNECT_PROTOCOL_V1);
 
-        EasyMock.expect(member.memberId()).andStubReturn("member");
-        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V1);
         expectRebalance(Collections.emptyList(), Collections.emptyList(),
                 ConnectProtocol.Assignment.NO_ERROR, 1,
                 Collections.emptyList(), Arrays.asList(TASK2),
                 rebalanceDelay);
         expectPostRebalanceCatchup(SNAPSHOT);
 
-        worker.startTask(EasyMock.eq(TASK2), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
-        PowerMock.expectLastCall().andReturn(true);
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall().andAnswer(() -> {
-            time.sleep(9900L);
+        when(worker.startTask(eq(TASK2), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED))).thenReturn(true);
+        doAnswer(invocation -> {
+            // TODO: better way to handle this?
+            // EasyMock apparently only uses this expectation once, and therefore only the first call to tick
+            // below invokes this sleep; in Mockito, however, this answer is invoked *twice* (for both calls to tick,
+            // below), so this is a hacky way to deal with the difference (the 9900 long value is only passed on the
+            // first invocation)
+            // the value of 9900, BTW, comes from rebalanceDelay - 100 (which is the sleep value in expectRebalance)
+            // so even if this logic makes sense, it would probably be clearer to introduce that as a constant
+            if (Long.valueOf(9900L).equals(invocation.getArgument(0))) {
+                time.sleep(9900L);
+            }
             return null;
-        });
+        }).when(member).poll(anyLong());
 
         // Request to re-join because the scheduled rebalance delay has been reached
-        member.requestRejoin();
-        PowerMock.expectLastCall();
+        doNothing().when(member).requestRejoin();
 
-        // The member got its assignment and revocation
-        expectRebalance(Collections.emptyList(), Collections.emptyList(),
-                ConnectProtocol.Assignment.NO_ERROR,
-                1, Arrays.asList(CONN1), Arrays.asList(TASK1), 0);
-
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins);
         // and the new assignment started
-        Capture<Callback<TargetState>> onStart = newCapture();
-        worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onStart));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            onStart.getValue().onCompletion(null, TargetState.STARTED);
-            return true;
-        });
-        member.wakeup();
-        PowerMock.expectLastCall();
-        EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
+        doNothing().when(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
+                refEq(herder), any(TargetState.class), any());
+        when(worker.isRunning(CONN1)).thenReturn(true);
+        when(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).thenReturn(TASK_CONFIGS);
 
-        worker.startTask(EasyMock.eq(TASK1), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(),
-                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
-        PowerMock.expectLastCall().andReturn(true);
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
-
-        PowerMock.replayAll();
+        when(worker.startTask(eq(TASK1), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
 
+        // The member got its assignment and revocation
+        expectRebalance(Collections.emptyList(), Collections.emptyList(),
+                ConnectProtocol.Assignment.NO_ERROR,
+                1, Arrays.asList(CONN1), Arrays.asList(TASK1), 0);
         herder.tick();
 
         time.sleep(2000L);
         assertStatistics(3, 2, 100, 2000);
 
-        PowerMock.verifyAll();
+        verify(herder, times(2)).tick();
+        verify(worker).startConnector(eq(CONN1), anyMap(), any(CloseableConnectorContext.class),
+                refEq(herder), any(TargetState.class), onStart.capture());
+        onStart.getValue().onCompletion(null, TargetState.STARTED);
+        verify(worker).startTask(eq(TASK2), any(ClusterConfigState.class), anyMap(), anyMap(),
+                refEq(herder), eq(TargetState.STARTED));
+        verify(member).requestRejoin();
     }
 
     @Disabled("Disabled until EasyMock->Mockito conversion is done (WIP - PR #11792)")
