@@ -75,7 +75,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
         );
         metadataWaitSensor = newLatencySensor(
             METADATA_WAIT,
-            "Total time producer has spent waiting on topic metadata."
+            "Total time producer has spent waiting on topic metadata in nanoseconds."
         );
     }
 
