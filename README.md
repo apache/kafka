@@ -180,14 +180,20 @@ Please note for this to work you should create/update user maven settings (typic
      ...
 
 
-### Installing the jars to the local Maven repository ###
-The recommended command is:
+### Installing ALL the jars to the local Maven repository ###
+The recommended command to build for both Scala 2.12 and 2.13 is:
 
     ./gradlewAll publishToMavenLocal
 
 For backwards compatibility, the following also works:
 
     ./gradlewAll install
+
+### Installing specific projects to the local Maven repository ###
+
+    ./gradlew -PskipSigning :streams:publishToMavenLocal
+    
+If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
 
 ### Building the test jar ###
     ./gradlew testJar

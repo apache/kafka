@@ -206,8 +206,8 @@ public class TransactionManager {
 
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
 
-    // If a batch bound for a partition expired locally after being sent at least once, the partition has is considered
-    // to have an unresolved state. We keep track fo such partitions here, and cannot assign any more sequence numbers
+    // If a batch bound for a partition expired locally after being sent at least once, the partition is considered
+    // to have an unresolved state. We keep track of such partitions here, and cannot assign any more sequence numbers
     // for this partition until the unresolved state gets cleared. This may happen if other inflight batches returned
     // successfully (indicating that the expired batch actually made it to the broker). If we don't get any successful
     // responses for the partition once the inflight request count falls to zero, we reset the producer id and
