@@ -654,5 +654,5 @@ public interface SessionWindowedKStream<K, V> {
      * @param emitStrategy Emit strategy to be set
      * @return SessionWindowedKStream with new emit strategy
      */
-    SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
+    //SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
 }

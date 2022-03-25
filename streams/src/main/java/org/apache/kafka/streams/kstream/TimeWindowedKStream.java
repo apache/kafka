@@ -660,6 +660,6 @@ public interface TimeWindowedKStream<K, V> {
      * @param emitStrategy Emit strategy to be set
      * @return TimeWindowedKStream with new emit strategy
      */
-    TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
+    //TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
 
 }

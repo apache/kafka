@@ -225,7 +225,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             materializedInternal.valueSerde());
     }
 
-    @Override
+    //@Override
     public SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
         this.emitStrategy = emitStrategy;
         return this;
