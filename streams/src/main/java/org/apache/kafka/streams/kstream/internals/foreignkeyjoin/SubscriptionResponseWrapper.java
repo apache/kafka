@@ -22,9 +22,11 @@ import java.util.Arrays;
 
 public class SubscriptionResponseWrapper<FV> {
     final static byte CURRENT_VERSION = 0x01;
+    // 0x00
     private final long[] originalValueHash;
     private final FV foreignValue;
     private final byte version;
+    // 0x01
     private final Integer primaryPartition;
 
     public SubscriptionResponseWrapper(final long[] originalValueHash, final FV foreignValue, final Integer primaryPartition) {
