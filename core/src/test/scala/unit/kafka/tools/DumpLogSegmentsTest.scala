@@ -310,10 +310,10 @@ class DumpLogSegmentsTest {
     val lines = util.Arrays.asList(output.split("\n"): _*).listIterator()
 
     // Get total bytes of the partial batches
-    val partialBatchesSize = readPartialBatchesSize(lines, partialBatches)
+    val partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches)
 
     // Request only the partial batches by bytes
-    val partialOutput = runDumpLogSegments(Array("--max-batches-size", partialBatchesSize.toString, "--files", logFilePath))
+    val partialOutput = runDumpLogSegments(Array("--max-bytes", partialBatchesBytes.toString, "--files", logFilePath))
     val partialLines = util.Arrays.asList(partialOutput.split("\n"): _*).listIterator()
 
     // Count the total of partial batches limited by bytes
@@ -335,24 +335,24 @@ class DumpLogSegmentsTest {
   }
 
   // Returns the total bytes of the batches specified
-  private def readPartialBatchesSize(lines: util.ListIterator[String], limit: Int): Int = {
+  private def readPartialBatchesBytes(lines: util.ListIterator[String], limit: Int): Int = {
     val sizePattern: Regex = raw".+?size:\s(\d+).+".r
-    var batchesSize = 0
+    var batchesBytes = 0
     var batchesCounter = 0
     while (lines.hasNext) {
       if (batchesCounter >= limit){
-        return batchesSize
+        return batchesBytes
       }
       val line = lines.next()
       if (line.startsWith("baseOffset")) {
         line match {
-          case sizePattern(size) => batchesSize += size.toInt
+          case sizePattern(size) => batchesBytes += size.toInt
           case _ => throw new IllegalStateException(s"Failed to parse and find size value for batch line: $line")
         }
         batchesCounter += 1
       }
     }
-    return batchesSize
+    return batchesBytes
   }
 
   private def countBatches(lines: util.ListIterator[String]): Int = {

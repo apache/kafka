@@ -59,7 +59,7 @@ object DumpLogSegments {
       suffix match {
         case UnifiedLog.LogFileSuffix =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
-            opts.messageParser, opts.skipRecordMetadata, opts.maxBatchesSize)
+            opts.messageParser, opts.skipRecordMetadata, opts.maxBytes)
         case UnifiedLog.IndexFileSuffix =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case UnifiedLog.TimeIndexFileSuffix =>
@@ -247,10 +247,10 @@ object DumpLogSegments {
                       isDeepIteration: Boolean,
                       parser: MessageParser[_, _],
                       skipRecordMetadata: Boolean,
-                      maxBatchesSize: Int): Unit = {
+                      maxBytes: Int): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val fileRecords = FileRecords.open(file, false).slice(0, maxBatchesSize)
+    val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
     try {
       var validBytes = 0L
       var lastOffset = -1L
@@ -307,7 +307,7 @@ object DumpLogSegments {
         validBytes += batch.sizeInBytes
       }
       val trailingBytes = fileRecords.sizeInBytes - validBytes
-      if ( (trailingBytes > 0) && (maxBatchesSize == Integer.MAX_VALUE) )
+      if ( (trailingBytes > 0) && (maxBytes == Integer.MAX_VALUE) )
         println(s"Found $trailingBytes invalid bytes at the end of ${file.getName}")
     } finally fileRecords.closeHandlers()
   }
@@ -431,7 +431,7 @@ object DumpLogSegments {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(5 * 1024 * 1024)
-    val maxBatchesSizeOpt = parser.accepts("max-batches-size", "Limit the amount of total batches in bytes avoiding reading the whole file(s).")
+    val maxBytesOpt = parser.accepts("max-bytes", "Limit the amount of total batches in bytes avoiding reading the whole file(s).")
        .withRequiredArg
        .describedAs("size")
        .ofType(classOf[java.lang.Integer])
@@ -479,7 +479,7 @@ object DumpLogSegments {
     lazy val indexSanityOnly: Boolean = options.has(indexSanityOpt)
     lazy val files = options.valueOf(filesOpt).split(",")
     lazy val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
-    lazy val maxBatchesSize = options.valueOf(maxBatchesSizeOpt).intValue()
+    lazy val maxBytes = options.valueOf(maxBytesOpt).intValue()
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
