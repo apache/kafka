@@ -25,14 +25,16 @@ on:
       - 3.0-li
 
 jobs:
-  test:
+  non-core:
     # Name the Job
-    name: ${{ matrix.module }}
+    name: ${{ matrix.module }}_${{ matrix.scalaVersion }}
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # We still want to see all jobs' build result to the end
       matrix:
+        scalaVersion:
+          - 2.12
         module: # Maintain lexicographical order
           - clients
           - generator
@@ -56,16 +58,19 @@ jobs:
           java-version: '11'
       - name: Run tests
         env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
           MODULE: ${{ matrix.module }}
-        run: ./gradlew -PmaxTestRetries=3 cleanTest "$MODULE:integrationTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        run: ./gradlew -PmaxTestRetries=3 -PscalaVersion="$SCALA_VERSION" cleanTest "$MODULE:integrationTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
   core:
     # Name the Job
-    name: core (${{ matrix.prefixes }})
+    name: core_${{ matrix.scalaVersion }} (${{ matrix.prefixes }})
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # We still want to see all jobs' build result to the end
       matrix:
+        scalaVersion:
+          - 2.12
         prefixes:
           - A B C
           - D E F
@@ -88,10 +93,11 @@ jobs:
           java-version: '11'
       - name: Run tests
         env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
           PREFIXES: ${{ matrix.prefixes }}
         # Use set -f to disable shell expansion on *
         run: >
           set -f
-          && ./gradlew -PmaxTestRetries=3 -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIXES; do printf ' --tests %s*' $i; done`
+          && ./gradlew -PmaxTestRetries=3 -PscalaVersion="$SCALA_VERSION" -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIXES; do printf ' --tests %s*' $i; done`
           && set +f
 

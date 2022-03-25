@@ -27,12 +27,14 @@ on:
 jobs:
   test:
     # Name the Job
-    name: ${{ matrix.module }}
+    name: ${{ matrix.module }}_${{ matrix.scalaVersion }}
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # We still want to see all jobs' build result to the end
       matrix:
+        scalaVersion:
+          - 2.12
         module: # Maintain lexicographical order
           - clients
           - core
@@ -57,5 +59,6 @@ jobs:
           java-version: '11'
       - name: Run tests
         env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
           MODULE: ${{ matrix.module }}
-        run: ./gradlew -PmaxTestRetries=3 cleanTest "$MODULE:unitTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        run: ./gradlew -PscalaVersion="$SCALA_VERSION" -PmaxTestRetries=3 cleanTest "$MODULE:unitTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
