@@ -18,7 +18,6 @@
 package kafka.tools
 
 import java.io._
-
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
 import kafka.coordinator.group.GroupMetadataManager
 import kafka.coordinator.transaction.TransactionLog
@@ -31,6 +30,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.snapshot.Snapshots
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -57,7 +57,7 @@ object DumpLogSegments {
       val filename = file.getName
       val suffix = filename.substring(filename.lastIndexOf("."))
       suffix match {
-        case UnifiedLog.LogFileSuffix =>
+        case UnifiedLog.LogFileSuffix | Snapshots.SUFFIX =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
             opts.messageParser, opts.skipRecordMetadata, opts.maxBytes)
         case UnifiedLog.IndexFileSuffix =>
@@ -248,8 +248,10 @@ object DumpLogSegments {
                       parser: MessageParser[_, _],
                       skipRecordMetadata: Boolean,
                       maxBytes: Int): Unit = {
-    val startOffset = file.getName.split("\\.")(0).toLong
-    println("Starting offset: " + startOffset)
+    if (file.getName.endsWith(UnifiedLog.LogFileSuffix)) {
+      val startOffset = file.getName.split("\\.")(0).toLong
+      println("Starting offset: " + startOffset)
+    }
     val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
     try {
       var validBytes = 0L
@@ -288,6 +290,12 @@ object DumpLogSegments {
                   case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
                     val endTxnMarker = EndTransactionMarker.deserialize(record)
                     print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+                  case ControlRecordType.SNAPSHOT_HEADER =>
+                    val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(record)
+                    print(s" SnapshotHeader version: ${header.version()} lastContainedLogTimestamp: ${header.lastContainedLogTimestamp()}")
+                  case ControlRecordType.SNAPSHOT_FOOTER =>
+                    val footer = ControlRecordUtils.deserializedSnapshotFooterRecord(record)
+                    print(s" SnapshotFooter version: ${footer.version()}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")
                 }
