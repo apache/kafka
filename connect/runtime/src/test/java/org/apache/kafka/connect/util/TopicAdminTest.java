@@ -505,11 +505,33 @@ public class TopicAdminTest {
         KafkaFuture<ListOffsetsResultInfo> future = mockFuture();
         when(future.get()).thenReturn(resultsInfo);
         when(results.partitionResult(eq(tp))).thenReturn(future);
+    }
 
+    /**
+     * TopicAdmin can be used to read the end offsets, but the admin client API used to do this was
+     * added to the broker in 0.11.0.0. This means that if Connect talks to older brokers,
+     * the admin client cannot be used to read end offsets, and will throw an UnsupportedVersionException.
+     */
+    @Test
+    public void retryEndOffsetsShouldRethrowUnknownVersionException() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = 1000L;
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            // Expect the admin client list offsets will throw unsupported version, simulating older brokers
+            env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            // The retryEndOffsets should catch and rethrow an unsupported version exception
+            assertThrows(UnsupportedVersionException.class, () -> admin.retryEndOffsets(tps, Duration.ofMillis(100), 1));
+        }
     }
 
     @Test
-    public void retryEndOffsetsShouldThrowConnectException() {
+    public void retryEndOffsetsShouldWrapNonRetriableExceptionsWithConnectException() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
@@ -758,6 +780,14 @@ public class TopicAdminTest {
                 MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 
+    private ListOffsetResponse listOffsetsResultWithUnsupportedVersion(TopicPartition tp1, Long offset1) {
+        return listOffsetResponse(
+            Collections.singletonMap(tp1, offset1),
+            Errors.UNSUPPORTED_VERSION,
+            1L,
+            ListOffsetResponse.UNKNOWN_EPOCH
+        );
+    }
     private ListOffsetResponse listOffsetsResult(TopicPartition tp1, Long offset1) {
         return listOffsetResponse(Collections.singletonMap(tp1, offset1), Errors.NONE, 1L, ListOffsetResponse.UNKNOWN_EPOCH);
     }
