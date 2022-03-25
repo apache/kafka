@@ -16,7 +16,6 @@ package kafka.api
 import java.time
 import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
-
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
@@ -29,6 +28,7 @@ import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.time.Duration
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
@@ -84,7 +84,6 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * 1. Produce a bunch of messages
    * 2. Then consume the messages while killing and restarting brokers at random
    */
-  @nowarn("cat=deprecation")
   def consumeWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     val producer = createProducer()
@@ -99,8 +98,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     scheduler.start()
 
     while (scheduler.isRunning) {
-      val records = consumer.poll(100).asScala
-      assertEquals(Set(tp), consumer.assignment.asScala)
+      val records = consumer.poll(Duration.ofMillis(100)).asScala
 
       for (record <- records) {
         assertEquals(consumed, record.offset())
