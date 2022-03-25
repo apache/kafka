@@ -1265,7 +1265,7 @@ class ReplicaManagerTest {
 
       initializeLogAndTopicId(replicaManager, tp0, topicId)
 
-      // Make this replica the follower
+      // Make this replica the leader
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(topic)
@@ -1281,14 +1281,14 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
-      val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
+      val metadata = new DefaultClientMetadata("rack-a", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
         new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         clientMetadata = Some(metadata))
 
-      // Fetch from follower succeeds
+      // Fetch from leader succeeds
       assertTrue(consumerResult.isFired)
 
       // Returns a preferred replica (should just be the leader, which is None)
@@ -1302,30 +1302,24 @@ class ReplicaManagerTest {
 
   @Test
   def testHasPreferredReplica(): Unit = {
-    val topicPartition = 0
-    val topicId = Uuid.randomUuid()
-    val followerBrokerId = 0
-    val leaderBrokerId = 1
-    val leaderEpoch = 1
-    val leaderEpochIncrement = 2
-    val countDownLatch = new CountDownLatch(1)
-
-    // Prepare the mocked components for the test
-    val props = new Properties()
-    props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
-    val (replicaManager, _) = prepareReplicaManagerAndLogManager(new MockTimer(time),
-      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId), extraProps = props)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
 
     try {
-      val brokerList = Seq[Integer](0, 1).asJava
-
+      val leaderBrokerId = 0
+      val followerBrokerId = 1
+      val brokerList = Seq[Integer](leaderBrokerId, followerBrokerId).asJava
+      val topicId = Uuid.randomUuid()
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
       initializeLogAndTopicId(replicaManager, tp0, topicId)
+      when(replicaManager.metadataCache.getPartitionReplicaEndpoints(
+        any[TopicPartition], any[ListenerName])).
+        thenReturn(Map(leaderBrokerId -> new Node(leaderBrokerId, "host1", 9092, "rack-a"),
+          followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")).toMap)
 
-      // Make this replica the follower
+      // Make this replica the leader
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(topic)
@@ -1340,25 +1334,25 @@ class ReplicaManagerTest {
         Collections.singletonMap(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
-      replicaManager.getPartitionOrException(tp0).updateFollowerFetchState(1, new LogOffsetMetadata(0), 0, 0, 0)
+      // avoid the replica selector ignore the follower replica if it not have the data that need to fetch
+      replicaManager.getPartitionOrException(tp0).updateFollowerFetchState(followerBrokerId, new LogOffsetMetadata(0), 0, 0, 0)
 
-      val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
+      val metadata = new DefaultClientMetadata("rack-b", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
         new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()), minBytes = 1,
-        clientMetadata = Some(metadata))
+        clientMetadata = Some(metadata), timeout = 500)
 
-      // Fetch from follower succeeds
+      // Fetch from leader succeeds
       assertTrue(consumerResult.isFired)
 
-      // Returns a preferred replica (should just be the leader, which is None)
-      assertTrue(consumerResult.assertFired.preferredReadReplica.isDefined)
-    } finally {
-      replicaManager.shutdown()
-    }
+      // No delayed fetch was inserted
+      assertEquals(0, replicaManager.delayedFetchPurgatory.watched)
 
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+      // Returns a preferred replica,not None
+      assertTrue(consumerResult.assertFired.preferredReadReplica.isDefined)
+    } finally replicaManager.shutdown(checkpointHW = false)
   }
 
   @Test
@@ -2084,8 +2078,9 @@ class ReplicaManagerTest {
                               partitionData: PartitionData,
                               minBytes: Int = 0,
                               isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED,
-                              clientMetadata: Option[ClientMetadata] = None): CallbackResult[FetchPartitionData] = {
-    fetchMessages(replicaManager, replicaId = -1, partition, partitionData, minBytes, isolationLevel, clientMetadata)
+                              clientMetadata: Option[ClientMetadata] = None,
+                              timeout: Long = 1000): CallbackResult[FetchPartitionData] = {
+    fetchMessages(replicaManager, replicaId = -1, partition, partitionData, minBytes, isolationLevel, clientMetadata, timeout)
   }
 
   private def fetchAsFollower(replicaManager: ReplicaManager,
@@ -2103,7 +2098,8 @@ class ReplicaManagerTest {
                             partitionData: PartitionData,
                             minBytes: Int,
                             isolationLevel: IsolationLevel,
-                            clientMetadata: Option[ClientMetadata]): CallbackResult[FetchPartitionData] = {
+                            clientMetadata: Option[ClientMetadata],
+                            timeout: Long = 1000): CallbackResult[FetchPartitionData] = {
     val result = new CallbackResult[FetchPartitionData]()
     def fetchCallback(responseStatus: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       assertEquals(1, responseStatus.size)
@@ -2113,7 +2109,7 @@ class ReplicaManagerTest {
     }
 
     replicaManager.fetchMessages(
-      timeout = 1000,
+      timeout = timeout,
       replicaId = replicaId,
       fetchMinBytes = minBytes,
       fetchMaxBytes = Int.MaxValue,
