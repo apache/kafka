@@ -115,7 +115,7 @@ final class TaskMovement {
                     tryToMoveActiveToMostCaughtUpClient(tasksToClientByLag, clientStates, warmups, remainingWarmupReplicas, caughtUpClientsByTaskLoad, movement);
 
             if (!moved) {
-                throw new IllegalStateException("Tried to move task to more caught-up client but none exist");
+                throw new IllegalStateException("Tried to move task to more caught-up client as scheduled before but none exist");
             }
         }
 
