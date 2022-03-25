@@ -142,17 +142,18 @@ object DelegationTokenManager {
     }
   }
 
-  def filterToken(requestedPrincipal: KafkaPrincipal, owners : Option[List[KafkaPrincipal]], token: TokenInformation, authorizeToken: String => Boolean) : Boolean = {
+  def filterToken(requesterPrincipal: KafkaPrincipal, owners : Option[List[KafkaPrincipal]], token: TokenInformation,
+                  authorizeToken: String => Boolean, authorizeRequester: KafkaPrincipal  => Boolean) : Boolean = {
 
     val allow =
     //exclude tokens which are not requested
       if (owners.isDefined && !owners.get.exists(owner => token.ownerOrRenewer(owner))) {
         false
         //Owners and the renewers can describe their own tokens
-      } else if (token.ownerOrRenewer(requestedPrincipal)) {
+      } else if (token.ownerOrRenewer(requesterPrincipal)) {
         true
         // Check permission for non-owned tokens
-      } else if (authorizeToken(token.tokenId)) {
+      } else if (authorizeToken(token.tokenId) || authorizeRequester(token.owner)) {
         true
       }
       else {

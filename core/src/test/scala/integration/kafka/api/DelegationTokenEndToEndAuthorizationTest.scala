@@ -45,9 +45,9 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   private val clientPassword = JaasTestUtils.KafkaScramPassword
 
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
-  private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
+  protected val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
 
-  private val privilegedAdminClientConfig = new Properties()
+  protected val privilegedAdminClientConfig = new Properties()
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
 
@@ -132,12 +132,18 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   }
 
   def createDelegationTokens(): (DelegationToken, DelegationToken) = {
+    createDelegationTokens(createDelegationTokenOptions)
+  }
+
+  def createDelegationTokens(createDelegationTokenOptions: () => CreateDelegationTokenOptions, assert: Boolean = true): (DelegationToken, DelegationToken) = {
     val adminClient = createTokenRequesterAdminClient()
     try {
       val privilegedAdminClient = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
       try {
         val token = adminClient.createDelegationToken(createDelegationTokenOptions()).delegationToken().get()
-        assertToken(token)
+        if (assert) {
+          assertToken(token)
+        }
         val privilegedToken = privilegedAdminClient.createDelegationToken().delegationToken().get()
         //wait for tokens to reach all the brokers
         TestUtils.waitUntilTrue(() => servers.forall(server => server.tokenCache.tokens().size() == 2),

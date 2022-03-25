@@ -468,10 +468,10 @@ object AclCommand extends Logging {
       opts.options.valuesOf(opts.delegationTokenOpt).forEach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
 
     if (opts.options.has(opts.userPrincipalOpt))
-      resourceFilters += new ResourcePatternFilter(JResourceType.USER, opts.options.valueOf(opts.userPrincipalOpt), patternType)
+      opts.options.valuesOf(opts.userPrincipalOpt).forEach(user => resourceFilters += new ResourcePatternFilter(JResourceType.USER, user.trim, patternType))
 
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
-    CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
+      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
     resourceFilters
   }

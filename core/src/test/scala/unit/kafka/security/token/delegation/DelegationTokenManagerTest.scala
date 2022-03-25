@@ -20,7 +20,6 @@ package kafka.security.token.delegation
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.{Base64, Properties}
-
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
 import kafka.security.authorizer.AclEntry.WildcardHost
@@ -33,7 +32,7 @@ import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
-import org.apache.kafka.common.resource.ResourceType.DELEGATION_TOKEN
+import org.apache.kafka.common.resource.ResourceType.{DELEGATION_TOKEN, USER}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -315,13 +314,20 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
       List()
     }
     else {
-      def authorizeToken(tokenId: String) = {
+      def authorizeToken(tokenId: String): Boolean = {
         val requestContext = AuthorizerUtils.sessionToRequestContext(hostSession)
         val action = new Action(AclOperation.DESCRIBE,
           new ResourcePattern(DELEGATION_TOKEN, tokenId, LITERAL), 1, true, true)
         aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
       }
-      def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, Option(requestedOwners), token, authorizeToken)
+      def authorizeRequester(owner: KafkaPrincipal): Boolean = {
+        val requestContext = AuthorizerUtils.sessionToRequestContext(hostSession)
+        val action = new Action(AclOperation.DESCRIBE,
+          new ResourcePattern(USER, owner.toString, LITERAL), 1, true, true)
+        aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
+      }
+      def eligible(token: TokenInformation) = DelegationTokenManager
+        .filterToken(requestPrincipal, Option(requestedOwners), token, authorizeToken, authorizeRequester)
       tokenManager.getTokens(eligible)
     }
   }
