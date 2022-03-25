@@ -1253,9 +1253,11 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId))
+      leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId), extraProps = props)
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -1280,19 +1282,20 @@ class ReplicaManagerTest {
         Collections.singletonMap(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+      replicaManager.getPartitionOrException(tp0).updateFollowerFetchState(1, new LogOffsetMetadata(0), 0, 0, 0)
 
       val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
-        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()), minBytes = 1,
         clientMetadata = Some(metadata))
 
       // Fetch from follower succeeds
       assertTrue(consumerResult.isFired)
 
       // Returns a preferred replica (should just be the leader, which is None)
-      assertFalse(consumerResult.assertFired.preferredReadReplica.isDefined)
+      assertTrue(consumerResult.assertFired.preferredReadReplica.isDefined)
     } finally {
       replicaManager.shutdown()
     }

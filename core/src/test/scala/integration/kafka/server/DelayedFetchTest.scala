@@ -25,16 +25,11 @@ import org.apache.kafka.common.errors.{FencedLeaderEpochException, NotLeaderOrFo
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.replica.ClientMetadata
-import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, when}
-
-import java.net.InetAddress
 
 class DelayedFetchTest {
   private val maxBytes = 1024
@@ -171,34 +166,6 @@ class DelayedFetchTest {
     assertTrue(fetchResultOpt.isDefined)
   }
 
-
-  @Test
-  def testHasPreferredReadReplica(): Unit = {
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
-    val fetchOffset = 500L
-    val logStartOffset = 0L
-    val currentLeaderEpoch = Optional.of[Integer](10)
-    val lastFetchedEpoch = Optional.of[Integer](9)
-    val replicaId = -1
-
-    val fetchStatus = FetchPartitionStatus(
-      startOffsetMetadata = LogOffsetMetadata(fetchOffset),
-      fetchInfo = new FetchRequest.PartitionData(topicIdPartition.topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch, lastFetchedEpoch))
-    val metadata: ClientMetadata = new DefaultClientMetadata("rack-id", "client-id",
-      InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
-    expectReadFromReplica(replicaId, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE, false)
-    expectReadFromReplica(replicaId, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE, false, Some(metadata), Some(1))
-
-    val noPreferredReadReplicaLogReadResult = replicaManager.readFromLocalLog(replicaId, false,
-      FetchLogEnd, maxBytes, false, Seq((topicIdPartition, fetchStatus.fetchInfo)), replicaQuota, None)
-    assertTrue(needDelayFetchResponse(noPreferredReadReplicaLogReadResult))
-
-    val hasPreferredReadReplicaLogReadResult = replicaManager.readFromLocalLog(replicaId, false,
-      FetchLogEnd, maxBytes, false,
-      Seq((topicIdPartition, fetchStatus.fetchInfo)), replicaQuota, Some(metadata))
-    assertFalse(needDelayFetchResponse(hasPreferredReadReplicaLogReadResult))
-  }
-
   private def buildFetchMetadata(replicaId: Int,
                                  topicIdPartition: TopicIdPartition,
                                  fetchStatus: FetchPartitionStatus): FetchMetadata = {
@@ -215,23 +182,20 @@ class DelayedFetchTest {
   private def expectReadFromReplica(replicaId: Int,
                                     topicIdPartition: TopicIdPartition,
                                     fetchPartitionData: FetchRequest.PartitionData,
-                                    error: Errors,
-                                    fetchOnlyFromLeader: Boolean = true,
-                                    clientMetadata: Option[ClientMetadata] = None,
-                                    preferredReadReplica: Option[Int] = None): Unit = {
+                                    error: Errors): Unit = {
     when(replicaManager.readFromLocalLog(
       replicaId = replicaId,
-      fetchOnlyFromLeader = fetchOnlyFromLeader,
+      fetchOnlyFromLeader = true,
       fetchIsolation = FetchLogEnd,
       fetchMaxBytes = maxBytes,
       hardMaxBytesLimit = false,
       readPartitionInfo = Seq((topicIdPartition, fetchPartitionData)),
-      clientMetadata = clientMetadata,
+      clientMetadata = None,
       quota = replicaQuota))
-      .thenReturn(Seq((topicIdPartition, buildReadResult(error,preferredReadReplica))))
+      .thenReturn(Seq((topicIdPartition, buildReadResult(error))))
   }
 
-  private def buildReadResult(error: Errors, preferredReadReplica: Option[Int]): LogReadResult = {
+  private def buildReadResult(error: Errors): LogReadResult = {
     LogReadResult(
       exception = if (error != Errors.NONE) Some(error.exception) else None,
       info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
@@ -241,17 +205,7 @@ class DelayedFetchTest {
       leaderLogEndOffset = -1L,
       followerLogStartOffset = -1L,
       fetchTimeMs = -1L,
-      lastStableOffset = None,
-      preferredReadReplica = preferredReadReplica)
-  }
-
-  private def needDelayFetchResponse(logReadResults: Seq[(TopicIdPartition, LogReadResult)]): Boolean = {
-    var needDelayFetchResponse = true
-    logReadResults.foreach { case (_, logReadResult) =>
-      if (logReadResult.preferredReadReplica.nonEmpty)
-        needDelayFetchResponse = false
-    }
-    needDelayFetchResponse
+      lastStableOffset = None)
   }
 
 }
