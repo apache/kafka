@@ -30,6 +30,8 @@ import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+import org.apache.kafka.server.common.MetadataVersion
+
 import scala.jdk.CollectionConverters._
 
 
@@ -51,9 +53,12 @@ import scala.jdk.CollectionConverters._
  * In some cases we expose a volatile variable which can be read from any thread, but only
  * written from the event queue thread.
  */
-class BrokerLifecycleManager(val config: KafkaConfig,
-                             val time: Time,
-                             val threadNamePrefix: Option[String]) extends Logging {
+class BrokerLifecycleManager(
+  val config: KafkaConfig,
+  val featureCache: FinalizedFeatureCache,
+  val time: Time,
+  val threadNamePrefix: Option[String]
+) extends Logging {
   val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
 
   this.logIdent = logContext.logPrefix()
@@ -126,8 +131,16 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   private var _highestMetadataOffsetProvider: () => Long = _
 
   /**
-   * True only if we are ready to unfence the broker.  This variable can only be read or
-   * written from the event queue thread.
+   * A thread-safe callback function which gives this manager the current highest published
+   * offset.
+   * This variable can only be read or written from the event queue thread.
+   */
+  private var _highestPublishedOffsetProvider: () => Long = _
+
+  /**
+   * True only if we are ready to unfence the broker, which means the metadata listener has
+   * completed its first publish operation. This variable can only be read or written from
+   * the event queue thread.
    */
   private var readyToUnfence = false
 
@@ -186,12 +199,18 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * @param clusterId                     The cluster ID.
    */
   def start(highestMetadataOffsetProvider: () => Long,
+            highestPublishedOffsetProvider: () => Long,
             channelManager: BrokerToControllerChannelManager,
             clusterId: String,
             advertisedListeners: ListenerCollection,
             supportedFeatures: util.Map[String, VersionRange]): Unit = {
-    eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
-      channelManager, clusterId, advertisedListeners, supportedFeatures))
+    eventQueue.append(new StartupEvent(
+      highestMetadataOffsetProvider,
+      highestPublishedOffsetProvider,
+      channelManager,
+      clusterId,
+      advertisedListeners,
+      supportedFeatures))
   }
 
   def setReadyToUnfence(): CompletableFuture[Void] = {
@@ -253,13 +272,16 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     }
   }
 
-  private class StartupEvent(highestMetadataOffsetProvider: () => Long,
-                     channelManager: BrokerToControllerChannelManager,
-                     clusterId: String,
-                     advertisedListeners: ListenerCollection,
-                     supportedFeatures: util.Map[String, VersionRange]) extends EventQueue.Event {
+  private class StartupEvent(
+    highestMetadataOffsetProvider: () => Long,
+    highestPublishedOffsetProvider: () => Long,
+    channelManager: BrokerToControllerChannelManager,
+    clusterId: String,
+    advertisedListeners: ListenerCollection,
+    supportedFeatures: util.Map[String, VersionRange]) extends EventQueue.Event {
     override def run(): Unit = {
       _highestMetadataOffsetProvider = highestMetadataOffsetProvider
+      _highestPublishedOffsetProvider = highestPublishedOffsetProvider
       _channelManager = channelManager
       _channelManager.start()
       _state = BrokerState.STARTING
@@ -322,6 +344,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           _brokerEpoch = message.data().brokerEpoch()
           registered = true
           initialRegistrationSucceeded = true
+          _state = BrokerState.REGISTERED
           info(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
           scheduleNextCommunicationImmediately() // Immediately send a heartbeat
         } else {
@@ -340,16 +363,23 @@ class BrokerLifecycleManager(val config: KafkaConfig,
 
   private def sendBrokerHeartbeat(): Unit = {
     val metadataOffset = _highestMetadataOffsetProvider()
+    val publishedOffset = _highestPublishedOffsetProvider()
+    val version = if (featureCache.getMetadataVersion().exists(_ >= MetadataVersion.IBP_3_3_IV1.featureLevel())) {
+      1.toShort
+    } else {
+      0.toShort
+    }
     val data = new BrokerHeartbeatRequestData().
       setBrokerEpoch(_brokerEpoch).
       setBrokerId(nodeId).
       setCurrentMetadataOffset(metadataOffset).
+      setCurrentPublishedOffset(publishedOffset).
       setWantFence(!readyToUnfence).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat $data")
     }
-    _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data),
+    _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data, version),
       new BrokerHeartbeatResponseHandler())
   }
 
@@ -376,7 +406,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         if (errorCode == Errors.NONE) {
           failedAttempts = 0
           _state match {
-            case BrokerState.STARTING =>
+            case BrokerState.REGISTERED =>
               if (message.data().isCaughtUp) {
                 info(s"The broker has caught up. Transitioning from STARTING to RECOVERY.")
                 _state = BrokerState.RECOVERY

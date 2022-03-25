@@ -367,7 +367,8 @@ public class MockController implements Controller {
     @Override
     public CompletableFuture<BrokerHeartbeatReply> processBrokerHeartbeat(
         ControllerRequestContext context,
-        BrokerHeartbeatRequestData request
+        BrokerHeartbeatRequestData request,
+        short version
     ) {
         throw new UnsupportedOperationException();
     }

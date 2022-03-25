@@ -1658,7 +1658,8 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<BrokerHeartbeatReply> processBrokerHeartbeat(
         ControllerRequestContext context,
-        BrokerHeartbeatRequestData request
+        BrokerHeartbeatRequestData request,
+        short version
     ) {
         return appendWriteEvent("processBrokerHeartbeat", context.deadlineNs(),
             new ControllerWriteOperation<BrokerHeartbeatReply>() {
@@ -1668,7 +1669,7 @@ public final class QuorumController implements Controller {
                 @Override
                 public ControllerResult<BrokerHeartbeatReply> generateRecordsAndResult() {
                     ControllerResult<BrokerHeartbeatReply> result = replicationControl.
-                        processBrokerHeartbeat(request, lastCommittedOffset);
+                        processBrokerHeartbeat(request, version, lastCommittedOffset);
                     inControlledShutdown = result.response().inControlledShutdown();
                     rescheduleMaybeFenceStaleBrokers();
                     return result;

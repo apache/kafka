@@ -122,13 +122,13 @@ class BrokerMetadataListenerTest {
   }
 
   class MockMetadataPublisher extends MetadataPublisher {
-    var image = MetadataImage.EMPTY
+    var image: MetadataImage = MetadataImage.EMPTY
+    var publishedOffset: Long = -1
 
     override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
       image = newImage
+      publishedOffset = newImage.highestOffsetAndEpoch().offset
     }
-
-    override def publishedOffset: Long = -1
   }
 
   private val FOO_ID = Uuid.fromString("jj1G9utnTuCegi_gpnRgYw")

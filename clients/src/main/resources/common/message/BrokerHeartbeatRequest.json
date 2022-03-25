@@ -18,7 +18,8 @@
   "type": "request",
   "listeners": ["controller"],
   "name": "BrokerHeartbeatRequest",
-  "validVersions": "0",
+  // Version 1 add CurrentPublishedOffset.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -26,6 +27,8 @@
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
       "about": "The broker epoch." },
     { "name": "CurrentMetadataOffset", "type": "int64", "versions": "0+",
+      "about": "The highest metadata offset which the broker has seen." },
+    { "name": "CurrentPublishedOffset", "type": "int64", "versions": "1+",
       "about": "The highest metadata offset which the broker has reached." },
     { "name": "WantFence", "type": "bool", "versions": "0+",
       "about": "True if the broker wants to be fenced, false otherwise." },

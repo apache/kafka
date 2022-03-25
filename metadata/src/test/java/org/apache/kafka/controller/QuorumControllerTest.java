@@ -458,7 +458,9 @@ public class QuorumControllerTest {
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(2L).setBrokerId(0).
-                            setCurrentMetadataOffset(100000L)).get());
+                            setCurrentMetadataOffset(100000L).setCurrentPublishedOffset(100000L),
+                        BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION
+                    ).get());
                 assertEquals(Errors.NONE.code(), active.createTopics(ANONYMOUS_CONTEXT,
                     createTopicsRequestData, Collections.singleton("foo")).
                         get().topics().find("foo").errorCode());
@@ -519,7 +521,9 @@ public class QuorumControllerTest {
                     assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                         active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
-                            setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
+                            setBrokerId(i).setCurrentMetadataOffset(100000L).setCurrentPublishedOffset(100000L),
+                            BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION
+                        ).get());
                 }
                 CreateTopicsResponseData fooData = active.createTopics(ANONYMOUS_CONTEXT,
                     new CreateTopicsRequestData().setTopics(
@@ -589,7 +593,9 @@ public class QuorumControllerTest {
                     assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                         active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
-                            setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
+                            setBrokerId(i).setCurrentMetadataOffset(100000L).setCurrentPublishedOffset(100000L),
+                            BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION
+                        ).get());
                 }
                 CreateTopicsResponseData fooData = active.createTopics(ANONYMOUS_CONTEXT,
                     new CreateTopicsRequestData().setTopics(
@@ -643,7 +649,9 @@ public class QuorumControllerTest {
                     assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                         active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
-                            setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
+                            setBrokerId(i).setCurrentMetadataOffset(100000L).setCurrentPublishedOffset(100000L),
+                            BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION
+                        ).get());
                 }
 
                 assertTrue(logEnv.appendedBytes() < maxNewRecordBytes,
@@ -1021,6 +1029,8 @@ public class QuorumControllerTest {
                     .setBrokerEpoch(brokerEpochs.get(brokerId))
                     .setBrokerId(brokerId)
                     .setCurrentMetadataOffset(100000L)
+                    .setCurrentPublishedOffset(100000L),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION
             ).get();
         }
 
@@ -1041,7 +1051,9 @@ public class QuorumControllerTest {
                     .setWantFence(false)
                     .setBrokerEpoch(brokerEpochs.get(brokerId))
                     .setBrokerId(brokerId)
-                    .setCurrentMetadataOffset(100000)
+                    .setCurrentMetadataOffset(100000L)
+                    .setCurrentPublishedOffset(100000L),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION
             ).get();
             assertEquals(new BrokerHeartbeatReply(true, false, false, false), reply);
         }

@@ -262,41 +262,52 @@ public class BrokerHeartbeatManagerTest {
 
         assertEquals(new BrokerControlStates(FENCED, SHUTDOWN_NOW),
             manager.calculateNextBrokerState(0,
-                new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> false));
+                new BrokerHeartbeatRequestData().setWantShutDown(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
         assertEquals(new BrokerControlStates(FENCED, UNFENCED),
             manager.calculateNextBrokerState(0,
                 new BrokerHeartbeatRequestData().setWantFence(false).
-                    setCurrentMetadataOffset(100), 100, () -> false));
+                    setCurrentMetadataOffset(100).setCurrentPublishedOffset(100),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
         assertEquals(new BrokerControlStates(FENCED, FENCED),
             manager.calculateNextBrokerState(0,
                 new BrokerHeartbeatRequestData().setWantFence(false).
-                    setCurrentMetadataOffset(50), 100, () -> false));
+                    setCurrentMetadataOffset(50).setCurrentPublishedOffset(50),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
         assertEquals(new BrokerControlStates(FENCED, FENCED),
             manager.calculateNextBrokerState(0,
-                new BrokerHeartbeatRequestData().setWantFence(true), 100, () -> false));
+                new BrokerHeartbeatRequestData().setWantFence(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
 
         assertEquals(new BrokerControlStates(UNFENCED, CONTROLLED_SHUTDOWN),
             manager.calculateNextBrokerState(1,
-                new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true));
+                new BrokerHeartbeatRequestData().setWantShutDown(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> true));
         assertEquals(new BrokerControlStates(UNFENCED, SHUTDOWN_NOW),
             manager.calculateNextBrokerState(1,
-                new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> false));
+                new BrokerHeartbeatRequestData().setWantShutDown(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
         assertEquals(new BrokerControlStates(UNFENCED, UNFENCED),
             manager.calculateNextBrokerState(1,
-                new BrokerHeartbeatRequestData().setWantFence(false), 100, () -> false));
+                new BrokerHeartbeatRequestData().setWantFence(false),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
 
         assertEquals(new BrokerControlStates(CONTROLLED_SHUTDOWN, CONTROLLED_SHUTDOWN),
             manager.calculateNextBrokerState(5,
-                new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true));
+                new BrokerHeartbeatRequestData().setWantShutDown(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> true));
         assertEquals(new BrokerControlStates(CONTROLLED_SHUTDOWN, CONTROLLED_SHUTDOWN),
             manager.calculateNextBrokerState(5,
-                new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> false));
+                new BrokerHeartbeatRequestData().setWantShutDown(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
         manager.fence(1);
         assertEquals(new BrokerControlStates(CONTROLLED_SHUTDOWN, SHUTDOWN_NOW),
             manager.calculateNextBrokerState(5,
-                new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> false));
+                new BrokerHeartbeatRequestData().setWantShutDown(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> false));
         assertEquals(new BrokerControlStates(CONTROLLED_SHUTDOWN, CONTROLLED_SHUTDOWN),
             manager.calculateNextBrokerState(5,
-                new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true));
+                new BrokerHeartbeatRequestData().setWantShutDown(true),
+                BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION, 100, () -> true));
     }
 }

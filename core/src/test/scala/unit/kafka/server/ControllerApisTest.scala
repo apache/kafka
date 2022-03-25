@@ -306,7 +306,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
         handleBrokerHeartBeatRequest(buildRequest(new BrokerHeartbeatRequest.Builder(
-          new BrokerHeartbeatRequestData()).build(0))))
+          new BrokerHeartbeatRequestData(), ApiKeys.BROKER_HEARTBEAT.latestVersion()).build(0))))
   }
 
   @Test

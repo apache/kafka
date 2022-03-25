@@ -629,7 +629,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())
 
         case ApiKeys.BROKER_HEARTBEAT =>
-          new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData())
+          new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData(), ApiKeys.BROKER_HEARTBEAT.latestVersion())
 
         case ApiKeys.UNREGISTER_BROKER =>
           new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())

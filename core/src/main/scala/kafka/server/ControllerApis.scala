@@ -545,7 +545,9 @@ class ControllerApis(val requestChannel: RequestChannel,
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val context = new ControllerRequestContext(request.context.principal,
       requestTimeoutMsToDeadlineNs(time, config.brokerHeartbeatIntervalMs))
-    controller.processBrokerHeartbeat(context, heartbeatRequest.data).handle[Unit] { (reply, e) =>
+    controller.processBrokerHeartbeat(
+      context, heartbeatRequest.data, heartbeatRequest.version()
+    ).handle[Unit] { (reply, e) =>
       def createResponseCallback(requestThrottleMs: Int,
                                  reply: BrokerHeartbeatReply,
                                  e: Throwable): BrokerHeartbeatResponse = {

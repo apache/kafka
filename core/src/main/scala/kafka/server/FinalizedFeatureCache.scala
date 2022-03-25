@@ -151,6 +151,10 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
       Collections.unmodifiableMap(newFeatures)), highestMetadataOffset))
   }
 
+  def getMetadataVersion(): Option[Short] = {
+    featuresAndEpoch.flatMap(featuresAndEpoch => Option(featuresAndEpoch.features.features().get(MetadataVersion.FEATURE_NAME))).map(_.max())
+  }
+
   /**
    * Causes the current thread to wait no more than timeoutMs for the specified condition to be met.
    * It is guaranteed that the provided condition will always be invoked only from within a

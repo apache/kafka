@@ -521,6 +521,7 @@ public class BrokerHeartbeatManager {
      */
     BrokerControlStates calculateNextBrokerState(int brokerId,
                                                  BrokerHeartbeatRequestData request,
+                                                 int version,
                                                  long lastCommittedOffset,
                                                  Supplier<Boolean> hasLeaderships) {
         BrokerHeartbeatState broker = brokers.getOrDefault(brokerId,
@@ -533,7 +534,13 @@ public class BrokerHeartbeatManager {
                         "shutdown.", brokerId);
                     return new BrokerControlStates(currentState, SHUTDOWN_NOW);
                 } else if (!request.wantFence()) {
-                    if (request.currentMetadataOffset() >= lastCommittedOffset) {
+                    long currentPublishedOffset;
+                    if (version >= 1) {
+                        currentPublishedOffset = request.currentPublishedOffset();
+                    } else {
+                        currentPublishedOffset = request.currentMetadataOffset();
+                    }
+                    if (currentPublishedOffset >= lastCommittedOffset) {
                         log.info("The request from broker {} to unfence has been granted " +
                                 "because it has caught up with the last committed metadata " +
                                 "offset {}.", brokerId, lastCommittedOffset);
@@ -543,7 +550,7 @@ public class BrokerHeartbeatManager {
                             log.debug("The request from broker {} to unfence cannot yet " +
                                 "be granted because it has not caught up with the last " +
                                 "committed metadata offset {}. It is still at offset {}.",
-                                brokerId, lastCommittedOffset, request.currentMetadataOffset());
+                                brokerId, lastCommittedOffset, currentPublishedOffset);
                         }
                         return new BrokerControlStates(currentState, FENCED);
                     }

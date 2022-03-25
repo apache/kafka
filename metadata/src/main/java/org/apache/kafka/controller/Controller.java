@@ -249,7 +249,8 @@ public interface Controller extends AclMutator, AutoCloseable {
      */
     CompletableFuture<BrokerHeartbeatReply> processBrokerHeartbeat(
         ControllerRequestContext context,
-        BrokerHeartbeatRequestData request
+        BrokerHeartbeatRequestData request,
+        short version
     );
 
     /**

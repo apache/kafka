@@ -32,6 +32,8 @@ import java.util.Map;
  *
  * NOT_RUNNING
  *     ↓
+ * REGISTERED
+ *     ↓
  * STARTING
  *     ↓
  * RECOVERY
@@ -50,32 +52,37 @@ public enum BrokerState {
     NOT_RUNNING((byte) 0),
 
     /**
+     * The broker has successfully registered itself with the controller
+     */
+    REGISTERED((byte) 1),
+
+    /**
      * The state the broker is in when it is catching up with cluster metadata.
      */
-    STARTING((byte) 1),
+    STARTING((byte) 2),
 
     /**
      * The broker has caught up with cluster metadata, but has not yet
      * been unfenced by the controller.
      */
-    RECOVERY((byte) 2),
+    RECOVERY((byte) 3),
 
     /**
      * The state the broker is in when it has registered at least once, and is
      * accepting client requests.
      */
-    RUNNING((byte) 3),
+    RUNNING((byte) 4),
 
     /**
      * The state the broker is in when it is attempting to perform a controlled
      * shutdown.
      */
-    PENDING_CONTROLLED_SHUTDOWN((byte) 6),
+    PENDING_CONTROLLED_SHUTDOWN((byte) 5),
 
     /**
      * The state the broker is in when it is shutting down.
      */
-    SHUTTING_DOWN((byte) 7),
+    SHUTTING_DOWN((byte) 6),
 
     /**
      * The broker is in an unknown state.

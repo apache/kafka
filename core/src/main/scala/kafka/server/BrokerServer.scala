@@ -150,7 +150,7 @@ class BrokerServer(
 
   var metadataListener: BrokerMetadataListener = null
 
-  var metadataPublisher: BrokerMetadataPublisher = null
+  var _metadataPublisher: BrokerMetadataPublisher = null
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
 
@@ -177,14 +177,18 @@ class BrokerServer(
 
   def replicaManager: ReplicaManager = _replicaManager
 
+  def metadataPublisher: BrokerMetadataPublisher = _metadataPublisher
+
   override def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
       info("Starting broker")
 
       config.dynamicConfig.initialize(zkClientOpt = None)
+      featureCache = new FinalizedFeatureCache(brokerFeatures)
 
       lifecycleManager = new BrokerLifecycleManager(config,
+        featureCache,
         time,
         threadNamePrefix)
 
@@ -225,8 +229,6 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
-
-      featureCache = new FinalizedFeatureCache(brokerFeatures)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
@@ -342,10 +344,22 @@ class BrokerServer(
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      lifecycleManager.start(() => metadataListener.highestMetadataOffset,
-        BrokerToControllerChannelManager(controllerNodeProvider, time, metrics, config,
-          "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong),
-        metaProps.clusterId, networkListeners, featuresRemapped)
+      lifecycleManager.start(
+        () => metadataListener.highestMetadataOffset,
+        () => metadataPublisher.publishedOffset,
+        BrokerToControllerChannelManager(
+          controllerNodeProvider,
+          time,
+          metrics,
+          config,
+          "heartbeat",
+          threadNamePrefix,
+          config.brokerSessionTimeoutMs.toLong
+        ),
+        metaProps.clusterId,
+        networkListeners,
+        featuresRemapped
+      )
 
       // Register a listener with the Raft layer to receive metadata event notifications
       raftManager.register(metadataListener)
@@ -422,7 +436,7 @@ class BrokerServer(
       lifecycleManager.initialCatchUpFuture.get()
 
       // Apply the metadata log changes that we've accumulated.
-      metadataPublisher = new BrokerMetadataPublisher(config,
+      _metadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
         replicaManager,
@@ -438,7 +452,7 @@ class BrokerServer(
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
       try {
-        metadataListener.startPublishing(metadataPublisher).get()
+        metadataListener.startPublishing(_metadataPublisher).get()
       } catch {
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "waiting for the broker to catch up with the current cluster metadata.", t)

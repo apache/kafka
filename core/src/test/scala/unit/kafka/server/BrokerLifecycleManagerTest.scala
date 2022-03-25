@@ -43,7 +43,7 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(value = 12)
 class BrokerLifecycleManagerTest {
-  def configProperties = {
+  private def configProperties = {
     val properties = new Properties()
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
@@ -61,7 +61,7 @@ class BrokerLifecycleManagerTest {
 
     override def listenerName: ListenerName = new ListenerName("PLAINTEXT")
 
-    override def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT;
+    override def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 
     override def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
   }
@@ -70,6 +70,8 @@ class BrokerLifecycleManagerTest {
     val config = new KafkaConfig(properties)
     val time = new MockTime(1, 1)
     val highestMetadataOffset = new AtomicLong(0)
+    val highestPublishedOffset = new AtomicLong(0)
+    val featureCache = new FinalizedFeatureCache(BrokerFeatures.createDefault())
     val metadata = new Metadata(1000, 1000, new LogContext(), new ClusterResourceListeners())
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = new SimpleControllerNodeProvider()
@@ -97,16 +99,17 @@ class BrokerLifecycleManagerTest {
   @Test
   def testCreateAndClose(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.featureCache, context.time, None)
     manager.close()
   }
 
   @Test
   def testCreateStartAndClose(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.featureCache, context.time, None)
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
+      () => context.highestPublishedOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
       Collections.emptyMap())
     TestUtils.retry(60000) {
@@ -119,12 +122,13 @@ class BrokerLifecycleManagerTest {
   @Test
   def testSuccessfulRegistration(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.featureCache, context.time, None)
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
       new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
+      () => context.highestPublishedOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
       Collections.emptyMap())
     TestUtils.retry(10000) {
@@ -132,14 +136,13 @@ class BrokerLifecycleManagerTest {
       assertEquals(1000L, manager.brokerEpoch)
     }
     manager.close()
-
   }
 
   @Test
   def testRegistrationTimeout(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
     val controllerNode = new Node(3000, "localhost", 8021)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.featureCache, context.time, None)
     context.controllerNodeProvider.node.set(controllerNode)
     def newDuplicateRegistrationResponse(): Unit = {
       context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -150,6 +153,7 @@ class BrokerLifecycleManagerTest {
     newDuplicateRegistrationResponse()
     assertEquals(1, context.mockClient.futureResponses().size)
     manager.start(() => context.highestMetadataOffset.get(),
+      () => context.highestPublishedOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
       Collections.emptyMap())
     // We should send the first registration request and get a failure immediately
@@ -180,7 +184,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testControlledShutdown(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.featureCache, context.time, None)
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -188,6 +192,7 @@ class BrokerLifecycleManagerTest {
     context.mockClient.prepareResponseFrom(new BrokerHeartbeatResponse(
       new BrokerHeartbeatResponseData().setIsCaughtUp(true)), controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
+      () => context.highestPublishedOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
       Collections.emptyMap())
     TestUtils.retry(10000) {
@@ -230,6 +235,73 @@ class BrokerLifecycleManagerTest {
       assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
     }
     manager.controlledShutdownFuture.get()
+    manager.close()
+  }
+
+  @Test
+  def testAdvertisedOffset(): Unit = {
+    val context = new BrokerLifecycleManagerTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(context.config, context.featureCache, context.time, None)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    context.controllerNodeProvider.node.set(controllerNode)
+
+    context.highestMetadataOffset.set(2)
+    context.highestPublishedOffset.set(1)
+
+    manager.start(
+      () => context.highestMetadataOffset.get(),
+      () => context.highestPublishedOffset.get(),
+      context.mockChannelManager, context.clusterId, context.advertisedListeners,
+      Collections.emptyMap())
+
+    // Register success
+    context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
+      new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
+    TestUtils.retry(10000) {
+      context.poll()
+      manager.eventQueue.wakeup()
+      assertEquals(BrokerState.REGISTERED, manager.state)
+    }
+
+    // Assert we will send heartbeat with metadata offset and published offset and fence=true
+    TestUtils.waitUntilTrue(() => context.mockChannelManager.unsentQueue.size() > 0,
+      "Error waiting for lifecycleManager to send heartbeat")
+    val request1 = context.mockChannelManager.unsentQueue.peek().request.build()
+      .asInstanceOf[BrokerHeartbeatRequest].data()
+    assertEquals(2, request1.currentMetadataOffset())
+    assertEquals(1, request1.currentPublishedOffset())
+    assertTrue(request1.wantFence())
+
+    context.mockClient.prepareResponseFrom(new BrokerHeartbeatResponse(
+      new BrokerHeartbeatResponseData().setIsCaughtUp(true)), controllerNode)
+    TestUtils.retry(10000) {
+      context.poll()
+      manager.eventQueue.wakeup()
+      assertEquals(BrokerState.RECOVERY, manager.state)
+    }
+
+    // Assert we will send heartbeat with fence=false after first initialization
+    manager.initialCatchUpFuture.get()
+    val unfenceFuture = manager.setReadyToUnfence() // will send heartbeat request immediately here
+
+    TestUtils.waitUntilTrue(() => context.mockChannelManager.unsentQueue.size() > 0,
+      "Error waiting for lifecycleManager to send heartbeat")
+    val data = context.mockChannelManager.unsentQueue.peek().request.build()
+      .asInstanceOf[BrokerHeartbeatRequest].data()
+    assertEquals(2, request1.currentMetadataOffset())
+    assertEquals(1, request1.currentPublishedOffset())
+    assertFalse(data.wantFence())
+
+    context.mockClient.prepareResponseFrom(new BrokerHeartbeatResponse(
+      new BrokerHeartbeatResponseData().setIsFenced(false)), controllerNode)
+
+    TestUtils.retry(10000) {
+      context.poll()
+      manager.eventQueue.wakeup()
+      assertEquals(BrokerState.RUNNING, manager.state)
+    }
+
+    assertTrue(unfenceFuture.isDone)
     manager.close()
   }
 }

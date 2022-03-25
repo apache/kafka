@@ -29,7 +29,7 @@ class MockBrokerToControllerChannelManager(
   val retryTimeoutMs: Int = 60000,
   val requestTimeoutMs: Int = 30000
 ) extends BrokerToControllerChannelManager {
-  private val unsentQueue = new java.util.ArrayDeque[BrokerToControllerQueueItem]()
+  val unsentQueue = new java.util.ArrayDeque[BrokerToControllerQueueItem]()
 
   client.setNodeApiVersions(controllerApiVersions)
 

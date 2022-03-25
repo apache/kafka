@@ -29,8 +29,8 @@ public class BrokerHeartbeatRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<BrokerHeartbeatRequest> {
         private final BrokerHeartbeatRequestData data;
 
-        public Builder(BrokerHeartbeatRequestData data) {
-            super(ApiKeys.BROKER_HEARTBEAT);
+        public Builder(BrokerHeartbeatRequestData data, short version) {
+            super(ApiKeys.BROKER_HEARTBEAT, version);
             this.data = data;
         }
 

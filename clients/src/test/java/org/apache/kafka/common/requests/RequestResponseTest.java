@@ -3252,9 +3252,10 @@ public class RequestResponseTest {
                 .setBrokerId(1)
                 .setBrokerEpoch(1)
                 .setCurrentMetadataOffset(1)
+                .setCurrentPublishedOffset(1)
                 .setWantFence(false)
                 .setWantShutDown(false);
-        return new BrokerHeartbeatRequest.Builder(data).build(v);
+        return new BrokerHeartbeatRequest.Builder(data, ApiKeys.BROKER_HEARTBEAT.latestVersion()).build(v);
     }
 
     private BrokerHeartbeatResponse createBrokerHeartbeatResponse() {

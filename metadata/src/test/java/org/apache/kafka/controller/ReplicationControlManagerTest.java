@@ -309,7 +309,10 @@ public class ReplicationControlManagerTest {
                     processBrokerHeartbeat(new BrokerHeartbeatRequestData().
                         setBrokerId(brokerId).setBrokerEpoch(brokerId + 100).
                         setCurrentMetadataOffset(1).
-                        setWantFence(false).setWantShutDown(false), 0);
+                        setCurrentPublishedOffset(1).
+                        setWantFence(false).setWantShutDown(false),
+                        BrokerHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION,
+                        0);
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     result.response());
                 replay(result.records());
