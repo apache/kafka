@@ -162,6 +162,53 @@ public class TaskMovementTest {
     }
 
     @Test
+    public void shouldMoveTasksToMostCaughtUpClientsAndAssignWarmupReplicasInTheirPlace() {
+        final int maxWarmupReplicas = Integer.MAX_VALUE;
+        final Map<TaskId, Long> client1Lags = mkMap(mkEntry(TASK_0_0, 10000L), mkEntry(TASK_0_1, 20000L), mkEntry(TASK_0_2, 30000L));
+        final Map<TaskId, Long> client2Lags = mkMap(mkEntry(TASK_0_2, 10000L), mkEntry(TASK_0_0, 20000L), mkEntry(TASK_0_1, 30000L));
+        final Map<TaskId, Long> client3Lags = mkMap(mkEntry(TASK_0_1, 10000L), mkEntry(TASK_0_2, 20000L), mkEntry(TASK_0_0, 30000L));
+
+        final ClientState client1 = getClientStateWithLags(mkSet(TASK_0_0), client1Lags);
+        final ClientState client2 = getClientStateWithLags(mkSet(TASK_0_1), client2Lags);
+        final ClientState client3 = getClientStateWithLags(mkSet(TASK_0_2), client3Lags);
+        // To test when the task is already a standby on the most caught up node
+        client3.assignStandby(TASK_0_1);
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = mkMap(
+                mkEntry(TASK_0_0, mkSortedSet()),
+                mkEntry(TASK_0_1, mkSortedSet()),
+                mkEntry(TASK_0_2, mkSortedSet())
+        );
+        final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = mkMap(
+                mkEntry(TASK_0_0, mkOrderedSet(UUID_1, UUID_2, UUID_3)),
+                mkEntry(TASK_0_1, mkOrderedSet(UUID_3, UUID_1, UUID_2)),
+                mkEntry(TASK_0_2, mkOrderedSet(UUID_2, UUID_3, UUID_1))
+        );
+
+        assertThat(
+                "should have assigned movements",
+                assignActiveTaskMovements(
+                        tasksToCaughtUpClients,
+                        tasksToClientByLag,
+                        clientStates,
+                        new TreeMap<>(),
+                        new AtomicInteger(maxWarmupReplicas)
+                ),
+                is(2)
+        );
+        // The active tasks have changed to the ones that each client is most caught up on
+        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_0)));
+        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_2)));
+        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_1)));
+
+        // we assigned warmups to migrate to the input active assignment
+        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
+        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_1)));
+        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_2)));
+    }
+
+    @Test
     public void shouldOnlyGetUpToMaxWarmupReplicasAndReturnTrue() {
         final int maxWarmupReplicas = 1;
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
@@ -260,7 +307,12 @@ public class TaskMovementTest {
                 lags.put(task, 10000L);
             }
         }
-        final ClientState client1 = new ClientState(activeTasks, emptySet(), lags, emptyMap(), 1);
+        return getClientStateWithLags(activeTasks, lags);
+    }
+
+    private static ClientState getClientStateWithLags(final Set<TaskId> activeTasks,
+                                                      final Map<TaskId, Long> taskLags) {
+        final ClientState client1 = new ClientState(activeTasks, emptySet(), taskLags, emptyMap(), 1);
         client1.assignActiveTasks(activeTasks);
         return client1;
     }
