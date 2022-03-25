@@ -35,7 +35,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.controller.Controller;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -376,11 +375,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
      * Wait for a controller to mark all the brokers as ready (registered and unfenced).
      */
     public void waitForReadyBrokers() throws ExecutionException, InterruptedException {
-        // We can choose any controller, not just the active controller.
-        // If we choose a standby controller, we will wait slightly longer.
-        ControllerServer controllerServer = controllers.values().iterator().next();
-        Controller controller = controllerServer.controller();
-        controller.waitForReadyBrokers(brokers.size()).get();
+        // Make sure all metadata listeners have finished publishing all UnfenceBrokerRecords
+        TestUtils.waitForCondition(() ->
+                brokers().values().stream().allMatch(brokerServer -> brokerServer.metadataCache().getAliveBrokers().size() == brokers.size()),
+            "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
     public Properties controllerClientProperties() throws ExecutionException, InterruptedException {

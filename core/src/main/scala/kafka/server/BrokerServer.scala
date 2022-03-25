@@ -182,7 +182,9 @@ class BrokerServer(
 
       config.dynamicConfig.initialize(zkClientOpt = None)
 
-      lifecycleManager = new BrokerLifecycleManager(config, time, threadNamePrefix)
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
+
+      lifecycleManager = new BrokerLifecycleManager(config, time, metadataCache, threadNamePrefix)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -194,8 +196,6 @@ class BrokerServer(
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
-
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
 
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
@@ -331,10 +331,22 @@ class BrokerServer(
           setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
           setSecurityProtocol(ep.securityProtocol.id))
       }
-      lifecycleManager.start(() => metadataListener.highestMetadataOffset,
-        BrokerToControllerChannelManager(controllerNodeProvider, time, metrics, config,
-          "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong),
-        metaProps.clusterId, networkListeners, supportedFeatures)
+
+      lifecycleManager.start(
+        () => metadataListener.highestMetadataOffset,
+        BrokerToControllerChannelManager(
+          controllerNodeProvider,
+          time,
+          metrics,
+          config,
+          "heartbeat",
+          threadNamePrefix,
+          config.brokerSessionTimeoutMs.toLong
+        ),
+        metaProps.clusterId,
+        networkListeners,
+        supportedFeatures
+      )
 
       // Register a listener with the Raft layer to receive metadata event notifications
       raftManager.register(metadataListener)
@@ -418,6 +430,10 @@ class BrokerServer(
         featureCache,
         dynamicConfigHandlers.toMap,
         authorizer)
+
+      // After first catchup, Reset to lastCommittedOffset, then a broker will not advertise an
+      // offset to the controller until it has been published
+      lifecycleManager.setHighestMetadataOffsetProvider(() => metadataPublisher.lastCommittedOffset)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

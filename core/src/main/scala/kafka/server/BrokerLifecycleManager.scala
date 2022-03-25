@@ -51,9 +51,12 @@ import scala.jdk.CollectionConverters._
  * In some cases we expose a volatile variable which can be read from any thread, but only
  * written from the event queue thread.
  */
-class BrokerLifecycleManager(val config: KafkaConfig,
-                             val time: Time,
-                             val threadNamePrefix: Option[String]) extends Logging {
+class BrokerLifecycleManager(
+  val config: KafkaConfig,
+  val time: Time,
+  metadataCache: KRaftMetadataCache,
+  val threadNamePrefix: Option[String]
+) extends Logging {
   val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
 
   this.logIdent = logContext.logPrefix()
@@ -124,7 +127,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * True only if we are ready to unfence the broker.  This variable can only be read or
    * written from the event queue thread.
    */
-  private var readyToUnfence = false
+  private var initialPublishingFinished = false
 
   /**
    * True if we sent a event queue to the active controller requesting controlled
@@ -189,8 +192,12 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }
 
+  def setHighestMetadataOffsetProvider(highestMetadataOffsetProvider: () => Long): Unit = {
+    _highestMetadataOffsetProvider = highestMetadataOffsetProvider
+  }
+
   def setReadyToUnfence(): Unit = {
-    eventQueue.append(new SetReadyToUnfenceEvent())
+    eventQueue.append(new SetInitialPublishingFinished())
   }
 
   def brokerEpoch: Long = _brokerEpoch
@@ -240,9 +247,9 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     eventQueue.close()
   }
 
-  private class SetReadyToUnfenceEvent() extends EventQueue.Event {
+  private class SetInitialPublishingFinished() extends EventQueue.Event {
     override def run(): Unit = {
-      readyToUnfence = true
+      initialPublishingFinished = true
       scheduleNextCommunicationImmediately()
     }
   }
@@ -338,7 +345,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       setBrokerEpoch(_brokerEpoch).
       setBrokerId(nodeId).
       setCurrentMetadataOffset(metadataOffset).
-      setWantFence(!readyToUnfence).
+      setWantFence(!(initialPublishingFinished && metadataCache.readyToUnfence)).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat ${data}")

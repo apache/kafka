@@ -32,7 +32,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{BeforeEach, Disabled, Tag}
+import org.junit.jupiter.api.{BeforeEach, Tag}
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
@@ -56,12 +56,12 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testAllTopicPartition(): Unit = {
+    cluster.waitForReadyBrokers()
     val client = cluster.createAdminClient()
     val topic = "unclean-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
-    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -86,14 +86,13 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
-  @Disabled // TODO: re-enable until we fixed KAFKA-8541
   def testTopicPartition(): Unit = {
+    cluster.waitForReadyBrokers()
     val client = cluster.createAdminClient()
     val topic = "unclean-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
-    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -120,14 +119,13 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
-  @Disabled // TODO: re-enable until we fixed KAFKA-8785
   def testPathToJsonFile(): Unit = {
+    cluster.waitForReadyBrokers()
     val client = cluster.createAdminClient()
     val topic = "unclean-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
-    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -155,14 +153,13 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
-  @Disabled // TODO: re-enable after KAFKA-13737 is fixed
   def testPreferredReplicaElection(): Unit = {
+    cluster.waitForReadyBrokers()
     val client = cluster.createAdminClient()
     val topic = "preferred-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
-    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -200,6 +197,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testElectionResultOutput(): Unit = {
+    cluster.waitForReadyBrokers()
     val client = cluster.createAdminClient()
     val topic = "non-preferred-topic"
     val partition0 = 0
@@ -207,7 +205,6 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val assignment0 = Seq(broker2, broker3)
     val assignment1 = Seq(broker3, broker2)
 
-    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(
       partition0 -> assignment0,
       partition1 -> assignment1

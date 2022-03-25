@@ -30,4 +30,6 @@ trait MetadataPublisher {
    *                               delta to the previous image.
    */
   def publish(delta: MetadataDelta, newImage: MetadataImage): Unit
+
+  def lastCommittedOffset: Long
 }

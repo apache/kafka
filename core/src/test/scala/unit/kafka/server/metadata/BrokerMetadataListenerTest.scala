@@ -84,6 +84,7 @@ class BrokerMetadataListenerTest {
             Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true),
             delta.clusterDelta().broker(1))
         }
+        override def lastCommittedOffset: Long = -1
       }).get()
     } finally {
       listener.close()
@@ -120,10 +121,12 @@ class BrokerMetadataListenerTest {
   }
 
   class MockMetadataPublisher extends MetadataPublisher {
-    var image = MetadataImage.EMPTY
+    var image: MetadataImage = MetadataImage.EMPTY
+    var lastCommittedOffset: Long = -1
 
     override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
       image = newImage
+      lastCommittedOffset = newImage.highestOffsetAndEpoch().offset
     }
   }
 

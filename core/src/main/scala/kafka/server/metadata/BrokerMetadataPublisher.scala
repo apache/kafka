@@ -116,6 +116,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    */
   var _firstPublish = true
 
+  var lastCommittedOffset: Long = -1
+
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
 
@@ -247,6 +249,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         throw t
     } finally {
       _firstPublish = false
+      lastCommittedOffset = newImage.highestOffsetAndEpoch().offset
     }
   }
 
