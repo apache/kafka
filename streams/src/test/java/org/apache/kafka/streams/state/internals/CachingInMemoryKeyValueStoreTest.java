@@ -221,17 +221,44 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     }
 
     @Test
-    public void shouldMatchPositionAfterPut() {
+    public void shouldMatchPositionAfterPutWithFlushListener() {
+        store.setFlushListener(record -> { }, false);
+        shouldMatchPositionAfterPut();
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPutWithoutFlushListener() {
+        store.setFlushListener(null, false);
+        shouldMatchPositionAfterPut();
+    }
+
+    private void shouldMatchPositionAfterPut() {
         context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
         store.put(bytesKey("key1"), bytesValue("value1"));
         context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
         store.put(bytesKey("key2"), bytesValue("value2"));
-        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
-        store.put(bytesKey("key3"), bytesValue("value3"));
 
-        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
-        final Position actual = store.getPosition();
-        assertEquals(expected, actual);
+        // Position should correspond to the last record's context, not the current context.
+        context.setRecordContext(
+            new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders())
+        );
+
+        assertEquals(
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            store.getPosition()
+        );
+        assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
+
+        store.flush();
+
+        assertEquals(
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            store.getPosition()
+        );
+        assertEquals(
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            underlyingStore.getPosition()
+        );
     }
 
     private byte[] bytesValue(final String value) {

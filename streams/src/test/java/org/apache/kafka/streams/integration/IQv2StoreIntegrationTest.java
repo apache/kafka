@@ -760,45 +760,50 @@ public class IQv2StoreIntegrationTest {
 
     @Test
     public void verifyStore() {
-        if (storeToTest.global()) {
-            // See KAFKA-13523
-            globalShouldRejectAllQueries();
-        } else {
-            shouldRejectUnknownQuery();
-            shouldCollectExecutionInfo();
-            shouldCollectExecutionInfoUnderFailure();
+        try {
+            if (storeToTest.global()) {
+                // See KAFKA-13523
+                globalShouldRejectAllQueries();
+            } else {
+                shouldRejectUnknownQuery();
+                shouldCollectExecutionInfo();
+                shouldCollectExecutionInfoUnderFailure();
 
-            if (storeToTest.keyValue()) {
-                if (storeToTest.timestamped()) {
-                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
-                        ValueAndTimestamp::value;
-                    shouldHandleKeyQuery(2, valueExtractor, 2);
-                    shouldHandleRangeQueries(valueExtractor);
-                } else {
-                    final Function<Integer, Integer> valueExtractor = Function.identity();
-                    shouldHandleKeyQuery(2, valueExtractor, 2);
-                    shouldHandleRangeQueries(valueExtractor);
-                }
-            }
-
-            if (storeToTest.isWindowed()) {
-                if (storeToTest.timestamped()) {
-                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                if (storeToTest.keyValue()) {
+                    if (storeToTest.timestamped()) {
+                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
                             ValueAndTimestamp::value;
-                    shouldHandleWindowKeyQueries(valueExtractor);
-                    shouldHandleWindowRangeQueries(valueExtractor);
-                } else {
-                    final Function<Integer, Integer> valueExtractor = Function.identity();
-                    shouldHandleWindowKeyQueries(valueExtractor);
-                    shouldHandleWindowRangeQueries(valueExtractor);
+                        shouldHandleKeyQuery(2, valueExtractor, 2);
+                        shouldHandleRangeQueries(valueExtractor);
+                    } else {
+                        final Function<Integer, Integer> valueExtractor = Function.identity();
+                        shouldHandleKeyQuery(2, valueExtractor, 2);
+                        shouldHandleRangeQueries(valueExtractor);
+                    }
+                }
+
+                if (storeToTest.isWindowed()) {
+                    if (storeToTest.timestamped()) {
+                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                            ValueAndTimestamp::value;
+                        shouldHandleWindowKeyQueries(valueExtractor);
+                        shouldHandleWindowRangeQueries(valueExtractor);
+                    } else {
+                        final Function<Integer, Integer> valueExtractor = Function.identity();
+                        shouldHandleWindowKeyQueries(valueExtractor);
+                        shouldHandleWindowRangeQueries(valueExtractor);
+                    }
+                }
+
+                if (storeToTest.isSession()) {
+                    // Note there's no "timestamped" differentiation here.
+                    // Idiosyncratically, SessionStores are _never_ timestamped.
+                    shouldHandleSessionKeyQueries();
                 }
             }
-
-            if (storeToTest.isSession()) {
-                // Note there's no "timestamped" differentiation here.
-                // Idiosyncratically, SessionStores are _never_ timestamped.
-                shouldHandleSessionKeyQueries();
-            }
+        } catch (final AssertionError e) {
+            LOG.error("Failed assertion", e);
+            throw e;
         }
     }
 
@@ -1350,7 +1355,7 @@ public class IQv2StoreIntegrationTest {
                                                    final String supplier, final String kind) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind;
+                + "-" + kind + "-" + RANDOM.nextInt();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

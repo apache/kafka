@@ -37,12 +37,15 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew integrationTest
     
 ### Force re-running tests without code change ###
-    ./gradlew cleanTest test
-    ./gradlew cleanTest unitTest
-    ./gradlew cleanTest integrationTest
+    ./gradlew -Prerun-tests test
+    ./gradlew -Prerun-tests unitTest
+    ./gradlew -Prerun-tests integrationTest
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
+
+### Repeatedly running a particular unit/integration test ###
+    I=0; while ./gradlew clients:test -Prerun-tests --tests RequestResponseTest --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
 
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
