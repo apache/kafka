@@ -545,7 +545,8 @@ public class KafkaAdminClient extends AdminClient {
                 logContext,
                 (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
                 null,
-                leastLoadedNodeAlgorithm);
+                leastLoadedNodeAlgorithm,
+                Collections.emptyList());
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {

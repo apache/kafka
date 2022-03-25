@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -41,6 +42,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockClusterResourceListener;
 import org.junit.jupiter.api.Test;
+import org.apache.kafka.test.MockSelector;
+import org.apache.kafka.test.TestUtils;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -66,10 +69,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MetadataTest {
 
+    protected final int defaultRequestTimeoutMs = 1000;
+    protected final MockTime time = new MockTime();
+    protected final MockSelector selector = new MockSelector(time);
+    protected final Node node = TestUtils.singletonCluster().nodes().iterator().next();
+
     private long refreshBackoffMs = 100;
     private long metadataExpireMs = 1000;
+    private final long connectionSetupTimeoutMsTest = 5 * 1000;
+    private final long connectionSetupTimeoutMaxMsTest = 127 * 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
             new ClusterResourceListeners());
+
+    private Metadata clusterMetadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
+        new ClusterResourceListeners(), 0);
+
+    private NetworkClient clusterClient = new NetworkClient(selector, clusterMetadata, "mock-cluster-md", Integer.MAX_VALUE,
+        0, 0, 64 * 1024, 64 * 1024,
+        defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true,
+        new ApiVersions(), null, new LogContext(), null,
+        LeastLoadedNodeAlgorithm.VANILLA, Collections.singletonList("some.invalid.hostname.foo.bar.local:9999"));
 
     private static MetadataResponse emptyMetadataResponse() {
         return RequestTestUtils.metadataResponse(
@@ -88,6 +107,24 @@ public class MetadataTest {
     public void testMetadataUpdateAfterClose() {
         metadata.close();
         assertThrows(IllegalStateException.class, () -> metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, 1000));
+    }
+
+    @Test
+    public void testResolveBootstrapAfterClusterMetadataTimeout() {
+        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(Collections.singletonList("example.com:10000"));
+        //bootstrap the metadata cache with some valid nodes
+        clusterMetadata.bootstrap(addresses);
+
+        //first time call leastLoadedNode on the created NetworkClient should pass since nodesTriedSinceLastSuccessfulRefresh is 0
+        clusterClient.leastLoadedNode(time.milliseconds());
+
+        //simulate metadata refresh attempt by incrementing the nodesTriedSinceLastSuccessfulRefresh by 1
+        clusterMetadata.incrementNodesTriedSinceLastSuccessfulRefresh();
+
+        //now second call to leastLoadedNode on the NetworkClient should fail since we passed an invalid bootstrap server to it
+        //it should throw a ConfigException of no resolvable bootstrap server in provided urls
+        clusterMetadata.requestClusterMetadataUpdateFromBootstrap();
+        assertThrows(ConfigException.class, () -> clusterClient.leastLoadedNode(time.milliseconds()));
     }
 
     private static void checkTimeToNextUpdate(long refreshBackoffMs, long metadataExpireMs) {

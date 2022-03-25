@@ -436,8 +436,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         logContext,
                         clusterResourceListeners,
                         Time.SYSTEM,
+                        config.getLong(ProducerConfig.METADATA_TOPIC_EXPIRY_MS_CONFIG),
                         config.getBoolean(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
-                        metrics);
+                        metrics,
+                        config.getLong(ProducerConfig.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG));
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");
@@ -485,7 +487,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throttleTimeSensor,
                 logContext,
                 producerConfig.getString(ProducerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG),
-                leastLoadedNodeAlgorithm);
+                leastLoadedNodeAlgorithm,
+                producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
                 client,

@@ -55,6 +55,10 @@ public class CommonClientConfigs {
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 
+
+    public static final String METADATA_TOPIC_EXPIRY_MS_CONFIG = "metadata.topic.expiry.ms";
+    public static final String METADATA_TOPIC_EXPIRY_MS_DOC = "The period of time in milliseconds before we expire topic from metadata cache";
+
     public static final String SEND_BUFFER_CONFIG = "send.buffer.bytes";
     public static final String SEND_BUFFER_DOC = "The size of the TCP send buffer (SO_SNDBUF) to use when sending data. If the value is -1, the OS default will be used.";
     public static final int SEND_BUFFER_LOWER_BOUND = -1;
@@ -195,6 +199,12 @@ public class CommonClientConfigs {
                                                                  + "and are currently VANILLA (picks node with least expected latency) and AT_LEAST_THREE (random out "
                                                                  + "of 3 lowest-expected-latency nodes)";
     public static final String DEFAULT_LEAST_LOADED_NODE_ALGORITHM = LeastLoadedNodeAlgorithm.VANILLA.name();
+
+    public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG = "li.client.cluster.metadata.expire.time.ms";
+    public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_DOC = "The configuration controls the max time the client cluster metadata can remain idle/unchanged before "
+        + "trying to resolve the bootstrap servers from given url again; different from the other metadata.max.age.ms config, "
+        + "which will try to refresh metadata by choosing from existing resolved node set, this config will force resolving "
+        + "the bootstrap url again to get new node set and use the new node set to send update metadata request";
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

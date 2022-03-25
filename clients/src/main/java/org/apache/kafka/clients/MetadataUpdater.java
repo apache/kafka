@@ -46,6 +46,12 @@ public interface MetadataUpdater extends Closeable {
     boolean isUpdateDue(long now);
 
     /**
+     * Returns true if the cluster metadata hasn't refreshed for li.client.cluster.metadata.expire.time.ms
+     * and has tried at least one node in the cached metadata node set
+     */
+    boolean isUpdateClusterMetadataDue(long now);
+
+    /**
      * Starts a cluster metadata update if needed and possible. Returns the time until the metadata update (which would
      * be 0 if an update has been started as a result of this call).
      *

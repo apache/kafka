@@ -46,7 +46,20 @@ public class ConsumerMetadata extends Metadata {
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
                             Metrics metrics) {
-        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
+        this(refreshBackoffMs, metadataExpireMs, includeInternalTopics, allowAutoTopicCreation, subscription,
+            logContext, clusterResourceListeners, metrics, Long.MAX_VALUE);
+    }
+
+    public ConsumerMetadata(long refreshBackoffMs,
+        long metadataExpireMs,
+        boolean includeInternalTopics,
+        boolean allowAutoTopicCreation,
+        SubscriptionState subscription,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        Metrics metrics,
+        long clusterMetadataExpireMs) {
+        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, clusterMetadataExpireMs);
         this.includeInternalTopics = includeInternalTopics;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.subscription = subscription;

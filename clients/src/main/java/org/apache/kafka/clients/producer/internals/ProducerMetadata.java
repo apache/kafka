@@ -37,6 +37,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public class ProducerMetadata extends Metadata {
+    public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
     // If a topic hasn't been accessed for this many milliseconds, it is removed from the cache.
     private final long metadataIdleMs;
 
@@ -46,6 +47,7 @@ public class ProducerMetadata extends Metadata {
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
     private final Time time;
+    private final long topicExpiryMs;
     private final Sensor metadataRequestRateSensor;
     private final Metrics metrics;
 
@@ -59,7 +61,21 @@ public class ProducerMetadata extends Metadata {
         LogContext logContext,
         ClusterResourceListeners clusterResourceListeners,
         Time time) {
-        this(refreshBackoffMs, metadataExpireMs, metadataIdleMs, logContext, clusterResourceListeners, time, true, new Metrics());
+        this(refreshBackoffMs, metadataExpireMs, metadataIdleMs, logContext, clusterResourceListeners, time, TOPIC_EXPIRY_MS, true, new Metrics());
+    }
+
+
+    public ProducerMetadata(long refreshBackoffMs,
+        long metadataExpireMs,
+        long metadataIdleMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        Time time,
+        long topicExpiryMs,
+        boolean allowAutoTopicCreation,
+        Metrics metrics) {
+        this(refreshBackoffMs, metadataExpireMs, metadataIdleMs, logContext, clusterResourceListeners, time,
+            topicExpiryMs, allowAutoTopicCreation, metrics, Long.MAX_VALUE);
     }
 
     public ProducerMetadata(long refreshBackoffMs,
@@ -68,12 +84,15 @@ public class ProducerMetadata extends Metadata {
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
                             Time time,
+                            long topicExpiryMs,
                             boolean allowAutoTopicCreation,
-                            Metrics metrics) {
-        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
+                            Metrics metrics,
+                            long clusterMetadataExpireMs) {
+        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, clusterMetadataExpireMs);
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
+        this.topicExpiryMs = topicExpiryMs;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.metrics = metrics;
         this.metadataRequestRateSensor = metrics.sensor("producer-metadata-request-rate");
