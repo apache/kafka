@@ -1338,29 +1338,33 @@ class AbstractFetcherThreadTest {
 
     val topicPartition = mockTopicPartition(10, 100)
     val threadManager: TestThreadResizeManager = new TestThreadResizeManager()
-    threadManager.addFetcherForPartitions(topicPartition.map(_ -> InitialFetchState(None, new BrokerEndPoint(0, "localhost", 9092), 0, 1)).toMap)
+    try {
+      threadManager.addFetcherForPartitions(topicPartition.map(_ -> InitialFetchState(None, new BrokerEndPoint(0, "localhost", 9092), 0, 1)).toMap)
 
-    threadManager.resizeThreadPool(60)
-    val threadPartitionCount = threadManager.fetcherThreadMap.map {case (brokerFetcher, thread) => s"[${brokerFetcher.fetcherId}]${thread.getName}" -> thread.partitions.size}
-    val tpsWithoutResize = mutable.Map[Int, Set[TopicPartition]]()
-    threadManager.fetcherThreadMap.foreach {
-      case (brokerFetcher, thread) => {
-        val fetcherId = brokerFetcher.fetcherId
-        val tpSet = mutable.Set[TopicPartition]()
-        thread.partitions.foreach(tp => {
-          val id = threadManager.getFetcherId(tp)
-          if (!id.equals(fetcherId)) {
-            print(s"tp: $tp with fetcherId $fetcherId which should be $id, error when resizing threads.\n")
-            tpSet += tp
-          }
-        })
-        if (!tpSet.isEmpty)
-          tpsWithoutResize += fetcherId -> tpSet
+      threadManager.resizeThreadPool(60)
+      val threadPartitionCount = threadManager.fetcherThreadMap.map {case (brokerFetcher, thread) => s"[${brokerFetcher.fetcherId}]${thread.getName}" -> thread.partitions.size}
+      val tpsWithoutResize = mutable.Map[Int, Set[TopicPartition]]()
+      threadManager.fetcherThreadMap.foreach {
+        case (brokerFetcher, thread) => {
+          val fetcherId = brokerFetcher.fetcherId
+          val tpSet = mutable.Set[TopicPartition]()
+          thread.partitions.foreach(tp => {
+            val id = threadManager.getFetcherId(tp)
+            if (!id.equals(fetcherId)) {
+              print(s"tp: $tp with fetcherId $fetcherId which should be $id, error when resizing threads.\n")
+              tpSet += tp
+            }
+          })
+          if (!tpSet.isEmpty)
+            tpsWithoutResize += fetcherId -> tpSet
+        }
       }
+      print(s"Current fetcher assigned partition count Map: $threadPartitionCount\nFetcher partition without resize: $tpsWithoutResize")
+      // All partitions should be redistributed to fetchers with new thread number
+      assertEquals(0, tpsWithoutResize.size)
+    } finally {
+      threadManager.closeAllFetchers()
     }
-    print(s"Current fetcher assigned partition count Map: $threadPartitionCount\nFetcher partition without resize: $tpsWithoutResize")
-    // All partitions should be redistributed to fetchers with new thread number
-    assertEquals(0, tpsWithoutResize.size)
   }
 
   def mockTopicPartition(topicNum: Int, partitionNum: Int): Set[TopicPartition] = {
