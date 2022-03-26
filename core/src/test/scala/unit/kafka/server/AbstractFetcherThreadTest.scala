@@ -1358,7 +1358,8 @@ class AbstractFetcherThreadTest {
           tpsWithoutResize += fetcherId -> tpSet
       }
     }
-    print(s"current partition distributions: $threadPartitionCount\nerror distributions: $tpsWithoutResize")
+    print(s"Current fetcher assigned partition count Map: $threadPartitionCount\nFetcher partition without resize: $tpsWithoutResize")
+    // All partitions should be redistributed to fetchers with new thread number
     assertEquals(0, tpsWithoutResize.size)
   }
 
