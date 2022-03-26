@@ -54,7 +54,6 @@ import scala.jdk.CollectionConverters._
 class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
-  metadataCache: KRaftMetadataCache,
   val threadNamePrefix: Option[String]
 ) extends Logging {
   val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
@@ -118,14 +117,16 @@ class BrokerLifecycleManager(
   @volatile private var _state = BrokerState.NOT_RUNNING
 
   /**
-   * A thread-safe callback function which gives this manager the current highest metadata
-   * offset.  This variable can only be read or written from the event queue thread.
+   * A thread-safe callback function which gives this manager the current highest seen
+   * offset. Before metadata listener finishing first publish operation, we return highest
+   * metadata offset, after the first operation completed, we return highest published offset.
+   * This variable can only be read or written from the event queue thread.
    */
-  private var _highestMetadataOffsetProvider: () => Long = _
+  private var _highestSeenOffsetProvider: () => Long = _
 
   /**
-   * True only if we are ready to unfence the broker.  This variable can only be read or
-   * written from the event queue thread.
+   * True only if the metadata listener complete its first publish operation. This variable
+   * can only be read or written from the event queue thread.
    */
   private var initialPublishingFinished = false
 
@@ -192,12 +193,8 @@ class BrokerLifecycleManager(
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }
 
-  def setHighestMetadataOffsetProvider(highestMetadataOffsetProvider: () => Long): Unit = {
-    _highestMetadataOffsetProvider = highestMetadataOffsetProvider
-  }
-
-  def setReadyToUnfence(): Unit = {
-    eventQueue.append(new SetInitialPublishingFinished())
+  def setInitialPublishingFinished(publishedOffsetProvider: () => Long): Unit = {
+    eventQueue.append(new SetInitialPublishingFinished(publishedOffsetProvider))
   }
 
   def brokerEpoch: Long = _brokerEpoch
@@ -247,8 +244,11 @@ class BrokerLifecycleManager(
     eventQueue.close()
   }
 
-  private class SetInitialPublishingFinished() extends EventQueue.Event {
+  private class SetInitialPublishingFinished(publishedOffsetProvider: () => Long) extends EventQueue.Event {
     override def run(): Unit = {
+      // After first catchup, Reset to lastCommittedOffset, then a broker will not advertise an
+      // offset to the controller until it has been published
+      _highestSeenOffsetProvider = publishedOffsetProvider
       initialPublishingFinished = true
       scheduleNextCommunicationImmediately()
     }
@@ -260,7 +260,7 @@ class BrokerLifecycleManager(
                      advertisedListeners: ListenerCollection,
                      supportedFeatures: util.Map[String, VersionRange]) extends EventQueue.Event {
     override def run(): Unit = {
-      _highestMetadataOffsetProvider = highestMetadataOffsetProvider
+      _highestSeenOffsetProvider = highestMetadataOffsetProvider
       _channelManager = channelManager
       _channelManager.start()
       _state = BrokerState.STARTING
@@ -340,12 +340,12 @@ class BrokerLifecycleManager(
   }
 
   private def sendBrokerHeartbeat(): Unit = {
-    val metadataOffset = _highestMetadataOffsetProvider()
+    val metadataOffset = _highestSeenOffsetProvider()
     val data = new BrokerHeartbeatRequestData().
       setBrokerEpoch(_brokerEpoch).
       setBrokerId(nodeId).
       setCurrentMetadataOffset(metadataOffset).
-      setWantFence(!(initialPublishingFinished && metadataCache.readyToUnfence)).
+      setWantFence(!initialPublishingFinished).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat ${data}")

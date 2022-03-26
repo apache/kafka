@@ -182,9 +182,7 @@ class BrokerServer(
 
       config.dynamicConfig.initialize(zkClientOpt = None)
 
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
-
-      lifecycleManager = new BrokerLifecycleManager(config, time, metadataCache, threadNamePrefix)
+      lifecycleManager = new BrokerLifecycleManager(config, time, threadNamePrefix)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -196,6 +194,8 @@ class BrokerServer(
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
+
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
 
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
@@ -431,10 +431,6 @@ class BrokerServer(
         dynamicConfigHandlers.toMap,
         authorizer)
 
-      // After first catchup, Reset to lastCommittedOffset, then a broker will not advertise an
-      // offset to the controller until it has been published
-      lifecycleManager.setHighestMetadataOffsetProvider(() => metadataPublisher.lastCommittedOffset)
-
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
@@ -447,9 +443,10 @@ class BrokerServer(
       // Enable inbound TCP connections.
       socketServer.startProcessingRequests(authorizerFutures)
 
-      // We're now ready to unfence the broker. This also allows this broker to transition
-      // from RECOVERY state to RUNNING state, once the controller unfences the broker.
-      lifecycleManager.setReadyToUnfence()
+      // We're now ready to unfence the broker if the broker has consumed its own registration.
+      // This also allows this broker to transition from RECOVERY state to RUNNING state, once
+      // the controller unfences the broker.
+      lifecycleManager.setInitialPublishingFinished(() => metadataPublisher.lastCommittedOffset)
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {

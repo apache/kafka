@@ -201,10 +201,6 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     Option(_currentImage.cluster().broker(brokerId)).count(!_.fenced()) == 1
   }
 
-  def readyToUnfence: Boolean = {
-    _currentImage.cluster().broker(brokerId) != null
-  }
-
   override def getAliveBrokers(): Iterable[BrokerMetadata] = getAliveBrokers(_currentImage)
 
   private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
