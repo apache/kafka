@@ -17,16 +17,16 @@
 
 package kafka.server
 
+import kafka.admin.AdminUtils
+
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.AbstractFetcherThread.ReplicaFetch
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
@@ -1333,4 +1333,88 @@ class AbstractFetcherThreadTest {
 
   }
 
+  @Test
+  def testResize(): Unit = {
+
+    val topicPartition = mockTopicPartition(10, 100)
+    val threadManager: TestThreadResizeManager = new TestThreadResizeManager()
+    threadManager.addFetcherForPartitions(topicPartition.map(_ -> InitialFetchState(None, new BrokerEndPoint(0, "localhost", 9092), 0, 1)).toMap)
+
+    threadManager.resizeThreadPool(60)
+    val threadPartitionCount = threadManager.fetcherThreadMap.map {case (brokerFetcher, thread) => s"[${brokerFetcher.fetcherId}]${thread.getName}" -> thread.partitions.size}
+    val tpsWithoutResize = mutable.Map[Int, Set[TopicPartition]]()
+    threadManager.fetcherThreadMap.foreach {
+      case (brokerFetcher, thread) => {
+        val fetcherId = brokerFetcher.fetcherId
+        val tpSet = mutable.Set[TopicPartition]()
+        thread.partitions.foreach(tp => {
+          val id = threadManager.getFetcherId(tp)
+          if (!id.equals(fetcherId)) {
+            print(s"tp: $tp with fetcherId $fetcherId which should be $id, error when resizing threads.\n")
+            tpSet += tp
+          }
+        })
+        if (!tpSet.isEmpty)
+          tpsWithoutResize += fetcherId -> tpSet
+      }
+    }
+    print(s"current partition distributions: $threadPartitionCount\nerror distributions: $tpsWithoutResize")
+    assertEquals(0, tpsWithoutResize.size)
+  }
+
+  def mockTopicPartition(topicNum: Int, partitionNum: Int): Set[TopicPartition] = {
+    val res = mutable.Set[TopicPartition]()
+    val dict = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    val topicPrefix = "topic_"
+    for (i <- 0 to topicNum) {
+      for (j <- 0 to partitionNum) {
+        val topic = topicPrefix + dict(AdminUtils.rand.nextInt(i + 1))
+        res += new TopicPartition(topic, j)
+      }
+    }
+    res.toSet
+  }
+
+  class TestThreadResizeManager extends AbstractFetcherManager[TestResizeFetcherThread]("TestThreadResizeManager", "test-resize-thread", 10) {
+    override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): TestResizeFetcherThread = {
+      new TestResizeFetcherThread()
+    }
+  }
+
+  class TestResizeFetcherThread(val replicaId: Int = 0, val leaderId: Int = 1, fetchBackOffMs: Int = 0)
+    extends AbstractFetcherThread("test-resize-fetcher",
+      clientId = "mock-fetcher",
+      sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
+      failedPartitions,
+      fetchBackOffMs = fetchBackOffMs,
+      brokerTopicStats = new BrokerTopicStats) {
+    override protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
+      None
+    }
+
+    override protected def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {}
+
+    override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {}
+
+    override protected def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = ResultWithPartitions(None, Set.empty)
+
+    override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = Some(0)
+
+    override protected def logStartOffset(topicPartition: TopicPartition): Long = 1
+
+    override protected def logEndOffset(topicPartition: TopicPartition): Long = 1
+
+    override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(OffsetAndEpoch(1, 0))
+
+    override protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
+
+    override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
+
+    override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override protected val isOffsetForLeaderEpochSupported: Boolean = false
+    override protected val isTruncationOnFetchSupported: Boolean = false
+  }
 }
