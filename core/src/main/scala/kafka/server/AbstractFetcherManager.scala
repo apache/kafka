@@ -61,7 +61,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 
   def resizeThreadPool(newSize: Int): Unit = {
+    // Used to replace migratePartitions and solve the fetch problem
     def migratePartitions(newSize: Int): Unit = {
+      val allRemovedPartitionsMap = mutable.Map[TopicPartition, InitialFetchState]()
       fetcherThreadMap.forKeyValue { (id, thread) =>
         val partitionStates = removeFetcherForPartitions(thread.partitions)
         if (id.fetcherId >= newSize)
@@ -72,9 +74,11 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
             initOffset = currentFetchState.fetchOffset)
           topicPartition -> initialFetchState
         }
-        addFetcherForPartitions(fetchStates)
+        allRemovedPartitionsMap ++= fetchStates
       }
+      addFetcherForPartitions(allRemovedPartitionsMap)
     }
+
     lock synchronized {
       val currentSize = numFetchersPerBroker
       info(s"Resizing fetcher thread pool size from $currentSize to $newSize")
