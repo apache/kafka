@@ -78,7 +78,7 @@
 
   <pre class="line-numbers"><code class="language-text">      auto.leader.rebalance.enable=true</code></pre>
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
-  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-preferred-replica-election.sh --bootstrap-server broker_host:port</code></pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-leader-election.sh --bootstrap-server broker_host:port --election-type preferred --all-topic-partitions</code></pre>
 
   <h4 class="anchor-heading"><a id="basic_ops_racks" class="anchor-link"></a><a href="#basic_ops_racks">Balancing Replicas Across Racks</a></h4>
   The rack awareness feature spreads replicas of the same partition across different racks. This extends the guarantees Kafka provides for broker-failure to cover rack-failure, limiting the risk of data loss should all the brokers on a rack fail at once. The feature can also be applied to other broker groupings such as availability zones in EC2.
