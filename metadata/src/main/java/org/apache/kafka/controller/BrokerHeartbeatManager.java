@@ -536,9 +536,9 @@ public class BrokerHeartbeatManager {
                     return new BrokerControlStates(currentState, SHUTDOWN_NOW);
                 } else if (!request.wantFence()) {
                     if (request.currentMetadataOffset() >= lastCommittedOffset) {
-                        log.info("The request from broker {} to unfence has been granted " +
-                                "because it has caught up with the last committed metadata " +
-                                "offset {}.", brokerId, lastCommittedOffset);
+                        log.error("The request from broker {} to unfence has been granted " +
+                                "because it {} has caught up with the last committed metadata " +
+                                "offset {}.", brokerId, request.currentMetadataOffset(), lastCommittedOffset);
                         return new BrokerControlStates(currentState, UNFENCED);
                     } else {
                         if (log.isDebugEnabled()) {

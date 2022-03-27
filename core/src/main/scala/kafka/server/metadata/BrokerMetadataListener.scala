@@ -209,6 +209,7 @@ class BrokerMetadataListener(
 
         _highestOffset  = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
 
+        log.error(s"replay ${_highestOffset} ${messageAndVersion.message()}")
         delta.replay(highestMetadataOffset, epoch, messageAndVersion.message())
         numRecords += 1
         index += 1

@@ -35,7 +35,7 @@ def retryFlagsString(env) {
 }
 
 def doTest(env, target = "unitTest integrationTest") {
-  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION core:test --tests kafka.admin.LeaderElectionCommandTest kafka.admin.LeaderElectionCommandTest1 kafka.admin.LeaderElectionCommandTest2 kafka.admin.LeaderElectionCommandTest3 kafka.admin.LeaderElectionCommandTest3 kafka.admin.LeaderElectionCommandTest4 kafka.admin.LeaderElectionCommandTest5 kafka.admin.LeaderElectionCommandTest6 kafka.admin.LeaderElectionCommandTest7 kafka.admin.LeaderElectionCommandTest8 kafka.admin.LeaderElectionCommandTest9 \
       --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
   junit '**/build/test-results/**/TEST-*.xml'
