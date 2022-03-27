@@ -714,6 +714,7 @@ public class TopicAdmin implements AutoCloseable {
      *                          must be 0 or more
      * @return                  the map of offset for each topic partition, or an empty map if the supplied partitions
      *                          are null or empty
+     * @throws UnsupportedVersionException if the broker is too old to support the admin client API to read end offsets
      * @throws ConnectException if {@code timeoutDuration} is exhausted
      * @see TopicAdmin#endOffsets(Set)
      */
@@ -725,6 +726,9 @@ public class TopicAdmin implements AutoCloseable {
                     () -> "list offsets for topic partitions",
                     timeoutDuration,
                     retryBackoffMs);
+        } catch (UnsupportedVersionException e) {
+            // Older brokers don't support this admin method, so rethrow it without wrapping it
+            throw e;
         } catch (Exception e) {
             throw new ConnectException("Failed to list offsets for topic partitions.", e);
         }
