@@ -36,7 +36,7 @@ public class TopicPartitionMetadata {
     private final ProcessorMetadata processorMetadata;
 
     static TopicPartitionMetadata with(final long partitionTime, final ProcessorMetadata processorMetadata) {
-      return new TopicPartitionMetadata(partitionTime, processorMetadata);
+        return new TopicPartitionMetadata(partitionTime, processorMetadata);
     }
 
     private TopicPartitionMetadata(final long partitionTime, final ProcessorMetadata processorMetadata) {
@@ -46,11 +46,11 @@ public class TopicPartitionMetadata {
     }
 
     public long partitionTime() {
-      return partitionTime;
+        return partitionTime;
     }
 
     public ProcessorMetadata processorMetadata() {
-      return processorMetadata;
+        return processorMetadata;
     }
 
     public String encode() {
@@ -64,36 +64,36 @@ public class TopicPartitionMetadata {
     }
 
     public static TopicPartitionMetadata decode(final String encryptedString) {
-      long timestamp = RecordQueue.UNKNOWN;
-      ProcessorMetadata metadata = ProcessorMetadata.emptyMetadata();
+        long timestamp = RecordQueue.UNKNOWN;
+        ProcessorMetadata metadata = ProcessorMetadata.emptyMetadata();
 
-      if (encryptedString == null || encryptedString.isEmpty()) {
-        return with(timestamp, metadata);
-      }
-      try {
-        final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
-        final byte version = buffer.get();
-        switch (version) {
-          case (byte) 1:
-            timestamp = buffer.getLong();
-            break;
-          case LATEST_MAGIC_BYTE:
-            timestamp = buffer.getLong();
-            if (buffer.remaining() > 0) {
-              final byte[] metaBytes = new byte[buffer.remaining()];
-              buffer.get(metaBytes);
-              metadata = ProcessorMetadata.deserialize(metaBytes);
-            }
-            break;
-          default:
-            LOG.warn(
-                "Unsupported offset metadata version found. Supported version <= {}. Found version {}.",
-                LATEST_MAGIC_BYTE, version);
+        if (encryptedString == null || encryptedString.isEmpty()) {
+            return with(timestamp, metadata);
         }
-      } catch (final Exception exception) {
-        LOG.warn("Unsupported offset metadata found");
-      }
-      return with(timestamp, metadata);
+        try {
+            final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
+            final byte version = buffer.get();
+            switch (version) {
+                case (byte) 1:
+                    timestamp = buffer.getLong();
+                    break;
+                case LATEST_MAGIC_BYTE:
+                    timestamp = buffer.getLong();
+                    if (buffer.remaining() > 0) {
+                        final byte[] metaBytes = new byte[buffer.remaining()];
+                        buffer.get(metaBytes);
+                        metadata = ProcessorMetadata.deserialize(metaBytes);
+                    }
+                    break;
+                default:
+                    LOG.warn(
+                        "Unsupported offset metadata version found. Supported version <= {}. Found version {}.",
+                        LATEST_MAGIC_BYTE, version);
+            }
+        } catch (final Exception exception) {
+            LOG.warn("Unsupported offset metadata found");
+        }
+        return with(timestamp, metadata);
     }
 
     @Override
@@ -104,11 +104,11 @@ public class TopicPartitionMetadata {
     @Override
     public boolean equals(final Object obj) {
         if (obj == null || obj.getClass() != getClass()) {
-          return false;
+            return false;
         }
 
         if (obj == this) {
-          return true;
+            return true;
         }
 
         return partitionTime == ((TopicPartitionMetadata) obj).partitionTime

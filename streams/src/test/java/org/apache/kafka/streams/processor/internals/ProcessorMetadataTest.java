@@ -23,6 +23,8 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ProcessorMetadataTest {
 
@@ -87,4 +89,63 @@ public class ProcessorMetadataTest {
         assertThat(deserialized, is(ProcessorMetadata.emptyMetadata()));
     }
 
+    @Test
+    public void shouldUpdate() {
+        final ProcessorMetadata emptyMeta = ProcessorMetadata.emptyMetadata();
+        emptyMeta.update(null);
+
+        assertThat(emptyMeta, is(ProcessorMetadata.emptyMetadata()));
+
+        {
+            final Map<String, Long> map1 = new HashMap<>();
+            map1.put("key1", 1L);
+            map1.put("key2", 2L);
+            final ProcessorMetadata metadata1 = ProcessorMetadata.with(map1);
+            emptyMeta.update(metadata1);
+            assertThat(emptyMeta.getMetadata("key1"), is(1L));
+            assertThat(emptyMeta.getMetadata("key2"), is(2L));
+        }
+
+        {
+            final Map<String, Long> map1 = new HashMap<>();
+            map1.put("key1", 0L);
+            map1.put("key2", 1L);
+            final ProcessorMetadata metadata1 = ProcessorMetadata.with(map1);
+            emptyMeta.update(metadata1);
+            assertThat(emptyMeta.getMetadata("key1"), is(1L));
+            assertThat(emptyMeta.getMetadata("key2"), is(2L));
+        }
+
+        {
+            final Map<String, Long> map1 = new HashMap<>();
+            map1.put("key1", 2L);
+            map1.put("key2", 3L);
+            final ProcessorMetadata metadata1 = ProcessorMetadata.with(map1);
+            emptyMeta.update(metadata1);
+            assertThat(emptyMeta.getMetadata("key1"), is(2L));
+            assertThat(emptyMeta.getMetadata("key2"), is(3L));
+        }
+    }
+
+    @Test
+    public void shouldUpdateCommitFlag() {
+        final ProcessorMetadata emptyMeta = ProcessorMetadata.emptyMetadata();
+        assertFalse(emptyMeta.needCommit());
+
+        emptyMeta.setNeedsCommit(true);
+        assertTrue(emptyMeta.needCommit());
+
+        emptyMeta.setNeedsCommit(false);
+        assertFalse(emptyMeta.needCommit());
+
+        emptyMeta.addMetadata("key1", 1L);
+        assertTrue(emptyMeta.needCommit());
+
+        final Map<String, Long> map1 = new HashMap<>();
+        map1.put("key1", 2L);
+        map1.put("key2", 3L);
+        final ProcessorMetadata metadata1 = ProcessorMetadata.with(map1);
+        emptyMeta.update(metadata1);
+        assertTrue(emptyMeta.needCommit());
+    }
 }

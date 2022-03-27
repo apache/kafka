@@ -24,12 +24,16 @@ import java.util.Objects;
 
 /**
  * ProcessorMetadata to be access and populated by processor node. This will be committed along with
- * offset
+ * offset. This metadata is mainly for windowed aggregation processor to store last emitted timestamp
+ * for now. Therefore, the supported metadata value type is only Long which is timestamp type.
  */
 public class ProcessorMetadata {
 
     private final Map<String, Long> metadata;
-    private boolean committed;
+
+    // Whether metadata should be committed. We only need to commit if metadata is updated via
+    // put() or set explicitly
+    private boolean needsCommit;
 
     public static ProcessorMetadata emptyMetadata() {
         return new ProcessorMetadata();
@@ -45,7 +49,7 @@ public class ProcessorMetadata {
 
     private ProcessorMetadata(final Map<String, Long> metadata) {
         this.metadata = metadata;
-        committed = false;
+        needsCommit = false;
     }
 
     public static ProcessorMetadata deserialize(final byte[] metaData) {
@@ -74,7 +78,7 @@ public class ProcessorMetadata {
         int kvSize = 0;
         for (final Map.Entry<String, Long> entry : metadata.entrySet()) {
             kvSize += Integer.BYTES;
-            kvSize += entry.getKey().getBytes().length;
+            kvSize += entry.getKey().getBytes(StandardCharsets.UTF_8).length;
             kvSize += Long.BYTES;
         }
 
@@ -92,19 +96,42 @@ public class ProcessorMetadata {
 
     public void addMetadata(final String key, final long value) {
         metadata.put(key, value);
-        committed = false;
+        needsCommit = true;
     }
 
     public Long getMetadata(final String key) {
         return metadata.get(key);
     }
 
-    public void commit() {
-        committed = true;
+    /**
+     * Merge with other metadata. Missing keys will be added. Existing key's value will be updated to
+     * max
+     * @param other Other metadata to be merged
+     */
+    public void update(final ProcessorMetadata other) {
+        if (other == null) {
+            return;
+        }
+        for (final Map.Entry<String, Long> kv : other.metadata.entrySet()) {
+            final Long value = metadata.get(kv.getKey());
+            if (value == null || value < kv.getValue()) {
+                metadata.put(kv.getKey(), kv.getValue());
+            }
+        }
     }
 
+    public void setNeedsCommit(final boolean needsCommit) {
+        this.needsCommit = needsCommit;
+    }
+
+    /**
+     * Whether metadata needs to be committed. It should be committed only if addMetadata is or
+     * setNeedsCommit is called explicitly
+     *
+     * @return If metadata needs to be committed.
+     */
     public boolean needCommit() {
-        return !committed;
+        return needsCommit;
     }
 
     @Override

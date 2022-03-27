@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Comparator;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -89,7 +88,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
 
-    private TopicPartition processorMetadataPartition;
     private long processTimeMs = 0L;
 
     private final Sensor closeTaskSensor;
@@ -199,7 +197,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             highWatermark.put(topicPartition, -1L);
         }
         timeCurrentIdlingStarted = Optional.empty();
-        processorMetadataPartition = findProcessorMetadataPartition();
     }
 
     // create queues for each assigned partition and associate them
@@ -450,28 +447,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case SUSPENDED:
                 final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
 
-                committableOffsets = new HashMap<>(consumedOffsets.size());
-                for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                    final TopicPartition partition = entry.getKey();
-                    Long offset = findOffset(partition);
+                // If there's processor metadata to be committed. We need to commit them to all
+                // input partitions
+                final Set<TopicPartition> partitionsNeedCommit = processorContext.getProcessorMetadata().needCommit() ?
+                    inputPartitions() : consumedOffsets.keySet();
+                committableOffsets = new HashMap<>(partitionsNeedCommit.size());
 
+                for (final TopicPartition partition : partitionsNeedCommit) {
+                    final Long offset = findOffset(partition);
                     final long partitionTime = partitionTimes.get(partition);
-
-                    // Always commit processor metadata even if it's not dirty since we need to
-                    // commit offset for processorMetadataPartition
-                    final boolean needCommitProcessorMeta = partition.equals(processorMetadataPartition);
-                    final ProcessorMetadata processorMetadata = needCommitProcessorMeta ? processorContext.getProcessorMetadata() : ProcessorMetadata.emptyMetadata();
-
                     committableOffsets.put(partition, new OffsetAndMetadata(offset,
-                        TopicPartitionMetadata.with(partitionTime, processorMetadata).encode()));
-                }
-
-                // processorMetadataPartition is not consumed yet but we need to commit processor metadata to it
-                final boolean needCommitProcessorMetadata = processorContext.getProcessorMetadata().needCommit();
-                if (needCommitProcessorMetadata && !committableOffsets.containsKey(processorMetadataPartition)) {
-                    Long offset = findOffset(processorMetadataPartition);
-                    final long partitionTime = partitionTimes.get(processorMetadataPartition);
-                    committableOffsets.put(processorMetadataPartition, new OffsetAndMetadata(offset,
                         TopicPartitionMetadata.with(partitionTime, processorContext.getProcessorMetadata()).encode()));
                 }
                 break;
@@ -525,7 +510,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         commitNeeded = false;
         commitRequested = false;
         hasPendingTxCommit = false;
-        processorContext.getProcessorMetadata().commit();
+        processorContext.getProcessorMetadata().setNeedsCommit(false);
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -556,8 +541,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
         super.updateInputPartitions(topicPartitions, allTopologyNodesToSourceTopics);
-        processorMetadataPartition = findProcessorMetadataPartition();
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
+        processorContext.getProcessorMetadata().setNeedsCommit(true);
     }
 
     @Override
@@ -929,6 +914,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private void initializeTaskTimeAndProcessorMetadata(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
+        ProcessorMetadata finalProcessMetadata = null;
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final OffsetAndMetadata metadata = entry.getValue();
@@ -940,14 +926,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
                     + " to {} in stream task {}", partition, committedTimestamp, id);
 
-                if (partition.equals(processorMetadataPartition)) {
-                    processorContext.setProcessorMetadata(committedTimestampAndMeta.processorMetadata());
-                    log.info("ProcessorMetadata initialized from TopicPartition: {}", partition);
+                final ProcessorMetadata processorMetadata = committedTimestampAndMeta.processorMetadata();
+                if (finalProcessMetadata == null) {
+                    finalProcessMetadata = processorMetadata;
+                } else {
+                    finalProcessMetadata.update(processorMetadata);
                 }
             } else {
                 log.debug("No committed timestamp was found in metadata for partition {}", partition);
             }
         }
+
+        finalProcessMetadata = finalProcessMetadata == null ? ProcessorMetadata.emptyMetadata() : finalProcessMetadata;
+        processorContext.setProcessorMetadata(finalProcessMetadata);
 
         final Set<TopicPartition> nonCommitted = new HashSet<>(inputPartitions());
         nonCommitted.removeAll(offsetsAndMetadata.keySet());
@@ -1231,19 +1222,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Suspended {}", state());
         transitionTo(State.SUSPENDED);
         timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
-    }
-
-    private TopicPartition findProcessorMetadataPartition() {
-        return inputPartitions().stream().min(new Comparator<TopicPartition>() {
-            @Override
-            public int compare(final TopicPartition o1, final TopicPartition o2) {
-                final int topicCompare = o1.topic().compareTo(o2.topic());
-                if (topicCompare != 0) {
-                    return topicCompare;
-                }
-                return o1.partition() - o2.partition();
-            }
-        }).orElse(null);
     }
 
     @Override
