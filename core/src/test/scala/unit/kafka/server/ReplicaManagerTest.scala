@@ -1334,15 +1334,16 @@ class ReplicaManagerTest {
         Collections.singletonMap(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
-      // avoid the replica selector ignore the follower replica if it not have the data that need to fetch
+      // Avoid the replica selector ignore the follower replica if it not have the data that need to fetch
       replicaManager.getPartitionOrException(tp0).updateFollowerFetchState(followerBrokerId, new LogOffsetMetadata(0), 0, 0, 0)
 
       val metadata = new DefaultClientMetadata("rack-b", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
+      //If a preferred read replica is selected, the fetch response will return immediately，even with minBytes and timeout configured
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
         new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()), minBytes = 1,
-        clientMetadata = Some(metadata), timeout = 500)
+        clientMetadata = Some(metadata), timeout = 5000)
 
       // Fetch from leader succeeds
       assertTrue(consumerResult.isFired)
