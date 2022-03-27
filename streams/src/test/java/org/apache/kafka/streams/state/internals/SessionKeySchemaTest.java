@@ -227,7 +227,7 @@ public class SessionKeySchemaTest {
         );
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-             assertThat(upper, equalTo(toBinary.apply(
+            assertThat(upper, equalTo(toBinary.apply(
                 new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}),
                     new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
             );
@@ -264,7 +264,7 @@ public class SessionKeySchemaTest {
         final Function<Windowed<Bytes>, Bytes> toBinary = WINDOW_TO_STORE_BINARY_MAP.get(schemaType);
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-             assertThat(upper, equalTo(toBinary.apply(
+            assertThat(upper, equalTo(toBinary.apply(
                 new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE))))
             );
         } else {

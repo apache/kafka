@@ -102,8 +102,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     private File stateDir;
     private final Window[] windows = new Window[4];
     private Window nextSegmentWindow, startEdgeWindow, endEdgeWindow;
-    private long startEdgeTime = Long.MAX_VALUE - 700L;
-    private long endEdgeTime = Long.MAX_VALUE - 600L;
+    private final long startEdgeTime = Long.MAX_VALUE - 700L;
+    private final long endEdgeTime = Long.MAX_VALUE - 600L;
 
     final long retention = 1000;
     final long segmentInterval = 60_000L;
@@ -308,14 +308,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     }
 
     @Test
-    public void shouldPutAndFetchEdge() {
+    public void shouldPutAndFetchEdgeSingleKey() {
         final String keyA = "a";
         final String keyB = "b";
 
-        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false, Integer.MAX_VALUE);
-        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false, Integer.MAX_VALUE);
-        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false, Integer.MAX_VALUE);
-        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false, Integer.MAX_VALUE);
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
 
         bytesStore.put(serializedKeyAStart, serializeValue(10));
         bytesStore.put(serializedKeyAEnd, serializeValue(50));
@@ -369,7 +373,26 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
             assertEquals(expected, toList(values));
         }
+    }
 
+    @Test
+    public void shouldPutAndFetchEdgeKeyRange() {
+        final String keyA = "a";
+        final String keyB = "b";
+
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+
+        bytesStore.put(serializedKeyAStart, serializeValue(10));
+        bytesStore.put(serializedKeyAEnd, serializeValue(50));
+        bytesStore.put(serializedKeyBStart, serializeValue(100));
+        bytesStore.put(serializedKeyBEnd, serializeValue(150));
         // Can fetch from start/end for key range
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), startEdgeTime, endEdgeTime)) {
@@ -464,14 +487,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     }
 
     @Test
-    public void shouldPutAndBackwardFetchEdge() {
+    public void shouldPutAndBackwardFetchEdgeSingleKey() {
         final String keyA = "a";
         final String keyB = "b";
 
-        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false, Integer.MAX_VALUE);
-        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false, Integer.MAX_VALUE);
-        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false, Integer.MAX_VALUE);
-        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false, Integer.MAX_VALUE);
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
 
         bytesStore.put(serializedKeyAStart, serializeValue(10));
         bytesStore.put(serializedKeyAEnd, serializeValue(50));
@@ -525,6 +552,26 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
             assertEquals(expected, toList(values));
         }
+    }
+
+    @Test
+    public void shouldPutAndBackwardFetchEdgeKeyRange() {
+        final String keyA = "a";
+        final String keyB = "b";
+
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+
+        bytesStore.put(serializedKeyAStart, serializeValue(10));
+        bytesStore.put(serializedKeyAEnd, serializeValue(50));
+        bytesStore.put(serializedKeyBStart, serializeValue(100));
+        bytesStore.put(serializedKeyBEnd, serializeValue(150));
 
         // Can fetch from start/end for key range
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
