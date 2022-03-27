@@ -101,7 +101,8 @@ public class CachingPersistentWindowStoreTest {
     @Before
     public void setUp() {
         keySchema = new WindowKeySchema();
-        bytesStore = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
+        ///KAFKA-12960: Adding a retention of 100 ms to make all test cases work as is.
+        bytesStore = new RocksDBSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, keySchema);
         underlyingStore = new RocksDBWindowStore(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
