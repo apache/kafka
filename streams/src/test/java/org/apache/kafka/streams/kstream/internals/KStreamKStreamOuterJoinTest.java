@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -29,8 +32,10 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -883,6 +888,98 @@ public class KStreamKStreamOuterJoinTest {
 
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(2, "A2+a2", 201L)
+            );
+        }
+    }
+
+    /**
+     * NOTE: Header forwarding is undefined behavior, but we still want to understand the
+     * behavior so that we can make decisions about defining it in the future.
+     */
+    @Test
+    public void shouldForwardCurrentHeaders() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(10L)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+        );
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
+
+            inputTopic1.pipeInput(new TestRecord<>(
+                0,
+                "A0",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x1})}),
+                0L
+            ));
+            inputTopic2.pipeInput(new TestRecord<>(
+                1,
+                "a0",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x2})}),
+                0L
+            ));
+            // bump stream-time to trigger outer-join results
+            inputTopic2.pipeInput(new TestRecord<>(
+                3,
+                "dummy",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})}),
+                (long) 211
+            ));
+
+            // Again, header forwarding is undefined, but the current observed behavior is that
+            // the headers pass through the forwarding record.
+            processor.checkAndClearProcessedRecords(
+                new Record<>(
+                    1,
+                    "null+a0",
+                    0L,
+                    new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
+                ),
+                new Record<>(
+                    0,
+                    "A0+null",
+                    0L,
+                    new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
+                )
+            );
+
+            // verifies joined duplicates are emitted
+            inputTopic1.pipeInput(new TestRecord<>(
+                2,
+                "A2",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x4})}),
+                200L
+            ));
+            inputTopic2.pipeInput(new TestRecord<>(
+                2,
+                "a2",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x5})}),
+                200L
+            ));
+
+            processor.checkAndClearProcessedRecords(
+                new Record<>(
+                    2,
+                    "A2+a2",
+                    200L,
+                    new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x5})})
+                )
             );
         }
     }
