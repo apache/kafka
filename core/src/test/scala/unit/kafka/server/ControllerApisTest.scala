@@ -497,6 +497,7 @@ class ControllerApisTest {
         new CreatableTopic().setName("bar").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("bar").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("baz").setNumPartitions(2).setReplicationFactor(3),
+        new CreatableTopic().setName("indescribable").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("quux").setNumPartitions(2).setReplicationFactor(3),
     ).iterator()))
     val expectedResponse = Set(new CreatableTopicResult().setName("foo").
@@ -507,11 +508,19 @@ class ControllerApisTest {
         setErrorMessage("Duplicate topic name."),
       new CreatableTopicResult().setName("baz").
         setErrorCode(NONE.code()).
-        setTopicId(new Uuid(0L, 1L)),
+        setTopicId(new Uuid(0L, 1L)).
+        setNumPartitions(2).
+        setReplicationFactor(3).
+        setTopicConfigErrorCode(NONE.code()),
+      new CreatableTopicResult().setName("indescribable").
+        setErrorCode(NONE.code()).
+        setTopicId(new Uuid(0L, 2L)).
+        setTopicConfigErrorCode(TOPIC_AUTHORIZATION_FAILED.code()),
       new CreatableTopicResult().setName("quux").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()))
     assertEquals(expectedResponse, controllerApis.createTopics(request,
       false,
+      _ => Set("baz", "indescribable"),
       _ => Set("baz")).get().topics().asScala.toSet)
   }
 

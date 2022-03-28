@@ -239,24 +239,26 @@ abstract class QuorumTestHarness extends Logging {
   }
 
   private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
-    val clusterId = Uuid.randomUuid().toString
-    val metadataDir = TestUtils.tempDir()
-    val metaProperties = new MetaProperties(clusterId, 0)
-    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath()), metaProperties)
-    val controllerMetrics = new Metrics()
     val propsList = kraftControllerConfigs()
     if (propsList.size != 1) {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
     val props = propsList(0)
     props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    props.setProperty(KafkaConfig.NodeIdProp, "1000")
+    if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
+      props.setProperty(KafkaConfig.NodeIdProp, "1000")
+    }
+    val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
+    val metadataDir = TestUtils.tempDir()
+    val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
+    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath()), metaProperties)
+    val controllerMetrics = new Metrics()
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath())
     val proto = controllerListenerSecurityProtocol.toString()
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
     props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    props.setProperty(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
+    props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     val config = new KafkaConfig(props)
     val threadNamePrefix = "Controller_" + testInfo.getDisplayName
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
@@ -287,7 +289,7 @@ abstract class QuorumTestHarness extends Logging {
           error("Error completing controller socket server future", e)
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
-          controllerQuorumVotersFuture.complete(Collections.singletonMap(1000,
+          controllerQuorumVotersFuture.complete(Collections.singletonMap(nodeId,
             new InetAddressSpec(new InetSocketAddress("localhost", port))))
         }
       })
@@ -303,7 +305,7 @@ abstract class QuorumTestHarness extends Logging {
       controllerServer,
       metadataDir,
       controllerQuorumVotersFuture,
-      clusterId,
+      metaProperties.clusterId,
       this)
   }
 

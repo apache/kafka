@@ -183,5 +183,5 @@ object KafkaRaftServer {
   val configSchema = new KafkaConfigSchema(Map(
     ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
     ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
-  ).asJava)
+  ).asJava, LogConfig.AllTopicConfigSynonyms)
 }
