@@ -1301,7 +1301,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testHasPreferredReplica(): Unit = {
+  def testFetchShouldReturnImmediatelyWhenPreferredReadReplicaIsDefined(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
       propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
 
@@ -1315,12 +1315,15 @@ class ReplicaManagerTest {
 
       initializeLogAndTopicId(replicaManager, tp0, topicId)
       when(replicaManager.metadataCache.getPartitionReplicaEndpoints(
-        any[TopicPartition], any[ListenerName])).
-        thenReturn(Map(leaderBrokerId -> new Node(leaderBrokerId, "host1", 9092, "rack-a"),
-          followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")).toMap)
+        tp0,
+        new ListenerName("default"))
+      ).thenReturn(Map(
+        leaderBrokerId -> new Node(leaderBrokerId, "host1", 9092, "rack-a"),
+        followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")
+      ).toMap)
 
       // Make this replica the leader
-      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(topic)
           .setPartitionIndex(0)
@@ -1333,14 +1336,14 @@ class ReplicaManagerTest {
           .setIsNew(false)).asJava,
         Collections.singletonMap(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
       // Avoid the replica selector ignore the follower replica if it not have the data that need to fetch
       replicaManager.getPartitionOrException(tp0).updateFollowerFetchState(followerBrokerId, new LogOffsetMetadata(0), 0, 0, 0)
 
       val metadata = new DefaultClientMetadata("rack-b", "client-id",
-        InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
+        InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS, "default")
 
-      //If a preferred read replica is selected, the fetch response will return immediately，even with minBytes and timeout configured
+      // If a preferred read replica is selected, the fetch response returns immediately, even if min bytes and timeout conditions are not met.
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
         new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()), minBytes = 1,
         clientMetadata = Some(metadata), timeout = 5000)
@@ -1351,7 +1354,7 @@ class ReplicaManagerTest {
       // No delayed fetch was inserted
       assertEquals(0, replicaManager.delayedFetchPurgatory.watched)
 
-      // Returns a preferred replica,not None
+      // Returns a preferred replica
       assertTrue(consumerResult.assertFired.preferredReadReplica.isDefined)
     } finally replicaManager.shutdown(checkpointHW = false)
   }
