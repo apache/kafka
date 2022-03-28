@@ -23,7 +23,7 @@ import kafka.log.LogConfig
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp}
 import org.apache.kafka.clients.consumer._
@@ -752,7 +752,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizationWithTopicExisting(quorum: String): Unit = {
     //First create the topic so we have a valid topic ID
@@ -806,7 +806,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   /*
    * even if the topic doesn't exist, request APIs should not leak the topic name
    */
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizationWithTopicNotExisting(quorum: String): Unit = {
     val id = Uuid.randomUuid()
@@ -831,7 +831,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequests(requestKeyToRequest, false, topicNames)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @CsvSource(value = Array("zk,false", "zk,true", "kraft,false", "kraft,true"))
   def testTopicIdAuthorization(quorum: String, withTopicExisting: Boolean): Unit = {
     val topicId = if (withTopicExisting) {
@@ -884,7 +884,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   /*
    * even if the topic doesn't exist, request APIs should not leak the topic name
    */
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizationFetchV12WithTopicNotExisting(quorum: String): Unit = {
     val id = Uuid.ZERO_UUID
@@ -896,7 +896,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequests(requestKeyToRequest, false, topicNames)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateTopicAuthorizationWithClusterCreate(quorum: String): Unit = {
     removeAllClientAcls()
@@ -909,7 +909,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequestAndVerifyResponseError(createTopicsRequest, resources, isAuthorized = true)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testFetchFollowerRequest(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -929,7 +929,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequestAndVerifyResponseError(request, resources, isAuthorized = true)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testIncrementalAlterConfigsRequestRequiresClusterPermissionForBrokerLogger(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -953,7 +953,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequestAndVerifyResponseError(request, resources, isAuthorized = true)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetsForLeaderEpochClusterPermission(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -972,7 +972,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequestAndVerifyResponseError(request, resources, isAuthorized = true)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithNoTopicAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -980,7 +980,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithTopicDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -989,7 +989,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithTopicRead(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -998,7 +998,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceWithTopicWrite(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1007,13 +1007,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRecords(producer, numRecords, tp)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePermissionOnTopicToWriteToNonExistentTopic(quorum: String): Unit = {
     testCreatePermissionNeededToWriteToNonExistentTopic(TOPIC)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePermissionOnClusterToWriteToNonExistentTopic(quorum: String): Unit = {
     testCreatePermissionNeededToWriteToNonExistentTopic(CLUSTER)
@@ -1032,7 +1032,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRecords(producer, numRecords, tp)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeUsingAssignWithNoAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1047,7 +1047,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testSimpleConsumeWithOffsetLookupAndNoGroupAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1067,7 +1067,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(group, e.groupId())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testSimpleConsumeWithExplicitSeekAndNoGroupAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1087,7 +1087,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumeRecords(consumer)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithoutTopicDescribeAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1105,7 +1105,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithTopicDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1124,7 +1124,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithTopicWrite(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1143,7 +1143,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeWithTopicAndGroupRead(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1162,7 +1162,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithNoTopicAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1180,7 +1180,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertTrue(consumer.subscription.isEmpty)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithTopicDescribeOnlyAndGroupRead(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1199,7 +1199,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithTopicAndGroupRead(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1232,7 +1232,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionMatchingInternalTopic(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1256,13 +1256,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), new ResourcePattern(TOPIC,
       GROUP_METADATA_TOPIC_NAME, LITERAL))
     consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME))
-    TestUtils.retry(60000) {
+    TestInfoUtils.retry(60000) {
       consumer.poll(0)
       assertEquals(Set(GROUP_METADATA_TOPIC_NAME), consumer.subscription.asScala)
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionMatchingInternalTopicWithDescribeOnlyPermission(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1288,7 +1288,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Collections.singleton(GROUP_METADATA_TOPIC_NAME), e.unauthorizedTopics())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionNotMatchingInternalTopic(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1307,7 +1307,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumeRecords(consumer)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePermissionOnTopicToReadFromNonExistentTopic(quorum: String): Unit = {
     testCreatePermissionNeededToReadFromNonExistentTopic("newTopic",
@@ -1315,7 +1315,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       TOPIC)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePermissionOnClusterToReadFromNonExistentTopic(quorum: String): Unit = {
     testCreatePermissionNeededToReadFromNonExistentTopic("newTopic",
@@ -1348,7 +1348,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }, "Partition metadata not propagated.")
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePermissionMetadataRequestAutoCreate(quorum: String): Unit = {
     val readAcls = topicReadAcl(topicResource)
@@ -1364,20 +1364,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(createAcls, topicResource)
 
     // retry as topic being created can have MetadataResponse with Errors.LEADER_NOT_AVAILABLE
-    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS) {
+    TestInfoUtils.retry(JTestInfoUtils.DEFAULT_MAX_WAIT_MS) {
       val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
       assertEquals(Set(topic).asJava, metadataResponse.topicsByError(Errors.NONE))
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithNoAccess(quorum: String): Unit = {
     val consumer = createConsumer()
     assertThrows(classOf[GroupAuthorizationException], () => consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithNoTopicAccess(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
@@ -1385,7 +1385,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithTopicWrite(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1396,7 +1396,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithTopicDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1407,7 +1407,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithNoGroupAccess(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
@@ -1415,7 +1415,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[GroupAuthorizationException], () => consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitWithTopicAndGroupRead(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1425,7 +1425,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchWithNoAccess(quorum: String): Unit = {
     val consumer = createConsumer()
@@ -1433,7 +1433,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => consumer.position(tp))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchWithNoGroupAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1443,7 +1443,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[GroupAuthorizationException], () => consumer.position(tp))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchWithNoTopicAccess(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
@@ -1452,7 +1452,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TopicAuthorizationException], () => consumer.position(tp))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchAllTopicPartitionsAuthorization(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1484,7 +1484,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(offset, offsetFetchResponse.partitionDataMap(group).get(tp).offset)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchMultipleGroupsAuthorization(quorum: String): Unit = {
     val groups: Seq[String] = (1 to 5).map(i => s"group$i")
@@ -1640,7 +1640,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     )
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchTopicDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1651,7 +1651,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.position(tp)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchWithTopicAndGroupRead(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1662,14 +1662,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.position(tp)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetadataWithNoTopicAccess(quorum: String): Unit = {
     val consumer = createConsumer()
     assertThrows(classOf[TopicAuthorizationException], () => consumer.partitionsFor(topic))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetadataWithTopicDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1678,14 +1678,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.partitionsFor(topic)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListOffsetsWithNoTopicAccess(quorum: String): Unit = {
     val consumer = createConsumer()
     assertThrows(classOf[TopicAuthorizationException], () => consumer.endOffsets(Set(tp).asJava))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListOffsetsWithTopicDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1694,15 +1694,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.endOffsets(Set(tp).asJava)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeGroupApiWithNoGroupAcl(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     val result = createAdminClient().describeConsumerGroups(Seq(group).asJava)
-    TestUtils.assertFutureExceptionTypeEquals(result.describedGroups().get(group), classOf[GroupAuthorizationException])
+    TestInfoUtils.assertFutureExceptionTypeEquals(result.describedGroups().get(group), classOf[GroupAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeGroupApiWithGroupDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1711,7 +1711,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     createAdminClient().describeConsumerGroups(Seq(group).asJava).describedGroups().get(group).get()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeGroupCliWithGroupDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1725,7 +1725,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumerGroupService.close()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListGroupApiWithAndWithoutListGroupAcls(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1774,7 +1774,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     otherConsumer.close()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupApiWithDeleteGroupAcl(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1788,7 +1788,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     createAdminClient().deleteConsumerGroups(Seq(group).asJava).deletedGroups().get(group).get()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupApiWithNoDeleteGroupAcl(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1799,17 +1799,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.assign(List(tp).asJava)
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
-    TestUtils.assertFutureExceptionTypeEquals(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
+    TestInfoUtils.assertFutureExceptionTypeEquals(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupApiWithNoDeleteGroupAcl2(quorum: String): Unit = {
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
-    TestUtils.assertFutureExceptionTypeEquals(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
+    TestInfoUtils.assertFutureExceptionTypeEquals(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupOffsetsWithAcl(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1825,7 +1825,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertNull(result.partitionResult(tp).get())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupOffsetsWithoutDeleteAcl(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1837,10 +1837,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
     consumer.close()
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    TestUtils.assertFutureExceptionTypeEquals(result.all(), classOf[GroupAuthorizationException])
+    TestInfoUtils.assertFutureExceptionTypeEquals(result.all(), classOf[GroupAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupOffsetsWithDeleteAclWithoutTopicAcl(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1857,25 +1857,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DELETE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    TestUtils.assertFutureExceptionTypeEquals(result.all(), classOf[TopicAuthorizationException])
-    TestUtils.assertFutureExceptionTypeEquals(result.partitionResult(tp), classOf[TopicAuthorizationException])
+    TestInfoUtils.assertFutureExceptionTypeEquals(result.all(), classOf[TopicAuthorizationException])
+    TestInfoUtils.assertFutureExceptionTypeEquals(result.partitionResult(tp), classOf[TopicAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteGroupOffsetsWithNoAcl(quorum: String): Unit = {
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    TestUtils.assertFutureExceptionTypeEquals(result.all(), classOf[GroupAuthorizationException])
+    TestInfoUtils.assertFutureExceptionTypeEquals(result.all(), classOf[GroupAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedDeleteTopicsWithoutDescribe(quorum: String): Unit = {
     val deleteResponse = connectAndReceive[DeleteTopicsResponse](deleteTopicsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, deleteResponse.data.responses.find(topic).errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedDeleteTopicsWithDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1884,7 +1884,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, deleteResponse.data.responses.find(topic).errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicsWithWildCardAuth(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1893,7 +1893,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Errors.NONE.code, deleteResponse.data.responses.find(topic).errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedDeleteRecordsWithoutDescribe(quorum: String): Unit = {
     val deleteRecordsResponse = connectAndReceive[DeleteRecordsResponse](deleteRecordsRequest)
@@ -1901,7 +1901,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       partitions.asScala.head.errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedDeleteRecordsWithDescribe(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1911,7 +1911,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       partitions.asScala.head.errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteRecordsWithWildCardAuth(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1921,14 +1921,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       partitions.asScala.head.errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedCreatePartitions(quorum: String): Unit = {
     val createPartitionsResponse = connectAndReceive[CreatePartitionsResponse](createPartitionsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, createPartitionsResponse.data.results.asScala.head.errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePartitionsWithWildCardAuth(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1937,7 +1937,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Errors.NONE.code, createPartitionsResponse.data.results.asScala.head.errorCode)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testTransactionalProducerInitTransactionsNoWriteTransactionalIdAcl(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), transactionalIdResource)
@@ -1945,14 +1945,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TransactionalIdAuthorizationException], () => producer.initTransactions())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testTransactionalProducerInitTransactionsNoDescribeTransactionalIdAcl(quorum: String): Unit = {
     val producer = buildTransactionalProducer()
     assertThrows(classOf[TransactionalIdAuthorizationException], () => producer.initTransactions())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendOffsetsWithNoConsumerGroupDescribeAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1968,7 +1968,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, new ConsumerGroupMetadata(group)))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendOffsetsWithNoConsumerGroupWriteAccess(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -1983,7 +1983,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, new ConsumerGroupMetadata(group)))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testIdempotentProducerNoIdempotentWriteAclInInitProducerId(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2022,7 +2022,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertClusterAuthFailure()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testIdempotentProducerNoIdempotentWriteAclInProduce(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2051,7 +2051,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldInitTransactionsWhenAclSet(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
@@ -2059,7 +2059,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.initTransactions()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testTransactionalProducerTopicAuthorizationExceptionInSendCallback(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2072,11 +2072,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.beginTransaction()
 
     val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
-    val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
+    val e = JTestInfoUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
     assertEquals(Set(topic), e.unauthorizedTopics.asScala)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testTransactionalProducerTopicAuthorizationExceptionInCommit(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2094,7 +2094,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessDuringSend(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2106,10 +2106,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     producer.beginTransaction()
     val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
-    JTestUtils.assertFutureThrows(future, classOf[TransactionalIdAuthorizationException])
+    JTestInfoUtils.assertFutureThrows(future, classOf[TransactionalIdAuthorizationException])
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnEndTransaction(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2124,7 +2124,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertThrows(classOf[TransactionalIdAuthorizationException], () => producer.commitTransaction())
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListTransactionsAuthorization(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2158,7 +2158,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertListTransactionResult(expectedTransactionalIds = Set(transactionalId))
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldNotIncludeUnauthorizedTopicsInDescribeTransactionsResponse(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2181,7 +2181,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(List.empty, transactionStateData.topics.asScala.toList)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldSuccessfullyAbortTransactionAfterTopicAuthorizationException(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2195,13 +2195,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
     // try and add a partition resulting in TopicAuthorizationException
     val future = producer.send(new ProducerRecord("otherTopic", 0, "1".getBytes, "1".getBytes))
-    val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
+    val e = JTestInfoUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
     assertEquals(Set("otherTopic"), e.unauthorizedTopics.asScala)
     // now rollback
     producer.abortTransaction()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnSendOffsetsToTxn(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
@@ -2217,7 +2217,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldSendSuccessfullyWhenIdempotentAndHasCorrectACL(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2228,7 +2228,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   // Verify that metadata request without topics works without any ACLs and returns cluster id
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testClusterId(quorum: String): Unit = {
     val request = new requests.MetadataRequest.Builder(List.empty.asJava, false).build()
@@ -2237,7 +2237,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertFalse(response.clusterId.isEmpty, "Cluster id not returned")
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeMultipleAddAndRemove(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2255,7 +2255,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2278,7 +2278,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertIdempotentSendSuccess()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeDenyTakesPrecedence(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2291,7 +2291,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertIdempotentSendAuthorizationFailure()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypeWildcardResourceDenyDominate(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2309,7 +2309,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertIdempotentSendAuthorizationFailure()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizeByResourceTypePrefixedResourceDenyDominate(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2323,7 +2323,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertIdempotentSendAuthorizationFailure()
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetadataClusterAuthorizedOperationsWithoutDescribeCluster(quorum: String): Unit = {
     removeAllClientAcls()
@@ -2334,7 +2334,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetadataClusterAuthorizedOperationsWithDescribeAndAlterCluster(quorum: String): Unit = {
     removeAllClientAcls()
@@ -2355,7 +2355,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeTopicAclWithOperationAll(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2380,7 +2380,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Errors.NONE, topicResponse.error)
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeTopicConfigsAclWithOperationAll(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2420,7 +2420,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeClusterClusterAuthorizedOperationsWithoutDescribeCluster(quorum: String): Unit = {
     removeAllClientAcls()
@@ -2430,7 +2430,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeClusterClusterAuthorizedOperationsWithDescribeAndAlterCluster(quorum: String): Unit = {
     removeAllClientAcls()
@@ -2450,7 +2450,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testHostAddressBasedAcls(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
@@ -2484,7 +2484,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
 
-  @ParameterizedTest(name = "{displayName}.quorum={0}")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateAndCloseConsumerWithNoAccess(quorum: String): Unit = {
     val consumer = createConsumer()
@@ -2506,7 +2506,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   def removeAllClientAcls(): Unit = {
-    val authorizerForWrite = TestUtils.pickAuthorizerForWrite(brokers, controllerServers)
+    val authorizerForWrite = TestInfoUtils.pickAuthorizerForWrite(brokers, controllerServers)
     val aclEntryFilter = new AccessControlEntryFilter(clientPrincipalString, null, AclOperation.ANY, AclPermissionType.ANY)
     val aclFilter = new AclBindingFilter(ResourcePatternFilter.ANY, aclEntryFilter)
 
@@ -2514,7 +2514,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       deletion.aclBindingDeleteResults().asScala.map(_.aclBinding.pattern).toSet
     }.foreach { resource =>
       (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { authorizer =>
-        TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource, aclEntryFilter)
+        TestInfoUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource, aclEntryFilter)
       }
     }
   }
@@ -2574,11 +2574,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
+    TestInfoUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
   private def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
+    TestInfoUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
@@ -2586,7 +2586,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              startingOffset: Int = 0,
                              topic: String = topic,
                              part: Int = part): Unit = {
-    val records = TestUtils.consumeRecords(consumer, numRecords)
+    val records = TestInfoUtils.consumeRecords(consumer, numRecords)
 
     for (i <- 0 until numRecords) {
       val record = records(i)

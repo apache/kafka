@@ -43,4 +43,5 @@ object TestInfoUtils {
       false
     }
   }
+  val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
 }
