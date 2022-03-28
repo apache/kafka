@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import java.util.Map;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
@@ -36,6 +38,12 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
     }
 
     @Override
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
+        serializer.configure(configs, isKey);
+        deserializer.configure(configs, isKey);
+    }
+
+    @Override
     public Serializer<SubscriptionResponseWrapper<V>> serializer() {
         return serializer;
     }
@@ -49,6 +57,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         implements Serializer<SubscriptionResponseWrapper<V>>, WrappingNullableSerializer<SubscriptionResponseWrapper<V>, Void, V> {
 
         private Serializer<V> serializer;
+        private boolean upgradeFromV0 = false;
 
         private SubscriptionResponseWrapperSerializer(final Serializer<V> serializer) {
             this.serializer = serializer;
@@ -63,6 +72,42 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         }
 
         @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+            this.upgradeFromV0 = upgradeFromV0(configs);
+        }
+
+        private static boolean upgradeFromV0(final Map<String, ?> configs) {
+            final Object upgradeFrom = configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+            if (!(upgradeFrom instanceof String)) {
+                return false;
+            }
+
+            switch ((String) upgradeFrom) {
+                case StreamsConfig.UPGRADE_FROM_0100:
+                case StreamsConfig.UPGRADE_FROM_0101:
+                case StreamsConfig.UPGRADE_FROM_0102:
+                case StreamsConfig.UPGRADE_FROM_0110:
+                case StreamsConfig.UPGRADE_FROM_10:
+                case StreamsConfig.UPGRADE_FROM_11:
+                case StreamsConfig.UPGRADE_FROM_20:
+                case StreamsConfig.UPGRADE_FROM_21:
+                case StreamsConfig.UPGRADE_FROM_22:
+                case StreamsConfig.UPGRADE_FROM_23:
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        @Override
         public byte[] serialize(final String topic, final SubscriptionResponseWrapper<V> data) {
             //{1-bit-isHashNull}{7-bits-version}{4-bytes-primaryPartition}{Optional-16-byte-Hash}{n-bytes serialized data}
 
@@ -71,13 +116,13 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
                 throw new UnsupportedVersionException("SubscriptionResponseWrapper version is larger than maximum supported 0x7F");
             }
 
-            switch (data.getVersion()) {
-                case 0:
-                    return serializeV0(topic, data);
-                case 1:
-                    return serializeV1(topic, data);
-                default:
-                    throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.getVersion());
+            final int version = data.getVersion();
+            if (upgradeFromV0 || version == 0) {
+                return serializeV0(topic, data);
+            } else if (version == 1) {
+                return serializeV1(topic, data);
+            } else {
+                throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.getVersion());
             }
         }
 
@@ -91,11 +136,11 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             final ByteBuffer buf = ByteBuffer.allocate(dataLength);
 
             if (originalHash != null) {
-                buf.put(data.getVersion());
+                buf.put((byte) 0);
                 buf.putLong(originalHash[0]);
                 buf.putLong(originalHash[1]);
             } else {
-                buf.put((byte) (data.getVersion() | (byte) 0x80));
+                buf.put((byte) 0x80);
             }
 
             if (serializedData != null)

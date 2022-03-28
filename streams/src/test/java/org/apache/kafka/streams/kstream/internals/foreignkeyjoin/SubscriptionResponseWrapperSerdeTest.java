@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import java.util.Collections;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.junit.Test;
 
@@ -73,7 +75,7 @@ public class SubscriptionResponseWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void ShouldSerdeWithNonNullsV0Test() {
+    public void shouldSerdeWithNonNullsV0Test() {
         final byte version = 0;
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
         final String foreignValue = "foreignValue";
@@ -96,7 +98,7 @@ public class SubscriptionResponseWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void ShouldSerdeWithNonNullsV1Test() {
+    public void shouldSerdeWithNonNullsV1Test() {
         final byte version = 1;
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
         final String foreignValue = "foreignValue";
@@ -115,6 +117,32 @@ public class SubscriptionResponseWrapperSerdeTest {
         assertEquals(foreignValue, result.getForeignValue());
         assertEquals(primaryPartition, result.getPrimaryPartition());
         assertEquals(version, result.getVersion());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldSerdeWithV0IfUpgradeFromTest() {
+        final byte version = 1;
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
+        final String foreignValue = "foreignValue";
+        final Integer primaryPartition = 10;
+        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(
+            hashedValue,
+            foreignValue,
+            version,
+            primaryPartition);
+        final SubscriptionResponseWrapperSerde<String> srwSerde = new SubscriptionResponseWrapperSerde(
+            new NonNullableSerde(Serdes.String()));
+        srwSerde.configure(
+            Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_32),
+            true);
+        final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
+        final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
+
+        assertArrayEquals(hashedValue, result.getOriginalValueHash());
+        assertEquals(foreignValue, result.getForeignValue());
+        assertEquals(0, result.getVersion());
+        assertNull(result.getPrimaryPartition());
     }
 
     @Test

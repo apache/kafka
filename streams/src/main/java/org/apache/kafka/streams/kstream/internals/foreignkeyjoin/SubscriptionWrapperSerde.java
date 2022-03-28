@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import java.util.Map;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
@@ -45,6 +47,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
         private String primaryKeySerializationPseudoTopic = null;
         private Serializer<K> primaryKeySerializer;
+        private boolean upgradeFromV0 = false;
 
         SubscriptionWrapperSerializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
                                       final Serializer<K> primaryKeySerializer) {
@@ -61,6 +64,42 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         }
 
         @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+            this.upgradeFromV0 = upgradeFromV0(configs);
+        }
+
+        private static boolean upgradeFromV0(final Map<String, ?> configs) {
+            final Object upgradeFrom = configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+            if (!(upgradeFrom instanceof String)) {
+                return false;
+            }
+
+            switch ((String) upgradeFrom) {
+                case StreamsConfig.UPGRADE_FROM_0100:
+                case StreamsConfig.UPGRADE_FROM_0101:
+                case StreamsConfig.UPGRADE_FROM_0102:
+                case StreamsConfig.UPGRADE_FROM_0110:
+                case StreamsConfig.UPGRADE_FROM_10:
+                case StreamsConfig.UPGRADE_FROM_11:
+                case StreamsConfig.UPGRADE_FROM_20:
+                case StreamsConfig.UPGRADE_FROM_21:
+                case StreamsConfig.UPGRADE_FROM_22:
+                case StreamsConfig.UPGRADE_FROM_23:
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        @Override
         public byte[] serialize(final String ignored, final SubscriptionWrapper<K> data) {
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{4-bytes-primaryPartition}{Optional-16-byte-Hash}{PK-serialized}
 
@@ -69,13 +108,13 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 throw new UnsupportedVersionException("SubscriptionWrapper version is larger than maximum supported 0x7F");
             }
 
-            switch (data.getVersion()) {
-                case 0:
-                    return serializeV0(data);
-                case 1:
-                    return serializeV1(data);
-                default:
-                    throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.getVersion());
+            final int version = data.getVersion();
+            if (upgradeFromV0 || version == 0) {
+                return serializeV0(data);
+            } else if (version == 1) {
+                return serializeV1(data);
+            } else {
+                throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.getVersion());
             }
         }
 
@@ -97,11 +136,13 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             if (data.getHash() != null) {
                 dataLength += 2 * Long.BYTES;
                 buf = ByteBuffer.allocate(dataLength);
-                buf.put(data.getVersion());
+                // explicitly set to 0 because the actual data version might be higher in the case of
+                // upgrade from v0.
+                buf.put((byte) 0);
             } else {
                 //Don't store hash as it's null.
                 buf = ByteBuffer.allocate(dataLength);
-                buf.put((byte) (data.getVersion() | (byte) 0x80));
+                buf.put((byte) 0x80);
             }
             buf.put(data.getInstruction().getValue());
             final long[] elem = data.getHash();

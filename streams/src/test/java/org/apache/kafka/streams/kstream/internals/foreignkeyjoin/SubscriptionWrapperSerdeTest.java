@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import java.util.Collections;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
@@ -76,6 +79,34 @@ public class SubscriptionWrapperSerdeTest {
         assertEquals(originalKey, deserialized.getPrimaryKey());
         assertEquals(primaryPartition, deserialized.getPrimaryPartition());
         assertEquals(version, deserialized.getVersion());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldSerdeWithV0IfUpgradeTest() {
+        final byte version = 1;
+        final String originalKey = "originalKey";
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
+        swSerde.configure(
+            Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_32),
+            true);
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = 10;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE,
+            originalKey,
+            version,
+            primaryPartition);
+        final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
+            .deserialize(null, serialized);
+
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.getInstruction());
+        assertArrayEquals(hashedValue, deserialized.getHash());
+        assertEquals(originalKey, deserialized.getPrimaryKey());
+        assertEquals(0, deserialized.getVersion());
+        assertNull(deserialized.getPrimaryPartition());
     }
 
     @Test
