@@ -30,7 +30,7 @@ class MinIsrConfigTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.MinInSyncReplicasProp, "5")
   def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(KafkaConfig.fromProps(_, overridingProps))
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeaultKafkaConfig(quorum: String): Unit = {
     assert(brokers.head.logManager.initialDefaultConfig.minInSyncReplicas == 5)

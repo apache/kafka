@@ -82,7 +82,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdown(quorum: String): Unit = {
 
@@ -141,7 +141,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
     if (quorum == "zk") {
@@ -156,7 +156,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
@@ -168,7 +168,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyCleanShutdownAfterFailedStartup[KafkaStorageException](quorum)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk"))
   def testCleanShutdownWithZkUnavailable(quorum: String): Unit = {
     shutdownZooKeeper()
@@ -177,7 +177,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
@@ -212,7 +212,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsecutiveShutdown(quorum: String): Unit = {
     shutdownBroker()

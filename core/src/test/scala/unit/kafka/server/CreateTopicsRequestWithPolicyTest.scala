@@ -44,7 +44,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     Seq(properties)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidCreateTopicsRequests(quorum: String): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
@@ -63,7 +63,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       assignment = Map(0 -> List(1, 0), 1 -> List(0, 1))))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}")
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
     val existingTopic = "existing-topic"
