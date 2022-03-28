@@ -1314,10 +1314,11 @@ class ReplicaManagerTest {
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
       initializeLogAndTopicId(replicaManager, tp0, topicId)
+
       when(replicaManager.metadataCache.getPartitionReplicaEndpoints(
         tp0,
-        new ListenerName("default"))
-      ).thenReturn(Map(
+        new ListenerName("default")
+      )).thenReturn(Map(
         leaderBrokerId -> new Node(leaderBrokerId, "host1", 9092, "rack-a"),
         followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")
       ).toMap)
@@ -1345,8 +1346,8 @@ class ReplicaManagerTest {
 
       // If a preferred read replica is selected, the fetch response returns immediately, even if min bytes and timeout conditions are not met.
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
-        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()), minBytes = 1,
-        clientMetadata = Some(metadata), timeout = 5000)
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
+        minBytes = 1, clientMetadata = Some(metadata), timeout = 5000)
 
       // Fetch from leader succeeds
       assertTrue(consumerResult.isFired)
