@@ -32,6 +32,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // package private for test
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
+  @volatile
   private var numFetchersPerBroker = numFetchers
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
@@ -61,20 +62,19 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 
   def resizeThreadPool(newSize: Int): Unit = {
-    // Used to replace migratePartitions and solve the fetch problem
     def migratePartitions(newSize: Int): Unit = {
       val allRemovedPartitionsMap = mutable.Map[TopicPartition, InitialFetchState]()
       fetcherThreadMap.forKeyValue { (id, thread) =>
         val partitionStates = removeFetcherForPartitions(thread.partitions)
         if (id.fetcherId >= newSize)
           thread.shutdown()
-        val fetchStates = partitionStates.map { case (topicPartition, currentFetchState) =>
-          val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.sourceBroker,
-            currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
-            initOffset = currentFetchState.fetchOffset)
-          topicPartition -> initialFetchState
+        partitionStates.forKeyValue {
+          (topicPartition, currentFetchState) =>
+            val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.sourceBroker,
+              currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
+              initOffset = currentFetchState.fetchOffset)
+            allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
-        allRemovedPartitionsMap ++= fetchStates
       }
       addFetcherForPartitions(allRemovedPartitionsMap)
     }
