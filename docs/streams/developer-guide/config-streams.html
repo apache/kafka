@@ -699,13 +699,23 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
               Tags for the Kafka Streams instances can be set via <code class="docutils literal"><span class="pre">client.tag.</span></code>
               prefix. Example:
             </p>
-            <pre class="line-numbers">
-            <code class="language-text">
-              client.tag.zone: eu-central-1a
-              client.tag.cluster: k8s-cluster1
-              rack.aware.assignment.tags: zone,cluster
-            </code>
-            </pre>
+            <pre><code class="language-text">
+Client-1                                   | Client-2
+_______________________________________________________________________
+client.tag.zone: eu-central-1a             | client.tag.zone: eu-central-1b
+client.tag.cluster: k8s-cluster1           | client.tag.cluster: k8s-cluster1
+rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cluster
+
+
+Client-3                                   | Client-4
+_______________________________________________________________________
+client.tag.zone: eu-central-1a             | client.tag.zone: eu-central-1b
+client.tag.cluster: k8s-cluster2           | client.tag.cluster: k8s-cluster2
+rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cluster</code></pre>
+            <p>
+              In the above example, we have four clients spanned across two zones (<code class="docutils literal"><span class="pre">eu-central-1a</span></code>, <code class="docutils literal"><span class="pre">eu-central-1b</span></code>) and two clusters (<code class="docutils literal"><span class="pre">k8s-cluster1</span></code>, <code class="docutils literal"><span class="pre">k8s-cluster2</span></code>).
+              Assuming we have to create a standby task for an active task located on <code class="docutils literal"><span class="pre">Client-1</span></code>, Kafka Streams will allocate a standby task on <code class="docutils literal"><span class="pre">Client-4</span></code>, which has different <code class="docutils literal"><span class="pre">zone</span></code> and <code class="docutils literal"><span class="pre">cluster</span></code> tag values compared to the active task.
+            </p>
           </div>
         </blockquote>
       </div>
