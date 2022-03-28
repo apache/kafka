@@ -74,7 +74,6 @@ versions += [
   jline: "3.21.0",
   jmh: "1.34",
   hamcrest: "2.2",
-  log4j: "1.2.17",
   scalaLogging: "3.9.4",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
