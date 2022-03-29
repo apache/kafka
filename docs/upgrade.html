@@ -39,7 +39,7 @@
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
     <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
         Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
-    <li>Custom principal builder implementations specified through <code>principal.builder.class</code> must now implement the 
+    <li>Custom principal builder implementations specified through <code>principal.builder.class</code> must now implement the
         <code>KafkaPrincipalSerde</code> interface to allow for forwarding between brokers. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a> for more details about the usage of KafkaPrincipalSerde.</li>
     <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
     <ul>
@@ -100,7 +100,7 @@
     </li>
     <li>
         The Connect <code>internal.key.converter</code> and <code>internal.value.converter</code> properties have been completely <a href="https://cwiki.apache.org/confluence/x/2YDOCg">removed</a>.
-        The use of these Connect worker properties has been deprecated since version 2.0.0. 
+        The use of these Connect worker properties has been deprecated since version 2.0.0.
         Workers are now hardcoded to use the JSON converter with <code>schemas.enable</code> set to <code>false</code>. If your cluster has been using
         a different internal key or value converter, you can follow the migration steps outlined in <a href="https://cwiki.apache.org/confluence/x/2YDOCg">KIP-738</a>
         to safely upgrade your Connect cluster to 3.0.
@@ -494,7 +494,7 @@
     <li>The internal <code>PartitionAssignor</code> interface has been deprecated and replaced with a new <code>ConsumerPartitionAssignor</code> in the public API. Some
         methods/signatures are slightly different between the two interfaces. Users implementing a custom PartitionAssignor should migrate to the new interface as soon as possible.
     </li>
-    <li>The <code>DefaultPartitioner</code> now uses a sticky partitioning strategy. This means that records for specific topic with null keys and no assigned partition 
+    <li>The <code>DefaultPartitioner</code> now uses a sticky partitioning strategy. This means that records for specific topic with null keys and no assigned partition
         will be sent to the same partition until the batch is ready to be sent. When a new batch is created, a new partition is chosen. This decreases latency to produce, but
         it may result in uneven distribution of records across partitions in edge cases. Generally users will not be impacted, but this difference may be noticeable in tests and
         other situations producing records for a very short amount of time.
@@ -688,7 +688,7 @@
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
         brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
-        It is still possible to downgrade at this point if there are any problems. 
+        It is still possible to downgrade at this point if there are any problems.
     </li>
     <li> Once the cluster's behavior and performance has been verified, bump the protocol version by editing
         <code>inter.broker.protocol.version</code> and setting it to 2.1.
@@ -699,7 +699,7 @@
     <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
         upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
         change log.message.format.version to 2.1 on each broker and restart them one by one. Note that the older Scala clients,
-        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs 
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
         (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
         the newer Java clients must be used.
     </li>

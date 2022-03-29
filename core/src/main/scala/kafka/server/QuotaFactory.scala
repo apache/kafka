@@ -80,9 +80,9 @@ object QuotaFactory extends Logging {
     val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
       classOf[ClientQuotaCallback]))
     QuotaManagers(
-      new ClientQuotaManager(clientConfig(cfg), metrics, Fetch, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
-      new ClientQuotaManager(clientConfig(cfg), metrics, Produce, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
-      new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
+      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
+      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
+      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
       new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time,
         threadNamePrefix, clientQuotaCallback),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
@@ -92,7 +92,27 @@ object QuotaFactory extends Logging {
     )
   }
 
-  def clientConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+  def clientProduceConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    if (cfg.producerQuotaBytesPerSecondDefault != Long.MaxValue)
+      warn(s"${KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
+    ClientQuotaManagerConfig(
+      quotaDefault = cfg.producerQuotaBytesPerSecondDefault,
+      numQuotaSamples = cfg.numQuotaSamples,
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    )
+  }
+
+  def clientFetchConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    if (cfg.consumerQuotaBytesPerSecondDefault != Long.MaxValue)
+      warn(s"${KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
+    ClientQuotaManagerConfig(
+      quotaDefault = cfg.consumerQuotaBytesPerSecondDefault,
+      numQuotaSamples = cfg.numQuotaSamples,
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    )
+  }
+
+  def clientRequestConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     ClientQuotaManagerConfig(
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds

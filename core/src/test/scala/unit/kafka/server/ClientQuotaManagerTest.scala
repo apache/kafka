@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.{BeforeAll, AfterAll}
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
-  private val config = ClientQuotaManagerConfig()
+  private val config = ClientQuotaManagerConfig(quotaDefault = 500)
 
   private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
@@ -38,12 +38,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(2000, true)))
       clientQuotaManager.updateQuota(client2.configUser, client2.configClientId, client2.sanitizedConfigClientId, Some(new Quota(4000, true)))
 
-      assertEquals(Long.MaxValue.toDouble, clientQuotaManager.quota(randomClient.user, randomClient.clientId).bound, 0.0,
-        "Default producer quota should be " + Long.MaxValue.toDouble)
-      assertEquals(2000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0,
-        "Should return the overridden value (2000)")
-      assertEquals(4000, clientQuotaManager.quota(client2.user, client2.clientId).bound, 0.0,
-        "Should return the overridden value (4000)")
+      assertEquals(config.quotaDefault.toDouble,
+        clientQuotaManager.quota(randomClient.user, randomClient.clientId).bound, 0.0, "Default producer quota should be " + config.quotaDefault)
+      assertEquals(2000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the overridden value (2000)")
+      assertEquals(4000, clientQuotaManager.quota(client2.user, client2.clientId).bound, 0.0, "Should return the overridden value (4000)")
 
       // p1 should be throttled using the overridden quota
       var throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 2500 * config.numQuotaSamples)
@@ -100,7 +98,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client2 = UserClient("User2", "p2", Some("User2"), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
     val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.Default), None)
-    val config = ClientQuotaManagerConfig()
+    val config = ClientQuotaManagerConfig(quotaDefault = Long.MaxValue)
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -114,7 +112,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
     val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.Default), Some(ConfigEntityName.Default))
-    val config = ClientQuotaManagerConfig()
+    val config = ClientQuotaManagerConfig(quotaDefault = Long.MaxValue)
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -160,7 +158,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testGetMaxValueInQuotaWindowWithNonDefaultQuotaWindow(): Unit = {
     val numFullQuotaWindows = 3   // 3 seconds window (vs. 10 seconds default)
-    val nonDefaultConfig = ClientQuotaManagerConfig(numQuotaSamples = numFullQuotaWindows + 1)
+    val nonDefaultConfig = ClientQuotaManagerConfig(quotaDefault = Long.MaxValue, numQuotaSamples = numFullQuotaWindows + 1)
     val clientQuotaManager = new ClientQuotaManager(nonDefaultConfig, metrics, Fetch, time, Some(ClientQuotaManagerTest.scheduler), "")
     val userSession = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), InetAddress.getLocalHost)
 
@@ -179,7 +177,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveDefaultUserQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaDefault = Long.MaxValue),
       metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
     try {
       // no quota set yet, should not throttle
@@ -200,7 +198,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveUserQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaDefault = Long.MaxValue),
       metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
 
     try {
@@ -219,7 +217,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveUserClientQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaDefault = Long.MaxValue),
       metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
 
     try {
@@ -237,7 +235,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
   @Test
   def testQuotaConfigPrecedence(): Unit = {
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaDefault=Long.MaxValue),
       metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
 
     try {
@@ -305,9 +303,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     val throttleCountMetric = metrics.metrics().get(metrics.metricName("throttle-count", "Produce", ""))
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
-        Some(new Quota(500, true)))
-
       // We have 10 second windows. Make sure that there is no quota violation
       // if we produce under the quota
       for (_ <- 0 until 10) {
@@ -356,9 +351,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireThrottleTimeSensor(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
-        Some(new Quota(500, true)))
-
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
       // remove the throttle time sensor
       metrics.removeSensor("ProduceThrottleTime-:client1")
@@ -378,9 +370,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireQuotaSensors(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
-        Some(new Quota(500, true)))
-
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
       // remove all the sensors
       metrics.removeSensor("ProduceThrottleTime-:client1")
@@ -405,9 +394,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
     val clientId = "client@#$%"
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
-        Some(new Quota(500, true)))
-
       maybeRecord(clientQuotaManager, "ANONYMOUS", clientId, 100)
 
       // The metrics should use the raw client ID, even if the reporters internally sanitize them

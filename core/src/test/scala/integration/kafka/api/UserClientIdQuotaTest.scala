@@ -32,6 +32,8 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   @BeforeEach
   override def setUp(): Unit = {
     this.serverConfig.setProperty(KafkaConfig.SslClientAuthProp, "required")
+    this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
+    this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     super.setUp()
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(
