@@ -28,18 +28,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 
-/**
- * Tests the selector with the default TLS version - TLS 1.3
- */
-public class DefaultTlsSelectorTest extends SslSelectorTest {
+@EnabledForJreRange(min = JRE.JAVA_11) // TLS 1.3 is only supported with Java 11 and newer
+public class Tls13SelectorTest extends SslSelectorTest {
 
     @Override
     protected Map<String, Object> createSslClientConfigs(File trustStoreFile) throws GeneralSecurityException, IOException {
-        return TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
+        Map<String, Object> configs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT,
+            trustStoreFile, "client");
+        configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, asList("TLSv1.3"));
+        return configs;
     }
 
     /**
