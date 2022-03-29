@@ -180,10 +180,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L)
-            );
+            // all records expired as actual from is 59001 and to is 1000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
 
             assertEquals(expected, toList(values));
         }
@@ -191,11 +189,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L)
-            );
+            // all records expired as actual from is 59001 and to is 1000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
 
             assertEquals(expected, toList(values));
         }
@@ -203,20 +198,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L)
-            );
-
+            // all records expired as actual from is 59001 and to is 1000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
             assertEquals(expected, toList(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
+            // key B is expired as actual from is 59001
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
                 KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
             );
 
@@ -226,10 +217,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             null, null, 0, windows[3].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
+            // keys A and B expired as actual from is 59001
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
                 KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
             );
 
@@ -251,10 +240,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
-            );
+            // all records expired as actual from is 59001 and to = 1000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
 
             assertEquals(expected, toList(values));
         }
@@ -262,11 +249,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
-            );
+            // all records expired as actual from is 59001 and to = 1000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
 
             assertEquals(expected, toList(values));
         }
@@ -274,21 +258,17 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
-            );
-
+            // all records expired as actual from is 59001 and to = 1000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
             assertEquals(expected, toList(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L),
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L)
+            // only 1 record left as actual from is 59001 and to = 60,000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
             );
 
             assertEquals(expected, toList(values));
@@ -297,11 +277,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             null, null, 0, windows[3].start())) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L),
-                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
-                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
+            // only 1 record left as actual from is 59001 and to = 60,000
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
             );
 
             assertEquals(expected, toList(values));
@@ -1054,13 +1032,20 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
 
+        // don't return expired records.
         assertEquals(
-            asList(
-                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                KeyValue.pair(new Windowed<>(key, windows[1]), 100L),
-                KeyValue.pair(new Windowed<>(key, windows[2]), 500L)
-            ),
+            Collections.emptyList(),
             results
+        );
+
+        final List<KeyValue<Windowed<String>, Long>> results1 = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 59000, 60000));
+
+        // only non expired record as actual from is 59001
+        assertEquals(
+            Collections.singletonList(
+                KeyValue.pair(new Windowed<>(key, windows[3]), 1000L)
+            ),
+                results1
         );
 
         segments.close();
@@ -1086,9 +1071,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         );
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
+        // only one record returned as actual from is 59001
         assertEquals(
-            asList(
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 50L),
+            Collections.singletonList(
                 KeyValue.pair(new Windowed<>(keyB, windows[3]), 100L)
             ),
             results
@@ -1116,11 +1101,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
             segmentDirs()
         );
 
+        // key A expired as actual from is 59,001
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.backwardAll());
         assertEquals(
-            asList(
-                KeyValue.pair(new Windowed<>(keyB, windows[3]), 100L),
-                KeyValue.pair(new Windowed<>(keyA, windows[0]), 50L)
+            Collections.singletonList(
+                KeyValue.pair(new Windowed<>(keyB, windows[3]), 100L)
             ),
             results
         );
@@ -1147,9 +1132,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         );
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetchAll(0L, 60_000L));
+        // only 1 record fetched as actual from is 59001
         assertEquals(
-            asList(
-                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+            Collections.singletonList(
                 KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
             ),
             results
@@ -1277,9 +1262,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         assertEquals(2, bytesStore.getSegments().size());
 
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
-        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 100L));
 
+        // after restoration, only 1 record should be returned as actual from is 59001 and the prior record is expired.
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
     }
@@ -1332,10 +1317,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
         final String key = "a";
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
-        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
-        expected.add(new KeyValue<>(new Windowed<>(key, windows[2]), 100L));
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 200L));
 
+        // after restoration, only non expired segments should be returned which is one as actual from is 59001
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
         assertThat(bytesStore.getPosition(), Matchers.notNullValue());
@@ -1368,9 +1352,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         assertEquals(2, bytesStore.getSegments().size());
 
         final String key = "a";
+
+        // only non expired record as actual from is 59001
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
-        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
-        expected.add(new KeyValue<>(new Windowed<>(key, windows[2]), 100L));
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 200L));
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
