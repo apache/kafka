@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.NonEmptyString;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
@@ -252,6 +253,9 @@ public class ProducerConfig extends AbstractConfig {
             "The default is <code>null</code>, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+    public static final String ENABLE_FORCE_OLD_MESSAGE = "enable.force.old.message.format";
+    public static final String ENABLE_FORCE_OLD_MESSAGE_DOC = "Record version 1 will be force to use as the produce message format";
+
     /**
      * <code>security.providers</code>
      */
@@ -389,7 +393,13 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .define(ENABLE_FORCE_OLD_MESSAGE,
+                                        Type.INT,
+                                        null,
+                                        new ConfigDef.NonEmptyString(),
+                                        Importance.LOW,
+                                        ENABLE_FORCE_OLD_MESSAGE_DOC);
     }
 
     @Override

@@ -33,9 +33,23 @@ public class ApiVersions {
 
     private final Map<String, NodeApiVersions> nodeApiVersions = new HashMap<>();
     private byte maxUsableProduceMagic = RecordBatch.CURRENT_MAGIC_VALUE;
+    private byte forceProduceOldMessageVer = -1;
+    private short maxProduceVersion = -1;
+
+    public ApiVersions() {
+    }
+
+    public ApiVersions(int messageVer) {
+        this.forceProduceOldMessageVer = (byte) messageVer;
+        if (forceProduceOldMessageVer >= 0 && forceProduceOldMessageVer < RecordBatch.MAGIC_VALUE_V2) {
+            maxUsableProduceMagic = this.forceProduceOldMessageVer;
+            maxProduceVersion = 3;
+        }
+    }
 
     public synchronized void update(String nodeId, NodeApiVersions nodeApiVersions) {
         this.nodeApiVersions.put(nodeId, nodeApiVersions);
+
         this.maxUsableProduceMagic = computeMaxUsableProduceMagic();
     }
 
@@ -56,6 +70,10 @@ public class ApiVersions {
             byte nodeMaxUsableMagic = ProduceRequest.requiredMagicForVersion(versions.latestUsableVersion(ApiKeys.PRODUCE));
             maxUsableMagic = (byte) Math.min(nodeMaxUsableMagic, maxUsableMagic);
         }
+
+        if (forceProduceOldMessageVer >= 0) {
+            maxUsableMagic = (byte) Math.min(maxUsableMagic, forceProduceOldMessageVer);
+        }
         return maxUsableMagic;
     }
 
@@ -63,4 +81,7 @@ public class ApiVersions {
         return maxUsableProduceMagic;
     }
 
+    public short getMaxProduceVersion() {
+        return maxProduceVersion;
+    }
 }

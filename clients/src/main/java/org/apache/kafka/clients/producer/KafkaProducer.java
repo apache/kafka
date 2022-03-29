@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
@@ -84,7 +85,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
 
 /**
  * A Kafka client that publishes records to the Kafka cluster.
@@ -390,7 +390,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
-            this.apiVersions = new ApiVersions();
+            int enableForceUseOldMessage = userProvidedConfigs.containsKey(ProducerConfig.ENABLE_FORCE_OLD_MESSAGE) ?
+                    (Integer) userProvidedConfigs.get(ProducerConfig.ENABLE_FORCE_OLD_MESSAGE) : 0;
+
+            this.apiVersions = new ApiVersions(enableForceUseOldMessage);
             this.transactionManager = configureTransactionState(config, logContext);
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
