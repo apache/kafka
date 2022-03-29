@@ -140,10 +140,18 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             currentTime = currentTime + SEGMENT_INTERVAL;
             windowStore.put(1, "four", currentTime);
 
-            // should only have 2 values as the first segment is no longer open
-            assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
-            assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
-            assertFalse(iterator.hasNext());
+            if (storeType == StoreType.RocksDBTimeOrderedWindowStoreWithIndex) {
+                // In case of RocksDBTimeOrderedWindowStoreWithIndex, there's an extra get call to check if a key exists in base store or not
+                // now, that record is expired so as it's ts is 60,000 which is < (observedTime - retention + 1) == 60,001
+                // and hence that record is also not returned.
+                assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
+                assertFalse(iterator.hasNext());
+            } else {
+                // should only have 2 values as the first segment is no longer open
+                assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
+                assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
+                assertFalse(iterator.hasNext());
+            }
         }
     }
 
@@ -187,16 +195,15 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             ),
             segmentDirs(baseDir)
         );
-
+        // expired record
         assertEquals(
-            // expired record
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 0,
                 ofEpochMilli(startTime - WINDOW_SIZE),
                 ofEpochMilli(startTime + WINDOW_SIZE))));
+        // expired record
         assertEquals(
-            // expired record
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 1,
@@ -655,8 +662,8 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 3,
                 ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
+        // expired record
         assertEquals(
-            // expired record
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 4,

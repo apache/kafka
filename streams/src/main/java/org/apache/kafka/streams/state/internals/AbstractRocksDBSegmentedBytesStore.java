@@ -275,7 +275,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public byte[] get(final Bytes key) {
-        final S segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
+        final long timestampFromKey = keySchema.segmentTimestamp(key);
+        // check if timestamp is expired
+        if (timestampFromKey < observedStreamTime - retentionPeriod + 1)
+            return null;
+        final S segment = segments.getSegmentForTimestamp(timestampFromKey);
         if (segment == null) {
             return null;
         }
