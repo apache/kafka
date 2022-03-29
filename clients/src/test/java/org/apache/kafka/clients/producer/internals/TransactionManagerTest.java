@@ -2550,7 +2550,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
+    public void testTransitionToAbortableErrorWhenRetriedBatchIsExpired() throws InterruptedException {
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
@@ -2603,9 +2603,7 @@ public class TransactionManagerTest {
         }
         runUntil(commitResult::isCompleted);
         assertFalse(commitResult.isSuccessful());  // the commit should have been dropped.
-
-        assertTrue(transactionManager.hasFatalError());
-        assertFalse(transactionManager.hasOngoingTransaction());
+        assertTrue(transactionManager.hasAbortableError());
     }
 
     @Test
