@@ -25,6 +25,7 @@ import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -222,11 +223,11 @@ class AbstractFetcherManagerTest {
     val topicPartitions = mockTopicPartition(10, 100)
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 10) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-        new TestResizeFetcherThread()
+        new TestResizeFetcherThread(sourceBroker)
       }
     }
     try {
-      resizeAndCheckFetcherPartitionDistribution(fetcherManager, topicPartitions, 60)
+      resizeAndCheckFetcherPartitionDistribution(fetcherManager, topicPartitions, 25)
     } finally {
       fetcherManager.closeAllFetchers()
     }
@@ -235,21 +236,26 @@ class AbstractFetcherManagerTest {
   @Test
   def testShrinkThreadPool(): Unit = {
     val topicPartitions = mockTopicPartition(10, 100)
-    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 100) {
+    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 20) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-        new TestResizeFetcherThread()
+        new TestResizeFetcherThread(sourceBroker)
       }
     }
     try {
-      resizeAndCheckFetcherPartitionDistribution(fetcherManager, topicPartitions, 60)
+      resizeAndCheckFetcherPartitionDistribution(fetcherManager, topicPartitions, 5)
     } finally {
       fetcherManager.closeAllFetchers()
     }
   }
 
   def resizeAndCheckFetcherPartitionDistribution(fetcherManager: AbstractFetcherManager[AbstractFetcherThread], topicPartitions: Set[TopicPartition], fetcherNum: Int): Unit = {
-    fetcherManager.addFetcherForPartitions(topicPartitions.map(_ -> InitialFetchState(None, new BrokerEndPoint(0, "localhost", 9092), 0, 0)).toMap)
-    fetcherManager.resizeThreadPool(60)
+
+    fetcherManager.addFetcherForPartitions(topicPartitions.map(tp => {
+      val brokerId = Utils.abs(tp.topic().hashCode % 5)
+      val brokerEndPoint = new BrokerEndPoint(brokerId, s"kafka-host-$brokerId", 9092)
+      tp -> InitialFetchState(None, brokerEndPoint, 0, 0)
+    }).toMap)
+    fetcherManager.resizeThreadPool(fetcherNum)
     val ownedPartitions = mutable.Set.empty[TopicPartition]
     fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
       val fetcherId = brokerIdAndFetcherId.fetcherId
@@ -274,12 +280,12 @@ class AbstractFetcherManagerTest {
     res.toSet
   }
 
-  class TestResizeFetcherThread(val replicaId: Int = 0, val leaderId: Int = 1, fetchBackOffMs: Int = 0)
+  class TestResizeFetcherThread(sourceBroker: BrokerEndPoint)
     extends AbstractFetcherThread("test-resize-fetcher",
       clientId = "mock-fetcher",
-      sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = 9092),
+      sourceBroker,
       new FailedPartitions,
-      fetchBackOffMs = fetchBackOffMs,
+      fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {
     override protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
       None
