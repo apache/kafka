@@ -219,26 +219,14 @@ class AbstractFetcherManagerTest {
 
   @Test
   def testExpandThreadPool(): Unit = {
-    val topicPartition = mockTopicPartition(10, 100)
+    val topicPartitions = mockTopicPartition(10, 100)
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 10) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
         new TestResizeFetcherThread()
       }
     }
     try {
-      fetcherManager.addFetcherForPartitions(topicPartition.map(_ -> InitialFetchState(None, new BrokerEndPoint(0, "localhost", 9092), 0, 1)).toMap)
-
-      fetcherManager.resizeThreadPool(60)
-      val ownedPartitions = mutable.Set.empty[TopicPartition]
-      fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
-        val fetcherId = brokerIdAndFetcherId.fetcherId
-        fetcherThread.partitions.foreach { tp =>
-          ownedPartitions += tp
-          assertEquals(fetcherManager.getFetcherId(tp), fetcherId)
-        }
-      }
-      // Verify that all partitions are owned by the fetcher threads.
-      assertEquals(topicPartition, ownedPartitions)
+      resizeAndCheckFetcherPartitionDistribution(fetcherManager, topicPartitions, 60)
     } finally {
       fetcherManager.closeAllFetchers()
     }
@@ -246,28 +234,32 @@ class AbstractFetcherManagerTest {
 
   @Test
   def testShrinkThreadPool(): Unit = {
-    val topicPartition = mockTopicPartition(10, 100)
+    val topicPartitions = mockTopicPartition(10, 100)
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 100) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
         new TestResizeFetcherThread()
       }
     }
     try {
-      fetcherManager.addFetcherForPartitions(topicPartition.map(_ -> InitialFetchState(None, new BrokerEndPoint(0, "localhost", 9092), 0, 0)).toMap)
-      fetcherManager.resizeThreadPool(60)
-      val ownedPartitions = mutable.Set.empty[TopicPartition]
-      fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
-        val fetcherId = brokerIdAndFetcherId.fetcherId
-        fetcherThread.partitions.foreach { tp =>
-          ownedPartitions += tp
-          assertEquals(fetcherManager.getFetcherId(tp), fetcherId)
-        }
-      }
-      // Verify that all partitions are owned by the fetcher threads.
-      assertEquals(topicPartition, ownedPartitions)
+      resizeAndCheckFetcherPartitionDistribution(fetcherManager, topicPartitions, 60)
     } finally {
       fetcherManager.closeAllFetchers()
     }
+  }
+
+  def resizeAndCheckFetcherPartitionDistribution(fetcherManager: AbstractFetcherManager[AbstractFetcherThread], topicPartitions: Set[TopicPartition], fetcherNum: Int): Unit = {
+    fetcherManager.addFetcherForPartitions(topicPartitions.map(_ -> InitialFetchState(None, new BrokerEndPoint(0, "localhost", 9092), 0, 0)).toMap)
+    fetcherManager.resizeThreadPool(60)
+    val ownedPartitions = mutable.Set.empty[TopicPartition]
+    fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
+      val fetcherId = brokerIdAndFetcherId.fetcherId
+      fetcherThread.partitions.foreach { tp =>
+        ownedPartitions += tp
+        assertEquals(fetcherManager.getFetcherId(tp), fetcherId)
+      }
+    }
+    // Verify that all partitions are owned by the fetcher threads.
+    assertEquals(topicPartitions, ownedPartitions)
   }
 
   def mockTopicPartition(topicNum: Int, partitionNum: Int): Set[TopicPartition] = {
