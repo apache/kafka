@@ -100,7 +100,8 @@ public class FetchResponse extends AbstractResponse {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
-                    responseData = new LinkedHashMap<>();
+                    final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseDataTmp =
+                            new LinkedHashMap<>();
                     data.responses().forEach(topicResponse -> {
                         String name;
                         if (version < 13) {
@@ -110,9 +111,10 @@ public class FetchResponse extends AbstractResponse {
                         }
                         if (name != null) {
                             topicResponse.partitions().forEach(partition ->
-                                responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                                responseDataTmp.put(new TopicPartition(name, partition.partitionIndex()), partition));
                         }
                     });
+                    responseData = responseDataTmp;
                 }
             }
         }
