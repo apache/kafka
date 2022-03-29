@@ -558,13 +558,13 @@ class LocalLog(@volatile private var _dir: File,
       debug(s"Truncate and start at offset $newOffset")
       checkIfMemoryMappedBufferClosed()
       val segmentsToDelete = List[LogSegment]() ++ segments.values
-      if (segmentsToDelete.size > 1)
-        removeAndDeleteSegments(segmentsToDelete.dropRight(1), asyncDelete = true, LogTruncation(this))
 
-      // Use createAndDeleteSegment() to create new segment first and then delete the last segment to prevent missing
-      // active segment during the deletion process
-      if (segmentsToDelete.nonEmpty)
+      if (segmentsToDelete.nonEmpty) {
+        removeAndDeleteSegments(segmentsToDelete.dropRight(1), asyncDelete = true, LogTruncation(this))
+        // Use createAndDeleteSegment() to create new segment first and then delete the old last segment to prevent missing
+        // active segment during the deletion process
         createAndDeleteSegment(newOffset, segmentsToDelete.last, asyncDelete = true, LogTruncation(this))
+      }
 
       updateLogEndOffset(newOffset)
 
