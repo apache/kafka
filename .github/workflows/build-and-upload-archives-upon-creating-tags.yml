@@ -39,8 +39,7 @@ jobs:
     needs:
       - code-analysis
       - unit-test
-      - int-test-clients
-      - int-test-core
+      - int-test
     steps:
       # Checks out a copy of your repository on the ubuntu-latest machine
       - name: Checkout code
