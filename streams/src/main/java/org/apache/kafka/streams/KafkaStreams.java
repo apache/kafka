@@ -109,6 +109,7 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 
 /**
@@ -939,7 +940,7 @@ public class KafkaStreams implements AutoCloseable {
         streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
 
-        totalCacheSize = applicationConfigs.getTotalCacheSize();
+        totalCacheSize = getTotalCacheSize(applicationConfigs);
         inputBufferMaxBytes = applicationConfigs.getLong(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG);
         final int numStreamThreads = topologyMetadata.getNumStreamThreads(applicationConfigs);
 
@@ -1047,9 +1048,9 @@ public class KafkaStreams implements AutoCloseable {
                 // and then resize them later
                 streamThread = createAndAddStreamThread(0L, 0L, threadIdx);
                 final int numLiveThreads = getNumLiveStreamThreads();
-                resizeThreadCacheAndBufferMemory(numLiveThreads + 1);
+                resizeThreadCacheAndBufferMemory(numLiveThreads);
                 log.info("Adding StreamThread-{}, there are now {} threads with cache size/max buffer size values as {} per thread.",
-                        threadIdx, numLiveThreads + 1, getThreadCacheAndBufferMemoryString());
+                        threadIdx, numLiveThreads, getThreadCacheAndBufferMemoryString());
             }
 
             synchronized (stateLock) {
