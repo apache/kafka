@@ -52,6 +52,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected final AbstractSegments<S> segments;
     protected final KeySchema baseKeySchema;
     protected final Optional<KeySchema> indexKeySchema;
+    private final long retentionPeriod;
 
 
     protected ProcessorContext context;
@@ -66,22 +67,27 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
                                                  final KeySchema baseKeySchema,
                                                  final Optional<KeySchema> indexKeySchema,
-                                                 final AbstractSegments<S> segments) {
+                                                 final AbstractSegments<S> segments,
+                                                 final long retentionPeriod) {
         this.name = name;
         this.baseKeySchema = baseKeySchema;
         this.indexKeySchema = indexKeySchema;
         this.segments = segments;
+        this.retentionPeriod = retentionPeriod;
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
+
+        final long actualFrom = getActualFrom(0);
+
         final List<S> searchSpace = segments.allSegments(true);
-        final Bytes from = baseKeySchema.lowerRange(null, 0);
+        final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, true),
                 from,
                 to,
                 true);
@@ -89,13 +95,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
+
+        final long actualFrom = getActualFrom(0);
+
         final List<S> searchSpace = segments.allSegments(false);
-        final Bytes from = baseKeySchema.lowerRange(null, 0);
+        final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, false),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, false),
                 from,
                 to,
                 false);
@@ -118,6 +127,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
+
+    protected long getActualFrom(final long from) {
+        return Math.max(from, observedStreamTime - retentionPeriod + 1);
+    }
 
     // For testing
     void putIndex(final Bytes indexKey, final byte[] value) {
@@ -191,7 +204,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     @Override
     public byte[] get(final Bytes rawKey) {
-        final S segment = segments.getSegmentForTimestamp(baseKeySchema.segmentTimestamp(rawKey));
+        final long timestampFromRawKey = baseKeySchema.segmentTimestamp(rawKey);
+        // check if timestamp is expired
+        if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1)
+            return null;
+        final S segment = segments.getSegmentForTimestamp(timestampFromRawKey);
         if (segment == null) {
             return null;
         }
