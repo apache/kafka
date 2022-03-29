@@ -691,9 +691,9 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         <blockquote>
           <div>
             <p>
-              This configuration sets list of tag keys used to distribute standby replicas across Kafka Streams
-              instances. When configured, Kafka Streams will make a best-effort to distribute the standby tasks over
-              each client tag dimension.
+              This configuration sets a list of tag keys used to distribute standby replicas across Kafka Streams
+              clients. When configured, Kafka Streams will make a best-effort to distribute the standby tasks over
+              clients with different tag values.
             </p>
             <p>
               Tags for the Kafka Streams instances can be set via <code class="docutils literal"><span class="pre">client.tag.</span></code>
