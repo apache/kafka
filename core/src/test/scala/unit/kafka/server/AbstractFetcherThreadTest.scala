@@ -20,11 +20,13 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
+
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
+import kafka.server.AbstractFetcherThread.ReplicaFetch
+import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
@@ -1330,4 +1332,5 @@ class AbstractFetcherThreadTest {
     }
 
   }
+
 }
