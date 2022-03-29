@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,6 +76,7 @@ public class StreamsConfigUtils {
             processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
+    @SuppressWarnings("deprecation")
     public static long getTotalCacheSize(final StreamsConfig config) {
         // both deprecated and new config set. Warn and use the new one.
         if (config.originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG) && config.originals().containsKey(STATESTORE_CACHE_MAX_BYTES_CONFIG)) {
