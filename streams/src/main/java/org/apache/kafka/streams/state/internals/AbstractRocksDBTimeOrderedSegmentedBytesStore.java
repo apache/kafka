@@ -214,7 +214,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         }
 
         if (indexKeySchema.isPresent()) {
-            final List<KeyValueSegment> searchSpace = indexKeySchema.get().segmentsToSearch(segments, from, to,
+            final List<KeyValueSegment> searchSpace = indexKeySchema.get().segmentsToSearch(segments, actualFrom, to,
                 forward);
 
             final Bytes binaryFrom = indexKeySchema.get().lowerRange(keyFrom, from);
@@ -228,10 +228,10 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
                 forward));
         }
 
-        final List<KeyValueSegment> searchSpace = baseKeySchema.segmentsToSearch(segments, from, to,
+        final List<KeyValueSegment> searchSpace = baseKeySchema.segmentsToSearch(segments, actualFrom, to,
             forward);
 
-        final Bytes binaryFrom = baseKeySchema.lowerRange(keyFrom, from);
+        final Bytes binaryFrom = baseKeySchema.lowerRange(keyFrom, actualFrom);
         final Bytes binaryTo = baseKeySchema.upperRange(keyTo, to);
 
         return new SegmentIterator<>(
@@ -258,13 +258,13 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<KeyValueSegment> searchSpace = segments.segments(timeFrom, timeTo, true);
-        final Bytes binaryFrom = baseKeySchema.lowerRange(null, timeFrom);
+        final List<KeyValueSegment> searchSpace = segments.segments(actualFrom, timeTo, true);
+        final Bytes binaryFrom = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, timeFrom, timeTo, true),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, true),
                 binaryFrom,
                 binaryTo,
                 true);
@@ -280,13 +280,13 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<KeyValueSegment> searchSpace = segments.segments(timeFrom, timeTo, false);
-        final Bytes binaryFrom = baseKeySchema.lowerRange(null, timeFrom);
+        final List<KeyValueSegment> searchSpace = segments.segments(actualFrom, timeTo, false);
+        final Bytes binaryFrom = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, timeFrom, timeTo, false),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, false),
                 binaryFrom,
                 binaryTo,
                 false);
