@@ -758,4 +758,9 @@ public class ConfigDefTest {
                                                         "lst doc"));
     }
 
+    @Test
+    public void testListSizeValidatorToString() {
+        assertEquals("List containing maximum of 5 elements", ListSize.atMostOfSize(5).toString());
+    }
+
 }
