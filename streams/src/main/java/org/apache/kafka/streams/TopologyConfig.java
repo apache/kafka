@@ -230,19 +230,6 @@ public class TopologyConfig extends AbstractConfig {
     }
 
     /**
-     * Currently all topologies share the same state store cache and memory, so overriding the cache size of
-     * individual topologies to anything other than 0 has no effect. It's intended use is to allow fine-grained
-     * control of cache buffering at the topology level.
-     */
-    private void maybeLogWarningForAllowedCacheSizeValue(final String topologyName, final int cacheSize, final String configName) {
-        if (cacheSize != 0) {
-            log.warn("Topology {} is overriding {} to {} but this will not have any effect as the topology-level cache"
-                         + " size config only controls whether cache buffering is enabled or disabled, thus the only"
-                         + "valid override value is 0", topologyName, configName, cacheSize);
-        }
-    }
-
-    /**
      * @return true if there is an override for this config in the properties of this NamedTopology. Applications that
      *         don't use named topologies will just refer to the global defaults regardless of the topology properties
      */
