@@ -431,6 +431,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     private long maxReadOffset = Long.MAX_VALUE;
 
     /**
+     * The minimum offset that we'll allow for the high water mark.
+     */
+    private long minHighwaterMark = 0;
+
+    /**
      * The listener objects attached to this local log manager.
      */
     private final Map<Listener<ApiMessageAndVersion>, MetaLogListenerData> listeners = new IdentityHashMap<>();
@@ -720,6 +725,16 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         );
     }
 
+    @Override
+    public synchronized OptionalLong highWatermark() {
+        long highWatermark = shared.prevOffset + 1;
+        if (highWatermark < minHighwaterMark) {
+            return OptionalLong.empty();
+        } else {
+            return OptionalLong.of(highWatermark);
+        }
+    }
+
     private Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
         return Optional.of(
             new MockRawSnapshotWriter(snapshotId, buffer -> {
@@ -763,6 +778,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void setMinHighwaterMark(long minHighwaterMark) {
+        this.minHighwaterMark = minHighwaterMark;
     }
 
     public void resignAfterNonAtomicCommit() {

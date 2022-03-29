@@ -405,6 +405,8 @@ object KafkaConfig {
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
+  val EarlyStartListenersProp = "early.start.listeners"
+
   /** ********* Socket Server Configuration ***********/
   val ListenersProp = "listeners"
   val AdvertisedListenersProp = "advertised.listeners"
@@ -725,7 +727,11 @@ object KafkaConfig {
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements <code>${classOf[Authorizer].getName}</code>" +
-  " interface, which is used by the broker for authorization."
+    " interface, which is used by the broker for authorization."
+  val EarlyStartListenersDoc = "A comma-separated list of listener names which should be started before any non-early start listeners. " +
+    "This is useful in cases where the startup process requires some listeners to be open before other listeners can be brought up. " +
+    "In general, a listener should not appear in this list if it accepts external traffic."
+
   /** ********* Socket Server Configuration ***********/
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
     s" If the listener name is not a security protocol, <code>$ListenerSecurityProtocolMapProp</code> must also be set.\n" +
@@ -1142,6 +1148,7 @@ object KafkaConfig {
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
+      .define(EarlyStartListenersProp, STRING, null,  HIGH, EarlyStartListenersDoc)
 
       /** ********* Socket Server Configuration ***********/
       .define(ListenersProp, STRING, Defaults.Listeners, HIGH, ListenersDoc)
@@ -1653,12 +1660,29 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val metadataSnapshotMaxNewRecordBytes = getLong(KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp)
 
   /************* Authorizer Configuration ***********/
-  val authorizer: Option[Authorizer] = {
+  val createNewAuthorizer: Option[Authorizer] = {
     val className = getString(KafkaConfig.AuthorizerClassNameProp)
     if (className == null || className.isEmpty)
       None
     else {
       Some(AuthorizerUtils.createAuthorizer(className))
+    }
+  }
+
+  val earlyStartListeners: Set[ListenerName] = {
+    val listenersSet = listeners.map(_.listenerName).toSet
+    val controllerListenersSet = controllerListeners.map(_.listenerName).toSet
+    Option(getString(KafkaConfig.EarlyStartListenersProp)) match {
+      case None => controllerListenersSet
+      case Some(str) =>
+        str.split(",").map(_.trim()).filter(!_.isEmpty).map { str =>
+          val listenerName = new ListenerName(str)
+          if (!listenersSet.contains(listenerName) && !controllerListenersSet.contains(listenerName))
+            throw new ConfigException(s"${KafkaConfig.EarlyStartListenersProp} contains " +
+              s"listener ${listenerName.value()}, but this is not contained in " +
+              s"${KafkaConfig.ListenersProp} or ${KafkaConfig.ControllerListenerNamesProp}")
+          listenerName
+        }.toSet
     }
   }
 

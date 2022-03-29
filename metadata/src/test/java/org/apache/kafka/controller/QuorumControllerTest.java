@@ -1071,4 +1071,9 @@ public class QuorumControllerTest {
             }
         }
     }
+
+    @Test
+    public void testQuorumControllerCompletesAuthorizerInitialLoad() throws Throwable {
+        // TODO: add test here.
+    }
 }
