@@ -37,12 +37,12 @@ public class UnattachedStateTest {
     private final int epoch = 5;
     private final int electionTimeoutMs = 10000;
 
-    private UnattachedState newUnattachedState(Set<Integer> voters, Optional<LogOffsetMetadata> highWatermark) {
+    private UnattachedState newUnattachedStateWithVoters(Set<Integer> voters) {
         return new UnattachedState(
             time,
             epoch,
             voters,
-            highWatermark,
+            Optional.empty(),
             electionTimeoutMs,
             logContext
         );
@@ -52,10 +52,7 @@ public class UnattachedStateTest {
     public void testElectionTimeout() {
         Set<Integer> voters = Utils.mkSet(1, 2, 3);
 
-        UnattachedState state = newUnattachedState(
-            voters,
-            Optional.empty()
-        );
+        UnattachedState state = newUnattachedStateWithVoters(voters);
 
         assertEquals(epoch, state.epoch());
 
@@ -75,10 +72,7 @@ public class UnattachedStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        UnattachedState state = newUnattachedState(
-                Utils.mkSet(1, 2, 3),
-                Optional.empty()
-        );
+        UnattachedState state = newUnattachedStateWithVoters(Utils.mkSet(1, 2, 3));
 
         assertEquals(isLogUpToDate, state.canGrantVote(1, isLogUpToDate));
         assertEquals(isLogUpToDate, state.canGrantVote(2, isLogUpToDate));

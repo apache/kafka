@@ -25,7 +25,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,16 +38,13 @@ public class CandidateStateTest {
     private final int electionTimeoutMs = 5000;
     private final LogContext logContext = new LogContext();
 
-    private CandidateState newCandidateState(
-            Set<Integer> voters,
-            Optional<LogOffsetMetadata> highWatermark
-    ) {
+    private CandidateState newCandidateStateWithVoters(Integer... voters) {
         return new CandidateState(
                 time,
                 localId,
                 epoch,
-                voters,
-                highWatermark,
+                Utils.mkSet(voters),
+                Optional.empty(),
                 0,
                 electionTimeoutMs,
                 logContext
@@ -57,7 +53,7 @@ public class CandidateStateTest {
 
     @Test
     public void testSingleNodeQuorum() {
-        CandidateState state = newCandidateState(Collections.singleton(localId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId);
         assertTrue(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
         assertEquals(Collections.emptySet(), state.unrecordedVoters());
@@ -66,10 +62,10 @@ public class CandidateStateTest {
     @Test
     public void testTwoNodeQuorumVoteRejected() {
         int otherNodeId = 1;
-        CandidateState state = newCandidateState(Utils.mkSet(localId, otherNodeId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, otherNodeId);
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
-        assertEquals(Collections.singleton(otherNodeId), state.unrecordedVoters());
+        assertEquals(Utils.mkSet(otherNodeId), state.unrecordedVoters());
         assertTrue(state.recordRejectedVote(otherNodeId));
         assertFalse(state.isVoteGranted());
         assertTrue(state.isVoteRejected());
@@ -78,11 +74,10 @@ public class CandidateStateTest {
     @Test
     public void testTwoNodeQuorumVoteGranted() {
         int otherNodeId = 1;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, otherNodeId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, otherNodeId);
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
-        assertEquals(Collections.singleton(otherNodeId), state.unrecordedVoters());
+        assertEquals(Utils.mkSet(otherNodeId), state.unrecordedVoters());
         assertTrue(state.recordGrantedVote(otherNodeId));
         assertEquals(Collections.emptySet(), state.unrecordedVoters());
         assertFalse(state.isVoteRejected());
@@ -93,13 +88,12 @@ public class CandidateStateTest {
     public void testThreeNodeQuorumVoteGranted() {
         int node1 = 1;
         int node2 = 2;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, node1, node2), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, node1, node2);
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
         assertEquals(Utils.mkSet(node1, node2), state.unrecordedVoters());
         assertTrue(state.recordGrantedVote(node1));
-        assertEquals(Collections.singleton(node2), state.unrecordedVoters());
+        assertEquals(Utils.mkSet(node2), state.unrecordedVoters());
         assertTrue(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
         assertTrue(state.recordRejectedVote(node2));
@@ -112,13 +106,12 @@ public class CandidateStateTest {
     public void testThreeNodeQuorumVoteRejected() {
         int node1 = 1;
         int node2 = 2;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, node1, node2), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, node1, node2);
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
         assertEquals(Utils.mkSet(node1, node2), state.unrecordedVoters());
         assertTrue(state.recordRejectedVote(node1));
-        assertEquals(Collections.singleton(node2), state.unrecordedVoters());
+        assertEquals(Utils.mkSet(node2), state.unrecordedVoters());
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
         assertTrue(state.recordRejectedVote(node2));
@@ -130,16 +123,14 @@ public class CandidateStateTest {
     @Test
     public void testCannotRejectVoteFromLocalId() {
         int otherNodeId = 1;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, otherNodeId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, otherNodeId);
         assertThrows(IllegalArgumentException.class, () -> state.recordRejectedVote(localId));
     }
 
     @Test
     public void testCannotChangeVoteGrantedToRejected() {
         int otherNodeId = 1;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, otherNodeId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, otherNodeId);
         assertTrue(state.recordGrantedVote(otherNodeId));
         assertThrows(IllegalArgumentException.class, () -> state.recordRejectedVote(otherNodeId));
         assertTrue(state.isVoteGranted());
@@ -148,8 +139,7 @@ public class CandidateStateTest {
     @Test
     public void testCannotChangeVoteRejectedToGranted() {
         int otherNodeId = 1;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, otherNodeId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, otherNodeId);
         assertTrue(state.recordRejectedVote(otherNodeId));
         assertThrows(IllegalArgumentException.class, () -> state.recordGrantedVote(otherNodeId));
         assertTrue(state.isVoteRejected());
@@ -158,8 +148,7 @@ public class CandidateStateTest {
     @Test
     public void testCannotGrantOrRejectNonVoters() {
         int nonVoterId = 1;
-        CandidateState state = newCandidateState(
-            Collections.singleton(localId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId);
         assertThrows(IllegalArgumentException.class, () -> state.recordGrantedVote(nonVoterId));
         assertThrows(IllegalArgumentException.class, () -> state.recordRejectedVote(nonVoterId));
     }
@@ -167,8 +156,7 @@ public class CandidateStateTest {
     @Test
     public void testIdempotentGrant() {
         int otherNodeId = 1;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, otherNodeId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, otherNodeId);
         assertTrue(state.recordGrantedVote(otherNodeId));
         assertFalse(state.recordGrantedVote(otherNodeId));
     }
@@ -176,8 +164,7 @@ public class CandidateStateTest {
     @Test
     public void testIdempotentReject() {
         int otherNodeId = 1;
-        CandidateState state = newCandidateState(
-            Utils.mkSet(localId, otherNodeId), Optional.empty());
+        CandidateState state = newCandidateStateWithVoters(localId, otherNodeId);
         assertTrue(state.recordRejectedVote(otherNodeId));
         assertFalse(state.recordRejectedVote(otherNodeId));
     }
@@ -185,10 +172,7 @@ public class CandidateStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        CandidateState state = newCandidateState(
-            Utils.mkSet(1, 2, 3),
-            Optional.empty()
-        );
+        CandidateState state = newCandidateStateWithVoters(1, 2, 3);
 
         assertFalse(state.canGrantVote(1, isLogUpToDate));
         assertFalse(state.canGrantVote(2, isLogUpToDate));

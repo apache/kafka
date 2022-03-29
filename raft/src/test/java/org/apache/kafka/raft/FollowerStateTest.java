@@ -25,7 +25,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,16 +38,13 @@ public class FollowerStateTest {
     private final int fetchTimeoutMs = 15000;
     int leaderId = 3;
 
-    private FollowerState newFollowerState(
-        Set<Integer> voters,
-        Optional<LogOffsetMetadata> highWatermark
-    ) {
+    private FollowerState newFollowerStateWithVoters(Integer... voters) {
         return new FollowerState(
             time,
             epoch,
             leaderId,
-            voters,
-            highWatermark,
+            Utils.mkSet(voters),
+            Optional.empty(),
             fetchTimeoutMs,
             logContext
         );
@@ -56,7 +52,7 @@ public class FollowerStateTest {
 
     @Test
     public void testFetchTimeoutExpiration() {
-        FollowerState state = newFollowerState(Utils.mkSet(1, 2, 3), Optional.empty());
+        FollowerState state = newFollowerStateWithVoters(1, 2, 3);
 
         assertFalse(state.hasFetchTimeoutExpired(time.milliseconds()));
         assertEquals(fetchTimeoutMs, state.remainingFetchTimeMs(time.milliseconds()));
@@ -72,7 +68,7 @@ public class FollowerStateTest {
 
     @Test
     public void testMonotonicHighWatermark() {
-        FollowerState state = newFollowerState(Utils.mkSet(1, 2, 3), Optional.empty());
+        FollowerState state = newFollowerStateWithVoters(1, 2, 3);
 
         OptionalLong highWatermark = OptionalLong.of(15L);
         state.updateHighWatermark(highWatermark);
@@ -85,10 +81,7 @@ public class FollowerStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        FollowerState state = newFollowerState(
-            Utils.mkSet(1, 2, 3),
-            Optional.empty()
-        );
+        FollowerState state = newFollowerStateWithVoters(1, 2, 3);
 
         assertFalse(state.canGrantVote(1, isLogUpToDate));
         assertFalse(state.canGrantVote(2, isLogUpToDate));
