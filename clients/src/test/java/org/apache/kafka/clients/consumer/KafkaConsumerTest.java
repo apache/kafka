@@ -138,6 +138,7 @@ import java.util.stream.Stream;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.consumer.KafkaConsumer.DEFAULT_REASON;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2352,7 +2353,31 @@ public class KafkaConsumerTest {
         return coordinator;
     }
 
-    private Node prepareRebalance(MockClient client, Node node, ConsumerPartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
+    private Node prepareRebalance(
+        MockClient client,
+        Node node,
+        ConsumerPartitionAssignor assignor,
+        List<TopicPartition> partitions,
+        Node coordinator
+    ) {
+        return prepareRebalance(
+            client,
+            node,
+            assignor,
+            partitions,
+            coordinator,
+            Optional.empty()
+        );
+    }
+
+    private Node prepareRebalance(
+        MockClient client,
+        Node node,
+        ConsumerPartitionAssignor assignor,
+        List<TopicPartition> partitions,
+        Node coordinator,
+        Optional<String> expectedReason
+    ) {
         if (coordinator == null) {
             // lookup coordinator
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
@@ -2360,7 +2385,14 @@ public class KafkaConsumerTest {
         }
 
         // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
+        client.prepareResponseFrom(
+            body -> {
+                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
+                return expectedReason.map(r -> r.equals(joinGroupRequest.data().reason())).orElse(true);
+            },
+            joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE),
+            coordinator
+        );
 
         // sync group
         client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
@@ -2817,6 +2849,39 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertEquals(countingRebalanceListener.revokedCount, 1);
+    }
+
+    @Test
+    public void testEnforceRebalanceReason() {
+        Time time = new MockTime(1L);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
+        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
+
+        consumer.subscribe(Arrays.asList(topic, topic2), countingRebalanceListener);
+        Node node = metadata.fetch().nodes().get(0);
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
+
+        // a first rebalance to get the assignment, we need two poll calls since we need two round trips to finish join / sync-group
+        consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
+
+        // A null reason should be replaced by the default reason.
+        consumer.enforceRebalance(null);
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null, Optional.of(DEFAULT_REASON));
+        consumer.poll(Duration.ZERO);
+
+        // An empty reason should be replaced by the default reason.
+        consumer.enforceRebalance("");
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null, Optional.of(DEFAULT_REASON));
+        consumer.poll(Duration.ZERO);
+
+        // A non-null and non-empty reason is sent as-is.
+        consumer.enforceRebalance("user provided reason");
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null, Optional.of("user provided reason"));
+        consumer.poll(Duration.ZERO);
     }
 
     @Test
