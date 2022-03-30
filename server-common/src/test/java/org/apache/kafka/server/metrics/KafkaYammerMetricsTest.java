@@ -15,10 +15,9 @@
  * limitations under the License.
  */
 
-package kafka.metrics;
+package org.apache.kafka.server.metrics;
 
 import com.yammer.metrics.core.MetricName;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
