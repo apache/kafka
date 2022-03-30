@@ -233,7 +233,6 @@ jetty-util-9.4.48.v20220622
 jetty-util-ajax-9.4.48.v20220622
 jersey-common-2.34
 jersey-server-2.34
-log4j-1.2.17
 lz4-java-1.7.1
 maven-artifact-3.8.1
 metrics-core-2.2.0
@@ -246,6 +245,7 @@ netty-transport-4.1.73.Final
 netty-transport-native-epoll-4.1.73.Final
 netty-transport-native-unix-common-4.1.73.Final
 plexus-utils-3.2.1
+reload4j-1.2.19
 rocksdbjni-5.18.4
 scala-collection-compat_2.13-2.3.0
 scala-library-2.13.5
@@ -300,8 +300,8 @@ MIT License
 
 argparse4j-0.7.0, see: licenses/argparse-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
-slf4j-api-1.7.30, see: licenses/slf4j-MIT
-slf4j-log4j12-1.7.30, see: licenses/slf4j-MIT
+slf4j-api-1.7.36, see: licenses/slf4j-MIT
+slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
 
 ---------------------------------------
 BSD 2-Clause

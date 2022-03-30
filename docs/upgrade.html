@@ -59,6 +59,8 @@
         (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
         the newer Java clients must be used.
     </li>
+    <li>Kafka has replaced log4j and slf4j-log4j12 with reload4j and slf4j-reload4j due to security concerns.
+        More information can be found at <a href="https://reload4j.qos.ch">reload4j</a>.</li>
 </ol>
 
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
@@ -1479,9 +1481,9 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> The new Java Consumer now supports heartbeating from a background thread. There is a new configuration
          <code>max.poll.interval.ms</code> which controls the maximum time between poll invocations before the consumer
          will proactively leave the group (5 minutes by default). The value of the configuration
-         <code>request.timeout.ms</code> must always be larger than <code>max.poll.interval.ms</code> because this is the maximum
-         time that a JoinGroup request can block on the server while the consumer is rebalancing, so we have changed its default
-         value to just above 5 minutes. Finally, the default value of <code>session.timeout.ms</code> has been adjusted down to
+         <code>request.timeout.ms</code> (default to 30 seconds) must always be smaller than <code>max.poll.interval.ms</code>(default to 5 minutes),
+         since that is the maximum time that a JoinGroup request can block on the server while the consumer is rebalance.
+         Finally, the default value of <code>session.timeout.ms</code> has been adjusted down to
          10 seconds, and the default value of <code>max.poll.records</code> has been changed to 500.</li>
     <li> When using an Authorizer and a user doesn't have <b>Describe</b> authorization on a topic, the broker will no
          longer return TOPIC_AUTHORIZATION_FAILED errors to requests since this leaks topic names. Instead, the UNKNOWN_TOPIC_OR_PARTITION
