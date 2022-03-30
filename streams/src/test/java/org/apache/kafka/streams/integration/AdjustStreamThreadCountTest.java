@@ -470,7 +470,7 @@ public class AdjustStreamThreadCountTest {
                 for (final String log : appender.getMessages()) {
                     // after we replace the thread there should be two remaining threads with 5 bytes each for
                     // the cache and 50 for the input buffer
-                    if (log.endsWith("Adding StreamThread-3, there are now 3 threads with cache size/max buffer size values as 5/50 per thread.")) {
+                    if (log.endsWith("Adding StreamThread-3, there are now 2 threads with cache size/max buffer size values as 5/50 per thread.")) {
                         return;
                     }
                 }
