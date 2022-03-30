@@ -1289,24 +1289,25 @@ public class DistributedHerderTest {
 
     @Test
     public void testDoRestartConnectorAndTasksOnlyTasks() {
-        ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         EasyMock.expect(restartPlan.shouldRestartConnector()).andReturn(true).anyTimes();
         EasyMock.expect(restartPlan.shouldRestartTasks()).andReturn(true).anyTimes();
-        EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();
-        EasyMock.expect(restartPlan.restartTaskCount()).andReturn(1).anyTimes();
-        EasyMock.expect(restartPlan.totalTaskCount()).andReturn(1).anyTimes();
+        // The connector has three tasks
+        EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Arrays.asList(TASK0, TASK1, TASK2)).anyTimes();
+        EasyMock.expect(restartPlan.restartTaskCount()).andReturn(3).anyTimes();
+        EasyMock.expect(restartPlan.totalTaskCount()).andReturn(3).anyTimes();
         EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         herder.assignment = PowerMock.createMock(ExtendedAssignment.class);
         EasyMock.expect(herder.assignment.connectors()).andReturn(Collections.emptyList()).anyTimes();
-        EasyMock.expect(herder.assignment.tasks()).andReturn(Collections.singletonList(taskId)).anyTimes();
+        // But only one task is assigned to this worker
+        EasyMock.expect(herder.assignment.tasks()).andReturn(Collections.singletonList(TASK0)).anyTimes();
 
-        worker.stopAndAwaitTasks(Collections.singletonList(taskId));
+        worker.stopAndAwaitTasks(Collections.singletonList(TASK0));
         PowerMock.expectLastCall();
 
-        herder.onRestart(taskId);
+        herder.onRestart(TASK0);
         EasyMock.expectLastCall();
 
         worker.startTask(EasyMock.eq(TASK0), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(),
