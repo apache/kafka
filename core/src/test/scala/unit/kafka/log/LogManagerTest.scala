@@ -18,7 +18,6 @@
 package kafka.log
 
 import com.yammer.metrics.core.MetricName
-import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.{FetchDataInfo, FetchLogEnd}
@@ -32,11 +31,13 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{doAnswer, mock, never, spy, times, verify}
-
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent.Future
 import java.util.{Collections, Properties}
+
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}

@@ -18,6 +18,7 @@
 package kafka.metrics;
 
 import com.yammer.metrics.core.MetricName;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;

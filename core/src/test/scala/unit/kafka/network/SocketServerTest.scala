@@ -25,12 +25,11 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.{Properties, Random}
+
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
-
 import javax.net.ssl._
 import kafka.cluster.EndPoint
-import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
 import kafka.server.{ApiVersionManager, KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
 import kafka.utils.Implicits._
@@ -51,8 +50,10 @@ import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
-
 import java.util.concurrent.atomic.AtomicInteger
+
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._

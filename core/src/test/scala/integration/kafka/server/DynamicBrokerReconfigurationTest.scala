@@ -34,7 +34,6 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.{CleanerConfig, LogConfig}
 import kafka.message.ProducerCompressionCodec
-import kafka.metrics.KafkaYammerMetrics
 import kafka.network.{Processor, RequestChannel}
 import kafka.server.QuorumTestHarness
 import kafka.utils._
@@ -61,6 +60,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
