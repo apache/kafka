@@ -44,6 +44,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -1011,7 +1012,7 @@ public class IncrementalCooperativeAssignorTest {
         }
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
-        assertNoReassignments();
+        assertNoRedundantAssignments();
         if (!assignmentFailure) {
             applyAssignments(leader, offset, returnedAssignments);
         }
@@ -1173,16 +1174,16 @@ public class IncrementalCooperativeAssignorTest {
         assertThat("Wrong set of workers",
                 new ArrayList<>(returnedAssignments.keySet()), hasItems(workers));
         assertThat("Wrong number of assigned connectors",
-                returnedAssignments.values().stream().map(v -> v.connectors().size()).reduce(0, Integer::sum),
+                extractFromAssignments(returnedAssignments, ConnectProtocol.Assignment::connectors).size(),
                 is(connectorNum));
         assertThat("Wrong number of assigned tasks",
-                returnedAssignments.values().stream().map(v -> v.tasks().size()).reduce(0, Integer::sum),
+                extractFromAssignments(returnedAssignments, ConnectProtocol.Assignment::tasks).size(),
                 is(taskNum));
         assertThat("Wrong number of revoked connectors",
-                returnedAssignments.values().stream().map(v -> v.revokedConnectors().size()).reduce(0, Integer::sum),
+                extractFromAssignments(returnedAssignments, ExtendedAssignment::revokedConnectors).size(),
                 is(revokedConnectorNum));
         assertThat("Wrong number of revoked tasks",
-                returnedAssignments.values().stream().map(v -> v.revokedTasks().size()).reduce(0, Integer::sum),
+                extractFromAssignments(returnedAssignments, ExtendedAssignment::revokedTasks).size(),
                 is(revokedTaskNum));
     }
 
@@ -1192,28 +1193,25 @@ public class IncrementalCooperativeAssignorTest {
                         "Wrong rebalance delay in " + a, expectedDelay, a.delay()));
     }
 
-    private void assertNoReassignments() {
+    private void assertNoRedundantAssignments() {
         Map<String, ExtendedAssignment> existingAssignments = memberConfigs.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey,
                 e -> e.getValue().assignment()
         ));
-        assertNoDuplicateInAssignment(existingAssignments);
-        assertNoDuplicateInAssignment(returnedAssignments);
 
-        List<String> existingConnectors = existingAssignments.values().stream()
-                .flatMap(a -> a.connectors().stream())
-                .collect(Collectors.toList());
-        List<String> newConnectors = returnedAssignments.values().stream()
-                .flatMap(a -> a.connectors().stream())
-                .collect(Collectors.toList());
+        List<String> existingConnectors = extractFromAssignments(existingAssignments, ConnectProtocol.Assignment::connectors);
+        List<String> newConnectors = extractFromAssignments(returnedAssignments, ConnectProtocol.Assignment::connectors);
+        List<ConnectorTaskId> existingTasks = extractFromAssignments(existingAssignments, ConnectProtocol.Assignment::tasks);
+        List<ConnectorTaskId> newTasks = extractFromAssignments(returnedAssignments, ConnectProtocol.Assignment::tasks);
 
-        List<ConnectorTaskId> existingTasks = existingAssignments.values().stream()
-                .flatMap(a -> a.tasks().stream())
-                .collect(Collectors.toList());
-
-        List<ConnectorTaskId> newTasks = returnedAssignments.values().stream()
-                .flatMap(a -> a.tasks().stream())
-                .collect(Collectors.toList());
+        assertNoDuplicates(
+                newConnectors,
+                "Connectors should be unique in assignments but duplicates were found; the set of newly-assigned connectors is " + newConnectors
+        );
+        assertNoDuplicates(
+                newTasks,
+                "Tasks should be unique in assignments but duplicates were found; the set of newly-assigned tasks is " + newTasks
+        );
 
         existingConnectors.retainAll(newConnectors);
         assertThat("Found connectors in new assignment that already exist in current assignment",
@@ -1223,26 +1221,6 @@ public class IncrementalCooperativeAssignorTest {
         assertThat("Found tasks in new assignment that already exist in current assignment",
                 Collections.emptyList(),
                 is(existingConnectors));
-    }
-
-    private void assertNoDuplicateInAssignment(Map<String, ExtendedAssignment> existingAssignment) {
-        List<String> existingConnectors = existingAssignment.values().stream()
-                .flatMap(a -> a.connectors().stream())
-                .collect(Collectors.toList());
-        Set<String> existingUniqueConnectors = new HashSet<>(existingConnectors);
-        existingConnectors.removeAll(existingUniqueConnectors);
-        assertThat("Connectors should be unique in assignments but duplicates where found",
-                Collections.emptyList(),
-                is(existingConnectors));
-
-        List<ConnectorTaskId> existingTasks = existingAssignment.values().stream()
-                .flatMap(a -> a.tasks().stream())
-                .collect(Collectors.toList());
-        Set<ConnectorTaskId> existingUniqueTasks = new HashSet<>(existingTasks);
-        existingTasks.removeAll(existingUniqueTasks);
-        assertThat("Tasks should be unique in assignments but duplicates where found",
-                Collections.emptyList(),
-                is(existingTasks));
     }
 
     private void assertBalancedAndCompleteAllocation() {
@@ -1277,27 +1255,20 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     private void assertCompleteAllocation() {
-        Set<String> allAssignedConnectors = memberConfigs.values().stream()
-                .map(ExtendedWorkerState::assignment)
-                .map(ConnectProtocol.Assignment::connectors)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toSet());
+        List<String> allAssignedConnectors = extractFromAssignments(memberConfigs, e -> e.assignment().connectors());
         assertEquals(
                 "The set of connectors assigned across the cluster does not match the set of connectors in the config topic",
                 configState.connectors(),
-                allAssignedConnectors
+                new HashSet<>(allAssignedConnectors)
         );
 
-        Map<String, Set<ConnectorTaskId>> allAssignedTasks = memberConfigs.values().stream()
-                .map(ExtendedWorkerState::assignment)
-                .map(ConnectProtocol.Assignment::tasks)
-                .flatMap(Collection::stream)
-                .collect(Collectors.groupingBy(ConnectorTaskId::connector, Collectors.toSet()));
+        Map<String, List<ConnectorTaskId>> allAssignedTasks = extractFromAssignments(memberConfigs, e -> e.assignment().tasks()).stream()
+                .collect(Collectors.groupingBy(ConnectorTaskId::connector, Collectors.toList()));
         configState.connectors().forEach(connector ->
             assertEquals(
                     "The set of tasks assigned across the cluster for connector " + connector + " does not match the set of tasks in the config topic",
                     new HashSet<>(configState.tasks(connector)),
-                    allAssignedTasks.get(connector)
+                    new HashSet<>(allAssignedTasks.get(connector))
             )
         );
     }
@@ -1308,6 +1279,24 @@ public class IncrementalCooperativeAssignorTest {
         verify(coordinator, times(2 * rebalanceNum)).generationId();
         verify(coordinator, times(rebalanceNum)).memberId();
         verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+    }
+
+    private static <A, T> List<T> extractFromAssignments(
+            Map<String, A> assignments,
+            Function<A, Collection<T>> extraction
+    ) {
+        return assignments.values().stream()
+                .map(extraction)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+    }
+
+    private static <T> void assertNoDuplicates(List<T> collection, String assertionMessage) {
+        assertEquals(
+                assertionMessage,
+                new HashSet<>(collection).size(),
+                collection.size()
+        );
     }
 
 }
