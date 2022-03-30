@@ -49,6 +49,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
@@ -136,37 +137,54 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
             log.info("Topology {} is overriding {} to {}", topologyName, BUFFERED_RECORDS_PER_PARTITION_CONFIG, maxBufferedSize);
         } else {
+            // If the user hasn't explicitly set the buffered.records.per.partition config, then leave it unbounded
+            // and rely on the input.buffer.max.bytes instead to keep the memory usage under control
             maxBufferedSize = globalAppConfigs.originals().containsKey(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG)
                     ? globalAppConfigs.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG) : -1;
         }
 
-        if (isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides) && isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
-            cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
-            log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} (value {}) is used",
-                    topologyName,
-                    CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                    STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                    CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                    STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                    cacheSize);
-        } else if (isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
-            cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
-            log.info("Topology {} is using only deprecated config {}, and will be used to set cache size to {}; " +
-                            "we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
-                    topologyName,
-                    CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                    cacheSize,
-                    STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                    CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        } else if (isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides)) {
-            cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+        final boolean stateStoreCacheMaxBytesOverridden = isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides);
+        final boolean cacheMaxBytesBufferingOverridden = isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides);
+
+        if (!stateStoreCacheMaxBytesOverridden && !cacheMaxBytesBufferingOverridden) {
+            cacheSize = getTotalCacheSize(globalAppConfigs);
         } else {
-            cacheSize = globalAppConfigs.getTotalCacheSize();
+            if (stateStoreCacheMaxBytesOverridden && cacheMaxBytesBufferingOverridden) {
+                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+                log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} (value {}) is used",
+                         topologyName,
+                         CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                         STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                         CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                         STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                         cacheSize);
+            } else if (cacheMaxBytesBufferingOverridden) {
+                cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+                log.info("Topology {} is using only deprecated config {}, and will be used to set cache size to {}; " +
+                             "we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
+                         topologyName,
+                         CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                         cacheSize,
+                         STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                         CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            } else {
+                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+            }
+
+            if (cacheSize != 0) {
+                log.warn("Topology {} is overriding cache size to {} but this will not have any effect as the "
+                             + "topology-level cache size config only controls whether record buffering is enabled "
+                             + "or disabled, thus the only valid override value is 0",
+                         topologyName, cacheSize);
+            } else {
+                log.info("Topology {} is overriding cache size to {}, record buffering will be disabled",
+                         topologyName, cacheSize);
+            }
         }
 
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {
             maxTaskIdleMs = getLong(MAX_TASK_IDLE_MS_CONFIG);
-            log.info("Topology {} is overridding {} to {}", topologyName, MAX_TASK_IDLE_MS_CONFIG, maxTaskIdleMs);
+            log.info("Topology {} is overriding {} to {}", topologyName, MAX_TASK_IDLE_MS_CONFIG, maxTaskIdleMs);
         } else {
             maxTaskIdleMs = globalAppConfigs.getLong(MAX_TASK_IDLE_MS_CONFIG);
         }
