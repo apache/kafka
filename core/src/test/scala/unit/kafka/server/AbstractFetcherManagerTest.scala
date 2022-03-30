@@ -229,18 +229,24 @@ class AbstractFetcherManagerTest {
   }
 
   private def testResizeThreadPool(currentFetcherSize: Int, newFetcherSize: Int, brokerNum: Int = 6): Unit = {
-    val topicPartitions = makeTopicPartition(10, 100)
+    val fetchingTopicPartitions = makeTopicPartition(10, 100)
+    val failedTopicPartitions = makeTopicPartition(2, 5, "topic_failed")
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", currentFetcherSize) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
         new TestResizeFetcherThread(sourceBroker, failedPartitions)
       }
     }
     try {
-      fetcherManager.addFetcherForPartitions(topicPartitions.map { tp =>
+      fetcherManager.addFetcherForPartitions(fetchingTopicPartitions.map { tp =>
         val brokerId = getBrokerId(tp, brokerNum)
         val brokerEndPoint = new BrokerEndPoint(brokerId, s"kafka-host-$brokerId", 9092)
         tp -> InitialFetchState(None, brokerEndPoint, 0, 0)
       }.toMap)
+
+      // Mark some of these partitions failed within resizing
+      fetchingTopicPartitions.take(20).foreach(fetcherManager.addFailedPartition)
+      // Mark failed partitions out of resizing scope
+      failedTopicPartitions.foreach(fetcherManager.addFailedPartition)
 
       fetcherManager.resizeThreadPool(newFetcherSize)
       val ownedPartitions = mutable.Set.empty[TopicPartition]
@@ -255,19 +261,26 @@ class AbstractFetcherManagerTest {
         }
       }
       // Verify that all partitions are owned by the fetcher threads.
-      assertEquals(topicPartitions, ownedPartitions)
+      assertEquals(fetchingTopicPartitions, ownedPartitions)
+      // Verify that failed partitions within resizing scope are removed, otherwise retained
+      fetchingTopicPartitions.foreach { tp =>
+        assertFalse(fetcherManager.failedPartitions.contains(tp))
+      }
+      failedTopicPartitions.foreach { tp =>
+        assertTrue(fetcherManager.failedPartitions.contains(tp))
+      }
+      assertEquals(failedTopicPartitions.size, fetcherManager.failedPartitions.size)
     } finally {
       fetcherManager.closeAllFetchers()
     }
   }
 
 
-  private def makeTopicPartition(topicNum: Int, partitionNum: Int): Set[TopicPartition] = {
+  private def makeTopicPartition(topicNum: Int, partitionNum: Int, topicPrefix: String = "topic_"): Set[TopicPartition] = {
     val res = mutable.Set[TopicPartition]()
-    val topicPrefix = "topic_"
-    for (i <- 0 to topicNum) {
+    for (i <- 0 to topicNum - 1) {
       val topic = topicPrefix + i
-      for (j <- 0 to partitionNum) {
+      for (j <- 0 to partitionNum - 1) {
         res += new TopicPartition(topic, j)
       }
     }
@@ -275,7 +288,7 @@ class AbstractFetcherManagerTest {
   }
 
   private def getBrokerId(tp: TopicPartition, brokerNum: Int): Int = {
-    Utils.abs(31 * tp.topic.hashCode() + tp.partition) % brokerNum
+    Utils.abs(tp.hashCode) % brokerNum
   }
 
   private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)

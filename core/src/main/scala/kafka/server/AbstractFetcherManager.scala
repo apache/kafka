@@ -74,7 +74,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
             allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
       }
-      failedPartitions.removeAll(allRemovedPartitionsMap.keySet)
       addFetcherForPartitions(allRemovedPartitionsMap)
     }
 
