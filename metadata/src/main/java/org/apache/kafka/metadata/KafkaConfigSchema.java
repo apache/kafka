@@ -33,7 +33,6 @@ import java.util.function.Function;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
-import static org.apache.kafka.metadata.ConfigSynonym.IDENTITY;
 
 
 /**
@@ -181,7 +180,7 @@ public class KafkaConfigSchema {
         if (dynamicTopicConfigs.containsKey(configKey.name)) {
             return toConfigEntry(configKey,
                 dynamicTopicConfigs.get(configKey.name),
-                ConfigSource.DYNAMIC_TOPIC_CONFIG, IDENTITY);
+                ConfigSource.DYNAMIC_TOPIC_CONFIG, Function.identity());
         }
         List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, emptyList());
         for (ConfigSynonym synonym : synonyms) {
@@ -203,13 +202,13 @@ public class KafkaConfigSchema {
             }
         }
         return toConfigEntry(configKey, configKey.hasDefault() ? configKey.defaultValue : null,
-            ConfigSource.DEFAULT_CONFIG, IDENTITY);
+            ConfigSource.DEFAULT_CONFIG, Function.identity());
     }
 
     private ConfigEntry toConfigEntry(ConfigDef.ConfigKey configKey,
-                                  Object value,
-                                  ConfigSource source,
-                                  Function<String, String> converter) {
+                                      Object value,
+                                      ConfigSource source,
+                                      Function<String, String> converter) {
         // Convert the value into a nulllable string suitable for storing in ConfigEntry.
         String stringValue = null;
         if (value != null) {

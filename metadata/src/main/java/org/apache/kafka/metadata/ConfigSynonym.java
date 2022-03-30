@@ -23,10 +23,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 
+/**
+ * Represents a synonym for a configuration plus a conversion function. The conversion
+ * function is necessary for cases where the synonym is denominated in different units
+ * (hours versus milliseconds, etc.)
+ */
 public class ConfigSynonym {
     private static final Logger log = LoggerFactory.getLogger(ConfigSynonym.class);
-
-    public static final Function<String, String> IDENTITY = a -> a;
 
     public static final Function<String, String> HOURS_TO_MILLISECONDS = input -> {
         int hours = valueToInt(input, 0, "hoursToMilliseconds");
@@ -39,6 +42,7 @@ public class ConfigSynonym {
     };
 
     private static int valueToInt(String input, int defaultValue, String what) {
+        if (input == null) return defaultValue;
         String trimmedInput = input.trim();
         if (trimmedInput.isEmpty()) {
             return defaultValue;
@@ -60,7 +64,7 @@ public class ConfigSynonym {
     }
 
     public ConfigSynonym(String name) {
-        this(name, IDENTITY);
+        this(name, Function.identity());
     }
 
     public String name() {
@@ -69,9 +73,5 @@ public class ConfigSynonym {
 
     public Function<String, String> converter() {
         return converter;
-    }
-
-    public String convert(String input) {
-        return converter.apply(input);
     }
 }

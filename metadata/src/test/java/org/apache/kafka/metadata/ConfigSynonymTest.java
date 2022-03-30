@@ -26,13 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Timeout(value = 40)
 public class ConfigSynonymTest {
     @Test
-    public void testIdentity() {
-        assertEquals(null, ConfigSynonym.IDENTITY.apply(null));
-        assertEquals("abc", ConfigSynonym.IDENTITY.apply("abc"));
-        assertEquals("123", ConfigSynonym.IDENTITY.apply("123"));
-    }
-
-    @Test
     public void testHoursToMilliseconds() {
         assertEquals("0", ConfigSynonym.HOURS_TO_MILLISECONDS.apply(""));
         assertEquals("0", ConfigSynonym.HOURS_TO_MILLISECONDS.apply(" "));

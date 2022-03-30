@@ -62,7 +62,7 @@ public class ConfigurationControlManager {
     private final ConfigurationValidator validator;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
     private final Map<String, Object> staticConfig;
-    private final ConfigResource currentNode;
+    private final ConfigResource currentController;
 
     static class Builder {
         private LogContext logContext = null;
@@ -145,7 +145,7 @@ public class ConfigurationControlManager {
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
-        this.currentNode = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
+        this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
     }
 
     /**
@@ -431,7 +431,7 @@ public class ConfigurationControlManager {
 
     Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {
         return configSchema.resolveEffectiveTopicConfigs(staticConfig, clusterConfig(),
-            currentNodeConfig(), creationConfigs);
+            currentControllerConfig(), creationConfigs);
     }
 
     Map<String, String> clusterConfig() {
@@ -439,8 +439,8 @@ public class ConfigurationControlManager {
         return (result == null) ? Collections.emptyMap() : result;
     }
 
-    Map<String, String> currentNodeConfig() {
-        Map<String, String> result = configData.get(currentNode);
+    Map<String, String> currentControllerConfig() {
+        Map<String, String> result = configData.get(currentController);
         return (result == null) ? Collections.emptyMap() : result;
     }
 

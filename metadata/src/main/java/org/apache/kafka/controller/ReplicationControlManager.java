@@ -476,7 +476,7 @@ public class ReplicationControlManager {
     private ApiError createTopic(CreatableTopic topic,
                                  List<ApiMessageAndVersion> records,
                                  Map<String, CreatableTopicResult> successes,
-                                 boolean includeConfigs) {
+                                 boolean authorizedToReturnConfigs) {
         Map<String, String> creationConfigs = translateCreationConfigs(topic.configs());
         Map<Integer, PartitionRegistration> newParts = new HashMap<>();
         if (!topic.assignments().isEmpty()) {
@@ -554,7 +554,7 @@ public class ReplicationControlManager {
             setTopicId(topicId).
             setErrorCode(NONE.code()).
             setErrorMessage(null);
-        if (includeConfigs) {
+        if (authorizedToReturnConfigs) {
             Map<String, ConfigEntry> effectiveConfig = configurationControl.
                 computeEffectiveTopicConfigs(creationConfigs);
             List<String> configNames = new ArrayList<>(effectiveConfig.keySet());
