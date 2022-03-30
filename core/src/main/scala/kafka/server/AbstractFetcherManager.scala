@@ -74,7 +74,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
             allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
       }
-      // Use
+      // failed partitions are removed when adding partitions to fetcher
       addFetcherForPartitions(allRemovedPartitionsMap)
     }
 
