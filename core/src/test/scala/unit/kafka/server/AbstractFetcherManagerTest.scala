@@ -267,7 +267,7 @@ class AbstractFetcherManagerTest {
       val failedPartitionsAfterResize = fetcherManager.failedPartitions.failedPartitions()
       // Verify that failed partitions within resizing scope are removed, otherwise retained
       assertEquals(Set.empty, fetchingTopicPartitions.intersect(failedPartitionsAfterResize))
-      assertEquals(failedTopicPartitions, failedTopicPartitions.intersect(failedPartitionsAfterResize))
+      assertEquals(failedTopicPartitions, failedPartitionsAfterResize)
     } finally {
       fetcherManager.closeAllFetchers()
     }
