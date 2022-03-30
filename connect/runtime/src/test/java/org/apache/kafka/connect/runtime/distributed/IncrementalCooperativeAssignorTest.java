@@ -34,7 +34,6 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -45,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -1044,11 +1044,11 @@ public class IncrementalCooperativeAssignorTest {
         }
     }
 
-    private WorkerLoad emptyWorkerLoad(String worker) {
+    private static WorkerLoad emptyWorkerLoad(String worker) {
         return new WorkerLoad.Builder(worker).build();
     }
 
-    private WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
+    private static WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
                                   int taskStart, int taskNum) {
         return new WorkerLoad.Builder(worker).with(
                 newConnectors(connectorStart, connectorStart + connectorNum),
@@ -1082,13 +1082,24 @@ public class IncrementalCooperativeAssignorTest {
                                                          int connectorNum,
                                                          int taskNum) {
         int connectorNumEnd = connectorStart + connectorNum - 1;
+
+        Map<String, Integer> connectorTaskCounts = fillMap(connectorStart, connectorNumEnd, i -> "connector" + i, () -> taskNum);
+        Map<String, Map<String, String>> connectorConfigs = fillMap(connectorStart, connectorNumEnd, i -> "connector" + i, HashMap::new);
+        Map<String, TargetState> connectorTargetStates = fillMap(connectorStart, connectorNumEnd, i -> "connector" + i, () -> TargetState.STARTED);
+        Map<ConnectorTaskId, Map<String, String>> taskConfigs = fillMap(
+                0,
+                connectorNum * taskNum,
+                i -> new ConnectorTaskId("connector" + i / connectorNum + 1, i),
+                HashMap::new
+        );
+
         return new ClusterConfigState(
                 offset,
                 null,
-                connectorTaskCounts(connectorStart, connectorNumEnd, taskNum),
-                connectorConfigs(connectorStart, connectorNumEnd),
-                connectorTargetStates(connectorStart, connectorNumEnd, TargetState.STARTED),
-                taskConfigs(0, connectorNum, connectorNum * taskNum),
+                connectorTaskCounts,
+                connectorConfigs,
+                connectorTargetStates,
+                taskConfigs,
                 Collections.emptySet());
     }
 
@@ -1096,41 +1107,13 @@ public class IncrementalCooperativeAssignorTest {
                                                                   long givenOffset,
                                                                   int start,
                                                                   int connectorNum) {
-        return IntStream.range(start, connectorNum + 1)
-                .mapToObj(i -> new SimpleEntry<>("worker" + i, new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, null)))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
+        return fillMap(start, connectorNum, i -> "worker" + i, () -> new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, null));
     }
 
-    private static Map<String, Integer> connectorTaskCounts(int start,
-                                                            int connectorNum,
-                                                            int taskCounts) {
-        return IntStream.range(start, connectorNum + 1)
-                .mapToObj(i -> new SimpleEntry<>("connector" + i, taskCounts))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
-    }
-
-    private static Map<String, Map<String, String>> connectorConfigs(int start, int connectorNum) {
-        return IntStream.range(start, connectorNum + 1)
-                .mapToObj(i -> new SimpleEntry<>("connector" + i, new HashMap<String, String>()))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
-    }
-
-    private static Map<String, TargetState> connectorTargetStates(int start,
-                                                                  int connectorNum,
-                                                                  TargetState state) {
-        return IntStream.range(start, connectorNum + 1)
-                .mapToObj(i -> new SimpleEntry<>("connector" + i, state))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
-    }
-
-    private static Map<ConnectorTaskId, Map<String, String>> taskConfigs(int start,
-                                                                         int connectorNum,
-                                                                         int taskNum) {
-        return IntStream.range(start, taskNum + 1)
-                .mapToObj(i -> new SimpleEntry<>(
-                        new ConnectorTaskId("connector" + i / connectorNum + 1, i),
-                        new HashMap<String, String>())
-                ).collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
+    private static <K, V> Map<K, V> fillMap(int start, int end, Function<Integer, K> key, Supplier<V> value) {
+        return IntStream.range(start, end + 1)
+                .boxed()
+                .collect(Collectors.toMap(key, i -> value.get()));
     }
 
     private void applyAssignments(String leader, long offset, Map<String, ExtendedAssignment> newAssignments) {
