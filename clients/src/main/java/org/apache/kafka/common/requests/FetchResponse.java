@@ -100,7 +100,8 @@ public class FetchResponse extends AbstractResponse {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
-                    // We are doing this to avoid other threads accessing a half-initialized object.
+                    // Assigning the lazy-initialized responseData in the last step
+                    // to avoid other threads accessing a half-initialized object.
                     final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseDataTmp =
                             new LinkedHashMap<>();
                     data.responses().forEach(topicResponse -> {
