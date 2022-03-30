@@ -234,7 +234,7 @@ object LogConfig {
   val LocalLogRetentionMsDoc = TopicConfig.LOCAL_LOG_RETENTION_MS_DOC
   val LocalLogRetentionBytesDoc = TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC
   val MaxMessageSizeDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC
-  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOCS
+  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOC
   val FileDeleteDelayMsDoc = TopicConfig.FILE_DELETE_DELAY_MS_DOC
   val DeleteRetentionMsDoc = TopicConfig.DELETE_RETENTION_MS_DOC
   val MinCompactionLagMsDoc = TopicConfig.MIN_COMPACTION_LAG_MS_DOC
