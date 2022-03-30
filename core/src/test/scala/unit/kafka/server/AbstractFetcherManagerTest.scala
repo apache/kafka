@@ -243,12 +243,13 @@ class AbstractFetcherManagerTest {
         tp -> InitialFetchState(None, brokerEndPoint, 0, 0)
       }.toMap)
 
-      // Mark some of these partitions failed within resizing
+      // Mark some of these partitions failed within resizing scope
       fetchingTopicPartitions.take(20).foreach(fetcherManager.addFailedPartition)
       // Mark failed partitions out of resizing scope
       failedTopicPartitions.foreach(fetcherManager.addFailedPartition)
 
       fetcherManager.resizeThreadPool(newFetcherSize)
+
       val ownedPartitions = mutable.Set.empty[TopicPartition]
       fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
         val fetcherId = brokerIdAndFetcherId.fetcherId
@@ -262,14 +263,11 @@ class AbstractFetcherManagerTest {
       }
       // Verify that all partitions are owned by the fetcher threads.
       assertEquals(fetchingTopicPartitions, ownedPartitions)
+
+      val failedPartitionsAfterResize = fetcherManager.failedPartitions.failedPartitions()
       // Verify that failed partitions within resizing scope are removed, otherwise retained
-      fetchingTopicPartitions.foreach { tp =>
-        assertFalse(fetcherManager.failedPartitions.contains(tp))
-      }
-      failedTopicPartitions.foreach { tp =>
-        assertTrue(fetcherManager.failedPartitions.contains(tp))
-      }
-      assertEquals(failedTopicPartitions.size, fetcherManager.failedPartitions.size)
+      assertEquals(Set.empty, fetchingTopicPartitions.intersect(failedPartitionsAfterResize))
+      assertEquals(failedTopicPartitions, failedTopicPartitions.intersect(failedPartitionsAfterResize))
     } finally {
       fetcherManager.closeAllFetchers()
     }

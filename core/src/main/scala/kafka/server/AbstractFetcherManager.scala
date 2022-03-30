@@ -74,6 +74,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
             allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
       }
+      // Use
       addFetcherForPartitions(allRemovedPartitionsMap)
     }
 
@@ -147,7 +148,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
           case None =>
             addAndStartFetcherThread(brokerAndFetcherId, brokerIdAndFetcherId)
         }
-
+        // failed partitions are removed when added partitions to thread
         addPartitionsToFetcherThread(fetcherThread, initialFetchOffsets)
       }
     }
@@ -252,6 +253,10 @@ class FailedPartitions {
 
   def contains(topicPartition: TopicPartition): Boolean = synchronized {
     failedPartitionsSet.contains(topicPartition)
+  }
+
+  def failedPartitions(): Set[TopicPartition] = synchronized {
+    failedPartitionsSet.toSet
   }
 }
 
