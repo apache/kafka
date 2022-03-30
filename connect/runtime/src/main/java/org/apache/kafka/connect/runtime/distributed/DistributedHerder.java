@@ -1180,8 +1180,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
         if (restartTasks) {
-            log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
-            plan.taskIdsToRestart().forEach(taskId -> {
+            log.debug("Restarting {} of {} tasks for {}", assignedIdsToRestart.size(), plan.totalTaskCount(), request);
+            assignedIdsToRestart.forEach(taskId -> {
                 try {
                     if (startTask(taskId)) {
                         log.info("Task '{}' restart successful", taskId);
@@ -1192,7 +1192,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     log.error("Task '{}' restart failed", taskId, t);
                 }
             });
-            log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);
+            log.debug("Restarted {} of {} tasks for {} as requested", assignedIdsToRestart.size(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
     }
