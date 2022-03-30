@@ -658,7 +658,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
 
     connectionStateOverride = Some(States.CONNECTED)
     zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.AuthFailed, null))
-    assertFalse(sessionInitializedCountDownLatch.await(10, TimeUnit.MILLISECONDS), "Unexpected session initialization when connection is alive")
+    assertFalse(sessionInitializedCountDownLatch.await(1200, TimeUnit.MILLISECONDS), "Unexpected session initialization when connection is alive")
 
     connectionStateOverride = Some(States.AUTH_FAILED)
     zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.AuthFailed, null))
