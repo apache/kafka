@@ -19,12 +19,16 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -40,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -51,7 +56,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
     private final Windows<W> windows;
     private final Initializer<VAgg> initializer;
     private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
-    private final boolean emitFinal;
+    private final EmitStrategy emitStrategy;
 
     private boolean sendOldValues = false;
 
@@ -59,19 +64,26 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                                   final String storeName,
                                   final Initializer<VAgg> initializer,
                                   final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
-        this(windows, storeName, false, initializer, aggregator);
+        this(windows, storeName, EmitStrategy.onWindowUpdate(), initializer, aggregator);
     }
 
     public KStreamWindowAggregate(final Windows<W> windows,
                                   final String storeName,
-                                  final boolean emitFinal,
+                                  final EmitStrategy emitStrategy,
                                   final Initializer<VAgg> initializer,
                                   final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
-        this.emitFinal = emitFinal;
+        this.emitStrategy = emitStrategy;
         this.initializer = initializer;
         this.aggregator = aggregator;
+
+        if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+            if (!(windows instanceof TimeWindows)) {
+                throw new IllegalArgumentException("ON_WINDOW_CLOSE strategy is only supported for "
+                    + "TimeWindows and SlidingWindows for TimeWindowedKStream");
+            }
+        }
     }
 
     @Override
@@ -95,24 +107,46 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
         private long lastEmitCloseTime = ConsumerRecord.NO_TIMESTAMP;
+        private InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext;
+        private final TimeTracker timeTracker = new TimeTracker();
 
         @Override
         public void init(final ProcessorContext<Windowed<KIn>, Change<VAgg>> context) {
             super.init(context);
-            final InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext =
-                (InternalProcessorContext<Windowed<KIn>, Change<VAgg>>) context;
+            internalProcessorContext = (InternalProcessorContext<Windowed<KIn>, Change<VAgg>>) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             windowStore = context.getStateStore(storeName);
-            tupleForwarder = new TimestampedTupleForwarder<>(
-                windowStore,
-                context,
-                new TimestampedCacheFlushListener<>(context),
-                sendOldValues);
 
+            if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                // Don't set flush lister which emit cache results
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    windowStore,
+                    context,
+                    sendOldValues);
+            } else {
+                 tupleForwarder = new TimestampedTupleForwarder<>(
+                    windowStore,
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
+                    sendOldValues);
+            }
 
-            // TODO: restore lastEmitCloseTime from context
+            // Restore last emit close time for ON_WINDOW_CLOSE strategy
+            if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                final Long lastEmitTime = internalProcessorContext.getProcessorMetadataForKey(storeName);
+                if (lastEmitTime != null) {
+                    lastEmitCloseTime = lastEmitTime;
+                }
+                timeTracker.setEmitInterval(
+                    StreamsConfig.InternalConfig.getLong(
+                        context.appConfigs(),
+                        EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION,
+                        1000L
+                    )
+                );
+            }
         }
 
         @Override
@@ -163,7 +197,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
                     // update the store with the new value
                     windowStore.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
-                    if (!emitFinal) {
+                    if (emitStrategy.type() == StrategyType.ON_WINDOW_UPDATE) {
                         tupleForwarder.maybeForward(
                             record.withKey(new Windowed<>(record.key(), entry.getValue()))
                                 .withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
@@ -204,38 +238,55 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 }
             }
 
-            if (emitFinal) {
-                if (!(windows instanceof TimeWindows)) {
-                    throw new IllegalStateException("Emit final is only supported for TimeWindows and SlidingWindows for TimeWindowedKStream");
+            tryEmitFinalResult(record, closeTime);
+        }
+
+        private void tryEmitFinalResult(final Record<KIn, VIn> record, final long closeTime) {
+            if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                final long now = internalProcessorContext.currentSystemTimeMs();
+                // Throttle emit frequency
+                if (now < timeTracker.nextTimeToEmit) {
+                    return;
                 }
+                if (timeTracker.nextTimeToEmit == 0) {
+                    timeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
+                }
+                timeTracker.advanceNextTimeToEmit();
 
                 // Close time does not progress
                 if (lastEmitCloseTime >= closeTime) {
                     return;
                 }
 
-                // Emit final deosn't make sense for some window like unlimitedWindow
-                // This should be checked in upstream before pass emit final in or checked here
-                final long closeWindowStart = closeTime - windows.size();
-                if (closeWindowStart <= 0) {
+                final long emitWindowStart = closeTime - windows.size();
+                if (emitWindowStart < 0) {
+                    // If emitWindowStart is 0, it means first window closes since windowEndTime
+                    // is exclusive
                     return;
                 }
 
+                // Because we only get here when emitWindowStart > 0 which means closeTime > windows.size()
+                // Since we set lastEmitCloseTime to closeTime before storing to processor metadata
+                // lastEmitCloseTime - windows.size() is always > 0
+                // Set lastEmitWindowStart to -1L if not set so that when we fetchAll, we fetch from 0L
                 final long lastEmitWindowStart = lastEmitCloseTime == ConsumerRecord.NO_TIMESTAMP ?
-                    0 : lastEmitCloseTime - windows.size();
+                    -1L : lastEmitCloseTime - windows.size();
 
-                final Map<Long, W> matchedCloseWindows = windows.windowsFor(closeWindowStart);
-                final Map<Long, W> matchedEmitWindows = windows.windowsFor(lastEmitWindowStart);
+                if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP) {
+                    final Map<Long, W> matchedCloseWindows = windows.windowsFor(emitWindowStart);
+                    final Map<Long, W> matchedEmitWindows = windows.windowsFor(lastEmitWindowStart);
 
-                // Don't fetch store if there's new close time doesn't progress enough to cover next
-                // window
-                if (matchedCloseWindows.equals(matchedEmitWindows)) {
-                    log.debug("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}", lastEmitCloseTime, closeTime);
-                    return;
+                    // Don't fetch store if the new emit window close time doesn't progress enough to cover next
+                    // window
+                    if (matchedCloseWindows.equals(matchedEmitWindows)) {
+                        log.debug("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}",
+                            lastEmitCloseTime, closeTime);
+                        return;
+                    }
                 }
 
                 KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
-                    .fetchAll(lastEmitWindowStart + 1, closeWindowStart);
+                    .fetchAll(lastEmitWindowStart + 1, emitWindowStart);
 
                 while (windowToEmit.hasNext()) {
                     KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
@@ -247,7 +298,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 }
 
                 lastEmitCloseTime = closeTime;
-                // TODO: commit this to offset meta
+                internalProcessorContext.addProcessorMetadataKeyValue(storeName, closeTime);
             }
         }
     }
