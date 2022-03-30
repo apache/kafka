@@ -746,7 +746,7 @@ abstract class AbstractFetcherThread(name: String,
   def removeAllPartitions(): Map[TopicPartition, PartitionFetchState] = {
     partitionMapLock.lockInterruptibly()
     try {
-      val allPartitionState = partitionStates.partitionStateMap().asScala.toMap
+      val allPartitionState = partitionStates.partitionStateMap.asScala.toMap
       allPartitionState.keys.foreach { tp =>
         partitionStates.remove(tp)
         fetcherLagStats.unregister(tp)

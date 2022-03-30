@@ -65,7 +65,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       val allRemovedPartitionsMap = mutable.Map[TopicPartition, InitialFetchState]()
       fetcherThreadMap.forKeyValue { (id, thread) =>
         val partitionStates = thread.removeAllPartitions()
-        failedPartitions.removeAll(partitionStates.keySet)
         if (id.fetcherId >= newSize)
           thread.shutdown()
         partitionStates.forKeyValue { (topicPartition, currentFetchState) =>
@@ -75,6 +74,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
             allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
       }
+      failedPartitions.removeAll(allRemovedPartitionsMap.keySet)
       addFetcherForPartitions(allRemovedPartitionsMap)
     }
 

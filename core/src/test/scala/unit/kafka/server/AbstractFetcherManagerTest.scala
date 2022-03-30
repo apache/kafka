@@ -220,19 +220,19 @@ class AbstractFetcherManagerTest {
 
   @Test
   def testExpandThreadPool(): Unit = {
-    testResizeThreadPool(10, 50, 6)
+    testResizeThreadPool(10, 50)
   }
 
   @Test
   def testShrinkThreadPool(): Unit = {
-    testResizeThreadPool(50, 10, 6)
+    testResizeThreadPool(50, 10)
   }
 
-  def testResizeThreadPool(currentFetcherNum: Int, newFetcherNum: Int, brokerNum: Int): Unit = {
+  private def testResizeThreadPool(currentFetcherSize: Int, newFetcherSize: Int, brokerNum: Int = 6): Unit = {
     val topicPartitions = makeTopicPartition(10, 100)
-    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", currentFetcherNum) {
+    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", currentFetcherSize) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-        new TestResizeFetcherThread(sourceBroker)
+        new TestResizeFetcherThread(sourceBroker, failedPartitions)
       }
     }
     try {
@@ -242,7 +242,7 @@ class AbstractFetcherManagerTest {
         tp -> InitialFetchState(None, brokerEndPoint, 0, 0)
       }.toMap)
 
-      fetcherManager.resizeThreadPool(newFetcherNum)
+      fetcherManager.resizeThreadPool(newFetcherSize)
       val ownedPartitions = mutable.Set.empty[TopicPartition]
       fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
         val fetcherId = brokerIdAndFetcherId.fetcherId
@@ -262,7 +262,7 @@ class AbstractFetcherManagerTest {
   }
 
 
-  def makeTopicPartition(topicNum: Int, partitionNum: Int): Set[TopicPartition] = {
+  private def makeTopicPartition(topicNum: Int, partitionNum: Int): Set[TopicPartition] = {
     val res = mutable.Set[TopicPartition]()
     val topicPrefix = "topic_"
     for (i <- 0 to topicNum) {
@@ -274,16 +274,16 @@ class AbstractFetcherManagerTest {
     res.toSet
   }
 
-  def getBrokerId(tp: TopicPartition, brokerNum: Int): Int = {
+  private def getBrokerId(tp: TopicPartition, brokerNum: Int): Int = {
     Utils.abs(31 * tp.topic.hashCode() + tp.partition) % brokerNum
   }
 
-  class TestResizeFetcherThread(sourceBroker: BrokerEndPoint)
+  private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)
     extends AbstractFetcherThread(
       name = "test-resize-fetcher",
       clientId = "mock-fetcher",
       sourceBroker,
-      new FailedPartitions,
+      failedPartitions,
       fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {
 
