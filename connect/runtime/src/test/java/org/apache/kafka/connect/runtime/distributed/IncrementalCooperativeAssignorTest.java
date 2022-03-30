@@ -128,6 +128,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1");
+        assertBalancedAssignments();
 
         // Second assignment with a second worker joining and all connectors running on previous worker
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
@@ -139,11 +140,13 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(1, 4, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         // A fourth rebalance should not change assignments
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -162,6 +165,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         // Second assignment with only one worker remaining in the group. The worker that left the
         // group was a follower. No re-assignments take place immediately and the count
@@ -185,6 +189,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(1, 4, 0, 0, "worker1");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -203,6 +208,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         // Second assignment with only one worker remaining in the group. The worker that left the
         // group was a follower. No re-assignments take place immediately and the count
@@ -236,6 +242,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(1, 4, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -255,6 +262,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2", "worker3");
+        assertBalancedAssignments();
 
         // Second assignment with two workers remaining in the group. The worker that left the
         // group was the leader. The new leader has no previous assignments and is not tracking a
@@ -270,10 +278,12 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(1, 3, 0, 0, "worker2", "worker3");
+        assertBalancedAssignments();
 
         // Third (incidental) assignment with still only one worker in the group.
         performStandardRebalance();
         assertAssignment(0, 0, 0, 0, "worker2", "worker3");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -293,6 +303,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2", "worker3");
+        assertBalancedAssignments();
 
         // Second assignment with two workers remaining in the group. The worker that left the
         // group was the leader. The new leader has no previous assignments and is not tracking a
@@ -308,6 +319,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(1, 3, 0, 0, "worker2", "worker3");
+        assertBalancedAssignments();
 
         // Third assignment with the previous leader returning as a follower. In this case, the
         // arrival of the previous leader is treated as an arrival of a new worker. Reassignment
@@ -320,6 +332,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 2, 0, 0, "worker1", "worker2", "worker3");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -348,6 +361,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -366,6 +380,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         when(coordinator.configSnapshot()).thenReturn(configState);
         doThrow(new RuntimeException("Unable to send computed assignment with SyncGroupRequest"))
@@ -386,6 +401,12 @@ public class IncrementalCooperativeAssignorTest {
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 0, 0, 2, "worker1", "worker2", "worker3");
 
+        // Fourth assignment after revocations
+        performStandardRebalance();
+        assertDelay(0, returnedAssignments);
+        assertAssignment(0, 2, 0, 0, "worker1", "worker2", "worker3");
+        assertBalancedAssignments();
+
         verifyCoordinatorInteractions();
     }
 
@@ -403,6 +424,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         // Second assignment triggered by a third worker joining. The computed assignment should
         // revoke tasks from the existing group. But the assignment won't be correctly delivered
@@ -420,6 +442,12 @@ public class IncrementalCooperativeAssignorTest {
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 0, 0, 2, "worker1", "worker2", "worker3");
 
+        // Fourth assignment after revocations
+        performStandardRebalance();
+        assertDelay(0, returnedAssignments);
+        assertAssignment(0, 2, 0, 0, "worker1", "worker2", "worker3");
+        assertBalancedAssignments();
+
         verifyCoordinatorInteractions();
     }
 
@@ -434,6 +462,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(3, 12, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         // Second assignment with an updated config state that reflects removal of a connector
         configState = clusterConfigState(offset + 1, 2, 4);
@@ -441,6 +470,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 0, 1, 4, "worker1", "worker2");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -867,6 +897,7 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1");
+        assertBalancedAssignments();
 
         // Second assignment with a second worker with duplicate assignment joining and all connectors running on previous worker
         ExtendedAssignment duplicatedWorkerAssignment = newExpandableAssignment();
@@ -886,11 +917,13 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 2, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         // Fifth rebalance should not change assignments
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -904,8 +937,9 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(2, 8, 0, 0, "worker1");
+        assertBalancedAssignments();
 
-        //delete connector1
+        // Delete connector1
         configState = clusterConfigState(offset, 2, 1, 4);
         when(coordinator.configSnapshot()).thenReturn(configState);
 
@@ -927,11 +961,13 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 2, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         // Fifth rebalance should not change assignments
         performStandardRebalance();
         assertDelay(0, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
+        assertBalancedAssignments();
 
         verifyCoordinatorInteractions();
     }
@@ -1188,6 +1224,32 @@ public class IncrementalCooperativeAssignorTest {
         assertThat("Tasks should be unique in assignments but duplicates where found",
                 Collections.emptyList(),
                 is(existingTasks));
+    }
+
+    private void assertBalancedAssignments() {
+        List<Integer> connectorCounts = memberConfigs.values().stream()
+                .map(e -> e.assignment().connectors().size())
+                .sorted()
+                .collect(Collectors.toList());
+        List<Integer> taskCounts = memberConfigs.values().stream()
+                .map(e -> e.assignment().tasks().size())
+                .sorted()
+                .collect(Collectors.toList());
+
+        int minConnectors = connectorCounts.get(0);
+        int maxConnectors = connectorCounts.get(connectorCounts.size() - 1);
+
+        int minTasks = taskCounts.get(0);
+        int maxTasks = taskCounts.get(taskCounts.size() - 1);
+
+        assertTrue(
+                "Assignments are imbalanced. The spread of connectors across each worker is: " + connectorCounts,
+                maxConnectors - minConnectors <= 1
+        );
+        assertTrue(
+                "Assignments are imbalanced. The spread of tasks across each worker is: " + taskCounts,
+                maxTasks - minTasks <= 1
+        );
     }
 
     private void verifyCoordinatorInteractions() {
