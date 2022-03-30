@@ -20,7 +20,6 @@ import java.nio.ByteBuffer;
 import java.util.Base64;
 import org.junit.Test;
 
-import static org.apache.kafka.streams.processor.internals.TopicPartitionMetadata.with;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -28,12 +27,12 @@ public class TopicPartitionMetadataTest {
 
     @Test
     public void shouldGetPartitonTimeAndProcessorMeta() {
-        final ProcessorMetadata metadata = ProcessorMetadata.emptyMetadata();
+        final ProcessorMetadata metadata = new ProcessorMetadata();
         final String key = "some_key";
         final long value = 100L;
-        metadata.addMetadata(key, value);
+        metadata.put(key, value);
 
-        final TopicPartitionMetadata topicMeta = with(100L, metadata);
+        final TopicPartitionMetadata topicMeta = new TopicPartitionMetadata(100L, metadata);
 
         assertThat(topicMeta.partitionTime(), is(100L));
         assertThat(topicMeta.processorMetadata(), is(metadata));
@@ -50,17 +49,17 @@ public class TopicPartitionMetadataTest {
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode(serializedString);
 
         assertThat(topicMeta.partitionTime(), is(100L));
-        assertThat(topicMeta.processorMetadata(), is(ProcessorMetadata.emptyMetadata()));
+        assertThat(topicMeta.processorMetadata(), is(new ProcessorMetadata()));
     }
 
     @Test
     public void shouldEncodeDecodeVersionTwo() {
-        final ProcessorMetadata metadata = ProcessorMetadata.emptyMetadata();
+        final ProcessorMetadata metadata = new ProcessorMetadata();
         final String key = "some_key";
         final long value = 100L;
-        metadata.addMetadata(key, value);
+        metadata.put(key, value);
 
-        final TopicPartitionMetadata expected = with(100L, metadata);
+        final TopicPartitionMetadata expected = new TopicPartitionMetadata(100L, metadata);
         final String serializedString = expected.encode();
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode(serializedString);
 
@@ -68,25 +67,17 @@ public class TopicPartitionMetadataTest {
     }
 
     @Test
-    public void shouldEncodeDecodeNullMetaVersionTwo() {
-        final TopicPartitionMetadata expected = with(100L, ProcessorMetadata.emptyMetadata());
+    public void shouldEncodeDecodeEmptyMetaVersionTwo() {
+        final TopicPartitionMetadata expected = new TopicPartitionMetadata(100L, new ProcessorMetadata());
         final String serializedString = expected.encode();
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode(serializedString);
-
-        assertThat(topicMeta, is(expected));
-    }
-
-    @Test
-    public void shouldDecodeNullVersionTwo() {
-        final TopicPartitionMetadata expected = with(RecordQueue.UNKNOWN, ProcessorMetadata.emptyMetadata());
-        final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode(null);
 
         assertThat(topicMeta, is(expected));
     }
 
     @Test
     public void shouldDecodeEmptyStringVersionTwo() {
-        final TopicPartitionMetadata expected = with(RecordQueue.UNKNOWN, ProcessorMetadata.emptyMetadata());
+        final TopicPartitionMetadata expected = new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata());
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode("");
 
         assertThat(topicMeta, is(expected));
@@ -100,7 +91,7 @@ public class TopicPartitionMetadataTest {
         final TopicPartitionMetadata decoded = TopicPartitionMetadata.decode(encodedString);
 
         assertThat(decoded.partitionTime(), is(RecordQueue.UNKNOWN));
-        assertThat(decoded.processorMetadata(), is(ProcessorMetadata.emptyMetadata()));
+        assertThat(decoded.processorMetadata(), is(new ProcessorMetadata()));
     }
 
     @Test
@@ -110,6 +101,6 @@ public class TopicPartitionMetadataTest {
         final TopicPartitionMetadata decoded = TopicPartitionMetadata.decode(invalidBase64String);
 
         assertThat(decoded.partitionTime(), is(RecordQueue.UNKNOWN));
-        assertThat(decoded.processorMetadata(), is(ProcessorMetadata.emptyMetadata()));
+        assertThat(decoded.processorMetadata(), is(new ProcessorMetadata()));
     }
 }

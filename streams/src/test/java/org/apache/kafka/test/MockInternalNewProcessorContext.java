@@ -53,12 +53,12 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     private ProcessorMetadata processorMetadata;
 
     public MockInternalNewProcessorContext() {
-        processorMetadata = ProcessorMetadata.emptyMetadata();
+        processorMetadata = new ProcessorMetadata();
     }
 
     public MockInternalNewProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
-        processorMetadata = ProcessorMetadata.emptyMetadata();
+        processorMetadata = new ProcessorMetadata();
     }
 
     @Override
@@ -214,12 +214,12 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
 
     @Override
     public void addProcessorMetadataKeyValue(final String key, final long value) {
-        processorMetadata.addMetadata(key, value);
+        processorMetadata.put(key, value);
     }
 
     @Override
-    public Long getProcessorMetadataForKey(final String key) {
-        return processorMetadata.getMetadata(key);
+    public Long processorMetadataForKey(final String key) {
+        return processorMetadata.get(key);
     }
 
     @Override

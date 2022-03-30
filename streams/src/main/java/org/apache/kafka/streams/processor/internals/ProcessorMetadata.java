@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -35,29 +36,21 @@ public class ProcessorMetadata {
     // put() or set explicitly
     private boolean needsCommit;
 
-    public static ProcessorMetadata emptyMetadata() {
-        return new ProcessorMetadata();
-    }
-
-    public static ProcessorMetadata with(final Map<String, Long> metadata) {
-        return new ProcessorMetadata(metadata);
-    }
-
-    private ProcessorMetadata() {
+    public ProcessorMetadata() {
         this(new HashMap<>());
     }
 
-    private ProcessorMetadata(final Map<String, Long> metadata) {
+    public ProcessorMetadata(final Map<String, Long> metadata) {
         this.metadata = metadata;
         needsCommit = false;
     }
 
-    public static ProcessorMetadata deserialize(final byte[] metaData) {
-        if (metaData == null || metaData.length == 0) {
+    public static ProcessorMetadata deserialize(final byte[] metaDataBytes) {
+        if (metaDataBytes == null || metaDataBytes.length == 0) {
             return new ProcessorMetadata();
         }
 
-        final ByteBuffer buffer = ByteBuffer.wrap(metaData);
+        final ByteBuffer buffer = ByteBuffer.wrap(metaDataBytes);
         final int entrySize = buffer.getInt();
         final Map<String, Long> metadata = new HashMap<>(entrySize);
         for (int i = 0; i < entrySize; i++) {
@@ -75,31 +68,29 @@ public class ProcessorMetadata {
             return new byte[0];
         }
 
-        int kvSize = 0;
-        for (final Map.Entry<String, Long> entry : metadata.entrySet()) {
-            kvSize += Integer.BYTES;
-            kvSize += entry.getKey().getBytes(StandardCharsets.UTF_8).length;
-            kvSize += Long.BYTES;
-        }
+        final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        final byte[] mapSizeBytes = ByteBuffer.allocate(Integer.BYTES).putInt(metadata.size()).array();
+        outputStream.write(mapSizeBytes, 0, mapSizeBytes.length);
 
-        final int capacity = Integer.BYTES + kvSize;
-        final ByteBuffer buffer = ByteBuffer.allocate(capacity).putInt(metadata.size());
         for (final Map.Entry<String, Long> entry : metadata.entrySet()) {
             final byte[] keyBytes = entry.getKey().getBytes(StandardCharsets.UTF_8);
             final int keyLen = keyBytes.length;
-            buffer.putInt(keyLen)
+            final byte[] buffer = ByteBuffer.allocate(Integer.BYTES + keyBytes.length + Long.BYTES)
+                .putInt(keyLen)
                 .put(keyBytes)
-                .putLong(entry.getValue());
+                .putLong(entry.getValue())
+                .array();
+            outputStream.write(buffer, 0, buffer.length);
         }
-        return buffer.array();
+        return outputStream.toByteArray();
     }
 
-    public void addMetadata(final String key, final long value) {
+    public void put(final String key, final long value) {
         metadata.put(key, value);
         needsCommit = true;
     }
 
-    public Long getMetadata(final String key) {
+    public Long get(final String key) {
         return metadata.get(key);
     }
 
@@ -125,17 +116,18 @@ public class ProcessorMetadata {
     }
 
     /**
-     * Whether metadata needs to be committed. It should be committed only if addMetadata is or
-     * setNeedsCommit is called explicitly
+     * Whether metadata needs to be committed. It should be committed only if put is or
+     * {@link #setNeedsCommit} is called explicitly
      *
      * @return If metadata needs to be committed.
      */
-    public boolean needCommit() {
+    public boolean needsCommit() {
         return needsCommit;
     }
 
     @Override
     public int hashCode() {
+        // needsCommit is not considered in hashCode or equals
         return Objects.hashCode(metadata);
     }
 

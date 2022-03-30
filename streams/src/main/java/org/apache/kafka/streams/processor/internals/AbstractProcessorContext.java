@@ -61,7 +61,7 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
         valueSerde = null;
         keySerde = null;
         this.cache = cache;
-        processorMetadata = ProcessorMetadata.emptyMetadata();
+        processorMetadata = new ProcessorMetadata();
     }
 
     protected abstract StateManager stateManager();
@@ -259,12 +259,12 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
 
     @Override
     public void addProcessorMetadataKeyValue(final String key, final long value) {
-        processorMetadata.addMetadata(key, value);
+        processorMetadata.put(key, value);
     }
 
     @Override
-    public Long getProcessorMetadataForKey(final String key) {
-        return processorMetadata.getMetadata(key);
+    public Long processorMetadataForKey(final String key) {
+        return processorMetadata.get(key);
     }
 
     @Override

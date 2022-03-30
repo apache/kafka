@@ -574,20 +574,20 @@ public class ProcessorContextImplTest {
     @Test
     public void shouldAddAndGetProcessorKeyValue() {
         context.addProcessorMetadataKeyValue("key1", 100L);
-        final Long value = context.getProcessorMetadataForKey("key1");
+        final Long value = context.processorMetadataForKey("key1");
         assertEquals(100L, value.longValue());
 
-        final Long noValue = context.getProcessorMetadataForKey("nokey");
+        final Long noValue = context.processorMetadataForKey("nokey");
         assertNull(noValue);
     }
 
     @Test
     public void shouldSetAndGetProcessorMetaData() {
-        final ProcessorMetadata emptyMetadata = ProcessorMetadata.emptyMetadata();
+        final ProcessorMetadata emptyMetadata = new ProcessorMetadata();
         context.setProcessorMetadata(emptyMetadata);
         assertEquals(emptyMetadata, context.getProcessorMetadata());
 
-        final ProcessorMetadata metadata = ProcessorMetadata.with(
+        final ProcessorMetadata metadata = new ProcessorMetadata(
             mkMap(
                 mkEntry("key1", 10L),
                 mkEntry("key2", 100L)
@@ -595,8 +595,8 @@ public class ProcessorContextImplTest {
         );
 
         context.setProcessorMetadata(metadata);
-        assertEquals(10L, context.getProcessorMetadataForKey("key1").longValue());
-        assertEquals(100L, context.getProcessorMetadataForKey("key2").longValue());
+        assertEquals(10L, context.processorMetadataForKey("key1").longValue());
+        assertEquals(100L, context.processorMetadataForKey("key2").longValue());
 
         assertThrows(NullPointerException.class, () -> context.setProcessorMetadata(null));
     }

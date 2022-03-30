@@ -407,13 +407,13 @@ public class StreamTaskTest {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.replay(stateDirectory);
 
-        final ProcessorMetadata processorMetadata = ProcessorMetadata.with(mkMap(
+        final ProcessorMetadata processorMetadata = new ProcessorMetadata(mkMap(
             mkEntry("key1", 1L),
             mkEntry("key2", 2L)
         ));
 
         consumer.commitSync(partitions.stream()
-            .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, TopicPartitionMetadata.with(10L, processorMetadata).encode()))));
+            .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, new TopicPartitionMetadata(10L, processorMetadata).encode()))));
 
         task = createStatelessTask(createConfig("100"));
 
@@ -423,8 +423,8 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
 
         assertEquals(10L, task.streamTime());
-        assertEquals(1L, task.processorContext().getProcessorMetadataForKey("key1").longValue());
-        assertEquals(2L, task.processorContext().getProcessorMetadataForKey("key2").longValue());
+        assertEquals(1L, task.processorContext().processorMetadataForKey("key1").longValue());
+        assertEquals(2L, task.processorContext().processorMetadataForKey("key2").longValue());
     }
 
     @Test
@@ -432,23 +432,23 @@ public class StreamTaskTest {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.replay(stateDirectory);
 
-        final ProcessorMetadata processorMetadata1 = ProcessorMetadata.with(mkMap(
+        final ProcessorMetadata processorMetadata1 = new ProcessorMetadata(mkMap(
             mkEntry("key1", 1L),
             mkEntry("key2", 2L)
         ));
 
         final Map<TopicPartition, OffsetAndMetadata> meta1 = mkMap(
-            mkEntry(partition1, new OffsetAndMetadata(0L, TopicPartitionMetadata.with(10L, processorMetadata1).encode())
+            mkEntry(partition1, new OffsetAndMetadata(0L, new TopicPartitionMetadata(10L, processorMetadata1).encode())
             )
         );
 
-        final ProcessorMetadata processorMetadata2 = ProcessorMetadata.with(mkMap(
+        final ProcessorMetadata processorMetadata2 = new ProcessorMetadata(mkMap(
             mkEntry("key1", 10L),
             mkEntry("key3", 30L)
         ));
 
         final Map<TopicPartition, OffsetAndMetadata> meta2 = mkMap(
-            mkEntry(partition2, new OffsetAndMetadata(0L, TopicPartitionMetadata.with(20L, processorMetadata2).encode())
+            mkEntry(partition2, new OffsetAndMetadata(0L, new TopicPartitionMetadata(20L, processorMetadata2).encode())
             )
         );
 
@@ -463,9 +463,9 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
 
         assertEquals(20L, task.streamTime());
-        assertEquals(10L, task.processorContext().getProcessorMetadataForKey("key1").longValue());
-        assertEquals(2L, task.processorContext().getProcessorMetadataForKey("key2").longValue());
-        assertEquals(30L, task.processorContext().getProcessorMetadataForKey("key3").longValue());
+        assertEquals(10L, task.processorContext().processorMetadataForKey("key1").longValue());
+        assertEquals(2L, task.processorContext().processorMetadataForKey("key2").longValue());
+        assertEquals(30L, task.processorContext().processorMetadataForKey("key3").longValue());
     }
 
     @Test
@@ -1157,8 +1157,8 @@ public class StreamTaskTest {
         processorSystemTime.mockProcessor.addProcessorMetadata("key2", 200L);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
-        final TopicPartitionMetadata expected = TopicPartitionMetadata.with(3L,
-            ProcessorMetadata.with(
+        final TopicPartitionMetadata expected = new TopicPartitionMetadata(3L,
+            new ProcessorMetadata(
                 mkMap(
                     mkEntry("key1", 100L),
                     mkEntry("key2", 200L)
@@ -1184,29 +1184,15 @@ public class StreamTaskTest {
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L)));
         task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L)));
         task.process(0L);
-        processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
 
-        final TopicPartitionMetadata expectedMetadata1 = TopicPartitionMetadata.with(0L,
-            ProcessorMetadata.with(
-                mkMap(
-                    mkEntry("key1", 100L)
-                )
-            )
-        );
-
-        final TopicPartitionMetadata expectedMetadata2 = TopicPartitionMetadata.with(RecordQueue.UNKNOWN,
-            ProcessorMetadata.with(
-                mkMap(
-                    mkEntry("key1", 100L)
-                )
-            )
-        );
+        final TopicPartitionMetadata metadata = new TopicPartitionMetadata(0, new ProcessorMetadata());
 
         assertTrue(task.commitNeeded());
         assertThat(task.prepareCommit(), equalTo(
             mkMap(
-                mkEntry(partition1, new OffsetAndMetadata(3L, expectedMetadata1.encode())),
-                mkEntry(partition2, new OffsetAndMetadata(0L, expectedMetadata2.encode()))
+                mkEntry(partition1,
+                    new OffsetAndMetadata(3L, metadata.encode())
+                )
             )
         ));
         task.postCommit(false);
@@ -1217,19 +1203,11 @@ public class StreamTaskTest {
         consumer.poll(Duration.ZERO);
         task.process(0L);
 
-        final TopicPartitionMetadata expectedMetadata3 = TopicPartitionMetadata.with(0L,
-            ProcessorMetadata.with(
-                mkMap(
-                    mkEntry("key1", 100L)
-                )
-            )
-        );
-
         assertTrue(task.commitNeeded());
         assertThat(task.prepareCommit(), equalTo(
             mkMap(
-                mkEntry(partition1, new OffsetAndMetadata(3L, expectedMetadata1.encode())),
-                mkEntry(partition2, new OffsetAndMetadata(1L, expectedMetadata3.encode()))
+                mkEntry(partition1, new OffsetAndMetadata(3L, metadata.encode())),
+                mkEntry(partition2, new OffsetAndMetadata(1L, metadata.encode()))
             )
         ));
         task.postCommit(false);
@@ -1255,16 +1233,16 @@ public class StreamTaskTest {
         task.process(0L);
         processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
 
-        final TopicPartitionMetadata expectedMetadata1 = TopicPartitionMetadata.with(0L,
-            ProcessorMetadata.with(
+        final TopicPartitionMetadata expectedMetadata1 = new TopicPartitionMetadata(0L,
+            new ProcessorMetadata(
                 mkMap(
                     mkEntry("key1", 100L)
                 )
             )
         );
 
-        final TopicPartitionMetadata expectedMetadata2 = TopicPartitionMetadata.with(-1L,
-            ProcessorMetadata.with(
+        final TopicPartitionMetadata expectedMetadata2 = new TopicPartitionMetadata(RecordQueue.UNKNOWN,
+            new ProcessorMetadata(
                 mkMap(
                     mkEntry("key1", 100L)
                 )
@@ -1286,8 +1264,8 @@ public class StreamTaskTest {
         consumer.poll(Duration.ZERO);
         task.process(0L);
 
-        final TopicPartitionMetadata expectedMetadata3 = TopicPartitionMetadata.with(1L,
-            ProcessorMetadata.with(
+        final TopicPartitionMetadata expectedMetadata3 = new TopicPartitionMetadata(1L,
+            new ProcessorMetadata(
                 mkMap(
                     mkEntry("key1", 100L)
                 )
@@ -2391,7 +2369,8 @@ public class StreamTaskTest {
         assertThat(
             task.prepareCommit(),
             equalTo(mkMap(mkEntry(partition1,
-                new OffsetAndMetadata(offset + 1, TopicPartitionMetadata.with(-1, ProcessorMetadata.emptyMetadata()).encode()))))
+                new OffsetAndMetadata(offset + 1,
+                    new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata()).encode()))))
         );
     }
 
@@ -2419,7 +2398,7 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, TopicPartitionMetadata.with(offset, ProcessorMetadata.emptyMetadata()).encode()))))
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, new TopicPartitionMetadata(offset, new ProcessorMetadata()).encode()))))
         );
     }
 
@@ -2446,14 +2425,14 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, TopicPartitionMetadata.with(0, ProcessorMetadata.emptyMetadata()).encode()))))
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
         );
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, TopicPartitionMetadata.with(0, ProcessorMetadata.emptyMetadata()).encode()))))
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
         );
     }
 

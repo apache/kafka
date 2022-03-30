@@ -35,11 +35,7 @@ public class TopicPartitionMetadata {
     private final long partitionTime;
     private final ProcessorMetadata processorMetadata;
 
-    static TopicPartitionMetadata with(final long partitionTime, final ProcessorMetadata processorMetadata) {
-        return new TopicPartitionMetadata(partitionTime, processorMetadata);
-    }
-
-    private TopicPartitionMetadata(final long partitionTime, final ProcessorMetadata processorMetadata) {
+    public TopicPartitionMetadata(final long partitionTime, final ProcessorMetadata processorMetadata) {
         Objects.requireNonNull(processorMetadata);
         this.partitionTime = partitionTime;
         this.processorMetadata = processorMetadata;
@@ -65,10 +61,10 @@ public class TopicPartitionMetadata {
 
     public static TopicPartitionMetadata decode(final String encryptedString) {
         long timestamp = RecordQueue.UNKNOWN;
-        ProcessorMetadata metadata = ProcessorMetadata.emptyMetadata();
+        ProcessorMetadata metadata = new ProcessorMetadata();
 
-        if (encryptedString == null || encryptedString.isEmpty()) {
-            return with(timestamp, metadata);
+        if (encryptedString.isEmpty()) {
+            return new TopicPartitionMetadata(timestamp, metadata);
         }
         try {
             final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
@@ -93,7 +89,7 @@ public class TopicPartitionMetadata {
         } catch (final Exception exception) {
             LOG.warn("Unsupported offset metadata found");
         }
-        return with(timestamp, metadata);
+        return new TopicPartitionMetadata(timestamp, metadata);
     }
 
     @Override

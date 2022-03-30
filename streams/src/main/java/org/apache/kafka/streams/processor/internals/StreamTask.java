@@ -449,7 +449,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 // If there's processor metadata to be committed. We need to commit them to all
                 // input partitions
-                final Set<TopicPartition> partitionsNeedCommit = processorContext.getProcessorMetadata().needCommit() ?
+                final Set<TopicPartition> partitionsNeedCommit = processorContext.getProcessorMetadata().needsCommit() ?
                     inputPartitions() : consumedOffsets.keySet();
                 committableOffsets = new HashMap<>(partitionsNeedCommit.size());
 
@@ -457,7 +457,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     final Long offset = findOffset(partition);
                     final long partitionTime = partitionTimes.get(partition);
                     committableOffsets.put(partition, new OffsetAndMetadata(offset,
-                        TopicPartitionMetadata.with(partitionTime, processorContext.getProcessorMetadata()).encode()));
+                        new TopicPartitionMetadata(partitionTime, processorContext.getProcessorMetadata()).encode()));
                 }
                 break;
 
@@ -914,7 +914,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private void initializeTaskTimeAndProcessorMetadata(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
-        ProcessorMetadata finalProcessMetadata = null;
+        final ProcessorMetadata finalProcessMetadata = new ProcessorMetadata();
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final OffsetAndMetadata metadata = entry.getValue();
@@ -927,17 +927,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     + " to {} in stream task {}", partition, committedTimestamp, id);
 
                 final ProcessorMetadata processorMetadata = committedTimestampAndMeta.processorMetadata();
-                if (finalProcessMetadata == null) {
-                    finalProcessMetadata = processorMetadata;
-                } else {
-                    finalProcessMetadata.update(processorMetadata);
-                }
+                finalProcessMetadata.update(processorMetadata);
             } else {
                 log.debug("No committed timestamp was found in metadata for partition {}", partition);
             }
         }
-
-        finalProcessMetadata = finalProcessMetadata == null ? ProcessorMetadata.emptyMetadata() : finalProcessMetadata;
         processorContext.setProcessorMetadata(finalProcessMetadata);
 
         final Set<TopicPartition> nonCommitted = new HashSet<>(inputPartitions());

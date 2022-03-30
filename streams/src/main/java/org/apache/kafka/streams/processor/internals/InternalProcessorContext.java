@@ -123,7 +123,7 @@ public interface InternalProcessorContext<KOut, VOut>
 
     void addProcessorMetadataKeyValue(final String key, final long value);
 
-    Long getProcessorMetadataForKey(final String key);
+    Long processorMetadataForKey(final String key);
 
     void setProcessorMetadata(final ProcessorMetadata metadata);
 
