@@ -18,9 +18,9 @@ package kafka.server
 
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
-import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito.{mock, verify, when}

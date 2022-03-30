@@ -33,7 +33,8 @@ import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
-import org.junit.jupiter.api.Timeout;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
