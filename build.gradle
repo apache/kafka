@@ -97,7 +97,7 @@ allprojects {
       }
     }
   }
-    task printAllDependencies(type: DependencyReportTask) {}
+  task printAllDependencies(type: DependencyReportTask) {}
 }
 
 ext {
