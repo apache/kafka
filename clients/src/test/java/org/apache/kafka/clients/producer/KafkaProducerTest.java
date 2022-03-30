@@ -71,8 +71,6 @@ import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -123,7 +121,8 @@ import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
     private final String topic = "topic";
-    private final Collection<Node> nodes = Collections.singletonList(NODE);
+    private final Node host1 = new Node(0, "host1", 1000);
+    private final Collection<Node> nodes = Collections.singletonList(host1);
     private final Cluster emptyCluster = new Cluster(
             null,
             nodes,
@@ -146,7 +145,6 @@ public class KafkaProducerTest {
             Collections.emptySet(),
             Collections.emptySet());
     private static final int DEFAULT_METADATA_IDLE_MS = 5 * 60 * 1000;
-    private static final Node NODE = new Node(0, "host1", 1000);
 
 
     private static <K, V> KafkaProducer<K, V> kafkaProducer(Map<String, Object> configs,
@@ -241,7 +239,6 @@ public class KafkaProducerTest {
         Properties invalidProps2 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.ACKS_CONFIG, "1");
-                // explicitly enabling idempotence should still throw exception
                 setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
             }};
         assertThrows(
@@ -252,149 +249,12 @@ public class KafkaProducerTest {
         Properties invalidProps3 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.ACKS_CONFIG, "0");
+                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
             }};
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
             "Must set acks to all in order to use the idempotent producer");
-
-        Properties invalidProps4 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "0");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps4),
-            "Must set retries to non-zero when using the idempotent producer.");
-    }
-
-    @Test
-    public void testRetriesAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
-
-        Properties validProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            }};
-        ProducerConfig config = new ProducerConfig(validProps);
-        assertFalse(
-            config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
-            "idempotence should be overwritten");
-        assertEquals(
-            0,
-            config.getInt(ProducerConfig.RETRIES_CONFIG),
-            "retries should be overwritten");
-
-        Properties invalidProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps),
-            "Cannot set a transactional.id without also enabling idempotence");
-
-        Properties invalidProps2 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps2),
-            "Must set retries to non-zero when using the idempotent producer.");
-
-        Properties invalidProps3 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                // explicitly enabling idempotence should still throw exception
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps3),
-            "Must set retries to non-zero when using the idempotent producer.");
-
-        Properties invalidProps4 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps4),
-            "Must set retries to non-zero when using the idempotent producer.");
-    }
-
-    @Test
-    public void testInflightRequestsAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
-
-        Properties validProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "10");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            }};
-        ProducerConfig config = new ProducerConfig(validProps);
-        assertFalse(
-            config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
-            "idempotence should be overwritten");
-        assertEquals(
-            10,
-            config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
-            "max.in.flight.requests.per.connection should be overwritten");
-
-        Properties invalidProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps),
-            "Cannot set a transactional.id without also enabling idempotence");
-
-        Properties invalidProps2 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "10");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps2),
-            "Must set max.in.flight.requests.per.connection to at most 5 when using the idempotent producer.");
-
-        Properties invalidProps3 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "10");
-                // explicitly enabling idempotence should still throw exception
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps3),
-            "Must set max.in.flight.requests.per.connection to at most 5 when using the idempotent producer.");
-
-        Properties invalidProps4 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "10");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
-        assertThrows(
-            ConfigException.class,
-            () -> new ProducerConfig(invalidProps4),
-            "Must set retries to non-zero when using the idempotent producer.");
     }
 
     @Test
@@ -606,17 +466,9 @@ public class KafkaProducerTest {
     private static KafkaProducer<String, String> producerWithOverrideNewSender(Map<String, Object> configs,
                                                                                ProducerMetadata metadata,
                                                                                Time timer) {
-        // let mockClient#leastLoadedNode return the node directly so that we can isolate Metadata calls from KafkaProducer for idempotent producer
-        MockClient mockClient = new MockClient(Time.SYSTEM, metadata) {
-            @Override
-            public Node leastLoadedNode(long now) {
-                return NODE;
-            }
-        };
-
         return new KafkaProducer<String, String>(
                 new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, mockClient, null, timer) {
+                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, timer) {
             @Override
             Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
@@ -625,13 +477,10 @@ public class KafkaProducerTest {
         };
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testMetadataFetch(boolean isIdempotenceEnabled) throws InterruptedException {
+    @Test
+    public void testMetadataFetch() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
-
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
         // Return empty cluster 4 times and cluster from then on
@@ -661,14 +510,18 @@ public class KafkaProducerTest {
         producer.close(Duration.ofMillis(0));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testMetadataExpiry(boolean isIdempotenceEnabled) throws InterruptedException {
+    @Test
+    public void testMetadataExpiry() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
+        Cluster emptyCluster = new Cluster(
+            "dummy",
+            Collections.singletonList(host1),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet());
         when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
@@ -689,13 +542,11 @@ public class KafkaProducerTest {
         producer.close(Duration.ofMillis(0));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testMetadataTimeoutWithMissingTopic(boolean isIdempotenceEnabled) throws Exception {
+    @Test
+    public void testMetadataTimeoutWithMissingTopic() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
 
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
@@ -716,7 +567,6 @@ public class KafkaProducerTest {
 
         // Four request updates where the topic isn't present, at which point the timeout expires and a
         // TimeoutException is thrown
-        // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
         Future<RecordMetadata> future = producer.send(record);
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
@@ -730,13 +580,11 @@ public class KafkaProducerTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testMetadataWithPartitionOutOfRange(boolean isIdempotenceEnabled) throws Exception {
+    @Test
+    public void testMetadataWithPartitionOutOfRange() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
 
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
@@ -756,13 +604,11 @@ public class KafkaProducerTest {
         producer.close(Duration.ofMillis(0));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testMetadataTimeoutWithPartitionOutOfRange(boolean isIdempotenceEnabled) throws Exception {
+    @Test
+    public void testMetadataTimeoutWithPartitionOutOfRange() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
 
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
@@ -783,10 +629,7 @@ public class KafkaProducerTest {
 
         // Four request updates where the requested partition is out of range, at which point the timeout expires
         // and a TimeoutException is thrown
-        // For idempotence enabled case, the first and last metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest,
-        // before the producer#send and after it finished
         Future<RecordMetadata> future = producer.send(record);
-
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
@@ -804,8 +647,6 @@ public class KafkaProducerTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
-        // test under normal producer for simplicity
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
         long refreshBackoffMs = 500L;
         long metadataExpireMs = 60000L;
         long metadataIdleMs = 60000L;
@@ -953,9 +794,6 @@ public class KafkaProducerTest {
     public void testFlushCompleteSendOfInflightBatches() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        // only test in idempotence disabled producer for simplicity
-        // flush operation acts the same for idempotence enabled and disabled cases
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
 
         Time time = new MockTime(1);
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
@@ -971,7 +809,6 @@ public class KafkaProducerTest {
                 Future<RecordMetadata> response = producer.send(new ProducerRecord<>("topic", "value" + i));
                 futureResponses.add(response);
             }
-
             futureResponses.forEach(res -> assertFalse(res.isDone()));
             producer.flush();
             futureResponses.forEach(res -> assertTrue(res.isDone()));
@@ -1049,14 +886,14 @@ public class KafkaProducerTest {
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                                ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
 
             client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
@@ -1082,7 +919,7 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1104,7 +941,7 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
@@ -1133,10 +970,10 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         String groupId = "group";
         client.prepareResponse(request ->
             ((TxnOffsetCommitRequest) request).data().groupId().equals(groupId),
@@ -1172,10 +1009,10 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         String groupId = "group";
         String memberId = "member";
         int generationId = 5;
@@ -1228,7 +1065,7 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1439,7 +1276,7 @@ public class KafkaProducerTest {
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         CountDownLatch assertionDoneLatch = new CountDownLatch(1);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", host1));
         executorService.submit(() -> {
             assertThrows(KafkaException.class, producer::initTransactions);
             assertionDoneLatch.countDown();
@@ -1468,7 +1305,7 @@ public class KafkaProducerTest {
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         CountDownLatch assertionDoneLatch = new CountDownLatch(1);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", NODE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", host1));
         executorService.submit(() -> {
             assertThrows(KafkaException.class, producer::initTransactions);
             assertionDoneLatch.countDown();
