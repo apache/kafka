@@ -19,7 +19,6 @@ package kafka.server
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
-import kafka.metrics.KafkaYammerMetrics
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
@@ -27,8 +26,9 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, verify, when}
 
 import scala.collection.{Map, Set, mutable}
@@ -107,6 +107,7 @@ class AbstractFetcherManagerTest {
     fetcherManager.removeFetcherForPartitions(Set(tp))
     assertEquals(0, getMetricValue(metricName))
   }
+
   @Test
   def testDeadThreadCountMetric(): Unit = {
     val fetcher: AbstractFetcherThread = mock(classOf[AbstractFetcherThread])
@@ -327,4 +328,5 @@ class AbstractFetcherManagerTest {
     override protected val isOffsetForLeaderEpochSupported: Boolean = false
     override protected val isTruncationOnFetchSupported: Boolean = false
   }
+
 }
