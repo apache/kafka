@@ -117,6 +117,7 @@ import java.util.regex.Pattern;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 /**
@@ -330,7 +331,7 @@ public class TopologyTestDriver implements Closeable {
 
         final ThreadCache cache = new ThreadCache(
             logContext,
-            Math.max(0, streamsConfig.getTotalCacheSize()),
+            Math.max(0, getTotalCacheSize(streamsConfig)),
             streamsMetrics
         );
 

@@ -20,7 +20,6 @@ import com.yammer.metrics.core.Metric
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
-import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
@@ -41,11 +40,12 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
-
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
+
 import kafka.server.epoch.LeaderEpochFileCache
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import scala.jdk.CollectionConverters._
 

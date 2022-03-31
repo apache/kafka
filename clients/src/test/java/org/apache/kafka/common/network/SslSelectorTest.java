@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import java.nio.channels.SelectionKey;
+import java.security.GeneralSecurityException;
 import javax.net.ssl.SSLEngine;
 
 import org.apache.kafka.common.config.SecurityConfig;
@@ -43,11 +44,9 @@ import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.Security;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
-public class SslSelectorTest extends SelectorTest {
+public abstract class SslSelectorTest extends SelectorTest {
 
     private Map<String, Object> sslClientConfigs;
 
@@ -73,13 +72,15 @@ public class SslSelectorTest extends SelectorTest {
         this.server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         this.server.start();
         this.time = new MockTime();
-        sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
+        sslClientConfigs = createSslClientConfigs(trustStoreFile);
         LogContext logContext = new LogContext();
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
     }
+
+    protected abstract Map<String, Object> createSslClientConfigs(File trustStoreFile) throws GeneralSecurityException, IOException;
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -89,18 +90,12 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     @Override
-    public SecurityProtocol securityProtocol() {
-        return SecurityProtocol.PLAINTEXT;
-    }
-
-    @Override
     protected Map<String, Object> clientConfigs() {
         return sslClientConfigs;
     }
 
     @Test
     public void testConnectionWithCustomKeyManager() throws Exception {
-
         TestProviderCreator testProviderCreator = new TestProviderCreator();
 
         int requestSize = 100 * 1024;
@@ -247,35 +242,6 @@ public class SslSelectorTest extends SelectorTest {
         selector.close(node1);
         selector.close(node2);
         verifySelectorEmpty();
-    }
-
-    /**
-     * Renegotiation is not supported since it is potentially unsafe and it has been removed in TLS 1.3
-     */
-    @Test
-    public void testRenegotiationFails() throws Exception {
-        String node = "0";
-        // create connections
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        // send echo requests and receive responses
-        while (!selector.isChannelReady(node)) {
-            selector.poll(1000L);
-        }
-        selector.send(createSend(node, node + "-" + 0));
-        selector.poll(0L);
-        server.renegotiate();
-        selector.send(createSend(node, node + "-" + 1));
-        long expiryTime = System.currentTimeMillis() + 2000;
-
-        List<String> disconnected = new ArrayList<>();
-        while (!disconnected.contains(node) && System.currentTimeMillis() < expiryTime) {
-            selector.poll(10);
-            disconnected.addAll(selector.disconnected().keySet());
-        }
-        assertTrue(disconnected.contains(node), "Renegotiation should cause disconnection");
-
     }
 
     @Override

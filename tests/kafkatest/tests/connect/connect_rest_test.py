@@ -73,7 +73,8 @@ class ConnectRestApiTest(KafkaTest):
             'test': {'partitions': 1, 'replication-factor': 1}
         })
 
-        self.cc = ConnectDistributedService(test_context, 2, self.kafka, [self.INPUT_FILE, self.INPUT_FILE2, self.OUTPUT_FILE])
+        self.cc = ConnectDistributedService(test_context, 2, self.kafka, [self.INPUT_FILE, self.INPUT_FILE2, self.OUTPUT_FILE],
+                                            include_filestream_connectors=True)
 
     @cluster(num_nodes=4)
     @matrix(connect_protocol=['compatible', 'eager'])

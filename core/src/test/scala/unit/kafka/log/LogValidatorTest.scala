@@ -18,17 +18,18 @@ package kafka.log
 
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
+
 import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
 import kafka.common.{LongRef, RecordValidationException}
 import kafka.log.LogValidator.ValidationAndOffsetAssignResult
 import kafka.message._
-import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test

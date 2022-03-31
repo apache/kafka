@@ -232,6 +232,7 @@
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.authorizer" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.server.policy"/>
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.test" />
@@ -315,6 +316,10 @@
 
     <subpackage name="common">
       <allow pkg="org.apache.kafka.server.common" />
+    </subpackage>
+
+    <subpackage name="metrics">
+      <allow pkg="com.yammer.metrics" />
     </subpackage>
 
     <subpackage name="log">

@@ -420,6 +420,37 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignToMostCaughtUpIfActiveTasksWasNotOnCaughtUpClient() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), EMPTY_CLIENT_TAGS, 1);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 1000L), EMPTY_CLIENT_TAGS, 1);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1);
+        final Map<UUID, ClientState> clientStates = mkMap(
+                mkEntry(UUID_1, client1),
+                mkEntry(UUID_2, client2),
+                mkEntry(UUID_3, client3)
+        );
+
+        final boolean probingRebalanceNeeded =
+                new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
+
+        assertThat(clientStates.get(UUID_1).activeTasks(), is(emptySet()));
+        assertThat(clientStates.get(UUID_2).activeTasks(), is(emptySet()));
+        assertThat(clientStates.get(UUID_3).activeTasks(), is(singleton(TASK_0_0)));
+
+        assertThat(clientStates.get(UUID_1).standbyTasks(), is(singleton(TASK_0_0))); // warm up
+        assertThat(clientStates.get(UUID_2).standbyTasks(), is(singleton(TASK_0_0))); // standby
+        assertThat(clientStates.get(UUID_3).standbyTasks(), is(emptySet()));
+
+        assertThat(probingRebalanceNeeded, is(true));
+        assertValidAssignment(1, 1, allTasks, emptySet(), clientStates, new StringBuilder());
+        assertBalancedActiveAssignment(clientStates, new StringBuilder());
+        assertBalancedStatefulAssignment(allTasks, clientStates, new StringBuilder());
+        assertBalancedTasks(clientStates);
+    }
+
+    @Test
     public void shouldAssignStandbysForStatefulTasks() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);

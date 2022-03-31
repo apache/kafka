@@ -35,7 +35,6 @@ import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
 import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
 import kafka.log._
-import kafka.metrics.KafkaYammerMetrics
 import kafka.network.RequestChannel
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -70,6 +69,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._

@@ -421,12 +421,14 @@ public class AdjustStreamThreadCountTest {
     }
 
     @Test
-    public void shouldResizeCacheAfterThreadReplacement() throws InterruptedException {
+    public void shouldResizeCacheAndInputBufferAfterThreadReplacement() throws InterruptedException {
         final long totalCacheBytes = 10L;
+        final long maxBufferBytes = 100L;
         final Properties props = new Properties();
         props.putAll(properties);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, totalCacheBytes);
+        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, maxBufferBytes);
 
         final AtomicBoolean injectError = new AtomicBoolean(false);
 
@@ -466,64 +468,9 @@ public class AdjustStreamThreadCountTest {
                 waitForTransitionFromRebalancingToRunning();
 
                 for (final String log : appender.getMessages()) {
-                    // after we replace the thread there should be two remaining threads with 5 bytes each
-                    if (log.endsWith("Adding StreamThread-3, there are now 3 threads with cache size/max buffer size values as 3/178956970 per thread.")) {
-                        return;
-                    }
-                }
-            }
-        }
-        fail();
-    }
-
-    @Test
-    public void shouldResizeMaxBufferAfterThreadReplacement() throws InterruptedException {
-        final long totalCacheBytes = 10L;
-        final Properties props = new Properties();
-        props.putAll(properties);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, totalCacheBytes);
-
-        final AtomicBoolean injectError = new AtomicBoolean(false);
-
-        final StreamsBuilder builder  = new StreamsBuilder();
-        final KStream<String, String> stream = builder.stream(inputTopic);
-        stream.transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
-            @Override
-            public void init(final ProcessorContext context) {
-                context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
-                    if (Thread.currentThread().getName().endsWith("StreamThread-1") && injectError.get()) {
-                        injectError.set(false);
-                        throw new RuntimeException("BOOM");
-                    }
-                });
-            }
-
-            @Override
-            public KeyValue<String, String> transform(final String key, final String value) {
-                return new KeyValue<>(key, value);
-            }
-
-            @Override
-            public void close() {
-            }
-        });
-
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
-            addStreamStateChangeListener(kafkaStreams);
-            kafkaStreams.setUncaughtExceptionHandler(e -> StreamThreadExceptionResponse.REPLACE_THREAD);
-            startStreamsAndWaitForRunning(kafkaStreams);
-
-            stateTransitionHistory.clear();
-            try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-                injectError.set(true);
-                waitForCondition(() -> !injectError.get(), "StreamThread did not hit and reset the injected error");
-
-                waitForTransitionFromRebalancingToRunning();
-
-                for (final String log : appender.getMessages()) {
-                    // after we replace the thread there should be two remaining threads with 5 bytes each
-                    if (log.endsWith("Adding StreamThread-3, there are now 3 threads with cache size/max buffer size values as 3495253/3 per thread.")) {
+                    // after we replace the thread there should be two remaining threads with 5 bytes each for
+                    // the cache and 50 for the input buffer
+                    if (log.endsWith("Adding StreamThread-3, there are now 2 threads with cache size/max buffer size values as 5/50 per thread.")) {
                         return;
                     }
                 }
