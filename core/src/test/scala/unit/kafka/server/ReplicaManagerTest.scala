@@ -21,7 +21,7 @@ import java.io.File
 import java.net.InetAddress
 import java.nio.file.Files
 import java.util
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, Properties}
@@ -32,7 +32,6 @@ import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
-import kafka.test.MockReplicaSelector
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import org.apache.kafka.common.message.FetchResponseData
@@ -45,7 +44,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -1304,7 +1303,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchFromFollowerShouldNotRunPreferLeaderSelect(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, "kafka.test.MockReplicaSelector"))
+      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, "kafka.server.MockReplicaSelector"))
     try {
       val leaderBrokerId = 0
       val followerBrokerId = 1
@@ -1313,13 +1312,6 @@ class ReplicaManagerTest {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
       initializeLogAndTopicId(replicaManager, tp0, topicId)
-      when(replicaManager.metadataCache.getPartitionReplicaEndpoints(
-        tp0,
-        new ListenerName("default")
-      )).thenReturn(Map(
-        leaderBrokerId -> new Node(leaderBrokerId, "host1", 9092, "rack-a"),
-        followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-a")
-      ).toMap)
 
       // Make this replica the follower
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -1348,11 +1340,13 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.isFired)
 
       // Expect not run the preferred read replica selection
-      assertEquals(0, replicaManager.replicaSelectorOpt.get.asInstanceOf[MockReplicaSelector].getTriggerElectionCount)
+      assertEquals(0, replicaManager.replicaSelectorOpt.get.asInstanceOf[MockReplicaSelector].getTriggerSelectionCount)
+
+      // Only leader will compute preferred replica
+      assertTrue(consumerResult.assertFired.preferredReadReplica.isEmpty)
 
     } finally replicaManager.shutdown(checkpointHW = false)
   }
-
 
   @Test
   def testFetchShouldReturnImmediatelyWhenPreferredReadReplicaIsDefined(): Unit = {
@@ -3771,5 +3765,21 @@ class ReplicaManagerTest {
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
+}
+
+class MockReplicaSelector extends ReplicaSelector {
+
+  private val triggerSelectionCount = new AtomicLong()
+
+  def getTriggerSelectionCount: Long = triggerSelectionCount.get
+
+  /**
+   * Select the preferred replica a client should use for fetching. If no replica is available, this will return an
+   * empty optional.
+   */
+  override def select(topicPartition: TopicPartition, clientMetadata: ClientMetadata, partitionView: PartitionView): Optional[ReplicaView] = {
+    triggerSelectionCount.incrementAndGet()
+    Optional.of(partitionView.leader)
   }
 }
