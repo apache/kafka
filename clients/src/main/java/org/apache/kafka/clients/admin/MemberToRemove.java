@@ -48,8 +48,8 @@ public class MemberToRemove {
 
     MemberIdentity toMemberIdentity() {
         return new MemberIdentity()
-                   .setGroupInstanceId(groupInstanceId)
-                   .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            .setGroupInstanceId(groupInstanceId)
+            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID);
     }
 
     public String groupInstanceId() {
