@@ -16,13 +16,20 @@
  */
 package kafka.metrics
 
+import kafka.Kafka.info
 import kafka.metrics.clientmetrics.ClientMetricsConfig.ClientMatchingParams.{CLIENT_SOFTWARE_NAME, CLIENT_SOFTWARE_VERSION}
 import kafka.metrics.clientmetrics.ClientMetricsConfig.SubscriptionInfo
-import kafka.metrics.clientmetrics.{ClientMetricsConfig, CmClientInformation, CmClientInstanceState}
+import kafka.metrics.clientmetrics.{ClientMetricsConfig, ClientMetricsReceiverPlugin, CmClientInformation, CmClientInstanceState}
 import kafka.server.ClientMetricsManager
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.clients.telemetry.{ClientTelemetryUtils, MetricType, StringTelemetrySerializer, TelemetryMetric}
+import org.apache.kafka.common.{MetricName, Uuid}
+import org.apache.kafka.common.metrics.{ClientTelemetryPayload, ClientTelemetryReceiver}
+import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext
 
-import java.util.Properties
+import java.nio.ByteBuffer
+import java.util
+import java.util.{Collections, Properties}
 
 object ClientMetricsTestUtils {
   val defaultPushInterval = 30 * 1000 // 30 seconds
@@ -38,6 +45,10 @@ object ClientMetricsTestUtils {
 
   def updateClientSubscription(subscriptionId :String, properties: Properties): Unit = {
     getCM.updateSubscription(subscriptionId, properties)
+  }
+
+  def getClientInstance(id: Uuid): CmClientInstanceState = {
+    getCM.getClientInstance(id).get
   }
 
   def createClientInstance(selector: CmClientInformation): CmClientInstanceState = {
@@ -59,5 +70,43 @@ object ClientMetricsTestUtils {
     }
     updateClientSubscription(subscriptionId, props)
     ClientMetricsConfig.getClientSubscriptionInfo(subscriptionId)
+  }
+
+  class TestClientMetricsPlugin extends ClientTelemetryReceiver {
+    var exportMetricsInvoked = 0
+    var metricsData: ByteBuffer = null
+    def exportMetrics(context: AuthorizableRequestContext, payload: ClientTelemetryPayload) = {
+      exportMetricsInvoked += 1
+      metricsData = payload.data()
+      val metricsDataStr = metricsData.array()
+      info(metricsDataStr.toString)
+    }
+    def reset() =  {
+      exportMetricsInvoked = 0
+      metricsData = null
+    }
+  }
+
+  def setupClientMetricsPlugin(): TestClientMetricsPlugin = {
+    val plugin = new TestClientMetricsPlugin
+    ClientMetricsReceiverPlugin.init(plugin)
+    plugin
+  }
+
+  def getSerializedMetricsData(compressionType: CompressionType, metrics: Map[String, Int]): (ByteBuffer, String) = {
+    def newMetricName(name: String) = new MetricName(name, "g_" + name, "desc_" + name, Collections.emptyMap())
+    def newTelemetryMetric(metricName: MetricName,  value: Long) = new TelemetryMetric(metricName, MetricType.sum, value)
+    val telemetryMetrics = new util.ArrayList[TelemetryMetric]
+    val metricsStr = new StringBuilder()
+    for ((k, v) <- metrics) {
+     val name = newMetricName(k)
+      val metric = newTelemetryMetric(name, v)
+      val tmpStr = name.toString + ": " + v + "\n"
+      metricsStr.append(tmpStr)
+      telemetryMetrics.add(metric)
+    }
+    val telemetrySerializer = new StringTelemetrySerializer
+    val buffer = ClientTelemetryUtils.serialize(telemetryMetrics, compressionType, telemetrySerializer)
+    (buffer, metricsStr.toString().trim)
   }
 }

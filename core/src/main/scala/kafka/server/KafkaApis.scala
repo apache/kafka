@@ -3542,10 +3542,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   // Just a place holder for now.
   def handlePushTelemetryRequest(request: RequestChannel.Request): Unit = {
     val pushTelemetryRequest = request.body[PushTelemetryRequest]
-
-    if (pushTelemetryRequest.getClientInstanceId == Uuid.ZERO_UUID) {
+    try {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception))
+        ClientMetricsManager.processPushTelemetryRequest(request, requestThrottleMs))
+    } catch {
+      case e: Exception =>
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception))
     }
   }
 
