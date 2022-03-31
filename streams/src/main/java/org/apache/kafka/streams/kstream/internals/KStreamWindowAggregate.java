@@ -126,7 +126,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     context,
                     sendOldValues);
             } else {
-                 tupleForwarder = new TimestampedTupleForwarder<>(
+                tupleForwarder = new TimestampedTupleForwarder<>(
                     windowStore,
                     context,
                     new TimestampedCacheFlushListener<>(context),
@@ -135,7 +135,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
             // Restore last emit close time for ON_WINDOW_CLOSE strategy
             if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
-                final Long lastEmitTime = internalProcessorContext.getProcessorMetadataForKey(storeName);
+                final Long lastEmitTime = internalProcessorContext.processorMetadataForKey(storeName);
                 if (lastEmitTime != null) {
                     lastEmitCloseTime = lastEmitTime;
                 }
@@ -248,13 +248,14 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 if (now < timeTracker.nextTimeToEmit) {
                     return;
                 }
-                if (timeTracker.nextTimeToEmit == 0) {
-                    timeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
-                }
+
+                // Schedule next emit time based on now to avoid the case that if system time jumps a lot,
+                // this can be triggered everytime
+                timeTracker.nextTimeToEmit = now;
                 timeTracker.advanceNextTimeToEmit();
 
                 // Close time does not progress
-                if (lastEmitCloseTime >= closeTime) {
+                if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP && lastEmitCloseTime >= closeTime) {
                     return;
                 }
 
@@ -285,11 +286,11 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     }
                 }
 
-                KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
+                final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
                     .fetchAll(lastEmitWindowStart + 1, emitWindowStart);
 
                 while (windowToEmit.hasNext()) {
-                    KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+                    final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
                     tupleForwarder.maybeForward(
                         record.withKey(kv.key)
                             .withValue(new Change<>(kv.value.value(), null))
