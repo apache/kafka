@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import java.util.function.Supplier;
 
 /**
+ * //TODO review docs
  * A processor supplier that can create one or more {@link Processor} instances.
  * <p>
  * It is used in {@link Topology} for adding new processor operators, whose generated
@@ -37,13 +38,14 @@ import java.util.function.Supplier;
  * @param <VOut> the type of output values
  */
 @FunctionalInterface
-public interface FixedKeyProcessorSupplier<KIn, VIn, VOut> extends ConnectedStoreProvider, Supplier<FixedKeyProcessor<KIn, VIn, VOut>> {
+public interface FixedKeyProcessorSupplier<KIn, VIn, VOut>
+    extends ConnectedStoreProvider, Supplier<FixedKeyProcessor<KIn, VIn, VOut>> {
 
     /**
      * Return a newly constructed {@link Processor} instance.
-     * The supplier should always generate a new instance each time {@link  FixedKeyProcessorSupplier#get()} gets called.
+     * The supplier should always generate a new instance each time {@code FixedKeyProcessorSupplier#get()} gets called.
      * <p>
-     * Creating a single {@link Processor} object and returning the same object reference in {@link FixedKeyProcessorSupplier#get()}
+     * Creating a single {@link Processor} object and returning the same object reference in {@code FixedKeyProcessorSupplier#get()}
      * is a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @return a new {@link Processor} instance

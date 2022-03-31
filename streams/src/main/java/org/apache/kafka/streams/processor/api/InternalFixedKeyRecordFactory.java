@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+// TODO: add comments to how/where this should be used.
 public final class InternalFixedKeyRecordFactory {
 
     private InternalFixedKeyRecordFactory() {

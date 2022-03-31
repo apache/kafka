@@ -1396,6 +1396,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         final AtomicBoolean shouldThrow = new AtomicBoolean(false);
         final AtomicBoolean processed = new AtomicBoolean(false);
+        // TODO check if needs to be extended
         internalTopologyBuilder.addProcessor(
             "proc",
             (ProcessorSupplier<Object, Object, Object, Object>) () -> record -> {

@@ -1522,10 +1522,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         builder.addGraphNode(graphNode, processNode);
     }
 
+    // TODO: review implementation
     @Override
-    public <VOut> KStream<K, VOut> processValues(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
-                        final Named named,
-                        final String... stateStoreNames) {
+    public <VOut> KStream<K, VOut> processValues(
+        final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames
+    ) {
         Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
@@ -1551,6 +1554,4 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             processNode,
             builder);
     }
-
-
 }

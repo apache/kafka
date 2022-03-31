@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 
 /**
+ * TODO: add connotation of different processor suppliers.
  * Class used to represent a {@link ProcessorSupplier} and the name
  * used to register it with the {@link org.apache.kafka.streams.processor.internals.InternalTopologyBuilder}
  *

@@ -2544,7 +2544,7 @@ public class KStreamImplTest {
         }
     }
 
-
+    // TODO validate and extend test if needed.
     @Test
     public void shouldProcessValues() {
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());

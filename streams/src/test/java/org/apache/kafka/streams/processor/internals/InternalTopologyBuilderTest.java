@@ -748,6 +748,7 @@ public class InternalTopologyBuilderTest {
         assertThrows(NullPointerException.class, () -> builder.addSink("name", (TopicNameExtractor<Object, Object>) null, null, null, null));
     }
 
+    // TODO: check if this needs to be expanded
     @Test
     public void shouldNotAllowNullNameWhenAddingProcessor() {
         assertThrows(NullPointerException.class, () -> builder.addProcessor(null,

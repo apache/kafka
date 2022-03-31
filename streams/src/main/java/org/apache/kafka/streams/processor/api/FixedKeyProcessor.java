@@ -23,11 +23,11 @@ import org.apache.kafka.streams.processor.StateStore;
 import java.time.Duration;
 
 /**
+ * // TODO: validate and update docs
  * A processor of key-value pair records.
  *
  * @param <KIn> the type of input keys
  * @param <VIn> the type of input values
- * @param <KOut> the type of output keys
  * @param <VOut> the type of output values
  */
 public interface FixedKeyProcessor<KIn, VIn, VOut> {

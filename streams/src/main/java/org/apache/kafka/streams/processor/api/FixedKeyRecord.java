@@ -22,6 +22,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 import java.util.Objects;
 
+// TODO check if docs need to be updated
 /**
  * A data class representing an incoming record for processing in a {@link Processor}
  * or a record to forward to downstream processors via {@link ProcessorContext}.

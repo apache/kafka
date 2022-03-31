@@ -248,6 +248,7 @@ public class InternalTopologyBuilder {
         }
     }
 
+    // TODO check if needs docs
     private static class FixedKeyProcessorNodeFactory<KIn, VIn, VOut> extends ProcessorNodeFactory<KIn, VIn, KIn, VOut> {
         private final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier;
         private final Set<String> stateStoreNames = new HashSet<>();

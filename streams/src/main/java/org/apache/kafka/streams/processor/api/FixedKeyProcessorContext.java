@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+// TODO check if docs need to be updated
 /**
  * Processor context interface.
  *
@@ -84,11 +85,11 @@ public interface FixedKeyProcessorContext<KForward, VForward> extends Processing
 
     /**
      * Forward a record to the specified child processor.
-     * See {@link FixedKeyProcessorContext#forward(Record)} for considerations.
+     * See {@link FixedKeyProcessorContext#forward(FixedKeyRecord)} for considerations.
      *
      * @param record The record to forward
      * @param childName The name of the child processor to receive the record
-     * @see FixedKeyProcessorContext#forward(Record)
+     * @see FixedKeyProcessorContext#forward(FixedKeyRecord)
      */
     <K extends KForward, V extends VForward> void forward(FixedKeyRecord<K, V> record, final String childName);
 }

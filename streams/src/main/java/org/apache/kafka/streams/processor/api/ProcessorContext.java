@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+// TODO Check if needs clarification
 /**
  * Processor context interface.
  *
