@@ -3723,8 +3723,7 @@ public class KafkaAdminClient extends AdminClient {
 
         List<MemberIdentity> membersToRemove = new ArrayList<>();
         for (final MemberDescription member : members) {
-            MemberIdentity memberIdentity = new MemberIdentity()
-                .setReason(reason);
+            MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
 
             if (member.groupInstanceId().isPresent()) {
                 memberIdentity.setGroupInstanceId(member.groupInstanceId().get());

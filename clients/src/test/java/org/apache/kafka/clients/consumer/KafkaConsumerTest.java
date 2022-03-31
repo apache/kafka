@@ -2353,31 +2353,7 @@ public class KafkaConsumerTest {
         return coordinator;
     }
 
-    private Node prepareRebalance(
-        MockClient client,
-        Node node,
-        ConsumerPartitionAssignor assignor,
-        List<TopicPartition> partitions,
-        Node coordinator
-    ) {
-        return prepareRebalance(
-            client,
-            node,
-            assignor,
-            partitions,
-            coordinator,
-            Optional.empty()
-        );
-    }
-
-    private Node prepareRebalance(
-        MockClient client,
-        Node node,
-        ConsumerPartitionAssignor assignor,
-        List<TopicPartition> partitions,
-        Node coordinator,
-        Optional<String> expectedReason
-    ) {
+    private Node prepareRebalance(MockClient client, Node node, ConsumerPartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
         if (coordinator == null) {
             // lookup coordinator
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
@@ -2385,14 +2361,7 @@ public class KafkaConsumerTest {
         }
 
         // join group
-        client.prepareResponseFrom(
-            body -> {
-                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
-                return expectedReason.map(r -> r.equals(joinGroupRequest.data().reason())).orElse(true);
-            },
-            joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE),
-            coordinator
-        );
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         // sync group
         client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
@@ -2854,34 +2823,61 @@ public class KafkaConsumerTest {
     @Test
     public void testEnforceRebalanceReason() {
         Time time = new MockTime(1L);
+
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
-        MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
-        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
-
-        consumer.subscribe(Arrays.asList(topic, topic2), countingRebalanceListener);
+        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1)));
         Node node = metadata.fetch().nodes().get(0);
-        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 
-        // a first rebalance to get the assignment, we need two poll calls since we need two round trips to finish join / sync-group
+        KafkaConsumer<String, String> consumer = newConsumer(
+            time,
+            client,
+            subscription,
+            metadata,
+            assignor,
+            true,
+            groupInstanceId
+        );
+        consumer.subscribe(Collections.singletonList(topic));
+
+        // Lookup coordinator.
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         consumer.poll(Duration.ZERO);
+
+        // Initial join sends an empty reason.
+        prepareJoinGroupAndVerifyReason(client, node, "");
         consumer.poll(Duration.ZERO);
 
         // A null reason should be replaced by the default reason.
         consumer.enforceRebalance(null);
-        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null, Optional.of(DEFAULT_REASON));
+        prepareJoinGroupAndVerifyReason(client, node, DEFAULT_REASON);
         consumer.poll(Duration.ZERO);
 
         // An empty reason should be replaced by the default reason.
         consumer.enforceRebalance("");
-        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null, Optional.of(DEFAULT_REASON));
+        prepareJoinGroupAndVerifyReason(client, node, DEFAULT_REASON);
         consumer.poll(Duration.ZERO);
 
         // A non-null and non-empty reason is sent as-is.
-        consumer.enforceRebalance("user provided reason");
-        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null, Optional.of("user provided reason"));
+        String customReason = "user provided reason";
+        consumer.enforceRebalance(customReason);
+        prepareJoinGroupAndVerifyReason(client, node, customReason);
         consumer.poll(Duration.ZERO);
+    }
+
+    private void prepareJoinGroupAndVerifyReason(
+        MockClient client,
+        Node node,
+        String expectedReason
+    ) {
+        client.prepareResponseFrom(
+            body -> {
+                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
+                return expectedReason.equals(joinGroupRequest.data().reason());
+            },
+            joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE),
+            node
+        );
     }
 
     @Test
