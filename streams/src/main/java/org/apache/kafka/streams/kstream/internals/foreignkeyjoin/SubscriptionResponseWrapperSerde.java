@@ -109,7 +109,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
         @Override
         public byte[] serialize(final String topic, final SubscriptionResponseWrapper<V> data) {
-            //{1-bit-isHashNull}{7-bits-version}{4-bytes-primaryPartition}{Optional-16-byte-Hash}{n-bytes serialized data}
+            //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}{4-bytes-primaryPartition}
 
             //7-bit (0x7F) maximum for data version.
             if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
@@ -126,52 +126,39 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             }
         }
 
-        private byte[] serializeV0(final String topic, final SubscriptionResponseWrapper<V> data) {
+        private ByteBuffer serializeCommon(
+            final String topic,
+            final SubscriptionResponseWrapper<V> data,
+            final byte version,
+            final int extraLength) {
             final byte[] serializedData = data.getForeignValue() == null ? null : serializer.serialize(topic, data.getForeignValue());
             final int serializedDataLength = serializedData == null ? 0 : serializedData.length;
             final long[] originalHash = data.getOriginalValueHash();
             final int hashLength = originalHash == null ? 0 : 2 * Long.BYTES;
-            final int dataLength = 1 + hashLength + serializedDataLength;
+            final int dataLength = 1 + hashLength + serializedDataLength + extraLength;
 
             final ByteBuffer buf = ByteBuffer.allocate(dataLength);
 
             if (originalHash != null) {
-                buf.put((byte) 0);
+                buf.put(version);
                 buf.putLong(originalHash[0]);
                 buf.putLong(originalHash[1]);
             } else {
-                buf.put((byte) 0x80);
+                buf.put((byte) (version | (byte) 0x80));
             }
 
             if (serializedData != null)
                 buf.put(serializedData);
-            return buf.array();
+            return buf;
+        }
+
+        private byte[] serializeV0(final String topic, final SubscriptionResponseWrapper<V> data) {
+            return serializeCommon(topic, data, (byte) 0, 0).array();
         }
 
         private byte[] serializeV1(final String topic, final SubscriptionResponseWrapper<V> data) {
-            final byte[] serializedData = data.getForeignValue() == null ? null : serializer.serialize(topic, data.getForeignValue());
-            final int serializedDataLength = serializedData == null ? 0 : serializedData.length;
-            final long[] originalHash = data.getOriginalValueHash();
-            final int hashLength = originalHash == null ? 0 : 2 * Long.BYTES;
-            final int primaryPartitionLength = Integer.BYTES;
-            final int dataLength = 1 + hashLength + serializedDataLength + primaryPartitionLength;
-
-            final ByteBuffer buf = ByteBuffer.allocate(dataLength);
-
-            if (originalHash != null) {
-                buf.put(data.getVersion());
-            } else {
-                buf.put((byte) (data.getVersion() | (byte) 0x80));
-            }
+            final ByteBuffer buf = serializeCommon(topic, data, data.getVersion(), Integer.BYTES);
             buf.putInt(data.getPrimaryPartition());
-
-            if (originalHash != null) {
-                buf.putLong(originalHash[0]);
-                buf.putLong(originalHash[1]);
-            }
-
-            if (serializedData != null)
-                buf.put(serializedData);
             return buf.array();
         }
     }
@@ -195,20 +182,13 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
         @Override
         public SubscriptionResponseWrapper<V> deserialize(final String topic, final byte[] data) {
-            //{1-bit-isHashNull}{7-bits-version}{4-bytes-primaryPartition}{Optional-16-byte-Hash}{n-bytes serialized data}
+            //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}{4-bytes-primaryPartition}
 
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
             final byte version = (byte) (0x7F & versionAndIsHashNull);
             final boolean isHashNull = (0x80 & versionAndIsHashNull) == 0x80;
             int lengthSum = 1; //The first byte
-            final Integer primaryPartition;
-            if (version > 0) {
-                primaryPartition = buf.getInt();
-                lengthSum += Integer.BYTES;
-            } else {
-                primaryPartition = null;
-            }
 
             final long[] hash;
             if (isHashNull) {
@@ -221,18 +201,31 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             }
 
             final V value;
-            if (data.length - lengthSum > 0) {
+            final int valueLength;
+            if (version > 0) {
+                valueLength = data.length - lengthSum - Integer.BYTES;
+
+            } else {
+                valueLength = data.length - lengthSum;
+            }
+            if (valueLength > 0) {
                 final byte[] serializedValue;
-                serializedValue = new byte[data.length - lengthSum];
+                serializedValue = new byte[valueLength];
                 buf.get(serializedValue, 0, serializedValue.length);
                 value = deserializer.deserialize(topic, serializedValue);
             } else {
                 value = null;
             }
 
+            final Integer primaryPartition;
+            if (version > 0) {
+                primaryPartition = buf.getInt();
+            } else {
+                primaryPartition = null;
+            }
+
             return new SubscriptionResponseWrapper<>(hash, value, version, primaryPartition);
         }
-
     }
 
 }
