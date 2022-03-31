@@ -236,7 +236,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.clients.admin.KafkaAdminClient.LEAVE_GROUP_REASON;
+import static org.apache.kafka.clients.admin.KafkaAdminClient.DEFAULT_LEAVE_GROUP_REASON;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
@@ -3947,35 +3947,44 @@ public class KafkaAdminClientTest {
                 LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
 
                 return leaveGroupRequest.members().stream().allMatch(
-                        member -> member.reason().equals(expectedReason)
+                    member -> member.reason().equals(expectedReason)
                 );
             }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
-                    Arrays.asList(
-                            new MemberResponse().setGroupInstanceId("instance-1"),
-                            new MemberResponse().setGroupInstanceId("instance-2")
-                    ))
+                Arrays.asList(
+                    new MemberResponse().setGroupInstanceId("instance-1"),
+                    new MemberResponse().setGroupInstanceId("instance-2")
+                ))
             ));
 
-            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
+            MemberToRemove memberToRemove1 = new MemberToRemove("instance-1");
+            MemberToRemove memberToRemove2 = new MemberToRemove("instance-2");
 
-            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(membersToRemove);
+            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(Arrays.asList(
+                memberToRemove1,
+                memberToRemove2
+            ));
             options.reason(reason);
 
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
-                    GROUP_ID, options);
+                GROUP_ID,
+                options
+            );
 
             assertNull(result.all().get());
+            assertNull(result.memberResult(memberToRemove1).get());
+            assertNull(result.memberResult(memberToRemove2).get());
         }
     }
 
     @Test
     public void testRemoveMembersFromGroupReason() throws Exception {
-        testRemoveMembersFromGroup("testing remove members reason", LEAVE_GROUP_REASON + ": testing remove members reason");
+        testRemoveMembersFromGroup("testing remove members reason", "testing remove members reason");
     }
 
     @Test
     public void testRemoveMembersFromGroupDefaultReason() throws Exception {
-        testRemoveMembersFromGroup(null, LEAVE_GROUP_REASON);
+        testRemoveMembersFromGroup(null, DEFAULT_LEAVE_GROUP_REASON);
+        testRemoveMembersFromGroup("", DEFAULT_LEAVE_GROUP_REASON);
     }
 
     @Test
