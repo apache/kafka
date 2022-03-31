@@ -265,10 +265,8 @@ class AbstractFetcherManagerTest {
       // Verify that all partitions are owned by the fetcher threads.
       assertEquals(fetchingTopicPartitions, ownedPartitions)
 
-      val failedPartitionsAfterResize = fetcherManager.failedPartitions.failedPartitions()
-      // Verify that failed partitions within resizing scope are removed, otherwise retained
-      assertEquals(Set.empty, fetchingTopicPartitions.intersect(failedPartitionsAfterResize))
-      assertEquals(failedTopicPartitions, failedPartitionsAfterResize)
+      // Only failed partitions should still be kept after resizing
+      assertEquals(failedTopicPartitions, fetcherManager.failedPartitions.failedPartitions())
     } finally {
       fetcherManager.closeAllFetchers()
     }
