@@ -224,7 +224,7 @@ class SocketServer(val config: KafkaConfig,
       ).start()
       acceptor.awaitStartup()
     }
-    info(s"Started ${acceptor.threadPrefix()} acceptor and processor(s) for endpoint : ${endpoint.listenerName}")
+    info(s"Started ${acceptor.threadPrefix()} acceptor and processor(s) for listenerName : ${endpoint.listenerName}")
   }
 
   /**
@@ -268,7 +268,7 @@ class SocketServer(val config: KafkaConfig,
       config.addReconfigurable(dataPlaneAcceptor)
       dataPlaneAcceptor.configure(parsedConfigs)
       dataPlaneAcceptors.put(endpoint, dataPlaneAcceptor)
-      info(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
+      info(s"Created data-plane acceptor and processors for listenerName : ${endpoint.listenerName}")
     }
   }
 
@@ -278,7 +278,7 @@ class SocketServer(val config: KafkaConfig,
       val controlPlaneAcceptor = createControlPlaneAcceptor(endpoint, controlPlaneRequestChannelOpt.get)
       controlPlaneAcceptor.addProcessors(1)
       controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
-      info(s"Created control-plane acceptor and processor for endpoint : ${endpoint.listenerName}")
+      info(s"Created control-plane acceptor and processor for listenerName : ${endpoint.listenerName}")
     }
   }
 
