@@ -255,7 +255,7 @@ class FailedPartitions {
     failedPartitionsSet.contains(topicPartition)
   }
 
-  def failedPartitions(): Set[TopicPartition] = synchronized {
+  def partitions(): Set[TopicPartition] = synchronized {
     failedPartitionsSet.toSet
   }
 }

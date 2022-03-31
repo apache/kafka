@@ -266,7 +266,7 @@ class AbstractFetcherManagerTest {
       assertEquals(fetchingTopicPartitions, ownedPartitions)
 
       // Only failed partitions should still be kept after resizing
-      assertEquals(failedTopicPartitions, fetcherManager.failedPartitions.failedPartitions())
+      assertEquals(failedTopicPartitions, fetcherManager.failedPartitions.partitions())
     } finally {
       fetcherManager.closeAllFetchers()
     }
