@@ -167,6 +167,13 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
+  def testNoOffsetIfTimestampGreaterThanLatestRecord(): Unit = {
+    val time = (System.currentTimeMillis() * 2).toString
+    val offsets = executeAndParse(Array("--topic-partitions", "topic.*", "--time", time))
+    assertEquals(List.empty, offsets)
+  }
+
+  @Test
   def testTopicPartitionsArgWithInternalExcluded(): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions",
       "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics"))
