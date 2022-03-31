@@ -418,12 +418,20 @@ public class StateDirectory {
         }
 
         try {
+            Utils.delete(stateDir);
             if (hasPersistentStores && stateDir.exists() && !stateDir.delete()) {
                 log.warn(
                     String.format("%s Failed to delete state store directory of %s for it is not empty",
                         logPrefix(), stateDir.getAbsolutePath())
                 );
             }
+        } catch (final IOException exception) {
+            log.error(
+                    String.format("%s Failed to delete state store directory %s due to an unexpected exception",
+                            logPrefix(), stateDir),
+                    exception
+            );
+            throw new StreamsException(exception);
         } catch (final SecurityException exception) {
             log.error(
                 String.format("%s Failed to delete state store directory of %s due to an unexpected exception",
