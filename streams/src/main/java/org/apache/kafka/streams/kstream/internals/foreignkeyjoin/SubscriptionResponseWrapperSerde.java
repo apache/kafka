@@ -78,7 +78,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
         private static boolean upgradeFromV0(final Map<String, ?> configs) {
             final Object upgradeFrom = configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
-            if (!(upgradeFrom instanceof String)) {
+            if (upgradeFrom == null) {
                 return false;
             }
 
