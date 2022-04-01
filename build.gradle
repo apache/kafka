@@ -750,7 +750,7 @@ subprojects {
 
   if (userEnableTestCoverage) {
     def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
-    task reportCoverage(dependsOn: [coverageGen])
+    tasks.register('reportCoverage').configure { dependsOn(coverageGen) }
   }
 
   dependencyCheck {
@@ -800,33 +800,8 @@ def checkstyleConfigProperties(configFileName) {
   [importControlFile: "$configFileName"]
 }
 
-// Aggregates all jacoco results into the root project directory
 if (userEnableTestCoverage) {
-  task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
-    def javaProjects = subprojects.findAll { it.path != ':core' }
-
-    description = 'Generates an aggregate report from all subprojects'
-    dependsOn(javaProjects.test)
-
-    additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
-    sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
-    classDirectories.from = javaProjects.sourceSets.main.output
-    executionData.from = javaProjects.jacocoTestReport.executionData
-
-    reports {
-      html.required = true
-      xml.required = true
-    }
-    // workaround to ignore projects that don't have any tests at all
-    onlyIf = { true }
-    doFirst {
-      executionData = files(executionData.findAll { it.exists() })
-    }
-  }
-}
-
-if (userEnableTestCoverage) {
-  task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
+  tasks.register('reportCoverage').configure { dependsOn(subprojects.reportCoverage) }
 }
 
 def connectPkgs = [
@@ -1003,6 +978,9 @@ project(':core') {
   if (userEnableTestCoverage) {
     scoverage {
       scoverageVersion = versions.scoverage
+      if (versions.baseScala == '2.13') {
+        scoverageScalaVersion = '2.13.8' // there's no 2.13.10 artifact, org.scoverage:scalac-scoverage-plugin_2.13.8:1.4.11 is the latest as of now
+      }
       reportDir = file("${rootProject.buildDir}/scoverage")
       highlighting = false
       minimumRate = 0.0
@@ -1294,7 +1272,7 @@ project(':metadata') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1661,7 +1639,7 @@ project(':raft') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1904,7 +1882,7 @@ project(':storage') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -2218,7 +2196,7 @@ project(':streams') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
