@@ -33,6 +33,8 @@ import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.HostResolver
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -45,6 +47,8 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
@@ -74,7 +78,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     brokerLoggerConfigResource = new ConfigResource(
-      ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
+      ConfigResource.Type.BROKER_LOGGER, brokers.head.config.brokerId.toString)
   }
 
   @AfterEach
@@ -2061,7 +2065,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // we expect the log level to be inherited from the first ancestor with a level configured
     assertEquals(kafkaLogLevel, logCleanerLogLevelConfig.value())
     assertEquals("kafka.cluster.Replica", logCleanerLogLevelConfig.name())
-    assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
+    assertEquals(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
     assertEquals(false, logCleanerLogLevelConfig.isReadOnly)
     assertEquals(false, logCleanerLogLevelConfig.isSensitive)
     assertTrue(logCleanerLogLevelConfig.synonyms().isEmpty)
@@ -2275,6 +2279,85 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  /**
+   * Test that createTopics returns the dynamic configurations of the topics that were created.
+   *
+   * Note: this test requires some custom static broker and controller configurations, which are set up in
+   * BaseAdminIntegrationTest.modifyConfigs and BaseAdminIntegrationTest.kraftControllerConfigs.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateTopicsReturnsConfigs(quorum: String): Unit = {
+    client = Admin.create(super.createConfig)
+
+    val alterMap = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]
+    alterMap.put(new ConfigResource(ConfigResource.Type.BROKER, ""), util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "10800000"), OpType.SET)))
+    (brokers.map(_.config) ++ controllerServers.map(_.config)).foreach { case config =>
+      alterMap.put(new ConfigResource(ConfigResource.Type.BROKER, config.nodeId.toString()),
+        util.Arrays.asList(new AlterConfigOp(new ConfigEntry(
+          KafkaConfig.LogCleanerDeleteRetentionMsProp, "34"), OpType.SET)))
+    }
+    client.incrementalAlterConfigs(alterMap).all().get()
+    waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
+      KafkaConfig.LogCleanerDeleteRetentionMsProp, "").toString.equals("34")),
+      s"Timed out waiting for change to ${KafkaConfig.LogCleanerDeleteRetentionMsProp}",
+      waitTimeMs = 60000L)
+
+    val newTopics = Seq(new NewTopic("foo", Map((0: Integer) -> Seq[Integer](1, 2).asJava,
+      (1: Integer) -> Seq[Integer](2, 0).asJava).asJava).
+      configs(Collections.singletonMap(LogConfig.IndexIntervalBytesProp, "9999999")),
+      new NewTopic("bar", 3, 3.toShort),
+      new NewTopic("baz", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+    )
+    val result = client.createTopics(newTopics.asJava)
+    result.all.get()
+    waitForTopics(client, newTopics.map(_.name()).toList, List())
+
+    assertEquals(2, result.numPartitions("foo").get())
+    assertEquals(2, result.replicationFactor("foo").get())
+    assertEquals(3, result.numPartitions("bar").get())
+    assertEquals(3, result.replicationFactor("bar").get())
+    assertEquals(configs.head.numPartitions, result.numPartitions("baz").get())
+    assertEquals(configs.head.defaultReplicationFactor, result.replicationFactor("baz").get())
+
+    val topicConfigs = result.config("foo").get()
+
+    // From the topic configuration defaults.
+    assertEquals(new ConfigEntry(LogConfig.CleanupPolicyProp, "delete",
+      ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), null, null),
+      topicConfigs.get(LogConfig.CleanupPolicyProp))
+
+    // From dynamic cluster config via the synonym LogRetentionTimeHoursProp.
+    assertEquals(new ConfigEntry(LogConfig.RetentionMsProp, "10800000",
+      ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, false, false, Collections.emptyList(), null, null),
+      topicConfigs.get(LogConfig.RetentionMsProp))
+
+    // From dynamic broker config via LogCleanerDeleteRetentionMsProp.
+    assertEquals(new ConfigEntry(LogConfig.DeleteRetentionMsProp, "34",
+      ConfigSource.DYNAMIC_BROKER_CONFIG, false, false, Collections.emptyList(), null, null),
+      topicConfigs.get(LogConfig.DeleteRetentionMsProp))
+
+    // From static broker config by SegmentJitterMsProp.
+    assertEquals(new ConfigEntry(LogConfig.SegmentJitterMsProp, "123",
+      ConfigSource.STATIC_BROKER_CONFIG, false, false, Collections.emptyList(), null, null),
+      topicConfigs.get(LogConfig.SegmentJitterMsProp))
+
+    // From static broker config by the synonym LogRollTimeHoursProp.
+    val segmentMsPropType = if (isKRaftTest()) {
+      ConfigSource.STATIC_BROKER_CONFIG
+    } else {
+      ConfigSource.DEFAULT_CONFIG
+    }
+    assertEquals(new ConfigEntry(LogConfig.SegmentMsProp, "7200000",
+      segmentMsPropType, false, false, Collections.emptyList(), null, null),
+      topicConfigs.get(LogConfig.SegmentMsProp))
+
+    // From the dynamic topic config.
+    assertEquals(new ConfigEntry(LogConfig.IndexIntervalBytesProp, "9999999",
+      ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList(), null, null),
+      topicConfigs.get(LogConfig.IndexIntervalBytesProp))
+  }
 }
 
 object PlaintextAdminIntegrationTest {
@@ -2417,5 +2500,4 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(Defaults.CompressionType, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
   }
-
 }

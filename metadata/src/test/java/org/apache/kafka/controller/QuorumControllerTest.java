@@ -233,7 +233,8 @@ public class QuorumControllerTest {
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
                         setReplicationFactor(replicationFactor)).iterator()));
-            CreateTopicsResponseData createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(
+                createTopicsRequestData, Collections.singleton("foo")).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
 
@@ -322,7 +323,8 @@ public class QuorumControllerTest {
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
                         setReplicationFactor(replicationFactor)).iterator()));
-            CreateTopicsResponseData createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(
+                createTopicsRequestData, Collections.singleton("foo")).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
 
@@ -432,16 +434,17 @@ public class QuorumControllerTest {
                             new CreatableTopic().setName("foo").setNumPartitions(1).
                                 setReplicationFactor((short) 1)).iterator()));
                 assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(), active.createTopics(
-                    createTopicsRequestData).get().topics().find("foo").errorCode());
+                    createTopicsRequestData, Collections.singleton("foo")).get().
+                        topics().find("foo").errorCode());
                 assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
-                    "are currently fenced.", active.createTopics(
-                    createTopicsRequestData).get().topics().find("foo").errorMessage());
+                    "are currently fenced.", active.createTopics(createTopicsRequestData,
+                        Collections.singleton("foo")).get().topics().find("foo").errorMessage());
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(0L).setBrokerId(0).
                             setCurrentMetadataOffset(100000L)).get());
-                assertEquals(Errors.NONE.code(), active.createTopics(
-                    createTopicsRequestData).get().topics().find("foo").errorCode());
+                assertEquals(Errors.NONE.code(), active.createTopics(createTopicsRequestData,
+                    Collections.singleton("foo")).get().topics().find("foo").errorCode());
                 CompletableFuture<TopicIdPartition> topicPartitionFuture = active.appendReadEvent(
                     "debugGetPartition", () -> {
                         Iterator<TopicIdPartition> iterator = active.
@@ -504,7 +507,8 @@ public class QuorumControllerTest {
                                     new CreatableReplicaAssignment().
                                         setPartitionIndex(1).
                                         setBrokerIds(Arrays.asList(1, 2, 0))).
-                                            iterator()))).iterator()))).get();
+                                            iterator()))).iterator())),
+                    Collections.singleton("foo")).get();
                 fooId = fooData.topics().find("foo").topicId();
                 active.allocateProducerIds(
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
@@ -573,7 +577,8 @@ public class QuorumControllerTest {
                                     new CreatableReplicaAssignment().
                                         setPartitionIndex(1).
                                         setBrokerIds(Arrays.asList(1, 2, 0))).
-                                            iterator()))).iterator()))).get();
+                                            iterator()))).iterator())),
+                    Collections.singleton("foo")).get();
                 fooId = fooData.topics().find("foo").topicId();
                 active.allocateProducerIds(
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
@@ -636,7 +641,8 @@ public class QuorumControllerTest {
                                         new CreatableReplicaAssignment().
                                             setPartitionIndex(1).
                                             setBrokerIds(Arrays.asList(1, 2, 0))).
-                                                iterator()))).iterator()))).get();
+                                                iterator()))).iterator())),
+                        Collections.singleton(topicName)).get();
                 }
                 logEnv.waitForLatestSnapshot();
             }
@@ -772,7 +778,8 @@ public class QuorumControllerTest {
                 CompletableFuture<CreateTopicsResponseData> createFuture =
                     controller.createTopics(new CreateTopicsRequestData().setTimeoutMs(0).
                         setTopics(new CreatableTopicCollection(Collections.singleton(
-                            new CreatableTopic().setName("foo")).iterator())));
+                            new CreatableTopic().setName("foo")).iterator())),
+                        Collections.emptySet());
                 long now = controller.time().nanoseconds();
                 CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
                     controller.deleteTopics(now, Collections.singletonList(Uuid.ZERO_UUID));
@@ -827,7 +834,8 @@ public class QuorumControllerTest {
                 QuorumController controller = controlEnv.activeController();
                 CountDownLatch countDownLatch = controller.pause();
                 CompletableFuture<CreateTopicsResponseData> createFuture =
-                    controller.createTopics(new CreateTopicsRequestData().setTimeoutMs(120000));
+                    controller.createTopics(new CreateTopicsRequestData().setTimeoutMs(120000),
+                        Collections.emptySet());
                 long deadlineMs = controller.time().nanoseconds() + HOURS.toNanos(1);
                 CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
                     controller.deleteTopics(deadlineMs, Collections.emptyList());
@@ -877,20 +885,14 @@ public class QuorumControllerTest {
                 )
                 .collect(Collectors.toList());
 
-            Uuid topicId = controller.createTopics(
-                new CreateTopicsRequestData()
-                    .setTopics(
-                        new CreatableTopicCollection(
-                            Collections.singleton(
-                                new CreatableTopic()
-                                    .setName(topicName)
-                                    .setNumPartitions(-1)
-                                    .setReplicationFactor((short) -1)
-                                    .setAssignments(new CreatableReplicaAssignmentCollection(partitions.iterator()))
-                            ).iterator()
-                        )
-                    )
-            ).get().topics().find(topicName).topicId();
+            Uuid topicId = controller.createTopics(new CreateTopicsRequestData()
+                    .setTopics(new CreatableTopicCollection(Collections.singleton(new CreatableTopic()
+                        .setName(topicName)
+                        .setNumPartitions(-1)
+                        .setReplicationFactor((short) -1)
+                        .setAssignments(new CreatableReplicaAssignmentCollection(partitions.iterator()))
+                    ).iterator())),
+                Collections.singleton("foo")).get().topics().find(topicName).topicId();
 
             // Create a lot of alter isr
             List<AlterPartitionRequestData.PartitionData> alterPartitions = IntStream
@@ -1029,7 +1031,8 @@ public class QuorumControllerTest {
                     setTopics(new CreatableTopicCollection(Collections.singleton(
                         new CreatableTopic().setName("foo").
                             setReplicationFactor((short) 3).
-                            setNumPartitions(1)).iterator()))).get();
+                            setNumPartitions(1)).iterator())),
+                    Collections.singleton("foo")).get();
                 ConfigResourceExistenceChecker checker =
                     active.new ConfigResourceExistenceChecker();
                 // A ConfigResource with type=BROKER and name=(empty string) represents
