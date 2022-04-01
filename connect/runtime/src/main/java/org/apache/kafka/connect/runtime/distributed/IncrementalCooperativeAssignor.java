@@ -286,7 +286,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         taskAssignments =
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
 
-        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment, memberAssignments);
+        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment);
 
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         // Also we do not revoke in two consecutive rebalances by the same leader
@@ -460,8 +460,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     // visible for testing
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks newSubmissions,
-                                         List<WorkerLoad> completeWorkerAssignment,
-                                         Map<String, ConnectorsAndTasks> memberAssignments) {
+                                         List<WorkerLoad> completeWorkerAssignment) {
         if (lostAssignments.isEmpty()) {
             resetDelay();
             return;
@@ -471,7 +470,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Found the following connectors and tasks missing from previous assignments: "
                 + lostAssignments);
 
-        if (scheduledRebalance <= 0 && memberAssignments.keySet().containsAll(previousMembers)) {
+        Set<String> activeMembers = completeWorkerAssignment.stream()
+                .map(WorkerLoad::worker)
+                .collect(Collectors.toSet());
+        if (scheduledRebalance <= 0 && activeMembers.containsAll(previousMembers)) {
             log.debug("No worker seems to have departed the group during the rebalance. The "
                     + "missing assignments that the leader is detecting are probably due to some "
                     + "workers failing to receive the new assignments in the previous rebalance. "
@@ -565,7 +567,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     }
 
     /**
-     * Task revocation is based on an rough estimation of the lower average number of tasks before
+     * Task revocation is based on a rough estimation of the lower average number of tasks before
      * and after new workers join the group. If no new workers join, no revocation takes place.
      * Based on this estimation, tasks are revoked until the new floor average is reached for
      * each existing worker. The revoked tasks, once assigned to the new workers will maintain

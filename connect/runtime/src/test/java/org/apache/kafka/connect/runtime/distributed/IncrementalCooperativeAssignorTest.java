@@ -481,7 +481,6 @@ public class IncrementalCooperativeAssignorTest {
     public void testLostAssignmentHandlingWhenWorkerBounces() {
         time = new MockTime();
         initAssignor();
-        memberAssignments.clear();
 
         assertTrue(assignor.candidateWorkersForReassignment.isEmpty());
         assertEquals(0, assignor.scheduledRebalance);
@@ -491,15 +490,13 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker0", workerLoad("worker0", 0, 2, 0, 4));
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
-        addNewEmptyWorkers("worker0", "worker1", "worker2");
 
         ConnectorsAndTasks newSubmissions = new ConnectorsAndTasks.Builder().build();
 
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 newSubmissions,
-                new ArrayList<>(configuredAssignment.values()),
-                memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -507,17 +504,16 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
-        String flakyWorker = "worker1";
-        WorkerLoad lostLoad = workerLoad(flakyWorker, 2, 2, 4, 4);
-        removeWorkers(flakyWorker);
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
 
+        String flakyWorker = "worker1";
+        WorkerLoad lostLoad = configuredAssignment.remove(flakyWorker);
         ConnectorsAndTasks lostAssignments = new ConnectorsAndTasks.Builder()
                 .withCopies(lostLoad.connectors(), lostLoad.tasks()).build();
 
         // Lost assignments detected - No candidate worker has appeared yet (worker with no assignments)
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -525,15 +521,14 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay / 2);
         rebalanceDelay /= 2;
 
         // A new worker (probably returning worker) has joined
         configuredAssignment.put(flakyWorker, new WorkerLoad.Builder(flakyWorker).build());
-        addNewEmptyWorkers(flakyWorker);
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.singleton(flakyWorker),
@@ -541,12 +536,12 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay);
 
         // The new worker has still no assignments
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertTrue("Wrong assignment of lost connectors",
                 configuredAssignment.getOrDefault(flakyWorker, new WorkerLoad.Builder(flakyWorker).build())
@@ -568,7 +563,6 @@ public class IncrementalCooperativeAssignorTest {
         // Customize assignor for this test case
         time = new MockTime();
         initAssignor();
-        memberAssignments.clear();
 
         assertTrue(assignor.candidateWorkersForReassignment.isEmpty());
         assertEquals(0, assignor.scheduledRebalance);
@@ -578,15 +572,13 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker0", workerLoad("worker0", 0, 2, 0, 4));
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
-        addNewEmptyWorkers("worker0", "worker1", "worker2");
 
         ConnectorsAndTasks newSubmissions = new ConnectorsAndTasks.Builder().build();
 
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 newSubmissions,
-                new ArrayList<>(configuredAssignment.values()),
-                memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -594,17 +586,16 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
-        String removedWorker = "worker1";
-        WorkerLoad lostLoad = workerLoad(removedWorker, 2, 2, 4, 4);
-        removeWorkers(removedWorker);
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
 
+        String removedWorker = "worker1";
+        WorkerLoad lostLoad = configuredAssignment.remove(removedWorker);
         ConnectorsAndTasks lostAssignments = new ConnectorsAndTasks.Builder()
                 .withCopies(lostLoad.connectors(), lostLoad.tasks()).build();
 
         // Lost assignments detected - No candidate worker has appeared yet (worker with no assignments)
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -618,7 +609,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // No new worker has joined
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -629,7 +620,7 @@ public class IncrementalCooperativeAssignorTest {
         time.sleep(rebalanceDelay);
 
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertTrue("Wrong assignment of lost connectors",
                 newSubmissions.connectors().containsAll(lostAssignments.connectors()));
@@ -647,7 +638,6 @@ public class IncrementalCooperativeAssignorTest {
         // Customize assignor for this test case
         time = new MockTime();
         initAssignor();
-        memberAssignments.clear();
 
         assertTrue(assignor.candidateWorkersForReassignment.isEmpty());
         assertEquals(0, assignor.scheduledRebalance);
@@ -657,15 +647,13 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker0", workerLoad("worker0", 0, 2, 0, 4));
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
-        addNewEmptyWorkers("worker0", "worker1", "worker2");
 
         ConnectorsAndTasks newSubmissions = new ConnectorsAndTasks.Builder().build();
 
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 newSubmissions,
-                new ArrayList<>(configuredAssignment.values()),
-                memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -673,20 +661,19 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
-        String flakyWorker = "worker1";
-        WorkerLoad lostLoad = workerLoad(flakyWorker, 2, 2, 4, 4);
-        removeWorkers(flakyWorker);
-        String newWorker = "worker3";
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
 
+        String flakyWorker = "worker1";
+        WorkerLoad lostLoad = configuredAssignment.remove(flakyWorker);
         ConnectorsAndTasks lostAssignments = new ConnectorsAndTasks.Builder()
                 .withCopies(lostLoad.connectors(), lostLoad.tasks()).build();
 
-        // Lost assignments detected - A new worker also has joined that is not the returning worker
+        String newWorker = "worker3";
         configuredAssignment.put(newWorker, new WorkerLoad.Builder(newWorker).build());
-        addNewEmptyWorkers(newWorker);
+
+        // Lost assignments detected - A new worker also has joined that is not the returning worker
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.singleton(newWorker),
@@ -694,15 +681,14 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay / 2);
         rebalanceDelay /= 2;
 
         // Now two new workers have joined
         configuredAssignment.put(flakyWorker, new WorkerLoad.Builder(flakyWorker).build());
-        addNewEmptyWorkers(flakyWorker);
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         Set<String> expectedWorkers = new HashSet<>();
         expectedWorkers.addAll(Arrays.asList(newWorker, flakyWorker));
@@ -712,7 +698,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay);
 
         // The new workers have new assignments, other than the lost ones
@@ -721,7 +707,7 @@ public class IncrementalCooperativeAssignorTest {
         // we don't reflect these new assignments in memberConfigs currently because they are not
         // used in handleLostAssignments method
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         // both the newWorkers would need to be considered for re assignment of connectors and tasks
         List<String> listOfConnectorsInLast2Workers = new ArrayList<>();
@@ -750,7 +736,6 @@ public class IncrementalCooperativeAssignorTest {
         // Customize assignor for this test case
         time = new MockTime();
         initAssignor();
-        memberAssignments.clear();
 
         assertTrue(assignor.candidateWorkersForReassignment.isEmpty());
         assertEquals(0, assignor.scheduledRebalance);
@@ -760,15 +745,13 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker0", workerLoad("worker0", 0, 2, 0, 4));
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
-        addNewEmptyWorkers("worker0", "worker1", "worker2");
 
         ConnectorsAndTasks newSubmissions = new ConnectorsAndTasks.Builder().build();
 
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 newSubmissions,
-                new ArrayList<>(configuredAssignment.values()),
-                memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -776,17 +759,16 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
-        String veryFlakyWorker = "worker1";
-        WorkerLoad lostLoad = workerLoad(veryFlakyWorker, 2, 2, 4, 4);
-        removeWorkers(veryFlakyWorker);
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
 
+        String veryFlakyWorker = "worker1";
+        WorkerLoad lostLoad = configuredAssignment.remove(veryFlakyWorker);
         ConnectorsAndTasks lostAssignments = new ConnectorsAndTasks.Builder()
                 .withCopies(lostLoad.connectors(), lostLoad.tasks()).build();
 
         // Lost assignments detected - No candidate worker has appeared yet (worker with no assignments)
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -794,15 +776,14 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay / 2);
         rebalanceDelay /= 2;
 
         // A new worker (probably returning worker) has joined
         configuredAssignment.put(veryFlakyWorker, new WorkerLoad.Builder(veryFlakyWorker).build());
-        addNewEmptyWorkers(veryFlakyWorker);
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.singleton(veryFlakyWorker),
@@ -810,14 +791,13 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
-        assignor.previousMembers = new HashSet<>(memberAssignments.keySet());
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay);
 
         // The returning worker leaves permanently after joining briefly during the delay
         configuredAssignment.remove(veryFlakyWorker);
-        removeWorkers(veryFlakyWorker);
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
-                new ArrayList<>(configuredAssignment.values()), memberAssignments);
+                new ArrayList<>(configuredAssignment.values()));
 
         assertTrue("Wrong assignment of lost connectors",
                 newSubmissions.connectors().containsAll(lostAssignments.connectors()));
