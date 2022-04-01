@@ -20,7 +20,7 @@ import java.util.{Collection, Collections, Optional, Properties}
 import kafka.admin.TopicCommand.{TopicCommandOptions, TopicService}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
@@ -99,7 +99,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       topicService.close()
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreate(quorum: String): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
@@ -108,7 +108,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     adminClient.listTopics().names().get().contains(testTopicName)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithDefaults(quorum: String): Unit = {
     createAndWaitTopic(new TopicCommandOptions(Array("--topic", testTopicName)))
@@ -123,7 +123,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertEquals(partitions.get(0).replicas().size(), defaultReplicationFactor)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithDefaultReplication(quorum: String): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
@@ -139,7 +139,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertEquals(partitions.get(0).replicas().size(), defaultReplicationFactor)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithDefaultPartitions(quorum: String): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
@@ -156,7 +156,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertEquals(partitions.get(0).replicas().size(), 2)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithConfigs(quorum: String): Unit = {
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)
@@ -169,7 +169,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertEquals(1000, Integer.valueOf(configs.get("delete.retention.ms").value()))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWhenAlreadyExists(quorum: String): Unit = {
     val numPartitions = 1
@@ -183,7 +183,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertThrows(classOf[TopicExistsException], () => topicService.createTopic(createOpts))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWhenAlreadyExistsWithIfNotExists(quorum: String): Unit = {
     val createOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--if-not-exists"))
@@ -191,7 +191,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicService.createTopic(createOpts)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithReplicaAssignment(quorum: String): Unit = {
     // create the topic
@@ -211,7 +211,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertEquals(List(1, 0), partitions.get(2).replicas().asScala.map(_.id()))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithInvalidReplicationFactor(quorum: String): Unit = {
     assertThrows(classOf[IllegalArgumentException],
@@ -219,7 +219,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithNegativeReplicationFactor(quorum: String): Unit = {
     assertThrows(classOf[IllegalArgumentException],
@@ -227,7 +227,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithNegativePartitionCount(quorum: String): Unit = {
     assertThrows(classOf[IllegalArgumentException],
@@ -235,7 +235,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidTopicLevelConfig(quorum: String): Unit = {
     val createOpts = new TopicCommandOptions(
@@ -244,7 +244,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertThrows(classOf[ConfigException], () => topicService.createTopic(createOpts))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListTopics(quorum: String): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
@@ -256,7 +256,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertTrue(output.contains(testTopicName))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListTopicsWithIncludeList(quorum: String): Unit = {
     val topic1 = "kafka.testTopic1"
@@ -279,7 +279,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertFalse(output.contains(topic3))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListTopicsWithExcludeInternal(quorum: String): Unit = {
     val topic1 = "kafka.testTopic1"
@@ -296,7 +296,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterPartitionCount(quorum: String): Unit = {
     adminClient.createTopics(
@@ -313,7 +313,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertTrue(topicDescription.partitions().size() == 3)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterAssignment(quorum: String): Unit = {
     adminClient.createTopics(
@@ -328,7 +328,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertEquals(List(4,2), topicDescription.partitions().get(2).replicas().asScala.map(_.id()))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterAssignmentWithMoreAssignmentThanPartitions(quorum: String): Unit = {
     adminClient.createTopics(
@@ -340,7 +340,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3"))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterAssignmentWithMorePartitionsThanAssignment(quorum: String): Unit = {
     adminClient.createTopics(
@@ -352,7 +352,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6"))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterWithInvalidPartitionCount(quorum: String): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
@@ -363,7 +363,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         Array("--partitions", "-1", "--topic", testTopicName))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterWhenTopicDoesntExist(quorum: String): Unit = {
     // alter a topic that does not exist without --if-exists
@@ -372,14 +372,14 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertThrows(classOf[IllegalArgumentException], () => topicService.alterTopic(alterOpts))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterWhenTopicDoesntExistWithIfExists(quorum: String): Unit = {
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--partitions", "1", "--if-exists")))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateAlterTopicWithRackAware(quorum: String): Unit = {
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
@@ -413,7 +413,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testConfigPreservationAcrossPartitionAlteration(quorum: String): Unit = {
     val numPartitionsOriginal = 1
@@ -448,7 +448,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertEquals(cleanupVal, newProps.get(cleanupKey).value(), "Updated properties have incorrect value")
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testTopicDeletion(quorum: String): Unit = {
     // create the NormalTopic
@@ -468,7 +468,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     TestUtils.verifyTopicDeletion(zkClientOrNull, testTopicName, 1, brokers)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteInternalTopic(quorum: String): Unit = {
     // create the offset topic
@@ -490,7 +490,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     TestUtils.verifyTopicDeletion(zkClientOrNull, Topic.GROUP_METADATA_TOPIC_NAME, 1, brokers)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteWhenTopicDoesntExist(quorum: String): Unit = {
     // delete a topic that does not exist
@@ -498,13 +498,13 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertThrows(classOf[IllegalArgumentException], () => topicService.deleteTopic(deleteOpts))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteWhenTopicDoesntExistWithIfExists(quorum: String): Unit = {
     topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribe(quorum: String): Unit = {
     adminClient.createTopics(
@@ -518,20 +518,20 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertTrue(rows(0).startsWith(s"Topic: $testTopicName"))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeWhenTopicDoesntExist(quorum: String): Unit = {
     assertThrows(classOf[IllegalArgumentException],
       () => topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeWhenTopicDoesntExistWithIfExists(quorum: String): Unit = {
     topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnavailablePartitions(quorum: String): Unit = {
     adminClient.createTopics(
@@ -575,7 +575,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     }
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnderReplicatedPartitions(quorum: String): Unit = {
     adminClient.createTopics(
@@ -595,7 +595,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     }
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnderMinIsrPartitions(quorum: String): Unit = {
     val configMap = new java.util.HashMap[String, String]()
@@ -618,7 +618,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     }
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(quorum: String): Unit = {
     val configMap = new java.util.HashMap[String, String]()
@@ -673,7 +673,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     TestUtils.waitForAllReassignmentsToComplete(adminClient)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeAtMinIsrPartitions(quorum: String): Unit = {
     val configMap = new java.util.HashMap[String, String]()
@@ -705,7 +705,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     *
     * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
     */
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnderMinIsrPartitionsMixed(quorum: String): Unit = {
     val underMinIsrTopic = "under-min-isr-topic"
@@ -743,7 +743,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     }
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeReportOverriddenConfigs(quorum: String): Unit = {
     val config = "file.delete.delay.ms=1000"
@@ -754,7 +754,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertTrue(output.contains(config), s"Describe output should have contained $config")
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeAndListTopicsWithoutInternalTopics(quorum: String): Unit = {
     createAndWaitTopic(
@@ -775,7 +775,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(quorum: String): Unit = {
     adminClient = spy(adminClient)
@@ -802,7 +802,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertTrue(rows(0).startsWith(s"Topic: $testTopicName"))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithTopicNameCollision(quorum: String): Unit = {
     adminClient.createTopics(
@@ -813,7 +813,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       () => topicService.createTopic(new TopicCommandOptions(Array("--topic", "foo.bar"))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateTopicDoesNotRetryThrottlingQuotaExceededException(quorum: String): Unit = {
     val adminClient = mock(classOf[Admin])
@@ -834,7 +834,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     )
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicDoesNotRetryThrottlingQuotaExceededException(quorum: String): Unit = {
     val adminClient = mock(classOf[Admin])
@@ -856,7 +856,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     )
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePartitionsDoesNotRetryThrottlingQuotaExceededException(quorum: String): Unit = {
     val adminClient = mock(classOf[Admin])

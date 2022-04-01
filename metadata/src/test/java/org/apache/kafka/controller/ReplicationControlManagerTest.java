@@ -641,7 +641,7 @@ public class ReplicationControlManagerTest {
         topics.add(new CreatableTopic().setName(""));
         topics.add(new CreatableTopic().setName("woo"));
         topics.add(new CreatableTopic().setName("."));
-        ReplicationControlManager.validateNewTopicNames(topicErrors, topics, Collections.emptySet());
+        ReplicationControlManager.validateNewTopicNames(topicErrors, topics, Collections.emptyMap());
         Map<String, ApiError> expectedTopicErrors = new HashMap<>();
         expectedTopicErrors.put("", new ApiError(INVALID_TOPIC_EXCEPTION,
             "Topic name is illegal, it can't be empty"));
@@ -656,12 +656,15 @@ public class ReplicationControlManagerTest {
         CreatableTopicCollection topics = new CreatableTopicCollection();
         topics.add(new CreatableTopic().setName("foo.bar"));
         topics.add(new CreatableTopic().setName("woo.bar_foo"));
-        ReplicationControlManager.validateNewTopicNames(topicErrors, topics, Arrays.asList("foo_bar", "woo_bar.foo"));
+        Map<String, String> collisionMap = new HashMap<>();
+        collisionMap.put("foo_bar", "foo_bar");
+        collisionMap.put("woo_bar_foo", "woo_bar.foo");
+        ReplicationControlManager.validateNewTopicNames(topicErrors, topics, collisionMap);
         Map<String, ApiError> expectedTopicErrors = new HashMap<>();
         expectedTopicErrors.put("foo.bar", new ApiError(INVALID_TOPIC_EXCEPTION,
-            "Topic 'foo.bar' collides with existing topics: foo_bar"));
+            "Topic 'foo.bar' collides with existing topic: foo_bar"));
         expectedTopicErrors.put("woo.bar_foo", new ApiError(INVALID_TOPIC_EXCEPTION,
-            "Topic 'woo.bar_foo' collides with existing topics: woo_bar.foo"));
+            "Topic 'woo.bar_foo' collides with existing topic: woo_bar.foo"));
         assertEquals(expectedTopicErrors, topicErrors);
     }
 

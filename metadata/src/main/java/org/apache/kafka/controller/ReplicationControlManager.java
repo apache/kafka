@@ -217,6 +217,11 @@ public class ReplicationControlManager {
     private final TimelineHashMap<String, Uuid> topicsByName;
 
     /**
+     * Maps topic with collision chars('.' or '_').
+     */
+    private final TimelineHashMap<String, String> topicsWithCollisionChars;
+
+    /**
      * Maps topic UUIDs to structures containing topic information, including partitions.
      */
     private final TimelineHashMap<Uuid, TopicControlInfo> topics;
@@ -258,6 +263,7 @@ public class ReplicationControlManager {
         this.clusterControl = clusterControl;
         this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.topicsWithCollisionChars = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
         this.reassigningTopics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -266,6 +272,9 @@ public class ReplicationControlManager {
 
     public void replay(TopicRecord record) {
         topicsByName.put(record.name(), record.topicId());
+        if (Topic.hasCollisionChars(record.name())) {
+            topicsWithCollisionChars.put(Topic.unifyCollisionChars(record.name()), record.name());
+        }
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
         controllerMetrics.setGlobalTopicsCount(topics.size());
@@ -374,6 +383,7 @@ public class ReplicationControlManager {
                 " to remove.");
         }
         topicsByName.remove(topic.name);
+        topicsWithCollisionChars.remove(Topic.unifyCollisionChars(topic.name));
         reassigningTopics.remove(record.topicId());
 
         // Delete the configurations associated with this topic.
@@ -407,7 +417,7 @@ public class ReplicationControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
         // Check the topic names.
-        validateNewTopicNames(topicErrors, request.topics(), topicsByName.keySet());
+        validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
 
         // Identify topics that already exist and mark them with the appropriate error
         request.topics().stream().filter(creatableTopic -> topicsByName.containsKey(creatableTopic.name()))
@@ -599,7 +609,7 @@ public class ReplicationControlManager {
 
     static void validateNewTopicNames(Map<String, ApiError> topicErrors,
                                       CreatableTopicCollection topics,
-                                      Collection<String> topicAlreadyExists) {
+                                      Map<String, String> topicsWithCollisionChars) {
         for (CreatableTopic topic : topics) {
             if (topicErrors.containsKey(topic.name())) continue;
             try {
@@ -608,14 +618,10 @@ public class ReplicationControlManager {
                 topicErrors.put(topic.name(),
                     new ApiError(Errors.INVALID_TOPIC_EXCEPTION, e.getMessage()));
             }
-            if (Topic.hasCollisionChars(topic.name())) {
-                List<String> collidingTopics = topicAlreadyExists.stream()
-                    .filter(topicExists -> Topic.hasCollision(topic.name(), topicExists)).collect(Collectors.toList());
-                if (!collidingTopics.isEmpty()) {
-                    topicErrors.put(topic.name(),
-                        new ApiError(Errors.INVALID_TOPIC_EXCEPTION,
-                            "Topic '" + topic.name() + "' collides with existing topics: " + Utils.join(collidingTopics, ", ")));
-                }
+            if (topicsWithCollisionChars.containsKey(Topic.unifyCollisionChars(topic.name()))) {
+                topicErrors.put(topic.name(),
+                    new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "Topic '" + topic.name() + "' collides with existing topic: " +
+                            topicsWithCollisionChars.get(Topic.unifyCollisionChars(topic.name()))));
             }
         }
     }
