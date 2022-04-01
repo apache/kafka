@@ -113,7 +113,7 @@ public class TransactionManager {
         }
 
         private TopicPartitionEntry getOrCreatePartition(TopicPartition topicPartition) {
-            return topicPartitions.putIfAbsent(topicPartition, new TopicPartitionEntry());
+            return topicPartitions.computeIfAbsent(topicPartition, tp -> new TopicPartitionEntry());
         }
 
         private boolean contains(TopicPartition topicPartition) {
