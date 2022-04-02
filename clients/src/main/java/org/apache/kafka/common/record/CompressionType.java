@@ -139,7 +139,7 @@ public enum CompressionType {
         this.rate = rate;
     }
 
-    public static final String[] producerCompressionOptions = Arrays.stream(CompressionType.values()).map(compressionType -> compressionType.name).toArray(String[]::new);
+    public static final String[] PRODUCER_COMPRESSION_OPTIONS = Arrays.stream(CompressionType.values()).map(compressionType -> compressionType.name).toArray(String[]::new);
 
     /**
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
