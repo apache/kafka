@@ -56,7 +56,10 @@ public class ProcessorGraphNode<K, V> extends GraphNode {
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-
-        topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNodeNames());
+        topologyBuilder.addProcessor(
+            processorParameters.processorName(),
+            processorParameters.processorSupplier(),
+            parentNodeNames()
+        );
     }
 }
