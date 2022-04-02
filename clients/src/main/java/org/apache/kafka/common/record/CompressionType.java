@@ -139,8 +139,6 @@ public enum CompressionType {
         this.rate = rate;
     }
 
-    public static final String[] PRODUCER_COMPRESSION_OPTIONS = Arrays.stream(CompressionType.values()).map(compressionType -> compressionType.name).toArray(String[]::new);
-
     /**
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
      *
@@ -193,4 +191,9 @@ public enum CompressionType {
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
+
+    public static String[] producerCompressionOptions() {
+        return Arrays.stream(CompressionType.values()).map(compressionType -> compressionType.name).toArray(String[]::new);
+    }
+
 }
