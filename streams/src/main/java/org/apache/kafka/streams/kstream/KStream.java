@@ -3206,7 +3206,10 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, String...)} instead.
      */
+    @Deprecated
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final String... stateStoreNames);
 
@@ -3335,7 +3338,10 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, Named, String...)} instead.
      */
+    @Deprecated
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final Named named,
                                        final String... stateStoreNames);
@@ -3464,7 +3470,10 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, String...)} instead.
      */
+    @Deprecated
     <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                            final String... stateStoreNames);
 
@@ -3593,7 +3602,10 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, Named, String...)} instead.
      */
+    @Deprecated
     <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                            final Named named,
                                            final String... stateStoreNames);
@@ -3703,7 +3715,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                         final String... stateStoreNames);
     /**
@@ -3813,7 +3828,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                         final Named named,
                                         final String... stateStoreNames);
@@ -3927,7 +3945,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
                                         final String... stateStoreNames);
 
@@ -4041,7 +4062,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
                                         final Named named,
                                         final String... stateStoreNames);
@@ -4164,7 +4188,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                             final String... stateStoreNames);
 
@@ -4288,7 +4315,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                             final Named named,
                                             final String... stateStoreNames);
@@ -4413,7 +4443,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
                                             final String... stateStoreNames);
 
@@ -4538,7 +4571,10 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
+     * //TODO update to right version
+     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
+    @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
                                             final Named named,
                                             final String... stateStoreNames);
@@ -4839,8 +4875,11 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
-        final String... stateStoreNames);
+    <KOut, VOut> KStream<KOut, VOut> process(
+        final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
+        final String... stateStoreNames
+    );
+
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
@@ -4932,9 +4971,23 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
-                 final Named named,
-                 final String... stateStoreNames);
+    <KOut, VOut> KStream<KOut, VOut> process(
+        final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames
+    );
+
+    /**
+     * TODO: add docs
+     * @param processorSupplier
+     * @param stateStoreNames
+     * @param <VOut>
+     * @return
+     */
+    <VOut> KStream<K, VOut> processValues(
+        final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+        final String... stateStoreNames
+    );
 
     /**
      * TODO: add docs
@@ -4947,5 +5000,6 @@ public interface KStream<K, V> {
     <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
         final Named named,
-        final String... stateStoreNames);
+        final String... stateStoreNames
+    );
 }

@@ -1279,6 +1279,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <KR, VR> KStream<KR, VR> transform(final TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
                                               final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
@@ -1287,6 +1288,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <KR, VR> KStream<KR, VR> transform(final TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
                                               final Named named,
                                               final String... stateStoreNames) {
@@ -1295,6 +1297,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                                   final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
@@ -1303,6 +1306,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                                   final Named named,
                                                   final String... stateStoreNames) {
@@ -1335,6 +1339,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
@@ -1345,6 +1350,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                                final Named named,
                                                final String... stateStoreNames) {
@@ -1357,6 +1363,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
@@ -1364,6 +1371,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
                                                final Named named,
                                                final String... stateStoreNames) {
@@ -1402,6 +1410,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
@@ -1412,6 +1421,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final Named named,
                                                    final String... stateStoreNames) {
@@ -1423,6 +1433,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
@@ -1430,6 +1441,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final Named named,
                                                    final String... stateStoreNames) {
@@ -1474,12 +1486,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
-                        final String... stateStoreNames) {
-        process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
-    }
-
-    @Override
     @Deprecated
     public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                         final Named named,
@@ -1502,9 +1508,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
-                        final Named named,
-                        final String... stateStoreNames) {
+    public <KOut, VOut> KStream<KOut, VOut> process(
+        final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
+        final String... stateStoreNames
+    ) {
+        return process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
+    }
+
+    @Override
+    public <KOut, VOut> KStream<KOut, VOut> process(
+        final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames
+    ) {
         Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
@@ -1520,6 +1536,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             stateStoreNames);
 
         builder.addGraphNode(graphNode, processNode);
+
+        // cannot inherit key and value serde
+        return new KStreamImpl<>(
+            name,
+            null,
+            null,
+            subTopologySourceNodes,
+            true,
+            processNode,
+            builder);
+    }
+
+    @Override
+    public <VOut> KStream<K, VOut> processValues(
+        final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+        final String... stateStoreNames
+    ) {
+        return processValues(processorSupplier, NamedInternal.empty(), stateStoreNames);
     }
 
     // TODO: review implementation
