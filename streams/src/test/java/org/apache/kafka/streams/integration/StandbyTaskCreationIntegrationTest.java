@@ -95,6 +95,7 @@ public class StandbyTaskCreationIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";

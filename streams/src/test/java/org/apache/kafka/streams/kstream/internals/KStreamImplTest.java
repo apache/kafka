@@ -1760,6 +1760,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1768,6 +1769,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransformWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1776,6 +1778,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1784,6 +1787,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransformWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1792,6 +1796,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1800,6 +1805,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1808,6 +1814,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1816,6 +1823,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1824,6 +1832,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1832,6 +1841,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformWithStoreName() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1840,6 +1850,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransform() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1850,6 +1861,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithStores() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1860,6 +1872,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamed() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1870,6 +1883,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamedAndStores() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1880,6 +1894,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1888,6 +1903,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransformWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1896,6 +1912,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1904,6 +1921,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransformWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1912,6 +1930,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1920,6 +1939,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1928,6 +1948,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1936,6 +1957,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1944,6 +1966,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1952,6 +1975,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformWithStoreName() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1960,6 +1984,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnTransformValues() {
         final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1970,6 +1995,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnTransformValuesWithNamed() {
         final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1980,6 +2006,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1988,6 +2015,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValues() {
         final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1998,6 +2026,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValuesWithNamed() {
         final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -2008,6 +2037,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2016,6 +2046,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2026,6 +2057,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2036,6 +2068,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2046,6 +2079,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2056,6 +2090,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2067,6 +2102,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2078,6 +2114,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2088,6 +2125,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2098,6 +2136,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2107,6 +2146,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2117,6 +2157,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerSupplierWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2128,6 +2169,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerWithKeySupplierWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2139,6 +2181,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerSupplierWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2150,6 +2193,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerWithKeySupplierWithName() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2161,6 +2205,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2171,6 +2216,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2181,6 +2227,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerSupplierAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2192,6 +2239,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerWithKeySupplierAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2203,6 +2251,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2211,6 +2260,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2219,6 +2269,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2229,6 +2280,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2239,6 +2291,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2249,6 +2302,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2259,6 +2313,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2270,6 +2325,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2281,6 +2337,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2291,6 +2348,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2301,6 +2359,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2311,6 +2370,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2321,6 +2381,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueSupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2332,6 +2393,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueWithKeySupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2343,6 +2405,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueSupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2354,6 +2417,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueWithKeySupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2365,6 +2429,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2375,6 +2440,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2385,6 +2451,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueSupplierAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2396,6 +2463,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueWithKeySupplierAndStore() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
