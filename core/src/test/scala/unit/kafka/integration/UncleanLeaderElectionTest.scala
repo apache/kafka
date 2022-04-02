@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.integration
+package unit.kafka.integration
 
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
