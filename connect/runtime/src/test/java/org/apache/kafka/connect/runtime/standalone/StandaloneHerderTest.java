@@ -118,6 +118,7 @@ public class StandaloneHerderTest {
     private DelegatingClassLoader delegatingLoader;
     protected FutureCallback<Herder.Created<ConnectorInfo>> createCallback;
     @Mock protected StatusBackingStore statusBackingStore;
+    @Mock private StandaloneConfig config;
 
     private final ConnectorClientConfigOverridePolicy
         noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
@@ -128,7 +129,7 @@ public class StandaloneHerderTest {
         worker = PowerMock.createMock(Worker.class);
         String[] methodNames = new String[]{"connectorTypeForClass"/*, "validateConnectorConfig"*/, "buildRestartPlan", "recordRestarting"};
         herder = PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
-                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy);
+                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy, config);
         createCallback = new FutureCallback<>();
         plugins = PowerMock.createMock(Plugins.class);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);

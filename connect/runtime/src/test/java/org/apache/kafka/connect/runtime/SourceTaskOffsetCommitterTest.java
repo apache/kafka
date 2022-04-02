@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
@@ -30,8 +29,6 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 import org.slf4j.Logger;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
@@ -59,19 +56,12 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
 
     private SourceTaskOffsetCommitter committer;
 
-    private static final long DEFAULT_OFFSET_COMMIT_INTERVAL_MS = 1000;
+    private static final long OFFSET_COMMIT_INTERVAL_MS = 1000;
 
     @Override
     public void setup() {
         super.setup();
-        Map<String, String> workerProps = new HashMap<>();
-        workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
-        workerProps.put("offset.flush.interval.ms",
-                Long.toString(DEFAULT_OFFSET_COMMIT_INTERVAL_MS));
-        WorkerConfig config = new StandaloneConfig(workerProps);
-        committer = new SourceTaskOffsetCommitter(config, executor, committers);
+        committer = new SourceTaskOffsetCommitter(OFFSET_COMMIT_INTERVAL_MS, executor, committers);
         Whitebox.setInternalState(SourceTaskOffsetCommitter.class, "log", mockLog);
     }
 
@@ -81,8 +71,8 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         Capture<Runnable> taskWrapper = EasyMock.newCapture();
 
         EasyMock.expect(executor.scheduleWithFixedDelay(
-                EasyMock.capture(taskWrapper), eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS),
-                eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS), eq(TimeUnit.MILLISECONDS))
+                EasyMock.capture(taskWrapper), eq(OFFSET_COMMIT_INTERVAL_MS),
+                eq(OFFSET_COMMIT_INTERVAL_MS), eq(TimeUnit.MILLISECONDS))
         ).andReturn((ScheduledFuture) commitFuture);
 
         PowerMock.replayAll();

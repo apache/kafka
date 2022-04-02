@@ -50,6 +50,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.easymock.Mock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -146,6 +147,7 @@ public class AbstractHerderTest {
     @MockStrict private ClassLoader classLoader;
     @MockStrict private ConfigBackingStore configStore;
     @MockStrict private StatusBackingStore statusStore;
+    @Mock private WorkerConfig config;
 
     @Test
     public void testConnectors() {
@@ -156,9 +158,10 @@ public class AbstractHerderTest {
                 String.class,
                 StatusBackingStore.class,
                 ConfigBackingStore.class,
-                ConnectorClientConfigOverridePolicy.class
+                ConnectorClientConfigOverridePolicy.class,
+                WorkerConfig.class
             )
-            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
             .addMockedMethod("generation")
             .createMock();
 
@@ -180,9 +183,10 @@ public class AbstractHerderTest {
                 String.class,
                 StatusBackingStore.class,
                 ConfigBackingStore.class,
-                ConnectorClientConfigOverridePolicy.class
+                ConnectorClientConfigOverridePolicy.class,
+                WorkerConfig.class
             )
-            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
             .addMockedMethod("generation")
             .createMock();
 
@@ -205,8 +209,8 @@ public class AbstractHerderTest {
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                                 ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                                 ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -246,8 +250,8 @@ public class AbstractHerderTest {
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                                 ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                                 ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -278,8 +282,8 @@ public class AbstractHerderTest {
         RestartRequest restartRequest = new RestartRequest(connectorName, false, true);
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                        ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -345,8 +349,8 @@ public class AbstractHerderTest {
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                        ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -387,8 +391,8 @@ public class AbstractHerderTest {
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                        ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -913,9 +917,10 @@ public class AbstractHerderTest {
                         String.class,
                         StatusBackingStore.class,
                         ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class
+                        ConnectorClientConfigOverridePolicy.class,
+                        WorkerConfig.class
                 )
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -963,8 +968,8 @@ public class AbstractHerderTest {
         String connName = "AnotherPlugin";
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                        ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
@@ -978,8 +983,8 @@ public class AbstractHerderTest {
         String connName = "AnotherPlugin";
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                        ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
@@ -1049,8 +1054,8 @@ public class AbstractHerderTest {
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                                 ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy)
+                                 ConnectorClientConfigOverridePolicy.class, WorkerConfig.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy, config)
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(herder.generation()).andStubReturn(generation);

@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * Configurations shared by Kafka client applications: producer, consumer, connect, etc.
@@ -181,6 +182,15 @@ public class CommonClientConfigs {
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
+
+    public static final String CONNECT_KAFKA_CLUSTER_ID = "connect.kafka.cluster.id";
+    public static final String CONNECT_GROUP_ID = "connect.group.id";
+
+    public static void ignoreAutoPopulatedMetricsContextProperties(AbstractConfig config) {
+        Stream.of(CONNECT_KAFKA_CLUSTER_ID, CONNECT_GROUP_ID)
+                .map(property -> METRICS_CONTEXT_PREFIX + property)
+                .forEach(config::ignore);
+    }
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

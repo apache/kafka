@@ -86,8 +86,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         data = new HashMap<>();
 
-        Map<String, Object> originals = config.originals();
-        Map<String, Object> producerProps = new HashMap<>(originals);
+        Map<String, Object> producerProps = config.originals();
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
@@ -99,12 +98,12 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
-        Map<String, Object> consumerProps = new HashMap<>(originals);
+        Map<String, Object> consumerProps = config.originals();
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
-        Map<String, Object> adminProps = new HashMap<>(originals);
+        Map<String, Object> adminProps = config.originals();
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         Supplier<TopicAdmin> adminSupplier;
         if (topicAdminSupplier != null) {

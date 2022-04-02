@@ -43,7 +43,6 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -104,7 +103,7 @@ public class ConnectDistributed {
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
         // Create the admin client to be shared by all backing stores.
-        Map<String, Object> adminProps = new HashMap<>(config.originals());
+        Map<String, Object> adminProps = config.originals();
         ConnectUtils.addMetricsContextProperties(adminProps, config, kafkaClusterId);
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
 

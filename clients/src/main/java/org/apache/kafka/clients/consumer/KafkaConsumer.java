@@ -812,7 +812,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
 
-            config.logUnused();
+            CommonClientConfigs.ignoreAutoPopulatedMetricsContextProperties(config);
+
+            if (!config.isSubConfig)
+                config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {

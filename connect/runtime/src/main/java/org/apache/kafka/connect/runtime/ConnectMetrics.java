@@ -87,10 +87,10 @@ public class ConnectMetrics {
 
         Map<String, Object> contextLabels = new HashMap<>();
         contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+        contextLabels.put(CommonClientConfigs.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {
-            contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, groupId);
+            contextLabels.put(CommonClientConfigs.CONNECT_GROUP_ID, groupId);
         }
         MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
         this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);

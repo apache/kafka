@@ -78,6 +78,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_ADMIN_PREFIX;
+import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CONSUMER_PREFIX;
+import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_PRODUCER_PREFIX;
 
 /**
  * <p>
@@ -641,26 +646,14 @@ public class Worker {
                                                Class<? extends Connector>  connectorClass,
                                                ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                                String clusterId) {
+        // Start with overrides specified by the user in the worker config
+        // We intentionally create a copy instead of using config::originalsWithPrefix directly
+        // since warnings for unused configs aren't issued by producers when they're configured
+        // with the result of AbstractConfig::originals or AbstractConfig::originalsWithPrefix
         Map<String, Object> producerProps = new HashMap<>();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        // These settings will execute infinite retries on retriable exceptions. They *may* be overridden via configs passed to the worker,
-        // but this may compromise the delivery guarantees of Kafka Connect.
-        producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
-        // By default, Connect disables idempotent behavior for all producers, even though idempotence became
-        // default for Kafka producers. This is to ensure Connect continues to work with many Kafka broker versions, including older brokers that do not support
-        // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
-        // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
-        // gets approved and scheduled for release.
-        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
-        producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
-        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, defaultClientId);
-        // User-specified overrides
-        producerProps.putAll(config.originalsWithPrefix("producer."));
-        //add client metrics.context properties
+        producerProps.putAll(config.originalsWithPrefix(CONNECTOR_PRODUCER_PREFIX));
+
+        // Metrics context properties
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         // Connector-specified overrides
@@ -669,6 +662,24 @@ public class Worker {
                                            ConnectorType.SOURCE, ConnectorClientConfigRequest.ClientType.PRODUCER,
                                            connectorClientConfigOverridePolicy);
         producerProps.putAll(producerOverrides);
+
+        // Default properties to use if no values for them have been specified anywhere else
+        producerProps.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+        producerProps.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        producerProps.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        // These settings will execute infinite retries on retriable exceptions. They *may* be overridden via configs passed to the worker,
+        // but this may compromise the delivery guarantees of Kafka Connect.
+        producerProps.putIfAbsent(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
+        // By default, Connect disables idempotent behavior for all producers, even though idempotence became
+        // default for Kafka producers. This is to ensure Connect continues to work with many Kafka broker versions, including older brokers that do not support
+        // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
+        // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
+        // gets approved and scheduled for release.
+        producerProps.putIfAbsent(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        producerProps.putIfAbsent(ProducerConfig.ACKS_CONFIG, "all");
+        producerProps.putIfAbsent(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
+        producerProps.putIfAbsent(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        producerProps.putIfAbsent(ProducerConfig.CLIENT_ID_CONFIG, defaultClientId);
 
         return producerProps;
     }
@@ -679,28 +690,32 @@ public class Worker {
                                                Class<? extends Connector> connectorClass,
                                                ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                                String clusterId) {
-        // Include any unknown worker configs so consumer configs can be set globally on the worker
-        // and through to the task
+        // Start with overrides specified by the user in the worker config
+        // We intentionally create a copy instead of using config::originalsWithPrefix directly
+        // since warnings for unused configs aren't issued by consumers when they're configured
+        // with the result of AbstractConfig::originals or AbstractConfig::originalsWithPrefix
         Map<String, Object> consumerProps = new HashMap<>();
+        consumerProps.putAll(config.originalsWithPrefix(CONNECTOR_CONSUMER_PREFIX));
 
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
-        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "connector-consumer-" + id);
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                  Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-
-        consumerProps.putAll(config.originalsWithPrefix("consumer."));
-        //add client metrics.context properties
+        // Metrics context properties
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
+
         // Connector-specified overrides
         Map<String, Object> consumerOverrides =
             connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
                                            ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.CONSUMER,
                                            connectorClientConfigOverridePolicy);
         consumerProps.putAll(consumerOverrides);
+
+        // Default properties to use if no values for them have been specified anywhere else
+        consumerProps.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
+        consumerProps.putIfAbsent(ConsumerConfig.CLIENT_ID_CONFIG, "connector-consumer-" + id);
+        consumerProps.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                  Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+        consumerProps.putIfAbsent(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerProps.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProps.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        consumerProps.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         return consumerProps;
     }
@@ -712,21 +727,18 @@ public class Worker {
                                             Class<? extends Connector> connectorClass,
                                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                             String clusterId) {
-        Map<String, Object> adminProps = new HashMap<>();
         // Use the top-level worker configs to retain backwards compatibility with older releases which
         // did not require a prefix for connector admin client configs in the worker configuration file
+        // Use config::originals directly here in order to prevent the admin client from issuing warnings
+        // for unused configs since it's basically guaranteed that some properties in the worker config
+        // are not used by admin clients
+        Map<String, Object> adminProps = config.originals();
+
         // Ignore configs that begin with "admin." since those will be added next (with the prefix stripped)
         // and those that begin with "producer." and "consumer.", since we know they aren't intended for
         // the admin client
-        Map<String, Object> nonPrefixedWorkerConfigs = config.originals().entrySet().stream()
-            .filter(e -> !e.getKey().startsWith("admin.")
-                && !e.getKey().startsWith("producer.")
-                && !e.getKey().startsWith("consumer."))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-            Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        adminProps.put(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId);
-        adminProps.putAll(nonPrefixedWorkerConfigs);
+        Stream.of(CONNECTOR_ADMIN_PREFIX, CONNECTOR_CONSUMER_PREFIX, CONNECTOR_PRODUCER_PREFIX)
+                .forEach(prefix -> adminProps.keySet().removeIf(property -> property.startsWith(prefix)));
 
         // Admin client-specific overrides in the worker config
         adminProps.putAll(config.originalsWithPrefix("admin."));
@@ -738,7 +750,10 @@ public class Worker {
                                            connectorClientConfigOverridePolicy);
         adminProps.putAll(adminOverrides);
 
-        //add client metrics.context properties
+        // Default client ID to use if none has been specified anywhere else
+        adminProps.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId);
+
+        // Metrics context properties
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
 
         return adminProps;

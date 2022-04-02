@@ -94,7 +94,7 @@ public class ConnectStandalone {
             Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore(),
                                        connectorClientConfigOverridePolicy);
 
-            Herder herder = new StandaloneHerder(worker, kafkaClusterId, connectorClientConfigOverridePolicy);
+            Herder herder = new StandaloneHerder(worker, kafkaClusterId, connectorClientConfigOverridePolicy, config);
             final Connect connect = new Connect(herder, rest);
             log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
 

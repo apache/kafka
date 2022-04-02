@@ -577,6 +577,8 @@ public class ConsumerConfig extends AbstractConfig {
                                 .withClientSaslSupport();
     }
 
+    final boolean isSubConfig;
+
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
@@ -601,7 +603,9 @@ public class ConsumerConfig extends AbstractConfig {
     protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
                                                                     Deserializer<?> keyDeserializer,
                                                                     Deserializer<?> valueDeserializer) {
-        Map<String, Object> newConfigs = new HashMap<>(configs);
+        Map<String, Object> newConfigs = configs instanceof RecordingMap ?
+                ((RecordingMap<Object>) configs).copy() :
+                new HashMap<>(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
         if (valueDeserializer != null)
@@ -624,14 +628,17 @@ public class ConsumerConfig extends AbstractConfig {
 
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
+        this.isSubConfig = false;
     }
 
     public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
+        this.isSubConfig = props instanceof RecordingMap;
     }
 
     protected ConsumerConfig(Map<?, ?> props, boolean doLog) {
         super(CONFIG, props, doLog);
+        this.isSubConfig = props instanceof RecordingMap;
     }
 
     public static Set<String> configNames() {

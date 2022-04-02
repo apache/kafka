@@ -382,7 +382,7 @@ public class AbstractConfig {
     public void logUnused() {
         Set<String> unusedkeys = unused();
         if (!unusedkeys.isEmpty()) {
-            log.warn("These configurations '{}' were supplied but are not used yet.", unusedkeys);
+            log.warn("These configurations were supplied but are not used yet: {}", unusedkeys);
         }
     }
 
@@ -609,7 +609,7 @@ public class AbstractConfig {
      * Marks keys retrieved via `get` as used. This is needed because `Configurable.configure` takes a `Map` instead
      * of an `AbstractConfig` and we can't change that without breaking public API like `Partitioner`.
      */
-    private class RecordingMap<V> extends HashMap<String, V> {
+    protected class RecordingMap<V> extends HashMap<String, V> {
 
         private final String prefix;
         private final boolean withIgnoreFallback;
@@ -649,6 +649,11 @@ public class AbstractConfig {
             }
             return super.get(key);
         }
+
+        public RecordingMap<V> copy() {
+            return new RecordingMap<>(this);
+        }
+
     }
 
     /**

@@ -71,13 +71,15 @@ public class StandaloneHerder extends AbstractHerder {
     private ClusterConfigState configState;
 
     public StandaloneHerder(Worker worker, String kafkaClusterId,
-                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                            StandaloneConfig config) {
         this(worker,
                 worker.workerId(),
                 kafkaClusterId,
                 new MemoryStatusBackingStore(),
                 new MemoryConfigBackingStore(worker.configTransformer()),
-             connectorClientConfigOverridePolicy);
+                connectorClientConfigOverridePolicy,
+                config);
     }
 
     // visible for testing
@@ -86,8 +88,9 @@ public class StandaloneHerder extends AbstractHerder {
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
                      MemoryConfigBackingStore configBackingStore,
-                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                     StandaloneConfig config) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, config);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());

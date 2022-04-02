@@ -453,6 +453,8 @@ public class ProducerConfig extends AbstractConfig {
                                         TRANSACTIONAL_ID_DOC);
     }
 
+    final boolean isSubConfig;
+
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
@@ -537,7 +539,9 @@ public class ProducerConfig extends AbstractConfig {
     static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
             Serializer<?> keySerializer,
             Serializer<?> valueSerializer) {
-        Map<String, Object> newConfigs = new HashMap<>(configs);
+        Map<String, Object> newConfigs = configs instanceof RecordingMap ?
+                ((RecordingMap<Object>) configs).copy() :
+                new HashMap<>(configs);
         if (keySerializer != null)
             newConfigs.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
         if (valueSerializer != null)
@@ -547,14 +551,17 @@ public class ProducerConfig extends AbstractConfig {
 
     public ProducerConfig(Properties props) {
         super(CONFIG, props);
+        this.isSubConfig = false;
     }
 
     public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
+        this.isSubConfig = props instanceof RecordingMap;
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {
         super(CONFIG, props, doLog);
+        this.isSubConfig = props instanceof RecordingMap;
     }
 
     public static Set<String> configNames() {

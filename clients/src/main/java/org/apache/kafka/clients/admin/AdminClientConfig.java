@@ -218,6 +218,8 @@ public class AdminClientConfig extends AbstractConfig {
                                 .withClientSaslSupport();
     }
 
+    final boolean isSubConfig;
+
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
@@ -229,6 +231,7 @@ public class AdminClientConfig extends AbstractConfig {
 
     protected AdminClientConfig(Map<?, ?> props, boolean doLog) {
         super(CONFIG, props, doLog);
+        this.isSubConfig = props instanceof RecordingMap;
     }
 
     public static Set<String> configNames() {

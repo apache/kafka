@@ -88,6 +88,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -196,6 +197,7 @@ public class WorkerTest extends ThreadedTest {
                                 .strictness(Strictness.STRICT_STUBS)
                                 .startMocking();
 
+        workerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
@@ -1163,7 +1165,7 @@ public class WorkerTest extends ThreadedTest {
             if (reporter instanceof MockMetricsReporter) {
                 MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) reporter;
                 //verify connect cluster is set in MetricsContext
-                assertEquals(CLUSTER_ID, mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
+                assertEquals(CLUSTER_ID, mockMetricsReporter.getMetricsContext().contextLabels().get(CommonClientConfigs.CONNECT_KAFKA_CLUSTER_ID));
             }
         }
         //verify metric is created with correct jmx prefix

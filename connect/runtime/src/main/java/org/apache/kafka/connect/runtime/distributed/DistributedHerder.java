@@ -241,7 +241,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       Time time,
                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                       AutoCloseable... uponShutdown) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, config);
 
         this.time = time;
         this.herderMetrics = new HerderMetrics(metrics);
@@ -1250,7 +1250,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         } else {
             if (configState.offset() < assignment.offset()) {
-                log.warn("Catching up to assignment's config offset.");
+                log.info("Catching up to assignment's config offset.");
                 needsReadToEnd = true;
             }
         }

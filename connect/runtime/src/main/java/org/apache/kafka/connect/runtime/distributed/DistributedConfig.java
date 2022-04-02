@@ -29,6 +29,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -399,6 +400,13 @@ public class DistributedConfig extends WorkerConfig {
     @Override
     public Integer getRebalanceTimeout() {
         return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
+    }
+
+    @Override
+    protected List<String> subConfigPrefixes() {
+        List<String> result = super.subConfigPrefixes();
+        result.addAll(Arrays.asList(CONFIG_STORAGE_PREFIX, OFFSET_STORAGE_PREFIX, STATUS_STORAGE_PREFIX));
+        return result;
     }
 
     public DistributedConfig(Map<String, String> props) {

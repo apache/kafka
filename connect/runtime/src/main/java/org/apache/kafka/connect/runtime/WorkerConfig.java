@@ -207,9 +207,6 @@ public class WorkerConfig extends AbstractConfig {
             + "user requests to reset the set of active topics per connector.";
     protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
 
-    public static final String CONNECT_KAFKA_CLUSTER_ID = "connect.kafka.cluster.id";
-    public static final String CONNECT_GROUP_ID = "connect.group.id";
-
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
     protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
             + "automatic creation of topics used by source connectors, when source connectors "
@@ -221,6 +218,10 @@ public class WorkerConfig extends AbstractConfig {
     public static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
     protected static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
     protected static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
+
+    public static final String CONNECTOR_ADMIN_PREFIX = "admin.";
+    public static final String CONNECTOR_CONSUMER_PREFIX = "consumer.";
+    public static final String CONNECTOR_PRODUCER_PREFIX = "producer.";
 
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
@@ -327,6 +328,8 @@ public class WorkerConfig extends AbstractConfig {
 
     private void logPluginPathConfigProviderWarning(Map<String, String> rawOriginals) {
         String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
+        if (rawPluginPath == null)
+            return;
         // Can't use AbstractConfig::originalsStrings here since some values may be null, which
         // causes that method to fail
         String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
@@ -366,6 +369,29 @@ public class WorkerConfig extends AbstractConfig {
         super(definition, props);
         logInternalConverterRemovalWarnings(props);
         logPluginPathConfigProviderWarning(props);
+        ignoreSubConfigs();
+    }
+
+    private void ignoreSubConfigs() {
+        subConfigPrefixes().forEach(this::ignoreAllWithPrefixes);
+        Arrays.asList(
+                KEY_CONVERTER_CLASS_CONFIG, VALUE_CONVERTER_CLASS_CONFIG, HEADER_CONVERTER_CLASS_CONFIG
+        ).forEach(this::ignore);
+    }
+
+    protected List<String> subConfigPrefixes() {
+        return new ArrayList<>(Arrays.asList(
+                KEY_CONVERTER_CLASS_CONFIG + ".",
+                VALUE_CONVERTER_CLASS_CONFIG + ".",
+                HEADER_CONVERTER_CLASS_CONFIG + ".",
+                CONNECTOR_ADMIN_PREFIX,
+                CONNECTOR_CONSUMER_PREFIX,
+                CONNECTOR_PRODUCER_PREFIX
+        ));
+    }
+
+    protected void ignoreAllWithPrefixes(String prefix) {
+        originalsWithPrefix(prefix, false).keySet().forEach(this::ignore);
     }
 
     // Visible for testing

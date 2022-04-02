@@ -165,8 +165,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             throw new ConfigException("Must specify topic for connector status.");
 
         String clusterId = ConnectUtils.lookupKafkaClusterId(config);
-        Map<String, Object> originals = config.originals();
-        Map<String, Object> producerProps = new HashMap<>(originals);
+        Map<String, Object> producerProps = config.originals();
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
@@ -178,12 +177,12 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false"); // disable idempotence since retries is force to 0
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
-        Map<String, Object> consumerProps = new HashMap<>(originals);
+        Map<String, Object> consumerProps = config.originals();
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
-        Map<String, Object> adminProps = new HashMap<>(originals);
+        Map<String, Object> adminProps = config.originals();
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         Supplier<TopicAdmin> adminSupplier;
         if (topicAdminSupplier != null) {

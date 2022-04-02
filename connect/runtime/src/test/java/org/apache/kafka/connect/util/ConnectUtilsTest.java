@@ -20,7 +20,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.junit.Test;
@@ -84,8 +83,8 @@ public class ConnectUtilsTest {
 
         Map<String, Object> prop = new HashMap<>();
         ConnectUtils.addMetricsContextProperties(prop, config, "cluster-1");
-        assertEquals("connect-cluster", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
-        assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
+        assertEquals("connect-cluster", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + CommonClientConfigs.CONNECT_GROUP_ID));
+        assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + CommonClientConfigs.CONNECT_KAFKA_CLUSTER_ID));
     }
 
     @Test
@@ -99,8 +98,8 @@ public class ConnectUtilsTest {
 
         Map<String, Object> prop = new HashMap<>();
         ConnectUtils.addMetricsContextProperties(prop, config, "cluster-1");
-        assertNull(prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
-        assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
+        assertNull(prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + CommonClientConfigs.CONNECT_GROUP_ID));
+        assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + CommonClientConfigs.CONNECT_KAFKA_CLUSTER_ID));
 
     }
 

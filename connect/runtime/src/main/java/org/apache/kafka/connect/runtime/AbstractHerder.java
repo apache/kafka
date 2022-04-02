@@ -104,6 +104,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final ConfigBackingStore configBackingStore;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     protected volatile boolean running = false;
+    private final WorkerConfig config;
     private final ExecutorService connectorExecutor;
 
     private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
@@ -113,7 +114,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                           String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore,
-                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                          WorkerConfig config) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
@@ -121,6 +123,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
+        this.config = config;
         this.connectorExecutor = Executors.newCachedThreadPool();
     }
 
@@ -135,6 +138,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.worker.start();
         this.statusBackingStore.start();
         this.configBackingStore.start();
+        config.logUnused();
     }
 
     protected void stopServices() {

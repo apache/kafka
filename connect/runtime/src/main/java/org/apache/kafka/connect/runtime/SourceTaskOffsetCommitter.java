@@ -47,22 +47,25 @@ import java.util.concurrent.TimeUnit;
 class SourceTaskOffsetCommitter {
     private static final Logger log = LoggerFactory.getLogger(SourceTaskOffsetCommitter.class);
 
-    private final WorkerConfig config;
+    private final long commitIntervalMs;
     private final ScheduledExecutorService commitExecutorService;
     private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers;
 
     // visible for testing
-    SourceTaskOffsetCommitter(WorkerConfig config,
+    SourceTaskOffsetCommitter(long commitIntervalMs,
                               ScheduledExecutorService commitExecutorService,
                               ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers) {
-        this.config = config;
+        this.commitIntervalMs = commitIntervalMs;
         this.commitExecutorService = commitExecutorService;
         this.committers = committers;
     }
 
     public SourceTaskOffsetCommitter(WorkerConfig config) {
-        this(config, Executors.newSingleThreadScheduledExecutor(ThreadUtils.createThreadFactory(
-                SourceTaskOffsetCommitter.class.getSimpleName() + "-%d", false)),
+        this(
+                config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG),
+                Executors.newSingleThreadScheduledExecutor(ThreadUtils.createThreadFactory(
+                        SourceTaskOffsetCommitter.class.getSimpleName() + "-%d", false)
+                ),
                 new ConcurrentHashMap<>());
     }
 
@@ -78,7 +81,6 @@ class SourceTaskOffsetCommitter {
     }
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
-        long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(() -> {
             try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
                 commit(workerTask);

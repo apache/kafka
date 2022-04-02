@@ -145,10 +145,10 @@ public final class ConnectUtils {
         //add all properties predefined with "metrics.context."
         prop.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
         //add connect properties
-        prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+        prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + CommonClientConfigs.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {
-            prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID, groupId);
+            prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + CommonClientConfigs.CONNECT_GROUP_ID, groupId);
         }
     }
 
