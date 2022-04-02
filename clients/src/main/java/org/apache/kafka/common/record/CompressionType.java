@@ -30,6 +30,7 @@ import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -137,6 +138,8 @@ public enum CompressionType {
         this.name = name;
         this.rate = rate;
     }
+
+    public static final String[] producerCompressionOptions = Arrays.stream(CompressionType.values()).map(compressionType -> compressionType.name).toArray(String[]::new);
 
     /**
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
