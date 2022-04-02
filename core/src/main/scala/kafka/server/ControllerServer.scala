@@ -183,7 +183,8 @@ class ControllerServer(
           setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
-          setConfigurationValidator(new ControllerConfigurationValidator())
+          setConfigurationValidator(new ControllerConfigurationValidator()).
+          setStaticConfig(config.originals)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)

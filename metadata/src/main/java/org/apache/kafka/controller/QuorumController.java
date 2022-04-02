@@ -101,6 +101,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
@@ -140,7 +141,7 @@ public final class QuorumController implements Controller {
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
         private LogContext logContext = null;
-        private KafkaConfigSchema configSchema = new KafkaConfigSchema(Collections.emptyMap());
+        private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;
         private RaftClient<ApiMessageAndVersion> raftClient = null;
         private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
         private short defaultReplicationFactor = 3;
@@ -155,6 +156,7 @@ public final class QuorumController implements Controller {
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
         private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
+        private Map<String, Object> staticConfig = Collections.emptyMap();
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -251,6 +253,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setStaticConfig(Map<String, Object> staticConfig) {
+            this.staticConfig = staticConfig;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -273,7 +280,8 @@ public final class QuorumController implements Controller {
                     configSchema, raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
-                    createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer);
+                    createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
+                    staticConfig);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -1316,7 +1324,8 @@ public final class QuorumController implements Controller {
                              Optional<CreateTopicPolicy> createTopicPolicy,
                              Optional<AlterConfigPolicy> alterConfigPolicy,
                              ConfigurationValidator configurationValidator,
-                             Optional<ClusterMetadataAuthorizer> authorizer) {
+                             Optional<ClusterMetadataAuthorizer> authorizer,
+                             Map<String, Object> staticConfig) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1327,12 +1336,16 @@ public final class QuorumController implements Controller {
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
-        this.configurationControl = new ConfigurationControlManager(logContext,
-            snapshotRegistry,
-            configSchema,
-            resourceExists,
-            alterConfigPolicy,
-            configurationValidator);
+        this.configurationControl = new ConfigurationControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            setKafkaConfigSchema(configSchema).
+            setExistenceChecker(resourceExists).
+            setAlterConfigPolicy(alterConfigPolicy).
+            setValidator(configurationValidator).
+            setStaticConfig(staticConfig).
+            setNodeId(nodeId).
+            build();
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
@@ -1367,13 +1380,13 @@ public final class QuorumController implements Controller {
 
     @Override
     public CompletableFuture<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request) {
+            createTopics(CreateTopicsRequestData request, Set<String> describable) {
         if (request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
         return appendWriteEvent("createTopics",
             time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
-            () -> replicationControl.createTopics(request));
+            () -> replicationControl.createTopics(request, describable));
     }
 
     @Override

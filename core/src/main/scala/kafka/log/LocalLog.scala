@@ -316,6 +316,44 @@ class LocalLog(@volatile private var _dir: File,
   }
 
   /**
+   * This method deletes the given segment and creates a new segment with the given new base offset. It ensures an
+   * active segment exists in the log at all times during this process.
+   *
+   * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
+   * physically deleting a file while it is being read.
+   *
+   * This method does not convert IOException to KafkaStorageException, the immediate caller
+   * is expected to catch and handle IOException.
+   *
+   * @param newOffset The base offset of the new segment
+   * @param segmentToDelete The old active segment to schedule for deletion
+   * @param asyncDelete Whether the segment files should be deleted asynchronously
+   * @param reason The reason for the segment deletion
+   */
+  private[log] def createAndDeleteSegment(newOffset: Long,
+                                          segmentToDelete: LogSegment,
+                                          asyncDelete: Boolean,
+                                          reason: SegmentDeletionReason): LogSegment = {
+    if (newOffset == segmentToDelete.baseOffset)
+      segmentToDelete.changeFileSuffixes("", DeletedFileSuffix)
+
+    val newSegment = LogSegment.open(dir,
+      baseOffset = newOffset,
+      config,
+      time = time,
+      initFileSize = config.initFileSize,
+      preallocate = config.preallocate)
+    segments.add(newSegment)
+
+    reason.logReason(List(segmentToDelete))
+    if (newOffset != segmentToDelete.baseOffset)
+      segments.remove(segmentToDelete.baseOffset)
+    LocalLog.deleteSegmentFiles(List(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
+
+    newSegment
+  }
+
+  /**
    * Given a message offset, find its corresponding offset metadata in the log.
    * If the message offset is out of range, throw an OffsetOutOfRangeException
    */
@@ -465,7 +503,10 @@ class LocalLog(@volatile private var _dir: File,
             s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
             s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
             s" size of offset index: ${activeSegment.offsetIndex.entries}.")
-          removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true, LogRoll(this))
+          val newSegment = createAndDeleteSegment(newOffset, activeSegment, asyncDelete = true, LogRoll(this))
+          updateLogEndOffset(nextOffsetMetadata.messageOffset)
+          info(s"Rolled new log segment at offset $newOffset in ${time.hiResClockMs() - start} ms.")
+          return newSegment
         } else {
           throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
             s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
@@ -517,14 +558,16 @@ class LocalLog(@volatile private var _dir: File,
       debug(s"Truncate and start at offset $newOffset")
       checkIfMemoryMappedBufferClosed()
       val segmentsToDelete = List[LogSegment]() ++ segments.values
-      removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, LogTruncation(this))
-      segments.add(LogSegment.open(dir,
-        baseOffset = newOffset,
-        config = config,
-        time = time,
-        initFileSize = config.initFileSize,
-        preallocate = config.preallocate))
+
+      if (segmentsToDelete.nonEmpty) {
+        removeAndDeleteSegments(segmentsToDelete.dropRight(1), asyncDelete = true, LogTruncation(this))
+        // Use createAndDeleteSegment() to create new segment first and then delete the old last segment to prevent missing
+        // active segment during the deletion process
+        createAndDeleteSegment(newOffset, segmentsToDelete.last, asyncDelete = true, LogTruncation(this))
+      }
+
       updateLogEndOffset(newOffset)
+
       segmentsToDelete
     }
   }
@@ -941,7 +984,10 @@ object LocalLog extends Logging {
                                       scheduler: Scheduler,
                                       logDirFailureChannel: LogDirFailureChannel,
                                       logPrefix: String): Unit = {
-    segmentsToDelete.foreach(_.changeFileSuffixes("", DeletedFileSuffix))
+    segmentsToDelete.foreach { segment =>
+      if (!segment.hasSuffix(DeletedFileSuffix))
+        segment.changeFileSuffixes("", DeletedFileSuffix)
+    }
 
     def deleteSegments(): Unit = {
       info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")

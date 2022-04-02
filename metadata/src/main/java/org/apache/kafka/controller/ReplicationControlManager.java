@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
@@ -50,6 +51,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfigCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
@@ -71,6 +73,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -114,7 +117,9 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.UNREGISTER_BRO
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
+import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -127,7 +132,6 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
  * of each partition, as well as administrative tasks like creating or deleting topics.
  */
 public class ReplicationControlManager {
-
     static class TopicControlInfo {
         private final String name;
         private final Uuid id;
@@ -146,6 +150,15 @@ public class ReplicationControlManager {
         public Uuid topicId() {
             return id;
         }
+    }
+
+    /**
+     * Translate a CreateableTopicConfigCollection to a map from string to string.
+     */
+    static Map<String, String> translateCreationConfigs(CreateableTopicConfigCollection collection) {
+        HashMap<String, String> result = new HashMap<>();
+        collection.forEach(config -> result.put(config.name(), config.value()));
+        return Collections.unmodifiableMap(result);
     }
 
     private final SnapshotRegistry snapshotRegistry;
@@ -389,7 +402,7 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request) {
+            createTopics(CreateTopicsRequestData request, Set<String> describable) {
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
@@ -420,7 +433,7 @@ public class ReplicationControlManager {
             if (topicErrors.containsKey(topic.name())) continue;
             ApiError error;
             try {
-                error = createTopic(topic, records, successes);
+                error = createTopic(topic, records, successes, describable.contains(topic.name()));
             } catch (ApiException e) {
                 error = ApiError.fromThrowable(e);
             }
@@ -462,7 +475,9 @@ public class ReplicationControlManager {
 
     private ApiError createTopic(CreatableTopic topic,
                                  List<ApiMessageAndVersion> records,
-                                 Map<String, CreatableTopicResult> successes) {
+                                 Map<String, CreatableTopicResult> successes,
+                                 boolean authorizedToReturnConfigs) {
+        Map<String, String> creationConfigs = translateCreationConfigs(topic.configs());
         Map<Integer, PartitionRegistration> newParts = new HashMap<>();
         if (!topic.assignments().isEmpty()) {
             if (topic.replicationFactor() != -1) {
@@ -499,10 +514,8 @@ public class ReplicationControlManager {
                 Map<Integer, List<Integer>> assignments = new HashMap<>();
                 newParts.entrySet().forEach(e -> assignments.put(e.getKey(),
                     Replicas.toList(e.getValue().replicas)));
-                Map<String, String> configs = new HashMap<>();
-                topic.configs().forEach(config -> configs.put(config.name(), config.value()));
                 return new CreateTopicPolicy.RequestMetadata(
-                    topic.name(), null, null, assignments, configs);
+                    topic.name(), null, null, assignments, creationConfigs);
             });
             if (error.isFailure()) return error;
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
@@ -530,21 +543,38 @@ public class ReplicationControlManager {
                         " time(s): " + e.getMessage());
             }
             ApiError error = maybeCheckCreateTopicPolicy(() -> {
-                Map<String, String> configs = new HashMap<>();
-                topic.configs().forEach(config -> configs.put(config.name(), config.value()));
                 return new CreateTopicPolicy.RequestMetadata(
-                    topic.name(), numPartitions, replicationFactor, null, configs);
+                    topic.name(), numPartitions, replicationFactor, null, creationConfigs);
             });
             if (error.isFailure()) return error;
         }
         Uuid topicId = Uuid.randomUuid();
-        successes.put(topic.name(), new CreatableTopicResult().
+        CreatableTopicResult result = new CreatableTopicResult().
             setName(topic.name()).
             setTopicId(topicId).
-            setErrorCode((short) 0).
-            setErrorMessage(null).
-            setNumPartitions(newParts.size()).
-            setReplicationFactor((short) newParts.get(0).replicas.length));
+            setErrorCode(NONE.code()).
+            setErrorMessage(null);
+        if (authorizedToReturnConfigs) {
+            Map<String, ConfigEntry> effectiveConfig = configurationControl.
+                computeEffectiveTopicConfigs(creationConfigs);
+            List<String> configNames = new ArrayList<>(effectiveConfig.keySet());
+            configNames.sort(String::compareTo);
+            for (String configName : configNames) {
+                ConfigEntry entry = effectiveConfig.get(configName);
+                result.configs().add(new CreateTopicsResponseData.CreatableTopicConfigs().
+                    setName(entry.name()).
+                    setValue(entry.isSensitive() ? null : entry.value()).
+                    setReadOnly(entry.isReadOnly()).
+                    setConfigSource(KafkaConfigSchema.translateConfigSource(entry.source()).id()).
+                    setIsSensitive(entry.isSensitive()));
+            }
+            result.setNumPartitions(newParts.size());
+            result.setReplicationFactor((short) newParts.get(0).replicas.length);
+            result.setTopicConfigErrorCode(NONE.code());
+        } else {
+            result.setTopicConfigErrorCode(TOPIC_AUTHORIZATION_FAILED.code());
+        }
+        successes.put(topic.name(), result);
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
             setTopicId(topicId), TOPIC_RECORD.highestSupportedVersion()));

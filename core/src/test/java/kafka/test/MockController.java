@@ -60,6 +60,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -113,7 +114,7 @@ public class MockController implements Controller {
 
     @Override
     synchronized public CompletableFuture<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request) {
+            createTopics(CreateTopicsRequestData request, Set<String> describable) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         for (CreatableTopic topic : request.topics()) {
             if (topicNameToId.containsKey(topic.name())) {
@@ -125,13 +126,30 @@ public class MockController implements Controller {
                 Uuid topicUuid = new Uuid(0, topicId);
                 topicNameToId.put(topic.name(), topicUuid);
                 topics.put(topicUuid, new MockTopic(topic.name(), topicUuid));
-                response.topics().add(new CreatableTopicResult().
+                CreatableTopicResult creatableTopicResult = new CreatableTopicResult().
                     setName(topic.name()).
                     setErrorCode(Errors.NONE.code()).
-                    setTopicId(topicUuid));
-                // For a better mock, we might want to return configs, replication factor,
-                // etc.  Right now, the tests that use MockController don't need these
-                // things.
+                    setTopicId(topicUuid);
+                if (describable.contains(topic.name())) {
+                    // Note: we don't simulate topic configs here yet.
+                    // Just returning replication factor and numPartitions.
+                    if (topic.assignments() != null && !topic.assignments().isEmpty()) {
+                        creatableTopicResult.
+                            setTopicConfigErrorCode(Errors.NONE.code()).
+                            setReplicationFactor((short)
+                                topic.assignments().iterator().next().brokerIds().size()).
+                            setNumPartitions(topic.assignments().size());
+                    } else {
+                        creatableTopicResult.
+                            setTopicConfigErrorCode(Errors.NONE.code()).
+                            setReplicationFactor(topic.replicationFactor()).
+                            setNumPartitions(topic.numPartitions());
+                    }
+                } else {
+                    creatableTopicResult.
+                        setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code());
+                }
+                response.topics().add(creatableTopicResult);
             }
         }
         return CompletableFuture.completedFuture(response);

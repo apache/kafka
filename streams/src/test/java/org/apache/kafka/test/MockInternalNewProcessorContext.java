@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.util.Objects;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
@@ -26,6 +27,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorMetadata;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -48,12 +50,15 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
 
     private long timestamp = 0;
     private Headers headers = new RecordHeaders();
+    private ProcessorMetadata processorMetadata;
 
     public MockInternalNewProcessorContext() {
+        processorMetadata = new ProcessorMetadata();
     }
 
     public MockInternalNewProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
+        processorMetadata = new ProcessorMetadata();
     }
 
     @Override
@@ -205,5 +210,26 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     @Override
     public String changelogFor(final String storeName) {
         return "mock-changelog";
+    }
+
+    @Override
+    public void addProcessorMetadataKeyValue(final String key, final long value) {
+        processorMetadata.put(key, value);
+    }
+
+    @Override
+    public Long processorMetadataForKey(final String key) {
+        return processorMetadata.get(key);
+    }
+
+    @Override
+    public void setProcessorMetadata(final ProcessorMetadata metadata) {
+        Objects.requireNonNull(metadata);
+        processorMetadata = metadata;
+    }
+
+    @Override
+    public ProcessorMetadata getProcessorMetadata() {
+        return processorMetadata;
     }
 }

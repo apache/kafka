@@ -67,7 +67,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
@@ -82,6 +81,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -142,13 +142,9 @@ public class ReplicationControlManagerTest {
             TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
             new StripedReplicaPlacer(random),
             metrics);
-        final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
-            new LogContext(),
-            snapshotRegistry,
-            KafkaConfigSchema.EMPTY,
-            __ -> { },
-            Optional.empty(),
-            (__, ___) -> { });
+        final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            build();
         final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
@@ -184,7 +180,7 @@ public class ReplicationControlManagerTest {
             topic.setNumPartitions(numPartitions).setReplicationFactor(replicationFactor);
             request.topics().add(topic);
             ControllerResult<CreateTopicsResponseData> result =
-                replicationControl.createTopics(request);
+                replicationControl.createTopics(request, Collections.singleton(name));
             CreatableTopicResult topicResult = result.response().topics().find(name);
             assertNotNull(topicResult);
             assertEquals(expectedErrorCode, topicResult.errorCode());
@@ -219,7 +215,7 @@ public class ReplicationControlManagerTest {
                     setValue(e.getValue())));
             request.topics().add(topic);
             ControllerResult<CreateTopicsResponseData> result =
-                replicationControl.createTopics(request);
+                replicationControl.createTopics(request, Collections.singleton(name));
             CreatableTopicResult topicResult = result.response().topics().find(name);
             assertNotNull(topicResult);
             assertEquals(expectedErrorCode, topicResult.errorCode());
@@ -402,7 +398,7 @@ public class ReplicationControlManagerTest {
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(-1).setReplicationFactor((short) -1));
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(request);
+            replicationControl.createTopics(request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
@@ -413,7 +409,7 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);
         ControllerResult<CreateTopicsResponseData> result2 =
-            replicationControl.createTopics(request);
+            replicationControl.createTopics(request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse2 = new CreateTopicsResponseData();
         expectedResponse2.topics().add(new CreatableTopicResult().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 3).
@@ -426,7 +422,7 @@ public class ReplicationControlManagerTest {
             replicationControl.getPartition(
                 ((TopicRecord) result2.records().get(0).message()).topicId(), 0));
         ControllerResult<CreateTopicsResponseData> result3 =
-                replicationControl.createTopics(request);
+                replicationControl.createTopics(request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
         expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
@@ -488,7 +484,7 @@ public class ReplicationControlManagerTest {
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 3));
         ControllerResult<CreateTopicsResponseData> result =
-            ctx.replicationControl.createTopics(request);
+            ctx.replicationControl.createTopics(request, Collections.singleton("foo"));
         assertEquals(0, result.records().size());
         CreatableTopicResult topicResult = result.response().topics().find("foo");
         assertEquals((short) 0, topicResult.errorCode());
@@ -503,7 +499,7 @@ public class ReplicationControlManagerTest {
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 4));
         ControllerResult<CreateTopicsResponseData> result =
-            ctx.replicationControl.createTopics(request);
+            ctx.replicationControl.createTopics(request, Collections.singleton("foo"));
         assertEquals(0, result.records().size());
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -551,7 +547,7 @@ public class ReplicationControlManagerTest {
         List<Uuid> topicsToDelete = new ArrayList<>();
 
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(request);
+            replicationControl.createTopics(request, Collections.singleton("foo"));
         topicsToDelete.add(result.response().topics().find("foo").topicId());
 
         RecordTestUtils.replayAll(replicationControl, result.records());
@@ -562,7 +558,8 @@ public class ReplicationControlManagerTest {
             setNumPartitions(1).setReplicationFactor((short) -1));
         request.topics().add(new CreatableTopic().setName("baz").
             setNumPartitions(2).setReplicationFactor((short) -1));
-        result = replicationControl.createTopics(request);
+        result = replicationControl.createTopics(request,
+            new HashSet<>(Arrays.asList("bar", "baz")));
         RecordTestUtils.replayAll(replicationControl, result.records());
         assertEquals(3, ctx.metrics.globalTopicsCount());
         assertEquals(4, ctx.metrics.globalPartitionCount());
@@ -889,7 +886,7 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1);
         ctx.unfenceBrokers(0, 1);
         ControllerResult<CreateTopicsResponseData> createResult =
-            replicationControl.createTopics(request);
+            replicationControl.createTopics(request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         Uuid topicId = createResult.response().topics().find("foo").topicId();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -961,8 +958,8 @@ public class ReplicationControlManagerTest {
             setNumPartitions(2).setReplicationFactor((short) 2));
         ctx.registerBrokers(0, 1);
         ctx.unfenceBrokers(0, 1);
-        ControllerResult<CreateTopicsResponseData> createTopicResult =
-            replicationControl.createTopics(request);
+        ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
+            createTopics(request, new HashSet<>(Arrays.asList("foo", "bar", "quux", "foo2")));
         ctx.replay(createTopicResult.records());
         List<CreatePartitionsTopic> topics = new ArrayList<>();
         topics.add(new CreatePartitionsTopic().

@@ -47,6 +47,7 @@ import org.apache.kafka.metadata.authorizer.AclMutator;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 
@@ -64,11 +65,12 @@ public interface Controller extends AclMutator, AutoCloseable {
      * Create a batch of topics.
      *
      * @param request       The CreateTopicsRequest data.
+     * @param describable   The topics which we have DESCRIBE permission on.
      *
      * @return              A future yielding the response.
      */
     CompletableFuture<CreateTopicsResponseData>
-        createTopics(CreateTopicsRequestData request);
+        createTopics(CreateTopicsRequestData request, Set<String> describable);
 
     /**
      * Unregister a broker.
