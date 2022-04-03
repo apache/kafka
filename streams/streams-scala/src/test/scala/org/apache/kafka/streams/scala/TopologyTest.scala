@@ -21,22 +21,8 @@ import java.util
 import java.util.{Locale, Properties}
 import java.util.regex.Pattern
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
-import org.apache.kafka.streams.kstream.{
-  Aggregator,
-  Initializer,
-  JoinWindows,
-  KeyValueMapper,
-  Reducer,
-  Transformer,
-  ValueJoiner,
-  ValueMapper,
-  KGroupedStream => KGroupedStreamJ,
-  KStream => KStreamJ,
-  KTable => KTableJ,
-  Materialized => MaterializedJ,
-  StreamJoined => StreamJoinedJ
-}
-import org.apache.kafka.streams.processor.{api, ProcessorContext}
+import org.apache.kafka.streams.kstream.{Aggregator, Initializer, JoinWindows, KeyValueMapper, Reducer, Transformer, ValueJoiner, ValueMapper, KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ, Materialized => MaterializedJ, StreamJoined => StreamJoinedJ}
+import org.apache.kafka.streams.processor.{ProcessorContext, api}
 import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
@@ -46,6 +32,7 @@ import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, S
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -275,6 +262,7 @@ class TopologyTest {
     assertEquals(getTopologyScala, getTopologyJava)
   }
 
+  @nowarn
   @Test
   def shouldBuildIdenticalTopologyInJavaNScalaTransform(): Unit = {
 
@@ -301,6 +289,7 @@ class TopologyTest {
       streamBuilder.build().describe()
     }
 
+    @nowarn
     // build the Java topology
     def getTopologyJava: TopologyDescription = {
 
