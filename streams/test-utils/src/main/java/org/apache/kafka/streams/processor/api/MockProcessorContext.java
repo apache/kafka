@@ -343,7 +343,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                                   final long offset) {
         recordMetadata = new MockRecordMetadata(topic, partition, offset);
     }
-    
+
     public void setCurrentSystemTimeMs(final long currentSystemTimeMs) {
         this.currentSystemTimeMs = currentSystemTimeMs;
     }

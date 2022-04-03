@@ -21,8 +21,22 @@ import java.util
 import java.util.{Locale, Properties}
 import java.util.regex.Pattern
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
-import org.apache.kafka.streams.kstream.{Aggregator, Initializer, JoinWindows, KeyValueMapper, Reducer, Transformer, ValueJoiner, ValueMapper, KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ, Materialized => MaterializedJ, StreamJoined => StreamJoinedJ}
-import org.apache.kafka.streams.processor.{ProcessorContext, api}
+import org.apache.kafka.streams.kstream.{
+  Aggregator,
+  Initializer,
+  JoinWindows,
+  KeyValueMapper,
+  Reducer,
+  Transformer,
+  ValueJoiner,
+  ValueMapper,
+  KGroupedStream => KGroupedStreamJ,
+  KStream => KStreamJ,
+  KTable => KTableJ,
+  Materialized => MaterializedJ,
+  StreamJoined => StreamJoinedJ
+}
+import org.apache.kafka.streams.processor.{api, ProcessorContext}
 import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}

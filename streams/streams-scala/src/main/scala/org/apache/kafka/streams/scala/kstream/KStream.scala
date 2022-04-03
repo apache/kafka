@@ -18,10 +18,30 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{GlobalKTable, JoinWindows, Printed, TransformerSupplier, ValueTransformerSupplier, ValueTransformerWithKeySupplier, KStream => KStreamJ}
+import org.apache.kafka.streams.kstream.{
+  GlobalKTable,
+  JoinWindows,
+  Printed,
+  TransformerSupplier,
+  ValueTransformerSupplier,
+  ValueTransformerWithKeySupplier,
+  KStream => KStreamJ
+}
 import org.apache.kafka.streams.processor.TopicNameExtractor
 import org.apache.kafka.streams.processor.api.ProcessorSupplier
-import org.apache.kafka.streams.scala.FunctionsCompatConversions.{FlatValueMapperFromFunction, FlatValueMapperWithKeyFromFunction, ForeachActionFromFunction, KeyValueMapperFromFunction, MapperFromFunction, PredicateFromFunction, TransformerSupplierAsJava, ValueMapperFromFunction, ValueMapperWithKeyFromFunction, ValueTransformerSupplierAsJava, ValueTransformerSupplierWithKeyAsJava}
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
+  FlatValueMapperFromFunction,
+  FlatValueMapperWithKeyFromFunction,
+  ForeachActionFromFunction,
+  KeyValueMapperFromFunction,
+  MapperFromFunction,
+  PredicateFromFunction,
+  TransformerSupplierAsJava,
+  ValueMapperFromFunction,
+  ValueMapperWithKeyFromFunction,
+  ValueTransformerSupplierAsJava,
+  ValueTransformerSupplierWithKeyAsJava
+}
 
 import scala.jdk.CollectionConverters._
 
