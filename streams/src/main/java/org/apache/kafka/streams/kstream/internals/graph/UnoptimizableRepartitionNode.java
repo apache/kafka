@@ -19,6 +19,8 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -53,11 +55,15 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
-        topologyBuilder.addProcessor(
-            processorParameters.processorName(),
-            processorParameters.processorSupplier(),
-            parentNodeNames()
-        );
+        final String processorName = processorParameters.processorName();
+        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters.processorSupplier();
+        if (processorSupplier != null) {
+            topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
+        }
+        final FixedKeyProcessorSupplier<K, V, ?> fixedKeyProcessorSupplier = processorParameters.fixedKeyProcessorSupplier();
+        if (fixedKeyProcessorSupplier != null) {
+            topologyBuilder.addProcessor(processorName, fixedKeyProcessorSupplier, parentNodeNames());
+        }
 
         topologyBuilder.addSink(
             sinkName,
