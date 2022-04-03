@@ -30,7 +30,9 @@ import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -129,6 +131,17 @@ public enum CompressionType {
         }
     };
 
+    private static final List<String> NAMES;
+
+    static {
+        CompressionType[] compressionTypes = CompressionType.values();
+        List<String> names = new ArrayList<>(compressionTypes.length);
+        for (CompressionType compressionType : compressionTypes) {
+            names.add(compressionType.name);
+        }
+        NAMES = Collections.unmodifiableList(names);
+    }
+
     public final int id;
     public final String name;
     public final float rate;
@@ -192,8 +205,8 @@ public enum CompressionType {
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
 
-    public static String[] producerCompressionOptions() {
-        return Arrays.stream(CompressionType.values()).map(compressionType -> compressionType.name).toArray(String[]::new);
+    public static List<String> names() {
+        return NAMES;
     }
 
 }
