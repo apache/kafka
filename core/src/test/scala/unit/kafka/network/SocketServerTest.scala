@@ -1124,12 +1124,12 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
       val headerLog = new ObjectNode(JsonNodeFactory.instance)
       headerLog.set("response", new TextNode("someResponse"))
       channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
 
-      val expectedTotalTimeCount = totalTimeHistCount() + 1
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
