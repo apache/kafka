@@ -22,18 +22,18 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 import java.util.Objects;
 
-// TODO check if docs need to be updated
 /**
- * A data class representing an incoming record for processing in a {@link Processor}
- * or a record to forward to downstream processors via {@link ProcessorContext}.
+ * A data class representing an incoming record with fixed key for processing in a {@link FixedKeyProcessor}
+ * or a record to forward to downstream processors via {@link FixedKeyProcessorContext}.
  *
  * This class encapsulates all the data attributes of a record: the key and value, but
  * also the timestamp of the record and any record headers.
+ * Though key is not allowed to be changes.
  *
  * This class is immutable, though the objects referenced in the attributes of this class
  * may themselves be mutable.
  *
- * @param <K> The type of the key
+ * @param <K> The type of the fixed key
  * @param <V> The type of the value
  */
 public final class FixedKeyRecord<K, V> {
@@ -119,7 +119,7 @@ public final class FixedKeyRecord<K, V> {
      * Copies the attributes of this record with the headers replaced.
      * Also makes a copy of the provided headers.
      *
-     * See {@link ProcessorContext#forward(Record)} for
+     * See {@link FixedKeyProcessorContext#forward(FixedKeyRecord)} for
      * considerations around mutability of keys, values, and headers.
      *
      * @param headers The headers of the result record.

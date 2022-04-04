@@ -44,7 +44,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     public final Set<String> stateStores;
 
-    private InternalProcessorContext internalProcessorContext;
+    private InternalProcessorContext<KOut, VOut> internalProcessorContext;
     private String threadId;
 
     private boolean closed = true;

@@ -16,12 +16,19 @@
  */
 package org.apache.kafka.streams.processor.api;
 
-// TODO: add comments to how/where this should be used.
 public final class InternalFixedKeyRecordFactory {
 
     private InternalFixedKeyRecordFactory() {
     }
 
+    /**
+     * Only allowed way to create {@link FixedKeyRecord}s.
+     * <p/>
+     * DO NOT USE THIS FACTORY OUTSIDE THE FRAMEWORK.
+     * This could produce undesired results by not partitioning record properly.
+     *
+     * @see FixedKeyProcessor
+     */
     public static <KIn, VIn> FixedKeyRecord<KIn, VIn> create(final Record<KIn, VIn> record) {
         return new FixedKeyRecord<>(
             record.key(),

@@ -32,7 +32,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 
-// TODO check if docs need update
 /**
  * Processor context interface.
  */
@@ -61,9 +60,10 @@ public interface ProcessingContext {
      * In the case of a punctuation, there is no source record, so this metadata would be
      * undefined. Note that when a punctuator invokes {@code forward(Record)},
      * downstream processors will receive the forwarded record as a regular
-     * {@link Processor#process(Record)} invocation. In other words, it wouldn't be apparent to
-     * downstream processors whether or not the record being processed came from an input topic
-     * or punctuation and therefore whether or not this metadata is defined. This is why
+     * {@link Processor#process(Record)} or {@link FixedKeyProcessor#process(FixedKeyRecord)} invocation.
+     * In other words, it wouldn't be apparent to
+     * downstream processors whether the record being processed came from an input topic
+     * or punctuation and therefore whether this metadata is defined. This is why
      * the return type of this method is {@link Optional}.
      * <p>
      * If there is any possibility of punctuators upstream, any access
@@ -114,8 +114,10 @@ public interface ProcessingContext {
 
     /**
      * Schedule a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessingContext) initialization} or
-     * {@link Processor#process(Record)}  processing} to
+     * {@link Processor#init(ProcessorContext) initialization},
+     * {@link Processor#process(Record) processing},
+     * {@link FixedKeyProcessor#init(FixedKeyProcessorContext) initialization}, or
+     * {@link FixedKeyProcessor#process(FixedKeyRecord) processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>

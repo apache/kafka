@@ -98,6 +98,19 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
     }
 
     @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
+    }
+
+    @Override
     public void commit() {
         //no-op
     }
@@ -142,19 +155,5 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
     @Override
     public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
         cache.addDirtyEntryFlushListener(namespace, listener);
-    }
-
-    // TODO check if needs to precise usage. 
-    @Override
-    public <K, V> void forward(final FixedKeyRecord<K, V> record) {
-        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
-    }
-
-    @Override
-    public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
-        forward(
-            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
-            childName
-        );
     }
 }

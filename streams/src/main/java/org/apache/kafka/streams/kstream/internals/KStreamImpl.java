@@ -1556,7 +1556,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return processValues(processorSupplier, NamedInternal.empty(), stateStoreNames);
     }
 
-    // TODO: review implementation
     @Override
     public <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,

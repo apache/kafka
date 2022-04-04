@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.streams.processor.api;
 
-// TODO check if docs need to be updated
 /**
- * Processor context interface.
+ * Processor context interface for {@link FixedKeyRecord}.
  *
  * @param <KForward> a bound on the types of keys that may be forwarded
  * @param <VForward> a bound on the types of values that may be forwarded
@@ -28,30 +27,30 @@ public interface FixedKeyProcessorContext<KForward, VForward> extends Processing
     /**
      * Forward a record to all child processors.
      * <p>
-     * Note that the forwarded {@link Record} is shared between the parent and child
+     * Note that the forwarded {@link FixedKeyRecord} is shared between the parent and child
      * processors. And of course, the parent may forward the same object to multiple children,
      * and the child may forward it to grandchildren, etc. Therefore, you should be mindful
      * of mutability.
      * <p>
-     * The {@link Record} class itself is immutable (all the setter-style methods return an
-     * independent copy of the instance). However, the key, value, and headers referenced by
+     * The {@link FixedKeyRecord} class itself is immutable (all the setter-style methods return an
+     * independent copy of the instance). However, the value and headers referenced by
      * the Record may themselves be mutable.
      * <p>
      * Some programs may opt to make use of this mutability for high performance, in which case
-     * the input record may be mutated and then forwarded by each {@link Processor}. However,
+     * the input record may be mutated and then forwarded by each {@link FixedKeyProcessor}. However,
      * most applications should instead favor safety.
      * <p>
      * Forwarding records safely simply means to make a copy of the record before you mutate it.
-     * This is trivial when using the {@link Record#withKey(Object)}, {@link Record#withValue(Object)},
-     * and {@link Record#withTimestamp(long)} methods, as each of these methods make a copy of the
+     * This is trivial when using the {@link FixedKeyRecord#withValue(Object)},
+     * and {@link FixedKeyRecord#withTimestamp(long)} methods, as each of these methods make a copy of the
      * record as a matter of course. But a little extra care must be taken with headers, since
      * the {@link org.apache.kafka.common.header.Header} class is mutable. The easiest way to
-     * safely handle headers is to use the {@link Record} constructors to make a copy before
+     * safely handle headers is to use the {@link FixedKeyRecord} constructors to make a copy before
      * modifying headers.
      * <p>
      * In other words, this would be considered unsafe:
      * <code>
-     *     process(Record inputRecord) {
+     *     process(FixedKeyRecord inputRecord) {
      *         inputRecord.headers().add(...);
      *         context.forward(inputRecord);
      *     }
@@ -62,16 +61,16 @@ public interface FixedKeyProcessorContext<KForward, VForward> extends Processing
      * <p>
      * A safe usage would look like this:
      * <code>
-     *     process(Record inputRecord) {
+     *     process(FixedKeyRecord inputRecord) {
      *         // makes a copy of the headers
-     *         Record toForward = inputRecord.withHeaders(inputRecord.headers());
+     *         FixedKeyRecord toForward = inputRecord.withHeaders(inputRecord.headers());
      *         // Other options to create a safe copy are:
      *         // * use any copy-on-write method, which makes a copy of all fields:
      *         //   toForward = inputRecord.withValue();
      *         // * explicitly copy all fields:
-     *         //   toForward = new Record(inputRecord.key(), inputRecord.value(), inputRecord.timestamp(), inputRecord.headers());
+     *         //   toForward = new FixedKeyRecord(inputRecord.key(), inputRecord.value(), inputRecord.timestamp(), inputRecord.headers());
      *         // * create a fresh, empty Headers:
-     *         //   toForward = new Record(inputRecord.key(), inputRecord.value(), inputRecord.timestamp());
+     *         //   toForward = new FixedKeyRecord(inputRecord.key(), inputRecord.value(), inputRecord.timestamp());
      *         // * etc.
      *
      *         // now, we are modifying our own independent copy of the headers.

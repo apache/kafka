@@ -23,8 +23,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import java.time.Duration;
 
 /**
- * // TODO: validate and update docs
- * A processor of key-value pair records.
+ * A processor of key-value pair records where keys are immutable.
  *
  * @param <KIn> the type of input keys
  * @param <VIn> the type of input values
@@ -37,8 +36,8 @@ public interface FixedKeyProcessor<KIn, VIn, VOut> {
      * that contains it is initialized. When the framework is done with the processor, {@link #close()} will be called on it; the
      * framework may later re-use the processor by calling {@code #init()} again.
      * <p>
-     * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
-     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
+     * The provided {@link FixedKeyProcessorContext context} can be used to access topology and record metadata, to
+     * {@link FixedKeyProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
      * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      *
      * @param context the context; may not be null

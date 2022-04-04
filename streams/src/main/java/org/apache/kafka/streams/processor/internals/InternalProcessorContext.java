@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 /**
- * For internal use so we can update the {@link RecordContext} and current
+ * For internal use, so we can update the {@link RecordContext} and current
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */

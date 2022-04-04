@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 /**
@@ -58,14 +56,6 @@ public class ProcessorGraphNode<K, V> extends GraphNode {
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String processorName = processorParameters.processorName();
-        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters.processorSupplier();
-        if (processorSupplier != null) {
-            topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
-        }
-        final FixedKeyProcessorSupplier<K, V, ?> fixedKeyProcessorSupplier = processorParameters.fixedKeyProcessorSupplier();
-        if (fixedKeyProcessorSupplier != null) {
-            topologyBuilder.addProcessor(processorName, fixedKeyProcessorSupplier, parentNodeNames());
-        }
+        processorParameters.addProcessorTo(topologyBuilder, parentNodeNames());
     }
 }
