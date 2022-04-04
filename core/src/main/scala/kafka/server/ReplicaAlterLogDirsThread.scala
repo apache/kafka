@@ -146,12 +146,7 @@ class ReplicaAlterLogDirsThread(name: String,
                                                 epochForFetchOffset: Int,
                                                 leaderLogStartOffset: Long): Long = {
     // JBOD is not supported with tiered storage.
-    truncateFullyAndStartAt(partition, fetchOffset)
-    replicaMgr.futureLocalLogOrException(partition)
-      .maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
-
-    // todo-tier: Confirm whether to rebuild the leader epoch and producer snapshots for future log.
-    leaderLogStartOffset
+    throw new UnsupportedOperationException();
   }
 
 }

@@ -592,8 +592,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     explicitMetricName(pkgStr, "Log", name, tags)
   }
 
-  def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
-    rebuildProducerState(lastOffset, producerStateManager, reloadFromCleanShutdown)
+  def loadProducerState(lastOffset: Long): Unit = lock synchronized {
+    rebuildProducerState(lastOffset, producerStateManager)
     maybeIncrementFirstUnstableOffset()
   }
 
@@ -1335,7 +1335,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (remoteLogManager.isEmpty) {
             throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.");
           }
-          if (leaderEpochCache.isEmpty) {
+          if (recordVersion.value < RecordVersion.V2.value) {
             throw new KafkaException("Tiered storage is supported only with versions supporting leader epochs, that means RecordVersion must be >= 2.")
           }
 

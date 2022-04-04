@@ -39,7 +39,7 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
 
     @Override
     public RecordBatch nextBatch() throws IOException {
-        logHeaderBuffer.rewind();
+        logHeaderBuffer.clear();
         Utils.readFully(inputStream, logHeaderBuffer);
 
         if (logHeaderBuffer.position() < HEADER_SIZE_UP_TO_MAGIC)
@@ -57,8 +57,7 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
         // will have size of "LOG_OVERHEAD + size"
         int bufferSize = LOG_OVERHEAD + size;
         ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        System.arraycopy(logHeaderBuffer.array(), 0, buffer.array(), 0, logHeaderBuffer.limit());
-        buffer.position(logHeaderBuffer.limit());
+        buffer.put(logHeaderBuffer);
 
         Utils.readFully(inputStream, buffer);
         if (buffer.position() != bufferSize)

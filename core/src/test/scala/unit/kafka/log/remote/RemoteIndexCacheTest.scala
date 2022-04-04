@@ -59,13 +59,16 @@ class RemoteIndexCacheTest {
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(IndexType.TRANSACTION)))
       .thenReturn(new FileInputStream(File.createTempFile("kafka-test-", ".txn", tempDir)))
 
-    val logDir = Files.createTempDirectory("kafka-").toString
-    cache = new RemoteIndexCache(remoteStorageManager = rsm, logDir = logDir)
+    cache = new RemoteIndexCache(remoteStorageManager = rsm, logDir = createLogDir)
 
     val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     rlsMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
       baseOffset, offsetIndex.lastOffset, -1L, 1, 1024, 1024,
       Collections.singletonMap(0, 0L))
+  }
+
+  private def createLogDir = {
+    Files.createTempDirectory("kafka-").toString
   }
 
   private def appendIndexEntries(): Unit = {
@@ -120,5 +123,11 @@ class RemoteIndexCacheTest {
     val nonExistentOffsetPosition = OffsetPosition(baseOffset, 0)
     val lowerOffsetThanBaseOffset = offsetIndex.baseOffset - 1
     assertEquals(nonExistentOffsetPosition.position, cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset))
+  }
+
+  @Test
+  def testCacheEtryExpiry(): Unit = {
+    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = createLogDir)
+
   }
 }

@@ -28,32 +28,42 @@ import java.io.{File, InputStream}
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 object RemoteIndexCache {
   val DirName = "remote-log-index-cache"
   val TmpFileSuffix = ".tmp"
 }
 
-class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex: TransactionIndex) {
-  private val markedForCleanup = new AtomicBoolean(false)
+class Entry(val offsetIndex: LazyIndex[OffsetIndex], val timeIndex: LazyIndex[TimeIndex], val txnIndex: TransactionIndex) {
+  private var markedForCleanup: Boolean = false
+  private val lock: ReentrantReadWriteLock = new ReentrantReadWriteLock()
 
   def lookupOffset(targetOffset: Long): OffsetPosition = {
-    if (markedForCleanup.get()) throw new IllegalStateException("This entry is marked for cleanup")
-    else offsetIndex.lookup(targetOffset)
+    CoreUtils.inLock(lock.readLock()) {
+      if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup")
+      else offsetIndex.get.lookup(targetOffset)
+    }
   }
 
   def lookupTimestamp(timestamp: Long, startingOffset: Long): OffsetPosition = {
-    if (markedForCleanup.get()) throw new IllegalStateException("This entry is marked for cleanup")
+    CoreUtils.inLock(lock.readLock()) {
+      if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup")
 
-    val timestampOffset = timeIndex.lookup(timestamp)
-    offsetIndex.lookup(math.max(startingOffset, timestampOffset.offset))
+      val timestampOffset = timeIndex.get.lookup(timestamp)
+      offsetIndex.get.lookup(math.max(startingOffset, timestampOffset.offset))
+    }
   }
 
   def markForCleanup(): Unit = {
-    if (!markedForCleanup.getAndSet(true)) {
-      Array(offsetIndex, timeIndex, txnIndex).foreach(x =>
-        x.renameTo(new File(CoreUtils.replaceSuffix(x.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
+    CoreUtils.inLock(lock.writeLock()) {
+      if (!markedForCleanup) {
+        markedForCleanup = true
+        Array(offsetIndex, timeIndex).foreach(index =>
+          index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
+        txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, "",
+          UnifiedLog.DeletedFileSuffix)))
+      }
     }
   }
 
@@ -63,11 +73,12 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
   }
 
   def close(): Unit = {
-    Array(offsetIndex, timeIndex, txnIndex).foreach(index => try {
+    Array(offsetIndex, timeIndex).foreach(index => try {
       index.close()
     } catch {
       case _: Exception => // ignore error.
     })
+    Utils.closeQuietly(txnIndex, "Closing the transaction index.")
   }
 }
 
@@ -113,6 +124,8 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         Files.deleteIfExists(path)
       }
     })
+
+    // Load the indexes.
   }
 
   init()
@@ -136,7 +149,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   cleanerThread.start()
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
-    def loadIndexFile[T <: BaseIndex](fileName: String,
+    def loadIndexFile[T](fileName: String,
                                       suffix: String,
                                       fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
                                       readIndex: File => T): T = {
@@ -173,22 +186,22 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
     lock synchronized {
       entries.computeIfAbsent(remoteLogSegmentMetadata.remoteLogSegmentId(), (key: RemoteLogSegmentId) => {
-        val fileName = key.id().toString
         val startOffset = remoteLogSegmentMetadata.startOffset()
+        val fileName = startOffset.toString + "_" + key.id().toString
 
-        val offsetIndex: OffsetIndex = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
+        val offsetIndex: LazyIndex[OffsetIndex] = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
           file => {
-            val index = new OffsetIndex(file, startOffset, Int.MaxValue, writable = false)
-            index.sanityCheck()
+            val index = LazyIndex.forOffset(file, startOffset, Int.MaxValue, writable = false)
+            index.get.sanityCheck()
             index
           })
 
-        val timeIndex: TimeIndex = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
+        val timeIndex: LazyIndex[TimeIndex] = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
           file => {
-            val index = new TimeIndex(file, startOffset, Int.MaxValue, writable = false)
-            index.sanityCheck()
+            val index = LazyIndex.forTime(file, startOffset, Int.MaxValue, writable = false)
+            index.get.sanityCheck()
             index
           })
 

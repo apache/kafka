@@ -254,8 +254,10 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     if (topicId == null) {
       throw new KafkaException("Topic id does not exist for topic partition: " + tp)
     }
-    // Get the respective epoch in which the starting offset exists.
-    var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
+
+    // Get the respective epoch in which the starting-offset exists.
+    val startingOffsetEpoch = leaderEpochCache.epochForOffset(startingOffset)
+    var maybeEpoch = startingOffsetEpoch;
     while (maybeEpoch.nonEmpty) {
       val epoch = maybeEpoch.get
       remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), epoch).asScala
