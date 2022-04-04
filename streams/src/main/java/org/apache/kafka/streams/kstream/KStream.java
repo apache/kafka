@@ -25,6 +25,8 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -3206,8 +3208,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#process(ProcessorSupplier, String...)} instead.
      */
     @Deprecated
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
@@ -3338,8 +3339,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, Named, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#process(ProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
@@ -3470,8 +3470,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#process(ProcessorSupplier, String...)} instead.
      */
     @Deprecated
     <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
@@ -3602,8 +3601,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#process(ProcessorSupplier, Named, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#process(ProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
     <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
@@ -3715,8 +3713,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
@@ -3828,8 +3825,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
@@ -3945,8 +3941,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
@@ -4062,8 +4057,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
@@ -4188,8 +4182,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
@@ -4315,8 +4308,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
@@ -4443,8 +4435,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
@@ -4571,8 +4562,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
-     * //TODO update to right version
-     * @deprecated Since 3.x. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
+     * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
@@ -4787,13 +4777,13 @@ public interface KStream<K, V> {
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
-     * but allows access to the {@code ProcessorContext} and record metadata.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper)}
+     * but allows access to the {@link org.apache.kafka.streams.processor.api.ProcessorContext}
+     * and {@link org.apache.kafka.streams.processor.api.Record} metadata.
      * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
-     * Note that this is a terminal operation that returns void.
      * <p>
      * In order for the processor to use state stores, the stores must be added to the topology and connected to the
      * processor using at least one of two strategies (though it's not required to connect global state stores; read-only
@@ -4810,7 +4800,7 @@ public interface KStream<K, V> {
      * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.processor(new ProcessorSupplier() {
+     * KStream outputStream = inputStream.process(new ProcessorSupplier() {
      *     public Processor get() {
      *         return new MyProcessor();
      *     }
@@ -4854,7 +4844,7 @@ public interface KStream<K, V> {
      *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *     }
      *
-     *     void process(K key, V value) {
+     *     void process(Record<K, V> record) {
      *         // can access this.state
      *     }
      *
@@ -4865,6 +4855,10 @@ public interface KStream<K, V> {
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
+     * <p>
+     * Processing records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)})
      *
      * @param processorSupplier an instance of {@link ProcessorSupplier} that generates a newly constructed {@link Processor}
      *                          The supplier should always generate a new instance. Creating a single {@link Processor} object
@@ -4872,7 +4866,7 @@ public interface KStream<K, V> {
      *                          violation of the supplier pattern and leads to runtime exceptions.
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
-     * @see #foreach(ForeachAction)
+     * @see #map(KeyValueMapper)
      * @see #transform(TransformerSupplier, String...)
      */
     <KOut, VOut> KStream<KOut, VOut> process(
@@ -4883,13 +4877,13 @@ public interface KStream<K, V> {
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
-     * but allows access to the {@code ProcessorContext} and record metadata.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper)}
+     * but allows access to the {@link org.apache.kafka.streams.processor.api.ProcessorContext}
+     * and {@link org.apache.kafka.streams.processor.api.Record} metadata.
      * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
-     * Note that this is a terminal operation that returns void.
      * <p>
      * In order for the processor to use state stores, the stores must be added to the topology and connected to the
      * processor using at least one of two strategies (though it's not required to connect global state stores; read-only
@@ -4906,7 +4900,7 @@ public interface KStream<K, V> {
      * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.processor(new ProcessorSupplier() {
+     * KStream outputStream = inputStream.process(new ProcessorSupplier() {
      *     public Processor get() {
      *         return new MyProcessor();
      *     }
@@ -4950,7 +4944,7 @@ public interface KStream<K, V> {
      *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *     }
      *
-     *     void process(K key, V value) {
+     *     void process(Record<K, V> record) {
      *         // can access this.state
      *     }
      *
@@ -4961,6 +4955,10 @@ public interface KStream<K, V> {
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
+     * <p>
+     * Processing records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #processValues(FixedKeyProcessorSupplier, Named, String...)})
      *
      * @param processorSupplier an instance of {@link ProcessorSupplier} that generates a newly constructed {@link Processor}
      *                          The supplier should always generate a new instance. Creating a single {@link Processor} object
@@ -4968,8 +4966,8 @@ public interface KStream<K, V> {
      *                          violation of the supplier pattern and leads to runtime exceptions.
      * @param named             a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames   the names of the state store used by the processor
-     * @see #foreach(ForeachAction)
-     * @see #transform(TransformerSupplier, String...)
+     * @see #map(KeyValueMapper)
+     * @see #processValues(FixedKeyProcessorSupplier, Named, String...)
      */
     <KOut, VOut> KStream<KOut, VOut> process(
         final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
@@ -4978,11 +4976,98 @@ public interface KStream<K, V> {
     );
 
     /**
-     * TODO: add docs
-     * @param processorSupplier
-     * @param stateStoreNames
-     * @param <VOut>
-     * @return
+     * Process all records in this stream, one record at a time, by applying a {@link FixedKeyProcessor} (provided by the given
+     * {@link FixedKeyProcessorSupplier}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper)}
+     * but allows access to the {@link org.apache.kafka.streams.processor.api.ProcessorContext}
+     * and {@link org.apache.kafka.streams.processor.api.Record} metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order for the processor to use state stores, the stores must be added to the topology and connected to the
+     * processor using at least one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the processor.
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // add store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.processValues(new ProcessorSupplier() {
+     *     public Processor get() {
+     *         return new MyProcessor();
+     *     }
+     * }, "myProcessorState");
+     * }</pre>
+     * The second strategy is for the given {@link ProcessorSupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the processor.
+     * <pre>{@code
+     * class MyProcessorSupplier implements FixedKeyProcessorSupplier {
+     *     // supply processor
+     *     FixedKeyProcessor get() {
+     *         return new MyProcessor();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated processor
+     *     // the store name from the builder ("myProcessorState") is used to access the store later via the ProcessorContext
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.processValues(new MyProcessorSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link FixedKeyProcessor}, the state is obtained via the {@link FixedKeyProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * class MyProcessor implements FixedKeyProcessor {
+     *     private StateStore state;
+     *
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myProcessorState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
+     *
+     *     void process(FixedKeyRecord<K, V> record) {
+     *         // can access this.state
+     *     }
+     *
+     *     void close() {
+     *         // can access this.state
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
+     * <p>
+     * Setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #process(ProcessorSupplier, String...)})
+     *
+     * @param processorSupplier an instance of {@link FixedKeyProcessorSupplier} that generates a newly constructed {@link FixedKeyProcessor}
+     *                          The supplier should always generate a new instance. Creating a single {@link FixedKeyProcessor} object
+     *                          and returning the same object reference in {@link FixedKeyProcessorSupplier#get()} is a
+     *                          violation of the supplier pattern and leads to runtime exceptions.
+     * @param stateStoreNames   the names of the state store used by the processor
+     * @see #mapValues(ValueMapper)
+     * @see #process(ProcessorSupplier, Named, String...)
      */
     <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
@@ -4990,12 +5075,99 @@ public interface KStream<K, V> {
     );
 
     /**
-     * TODO: add docs
-     * @param processorSupplier
-     * @param named
-     * @param stateStoreNames
-     * @param <VOut>
-     * @return
+     * Process all records in this stream, one record at a time, by applying a {@link FixedKeyProcessor} (provided by the given
+     * {@link FixedKeyProcessorSupplier}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper)}
+     * but allows access to the {@link org.apache.kafka.streams.processor.api.ProcessorContext}
+     * and {@link org.apache.kafka.streams.processor.api.Record} metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order for the processor to use state stores, the stores must be added to the topology and connected to the
+     * processor using at least one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the processor.
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // add store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.processValues(new ProcessorSupplier() {
+     *     public Processor get() {
+     *         return new MyProcessor();
+     *     }
+     * }, "myProcessorState");
+     * }</pre>
+     * The second strategy is for the given {@link ProcessorSupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the processor.
+     * <pre>{@code
+     * class MyProcessorSupplier implements FixedKeyProcessorSupplier {
+     *     // supply processor
+     *     FixedKeyProcessor get() {
+     *         return new MyProcessor();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated processor
+     *     // the store name from the builder ("myProcessorState") is used to access the store later via the ProcessorContext
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.processValues(new MyProcessorSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link FixedKeyProcessor}, the state is obtained via the {@link FixedKeyProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * class MyProcessor implements FixedKeyProcessor {
+     *     private StateStore state;
+     *
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myProcessorState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
+     *
+     *     void process(FixedKeyRecord<K, V> record) {
+     *         // can access this.state
+     *     }
+     *
+     *     void close() {
+     *         // can access this.state
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
+     * <p>
+     * Setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #process(ProcessorSupplier, String...)})
+     *
+     * @param processorSupplier an instance of {@link FixedKeyProcessorSupplier} that generates a newly constructed {@link FixedKeyProcessor}
+     *                          The supplier should always generate a new instance. Creating a single {@link FixedKeyProcessor} object
+     *                          and returning the same object reference in {@link FixedKeyProcessorSupplier#get()} is a
+     *                          violation of the supplier pattern and leads to runtime exceptions.
+     * @param named             a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames   the names of the state store used by the processor
+     * @see #mapValues(ValueMapper)
+     * @see #process(ProcessorSupplier, Named, String...)
      */
     <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
