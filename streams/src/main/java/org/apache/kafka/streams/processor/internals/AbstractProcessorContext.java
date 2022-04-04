@@ -48,6 +48,7 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
     protected ProcessorNode<?, ?, ?, ?> currentNode;
     private long cachedSystemTimeMs;
     protected ThreadCache cache;
+    private ProcessorMetadata processorMetadata;
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
@@ -60,6 +61,7 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
         valueSerde = null;
         keySerde = null;
         this.cache = cache;
+        processorMetadata = new ProcessorMetadata();
     }
 
     protected abstract StateManager stateManager();
@@ -253,5 +255,26 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
     @Override
     public String changelogFor(final String storeName) {
         return stateManager().changelogFor(storeName);
+    }
+
+    @Override
+    public void addProcessorMetadataKeyValue(final String key, final long value) {
+        processorMetadata.put(key, value);
+    }
+
+    @Override
+    public Long processorMetadataForKey(final String key) {
+        return processorMetadata.get(key);
+    }
+
+    @Override
+    public void setProcessorMetadata(final ProcessorMetadata metadata) {
+        Objects.requireNonNull(metadata);
+        processorMetadata = metadata;
+    }
+
+    @Override
+    public ProcessorMetadata getProcessorMetadata() {
+        return processorMetadata;
     }
 }

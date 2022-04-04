@@ -156,7 +156,7 @@ public class DescribeTransactionsHandlerTest {
         Set<String> transactionalIds
     ) {
         Set<CoordinatorKey> keys = coordinatorKeys(transactionalIds);
-        DescribeTransactionsRequest.Builder request = handler.buildRequest(1, keys);
+        DescribeTransactionsRequest.Builder request = handler.buildBatchedRequest(1, keys);
         assertEquals(transactionalIds, new HashSet<>(request.data.transactionalIds()));
     }
 

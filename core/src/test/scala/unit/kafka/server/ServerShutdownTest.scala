@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
@@ -82,26 +82,26 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdown(quorum: String): Unit = {
 
-    def createProducer(broker: KafkaBroker): KafkaProducer[Integer, String] =
+    def createProducer(): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
-        TestUtils.getBrokerListStrFromServers(Seq(broker)),
+        bootstrapServers(),
         keySerializer = new IntegerSerializer,
         valueSerializer = new StringSerializer
       )
 
-    def createConsumer(broker: KafkaBroker): KafkaConsumer[Integer, String] =
+    def createConsumer(): KafkaConsumer[Integer, String] =
       TestUtils.createConsumer(
-        TestUtils.getBrokerListStrFromServers(Seq(broker)),
+        bootstrapServers(),
         securityProtocol = SecurityProtocol.PLAINTEXT,
         keyDeserializer = new IntegerDeserializer,
         valueDeserializer = new StringDeserializer
       )
 
-    var producer = createProducer(broker)
+    var producer = createProducer()
 
     // create topic
     createTopic(topic)
@@ -124,8 +124,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     // wait for the broker to receive the update metadata request after startup
     TestUtils.waitForPartitionMetadata(Seq(broker), topic, 0)
 
-    producer = createProducer(broker)
-    val consumer = createConsumer(broker)
+    producer = createProducer()
+    val consumer = createConsumer()
     consumer.subscribe(Seq(topic).asJava)
 
     val consumerRecords = TestUtils.consumeRecords(consumer, sent1.size)
@@ -141,7 +141,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
     if (quorum == "zk") {
@@ -156,7 +156,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
@@ -168,7 +168,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyCleanShutdownAfterFailedStartup[KafkaStorageException](quorum)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testCleanShutdownWithZkUnavailable(quorum: String): Unit = {
     shutdownZooKeeper()
@@ -177,7 +177,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
@@ -212,7 +212,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsecutiveShutdown(quorum: String): Unit = {
     shutdownBroker()

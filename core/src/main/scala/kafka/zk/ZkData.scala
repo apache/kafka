@@ -30,23 +30,24 @@ import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
-import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
 import scala.beans.BeanProperty
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, immutable, mutable}
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -349,21 +350,39 @@ object TopicPartitionZNode {
 
 object TopicPartitionStateZNode {
   def path(partition: TopicPartition) = s"${TopicPartitionZNode.path(partition)}/state"
+
   def encode(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch): Array[Byte] = {
     val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
     val controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
-    Json.encodeAsBytes(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
-      "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr.asJava).asJava)
+    var partitionState = Map(
+      "version" -> 1,
+      "leader" -> leaderAndIsr.leader,
+      "leader_epoch" -> leaderAndIsr.leaderEpoch,
+      "controller_epoch" -> controllerEpoch,
+      "isr" -> leaderAndIsr.isr.asJava
+    )
+
+    if (leaderAndIsr.leaderRecoveryState != LeaderRecoveryState.RECOVERED) {
+      partitionState = partitionState ++ Seq("leader_recovery_state" -> leaderAndIsr.leaderRecoveryState.value.toInt)
+    }
+
+    Json.encodeAsBytes(partitionState.asJava)
   }
+
   def decode(bytes: Array[Byte], stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
     Json.parseBytes(bytes).map { js =>
       val leaderIsrAndEpochInfo = js.asJsonObject
       val leader = leaderIsrAndEpochInfo("leader").to[Int]
       val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
       val isr = leaderIsrAndEpochInfo("isr").to[List[Int]]
+      val recovery = leaderIsrAndEpochInfo
+        .get("leader_recovery_state")
+        .map(jsonValue => LeaderRecoveryState.of(jsonValue.to[Int].toByte))
+        .getOrElse(LeaderRecoveryState.RECOVERED)
       val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
+
       val zkPathVersion = stat.getVersion
-      LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch)
+      LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, recovery, zkPathVersion), controllerEpoch)
     }
   }
 }

@@ -508,7 +508,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    private void expectInitializeTask() throws Exception {
+    private void expectInitializeTask() {
 
         consumer.subscribe(EasyMock.eq(Arrays.asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -519,7 +519,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         PowerMock.expectLastCall();
     }
 
-    private void expectPollInitialAssignment() throws Exception {
+    private void expectPollInitialAssignment() {
         expectConsumerAssignment(INITIAL_ASSIGNMENT).times(2);
 
         sinkTask.open(INITIAL_ASSIGNMENT);
@@ -541,7 +541,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         return EasyMock.expect(consumer.assignment()).andReturn(assignment);
     }
 
-    private void expectStopTask() throws Exception {
+    private void expectStopTask() {
         sinkTask.stop();
         PowerMock.expectLastCall();
 
@@ -555,7 +555,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     }
 
     // Note that this can only be called once per test currently
-    private Capture<Collection<SinkRecord>> expectPolls(final long pollDelayMs) throws Exception {
+    private Capture<Collection<SinkRecord>> expectPolls(final long pollDelayMs) {
         // Stub out all the consumer stream/iterator responses, which we just want to verify occur,
         // but don't care about the exact details here.
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andStubAnswer(
@@ -607,7 +607,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     }
 
     @SuppressWarnings("unchecked")
-    private IExpectationSetters<Object> expectRebalanceDuringPoll() throws Exception {
+    private IExpectationSetters<Object> expectRebalanceDuringPoll() {
         final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
         final long startOffset = 40L;
@@ -652,8 +652,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                                                              final RuntimeException error,
                                                              final Exception consumerCommitError,
                                                              final long consumerCommitDelayMs,
-                                                             final boolean invokeCallback)
-            throws Exception {
+                                                             final boolean invokeCallback) {
         final long finalOffset = FIRST_OFFSET + expectedMessages;
 
         // All assigned partitions will have offsets committed, but we've only processed messages/updated offsets for one

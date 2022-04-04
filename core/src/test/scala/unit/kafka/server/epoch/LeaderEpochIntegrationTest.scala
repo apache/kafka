@@ -108,7 +108,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     TestUtils.createTopic(zkClient, topic2, assignment2, brokers)
 
     //Send messages equally to the two partitions, then half as many to a third
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
     (0 until 10).foreach { _ =>
       producer.send(new ProducerRecord(topic1, 0, null, "IHeartLogs".getBytes))
     }
@@ -151,7 +151,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
     TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
 
     //1. Given a single message
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
@@ -264,7 +264,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   private def sendFourMessagesToEachTopic() = {
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
+    val producer = TestUtils.createProducer(plaintextBootstrapServers(brokers),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
     val records =
       testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++

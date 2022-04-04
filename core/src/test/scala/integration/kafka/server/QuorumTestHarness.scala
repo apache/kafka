@@ -282,7 +282,9 @@ abstract class QuorumTestHarness extends Logging {
         metrics = controllerMetrics,
         threadNamePrefix = Option(threadNamePrefix),
         controllerQuorumVotersFuture = controllerQuorumVotersFuture,
-        raftApiVersions = apiVersions)
+        configSchema = KafkaRaftServer.configSchema,
+        raftApiVersions = apiVersions
+      )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
           error("Error completing controller socket server future", e)

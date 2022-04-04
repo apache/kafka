@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import java.util.Arrays;
 
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ public class PartitionReassignmentRevertTest {
     public void testNoneAddedOrRemoved() {
         PartitionRegistration registration = new PartitionRegistration(
             new int[] {3, 2, 1}, new int[] {3, 2},
-                Replicas.NONE, Replicas.NONE, 3, 100, 200);
+                Replicas.NONE, Replicas.NONE, 3, LeaderRecoveryState.RECOVERED, 100, 200);
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(3, 2), revert.isr());
@@ -46,7 +47,7 @@ public class PartitionReassignmentRevertTest {
     public void testSomeRemoving() {
         PartitionRegistration registration = new PartitionRegistration(
             new int[] {3, 2, 1}, new int[] {3, 2},
-            new int[] {2, 1}, Replicas.NONE, 3, 100, 200);
+            new int[] {2, 1}, Replicas.NONE, 3, LeaderRecoveryState.RECOVERED, 100, 200);
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(3, 2), revert.isr());
@@ -57,7 +58,7 @@ public class PartitionReassignmentRevertTest {
     public void testSomeAdding() {
         PartitionRegistration registration = new PartitionRegistration(
             new int[] {4, 5, 3, 2, 1}, new int[] {4, 5, 2},
-            Replicas.NONE, new int[] {4, 5}, 3, 100, 200);
+            Replicas.NONE, new int[] {4, 5}, 3, LeaderRecoveryState.RECOVERED, 100, 200);
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(2), revert.isr());
@@ -68,7 +69,7 @@ public class PartitionReassignmentRevertTest {
     public void testSomeRemovingAndAdding() {
         PartitionRegistration registration = new PartitionRegistration(
             new int[] {4, 5, 3, 2, 1}, new int[] {4, 5, 2},
-            new int[] {2}, new int[] {4, 5}, 3, 100, 200);
+            new int[] {2}, new int[] {4, 5}, 3, LeaderRecoveryState.RECOVERED, 100, 200);
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(2), revert.isr());
@@ -79,7 +80,7 @@ public class PartitionReassignmentRevertTest {
     public void testIsrSpecialCase() {
         PartitionRegistration registration = new PartitionRegistration(
             new int[] {4, 5, 3, 2, 1}, new int[] {4, 5},
-            new int[] {2}, new int[] {4, 5}, 3, 100, 200);
+            new int[] {2}, new int[] {4, 5}, 3, LeaderRecoveryState.RECOVERED, 100, 200);
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(3), revert.isr());

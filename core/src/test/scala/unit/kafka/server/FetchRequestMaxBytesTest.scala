@@ -60,7 +60,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers))
+    producer = TestUtils.createProducer(bootstrapServers())
   }
 
   @AfterEach

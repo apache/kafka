@@ -598,8 +598,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
             tp, 10, 5, Collections.singletonList(3)))
 
-        case ApiKeys.ALTER_ISR =>
-          new AlterIsrRequest.Builder(new AlterIsrRequestData())
+        case ApiKeys.ALTER_PARTITION =>
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData())
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())

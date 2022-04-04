@@ -17,26 +17,26 @@
 package kafka.controller
 
 import java.util.Properties
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, KAFKA_3_2_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError
+import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 class ControllerChannelManagerTest {
   private val controllerId = 1
@@ -161,7 +161,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_8_IV1) 5
+        if (apiVersion >= KAFKA_3_2_IV0) 6
+        else if (apiVersion >= KAFKA_2_8_IV1) 5
         else if (apiVersion >= KAFKA_2_4_IV1) 4
         else if (apiVersion >= KAFKA_2_4_IV0) 3
         else if (apiVersion >= KAFKA_2_2_IV0) 2
@@ -179,7 +180,10 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
     val partition = new TopicPartition("foo", 0)
-    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    var leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    if (interBrokerProtocolVersion >= KAFKA_3_2_IV0) {
+      leaderAndIsr = leaderAndIsr.copy(leaderRecoveryState = LeaderRecoveryState.RECOVERING)
+    }
 
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     context.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
@@ -192,11 +196,23 @@ class ControllerChannelManagerTest {
     assertEquals(1, leaderAndIsrRequests.size)
     assertEquals(expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version,
       s"IBP $interBrokerProtocolVersion should use version $expectedLeaderAndIsrVersion")
-    
+
     val request = leaderAndIsrRequests.head
     val byteBuffer = request.serialize
     val deserializedRequest = LeaderAndIsrRequest.parse(byteBuffer, expectedLeaderAndIsrVersion)
-    
+
+    val expectedRecovery = if (interBrokerProtocolVersion >= KAFKA_3_2_IV0) {
+      LeaderRecoveryState.RECOVERING
+    } else {
+      LeaderRecoveryState.RECOVERED
+    }
+
+    Seq(request, deserializedRequest).foreach { request =>
+      request.partitionStates.forEach { state =>
+        assertEquals(expectedRecovery , LeaderRecoveryState.of(state.leaderRecoveryState()))
+      }
+    }
+
     if (interBrokerProtocolVersion >= KAFKA_2_8_IV1) {
       assertFalse(request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
       assertFalse(deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))

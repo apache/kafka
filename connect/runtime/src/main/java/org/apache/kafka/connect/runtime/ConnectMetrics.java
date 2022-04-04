@@ -260,7 +260,7 @@ public class ConnectMetrics {
         protected MetricGroup(MetricGroupId groupId) {
             Objects.requireNonNull(groupId);
             this.groupId = groupId;
-            sensorPrefix = "connect-sensor-group: " + groupId.toString() + ";";
+            sensorPrefix = "connect-sensor-group: " + groupId + ";";
         }
 
         /**

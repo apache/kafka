@@ -18,13 +18,20 @@ package kafka.server
 
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
-import kafka.metrics.KafkaYammerMetrics
+import kafka.log.LogAppendInfo
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
+import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, verify, when}
 
+import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
 class AbstractFetcherManagerTest {
@@ -100,6 +107,7 @@ class AbstractFetcherManagerTest {
     fetcherManager.removeFetcherForPartitions(Set(tp))
     assertEquals(0, getMetricValue(metricName))
   }
+
   @Test
   def testDeadThreadCountMetric(): Unit = {
     val fetcher: AbstractFetcherThread = mock(classOf[AbstractFetcherThread])
@@ -210,4 +218,113 @@ class AbstractFetcherManagerTest {
     verify(fetcher).maybeUpdateTopicIds(Set(tp1), topicIds)
     verify(fetcher).maybeUpdateTopicIds(Set(tp2), topicIds)
   }
+
+  @Test
+  def testExpandThreadPool(): Unit = {
+    testResizeThreadPool(10, 50)
+  }
+
+  @Test
+  def testShrinkThreadPool(): Unit = {
+    testResizeThreadPool(50, 10)
+  }
+
+  private def testResizeThreadPool(currentFetcherSize: Int, newFetcherSize: Int, brokerNum: Int = 6): Unit = {
+    val fetchingTopicPartitions = makeTopicPartition(10, 100)
+    val failedTopicPartitions = makeTopicPartition(2, 5, "topic_failed")
+    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", currentFetcherSize) {
+      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+        new TestResizeFetcherThread(sourceBroker, failedPartitions)
+      }
+    }
+    try {
+      fetcherManager.addFetcherForPartitions(fetchingTopicPartitions.map { tp =>
+        val brokerId = getBrokerId(tp, brokerNum)
+        val brokerEndPoint = new BrokerEndPoint(brokerId, s"kafka-host-$brokerId", 9092)
+        tp -> InitialFetchState(None, brokerEndPoint, 0, 0)
+      }.toMap)
+
+      // Mark some of these partitions failed within resizing scope
+      fetchingTopicPartitions.take(20).foreach(fetcherManager.addFailedPartition)
+      // Mark failed partitions out of resizing scope
+      failedTopicPartitions.foreach(fetcherManager.addFailedPartition)
+
+      fetcherManager.resizeThreadPool(newFetcherSize)
+
+      val ownedPartitions = mutable.Set.empty[TopicPartition]
+      fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
+        val fetcherId = brokerIdAndFetcherId.fetcherId
+        val brokerId = brokerIdAndFetcherId.brokerId
+
+        fetcherThread.partitions.foreach { tp =>
+          ownedPartitions += tp
+          assertEquals(fetcherManager.getFetcherId(tp), fetcherId)
+          assertEquals(getBrokerId(tp, brokerNum), brokerId)
+        }
+      }
+      // Verify that all partitions are owned by the fetcher threads.
+      assertEquals(fetchingTopicPartitions, ownedPartitions)
+
+      // Only failed partitions should still be kept after resizing
+      assertEquals(failedTopicPartitions, fetcherManager.failedPartitions.partitions())
+    } finally {
+      fetcherManager.closeAllFetchers()
+    }
+  }
+
+
+  private def makeTopicPartition(topicNum: Int, partitionNum: Int, topicPrefix: String = "topic_"): Set[TopicPartition] = {
+    val res = mutable.Set[TopicPartition]()
+    for (i <- 0 to topicNum - 1) {
+      val topic = topicPrefix + i
+      for (j <- 0 to partitionNum - 1) {
+        res += new TopicPartition(topic, j)
+      }
+    }
+    res.toSet
+  }
+
+  private def getBrokerId(tp: TopicPartition, brokerNum: Int): Int = {
+    Utils.abs(tp.hashCode) % brokerNum
+  }
+
+  private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)
+    extends AbstractFetcherThread(
+      name = "test-resize-fetcher",
+      clientId = "mock-fetcher",
+      sourceBroker,
+      failedPartitions,
+      fetchBackOffMs = 0,
+      brokerTopicStats = new BrokerTopicStats) {
+
+    override protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
+      None
+    }
+
+    override protected def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {}
+
+    override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {}
+
+    override protected def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = ResultWithPartitions(None, Set.empty)
+
+    override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = Some(0)
+
+    override protected def logStartOffset(topicPartition: TopicPartition): Long = 1
+
+    override protected def logEndOffset(topicPartition: TopicPartition): Long = 1
+
+    override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(OffsetAndEpoch(1, 0))
+
+    override protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
+
+    override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
+
+    override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override protected val isOffsetForLeaderEpochSupported: Boolean = false
+    override protected val isTruncationOnFetchSupported: Boolean = false
+  }
+
 }

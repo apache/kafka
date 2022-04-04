@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.RecordContext;
@@ -35,15 +36,19 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
@@ -58,6 +63,7 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -82,7 +88,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void shouldNotAllowNullTopicsWhenAddingSoureWithTopic() {
+    public void shouldNotAllowNullTopicsWhenAddingSourceWithTopic() {
         assertThrows(NullPointerException.class, () -> topology.addSource("source", (String[]) null));
     }
 
@@ -1153,7 +1159,9 @@ public class TopologyTest {
         builder.stream("input-topic")
             .groupByKey()
             .count();
-        final TopologyDescription describe = builder.build().describe();
+        final Topology topology = builder.build();
+
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1164,6 +1172,8 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
     @Test
@@ -1171,8 +1181,10 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .count(Materialized.as("count-store"));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-store")
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1183,6 +1195,8 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @Test
@@ -1190,8 +1204,11 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .count(Materialized.with(null, Serdes.Long()));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>with(null, Serdes.Long())
+                // set store type explicitly with default rocksDB
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1202,6 +1219,54 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+    }
+
+    @Test
+    public void kGroupedStreamAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000003\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void kGroupedStreamZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.stream("input-topic")
+            .groupByKey()
+            .count();
+        final Topology topology = builder.build();
+
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @Test
@@ -1211,7 +1276,8 @@ public class TopologyTest {
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(1)))
             .count();
-        final TopologyDescription describe = builder.build().describe();
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1222,6 +1288,8 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
     @Test
@@ -1230,8 +1298,9 @@ public class TopologyTest {
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(1)))
-            .count(Materialized.as("count-store"));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as("count-store").withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1242,6 +1311,8 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @Test
@@ -1250,8 +1321,10 @@ public class TopologyTest {
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(1)))
-            .count(Materialized.with(null, Serdes.Long()));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>with(null, Serdes.Long())
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1262,6 +1335,381 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+    }
+
+    @Test
+    public void timeWindowAnonymousStoreTypeMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(1)))
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000003\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void timeWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(1)))
+            .count();
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void slidingWindowZeroArgCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(1)))
+            .count();
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+    }
+
+    @Test
+    public void slidingWindowNamedMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(1)))
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as("count-store").withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000001\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void slidingWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(1)))
+            .count();
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void timeWindowedCogroupedZeroArgCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "");
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000002 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000003 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000002\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+    }
+
+    @Test
+    public void timeWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "", Materialized.<Object, Object, WindowStore<Bytes, byte[]>>as("aggregate-store")
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000001 (stores: [aggregate-store])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000002\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000002 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000001\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void timeWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "");
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000002 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000003 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000002\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void slidingWindowedCogroupedZeroArgCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "");
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000002 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000003 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000002\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+    }
+
+    @Test
+    public void slidingWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "", Materialized.<Object, Object, WindowStore<Bytes, byte[]>>as("aggregate-store")
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000001 (stores: [aggregate-store])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000002\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000002 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000001\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void slidingWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "");
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000002 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000003 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000002\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void sessionWindowedCogroupedZeroArgCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "", (aggKey, aggOne, aggTwo) -> "");
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000002 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000003 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000002\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+    }
+
+    @Test
+    public void sessionWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "", (aggKey, aggOne, aggTwo) -> "", Materialized.<Object, Object, SessionStore<Bytes, byte[]>>as("aggregate-store")
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000001 (stores: [aggregate-store])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000002\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000002 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000001\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void sessionWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.stream("input-topic")
+            .groupByKey()
+            .cogroup((key, value, aggregate) -> value)
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
+            .aggregate(() -> "", (aggKey, aggOne, aggTwo) -> "");
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000002 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000003 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000002\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @Test
@@ -1271,7 +1719,8 @@ public class TopologyTest {
             .groupByKey()
             .windowedBy(SessionWindows.with(ofMillis(1)))
             .count();
-        final TopologyDescription describe = builder.build().describe();
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1282,6 +1731,8 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
     @Test
@@ -1290,8 +1741,10 @@ public class TopologyTest {
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SessionWindows.with(ofMillis(1)))
-            .count(Materialized.as("count-store"));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, SessionStore<Bytes, byte[]>>as("count-store")
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1302,6 +1755,8 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @Test
@@ -1310,8 +1765,10 @@ public class TopologyTest {
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SessionWindows.with(ofMillis(1)))
-            .count(Materialized.with(null, Serdes.Long()));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, SessionStore<Bytes, byte[]>>with(null, Serdes.Long())
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1322,6 +1779,55 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
         );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+    }
+
+    @Test
+    public void sessionWindowAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000003\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+    }
+
+    @Test
+    public void sessionWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .count();
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @Test
@@ -1330,8 +1836,8 @@ public class TopologyTest {
         builder.table("input-topic")
             .groupBy((key, value) -> null)
             .count();
-        final TopologyDescription describe = builder.build().describe();
-
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1355,6 +1861,14 @@ public class TopologyTest {
                 "\n",
             describe.toString()
         );
+
+        final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
+        // one for ktable, and one for count operation
+        assertThat(processorTopology.stateStores().size(), is(2));
+        // ktable store is rocksDB (default)
+        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        // count store is rocksDB (default)
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(true));
     }
 
     @Test
@@ -1362,8 +1876,10 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("input-topic")
             .groupBy((key, value) -> null)
-            .count(Materialized.as("count-store"));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-store")
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1387,6 +1903,57 @@ public class TopologyTest {
                 "\n",
             describe.toString()
         );
+
+        final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
+        // one for ktable, and one for count operation
+        assertThat(processorTopology.stateStores().size(), is(2));
+        // ktable store is rocksDB (default)
+        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        // count store is in-memory
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(false));
+    }
+
+    @Test
+    public void tableNamedMaterializedCountWithTopologyConfigShouldPreserveTopologyStructure() {
+        // override the default store into in-memory
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        builder.table("input-topic")
+            .groupBy((key, value) -> null)
+            // can still override the default store dynamically
+            .count(Materialized.as(Materialized.StoreType.ROCKS_DB));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topology: my-topology:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "      --> KTABLE-SOURCE-0000000002\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "      --> KTABLE-SELECT-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000005\n" +
+                "      <-- KTABLE-SOURCE-0000000002\n" +
+                "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
+                "      <-- KTABLE-SELECT-0000000003\n" +
+                "\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
+                "      --> KTABLE-AGGREGATE-0000000007\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000006\n" +
+                "\n",
+            describe.toString()
+        );
+
+        final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
+        // one for ktable, and one for count operation
+        assertThat(processorTopology.stateStores().size(), is(2));
+        // ktable store is in-memory (default is in-memory)
+        assertThat(processorTopology.stateStores().get(0).persistent(), is(false));
+        // count store is rocksDB
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(true));
     }
 
     @Test
@@ -1394,8 +1961,10 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("input-topic")
             .groupBy((key, value) -> null)
-            .count(Materialized.with(null, Serdes.Long()));
-        final TopologyDescription describe = builder.build().describe();
+            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>with(null, Serdes.Long())
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
@@ -1419,6 +1988,55 @@ public class TopologyTest {
                 "\n",
             describe.toString()
         );
+
+        final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
+        // one for ktable, and one for count operation
+        assertThat(processorTopology.stateStores().size(), is(2));
+        // ktable store is rocksDB (default)
+        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        // count store is rocksDB
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(true));
+    }
+
+    @Test
+    public void tableAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table("input-topic")
+            .groupBy((key, value) -> null)
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
+        final Topology topology = builder.build();
+        final TopologyDescription describe = topology.describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "      --> KTABLE-SOURCE-0000000002\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "      --> KTABLE-SELECT-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000005\n" +
+                "      <-- KTABLE-SOURCE-0000000002\n" +
+                "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
+                "      <-- KTABLE-SELECT-0000000003\n" +
+                "\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
+                "      --> KTABLE-AGGREGATE-0000000007\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000006\n" +
+                "\n",
+            describe.toString()
+        );
+
+        final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
+        // one for ktable, and one for count operation
+        assertThat(processorTopology.stateStores().size(), is(2));
+        // ktable store is rocksDB (default)
+        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        // count store is in-memory
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(false));
     }
 
     @Test
@@ -1447,7 +2065,8 @@ public class TopologyTest {
         final KTable<Object, Object> table = builder.table("input-topic");
         table.mapValues(
             (readOnlyKey, value) -> null,
-            Materialized.with(null, null));
+            Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>with(null, null)
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
         final TopologyDescription describe = builder.build().describe();
         Assert.assertEquals(
             "Topologies:\n" +
@@ -1681,5 +2300,17 @@ public class TopologyTest {
             id);
 
         expectedDescription.addGlobalStore(expectedGlobalStore);
+    }
+
+    private TopologyConfig overrideDefaultStore(final String defaultStore) {
+        final Properties topologyOverrides = new Properties();
+        // change default store as in-memory
+        topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, defaultStore);
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+
+        return new TopologyConfig(
+            "my-topology",
+            config,
+            topologyOverrides);
     }
 }

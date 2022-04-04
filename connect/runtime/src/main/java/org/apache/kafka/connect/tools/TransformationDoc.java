@@ -75,7 +75,7 @@ public class TransformationDoc {
         out.println("<div id=\"" + docInfo.transformationName + "\">");
 
         out.print("<h5>");
-        out.print(docInfo.transformationName);
+        out.print("<a href=\"#" + docInfo.transformationName + "\">" + docInfo.transformationName + "</a>");
         out.println("</h5>");
 
         out.println(docInfo.overview);

@@ -104,7 +104,6 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation")
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({DistributedHerder.class, Plugins.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
@@ -395,7 +394,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testIncrementalCooperativeRebalanceForExistingMember() throws Exception {
+    public void testIncrementalCooperativeRebalanceForExistingMember() {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
         // Join group. First rebalance contains revocations because a new member joined.
         EasyMock.expect(member.memberId()).andStubReturn("member");
@@ -793,7 +792,7 @@ public class DistributedHerderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testConnectorNameConflictsWithWorkerGroupId() throws Exception {
+    public void testConnectorNameConflictsWithWorkerGroupId() {
         Map<String, String> config = new HashMap<>(CONN2_CONFIG);
         config.put(ConnectorConfig.NAME_CONFIG, "test-group");
 
@@ -1230,7 +1229,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testDoRestartConnectorAndTasksEmptyPlan() throws Exception {
+    public void testDoRestartConnectorAndTasksEmptyPlan() {
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.empty()).anyTimes();
 
@@ -1241,7 +1240,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testDoRestartConnectorAndTasksNoAssignments() throws Exception {
+    public void testDoRestartConnectorAndTasksNoAssignments() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
@@ -1258,7 +1257,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testDoRestartConnectorAndTasksOnlyConnector() throws Exception {
+    public void testDoRestartConnectorAndTasksOnlyConnector() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
@@ -1289,25 +1288,26 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testDoRestartConnectorAndTasksOnlyTasks() throws Exception {
-        ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
+    public void testDoRestartConnectorAndTasksOnlyTasks() {
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         EasyMock.expect(restartPlan.shouldRestartConnector()).andReturn(true).anyTimes();
         EasyMock.expect(restartPlan.shouldRestartTasks()).andReturn(true).anyTimes();
-        EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();
-        EasyMock.expect(restartPlan.restartTaskCount()).andReturn(1).anyTimes();
-        EasyMock.expect(restartPlan.totalTaskCount()).andReturn(1).anyTimes();
+        // The connector has three tasks
+        EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Arrays.asList(TASK0, TASK1, TASK2)).anyTimes();
+        EasyMock.expect(restartPlan.restartTaskCount()).andReturn(3).anyTimes();
+        EasyMock.expect(restartPlan.totalTaskCount()).andReturn(3).anyTimes();
         EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         herder.assignment = PowerMock.createMock(ExtendedAssignment.class);
         EasyMock.expect(herder.assignment.connectors()).andReturn(Collections.emptyList()).anyTimes();
-        EasyMock.expect(herder.assignment.tasks()).andReturn(Collections.singletonList(taskId)).anyTimes();
+        // But only one task is assigned to this worker
+        EasyMock.expect(herder.assignment.tasks()).andReturn(Collections.singletonList(TASK0)).anyTimes();
 
-        worker.stopAndAwaitTasks(Collections.singletonList(taskId));
+        worker.stopAndAwaitTasks(Collections.singletonList(TASK0));
         PowerMock.expectLastCall();
 
-        herder.onRestart(taskId);
+        herder.onRestart(TASK0);
         EasyMock.expectLastCall();
 
         worker.startTask(EasyMock.eq(TASK0), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(),
@@ -1320,7 +1320,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testDoRestartConnectorAndTasksBoth() throws Exception {
+    public void testDoRestartConnectorAndTasksBoth() {
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
@@ -2366,7 +2366,7 @@ public class DistributedHerderTest {
         SessionKey initialKey = new SessionKey(EasyMock.mock(SecretKey.class), 0);
         ClusterConfigState snapshotWithKey =  new ClusterConfigState(2, initialKey, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
-            TASK_CONFIGS_MAP, Collections.<String>emptySet());
+            TASK_CONFIGS_MAP, Collections.emptySet());
         expectPostRebalanceCatchup(snapshotWithKey);
         // Second rebalance: poll indefinitely as worker is follower, so expiration still doesn't come into play
         member.poll(Long.MAX_VALUE);
@@ -2408,7 +2408,7 @@ public class DistributedHerderTest {
         SessionKey initialKey = new SessionKey(initialSecretKey, time.milliseconds());
         ClusterConfigState snapshotWithKey =  new ClusterConfigState(1, initialKey, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
-            TASK_CONFIGS_MAP, Collections.<String>emptySet());
+            TASK_CONFIGS_MAP, Collections.emptySet());
         expectPostRebalanceCatchup(snapshotWithKey);
         // First rebalance: poll for a limited time as worker is leader and must wake up for key expiration
         Capture<Long> firstPollTimeout = EasyMock.newCapture();

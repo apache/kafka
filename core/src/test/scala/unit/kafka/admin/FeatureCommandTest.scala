@@ -76,7 +76,7 @@ class FeatureCommandTest extends BaseRequestTest {
   def testDescribeFeaturesSuccess(): Unit = {
     updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
 
-    val initialDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", brokerList, "describe")))
+    val initialDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
     val expectedInitialDescribeOutputs = Seq(
       "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: -",
       "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: -"
@@ -86,9 +86,9 @@ class FeatureCommandTest extends BaseRequestTest {
       assertTrue(initialDescribeOutput.contains(expectedOutput))
     }
 
-    FeatureCommand.mainNoExit(Array("--bootstrap-server", brokerList, "upgrade",
+    FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "upgrade",
       "--feature", "feature_1", "--version", "3", "--feature", "feature_2", "--version", "5"))
-    val upgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", brokerList, "describe")))
+    val upgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
     val expectedUpgradeDescribeOutput = Seq(
       "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: 3",
       "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: 5"
@@ -97,9 +97,9 @@ class FeatureCommandTest extends BaseRequestTest {
       assertTrue(upgradeDescribeOutput.contains(expectedOutput))
     }
 
-    FeatureCommand.mainNoExit(Array("--bootstrap-server", brokerList, "downgrade",
+    FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "downgrade",
       "--feature", "feature_1", "--version", "2", "--feature", "feature_2", "--version", "2"))
-    val downgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", brokerList, "describe")))
+    val downgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
     val expectedFinalDescribeOutput = Seq(
       "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: 2",
       "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: 2"
