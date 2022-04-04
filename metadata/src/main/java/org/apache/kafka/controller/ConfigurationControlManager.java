@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
@@ -51,6 +52,8 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 
 
 public class ConfigurationControlManager {
+    public static final ConfigResource DEFAULT_NODE = new ConfigResource(Type.BROKER, "");
+
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
     private final KafkaConfigSchema configSchema;
@@ -58,13 +61,82 @@ public class ConfigurationControlManager {
     private final Optional<AlterConfigPolicy> alterConfigPolicy;
     private final ConfigurationValidator validator;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
+    private final Map<String, Object> staticConfig;
+    private final ConfigResource currentController;
 
-    ConfigurationControlManager(LogContext logContext,
-                                SnapshotRegistry snapshotRegistry,
-                                KafkaConfigSchema configSchema,
-                                Consumer<ConfigResource> existenceChecker,
-                                Optional<AlterConfigPolicy> alterConfigPolicy,
-                                ConfigurationValidator validator) {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+        private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;
+        private Consumer<ConfigResource> existenceChecker = __ -> { };
+        private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
+        private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
+        private Map<String, Object> staticConfig = Collections.emptyMap();
+        private int nodeId = 0;
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder setKafkaConfigSchema(KafkaConfigSchema configSchema) {
+            this.configSchema = configSchema;
+            return this;
+        }
+
+        Builder setExistenceChecker(Consumer<ConfigResource> existenceChecker) {
+            this.existenceChecker = existenceChecker;
+            return this;
+        }
+
+        Builder setAlterConfigPolicy(Optional<AlterConfigPolicy> alterConfigPolicy) {
+            this.alterConfigPolicy = alterConfigPolicy;
+            return this;
+        }
+
+        Builder setValidator(ConfigurationValidator validator) {
+            this.validator = validator;
+            return this;
+        }
+
+        Builder setStaticConfig(Map<String, Object> staticConfig) {
+            this.staticConfig = staticConfig;
+            return this;
+        }
+
+        Builder setNodeId(int nodeId) {
+            this.nodeId = nodeId;
+            return this;
+        }
+
+        ConfigurationControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            return new ConfigurationControlManager(
+                logContext,
+                snapshotRegistry,
+                configSchema,
+                existenceChecker,
+                alterConfigPolicy,
+                validator,
+                staticConfig,
+                nodeId);
+        }
+    }
+
+    private ConfigurationControlManager(LogContext logContext,
+            SnapshotRegistry snapshotRegistry,
+            KafkaConfigSchema configSchema,
+            Consumer<ConfigResource> existenceChecker,
+            Optional<AlterConfigPolicy> alterConfigPolicy,
+            ConfigurationValidator validator,
+            Map<String, Object> staticConfig,
+            int nodeId) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configSchema = configSchema;
@@ -72,6 +144,8 @@ public class ConfigurationControlManager {
         this.alterConfigPolicy = alterConfigPolicy;
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
+        this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
     }
 
     /**
@@ -353,6 +427,21 @@ public class ConfigurationControlManager {
 
     boolean uncleanLeaderElectionEnabledForTopic(String name) {
         return false; // TODO: support configuring unclean leader election.
+    }
+
+    Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {
+        return configSchema.resolveEffectiveTopicConfigs(staticConfig, clusterConfig(),
+            currentControllerConfig(), creationConfigs);
+    }
+
+    Map<String, String> clusterConfig() {
+        Map<String, String> result = configData.get(DEFAULT_NODE);
+        return (result == null) ? Collections.emptyMap() : result;
+    }
+
+    Map<String, String> currentControllerConfig() {
+        Map<String, String> result = configData.get(currentController);
+        return (result == null) ? Collections.emptyMap() : result;
     }
 
     class ConfigurationControlIterator implements Iterator<List<ApiMessageAndVersion>> {

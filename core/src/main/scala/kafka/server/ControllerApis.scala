@@ -29,7 +29,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
-import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE}
+import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
@@ -316,7 +316,9 @@ class ControllerApis(val requestChannel: RequestChannel,
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val future = createTopics(createTopicsRequest.data(),
         authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
-        names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity))
+        names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity),
+        names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
+            names, logIfDenied = false)(identity))
     future.whenComplete { (result, exception) =>
       requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
         if (exception != null) {
@@ -329,10 +331,12 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  def createTopics(request: CreateTopicsRequestData,
-                   hasClusterAuth: Boolean,
-                   getCreatableTopics: Iterable[String] => Set[String])
-                   : CompletableFuture[CreateTopicsResponseData] = {
+  def createTopics(
+    request: CreateTopicsRequestData,
+    hasClusterAuth: Boolean,
+    getCreatableTopics: Iterable[String] => Set[String],
+    getDescribableTopics: Iterable[String] => Set[String]
+  ): CompletableFuture[CreateTopicsResponseData] = {
     val topicNames = new util.HashSet[String]()
     val duplicateTopicNames = new util.HashSet[String]()
     request.topics().forEach { topicData =>
@@ -348,6 +352,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     } else {
       getCreatableTopics.apply(topicNames.asScala)
     }
+    val describableTopicNames = getDescribableTopics.apply(topicNames.asScala).asJava
     val effectiveRequest = request.duplicate()
     val iterator = effectiveRequest.topics().iterator()
     while (iterator.hasNext) {
@@ -357,7 +362,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         iterator.remove()
       }
     }
-    controller.createTopics(effectiveRequest).thenApply { response =>
+    controller.createTopics(effectiveRequest, describableTopicNames).thenApply { response =>
       duplicateTopicNames.forEach { name =>
         response.topics().add(new CreatableTopicResult().
           setName(name).
