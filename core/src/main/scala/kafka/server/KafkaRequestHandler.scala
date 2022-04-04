@@ -442,3 +442,7 @@ class BrokerTopicStats extends Logging {
     info("Broker and topic stats closed")
   }
 }
+
+object BrokerMetadataStats extends KafkaMetricsGroup {
+  val outgoingBytesRate: Meter = newMeter("MetadataOutgoingBytesPerSec", "bytes", TimeUnit.SECONDS)
+}

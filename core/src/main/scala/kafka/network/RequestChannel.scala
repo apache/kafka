@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network
-import kafka.server.{KafkaConfig, Observer}
+import kafka.server.{BrokerMetadataStats, KafkaConfig, Observer}
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
@@ -255,6 +255,10 @@ object RequestChannel extends Logging {
         m.responseBytesHist.update(responseBytes)
         m.messageConversionsTimeHist.foreach(_.update(Math.round(messageConversionsTimeMs)))
         m.tempMemoryBytesHist.foreach(_.update(temporaryMemoryBytes))
+      }
+
+      if (header.apiKey() == ApiKeys.METADATA) {
+        BrokerMetadataStats.outgoingBytesRate.mark(responseBytes)
       }
 
       // Records network handler thread usage. This is included towards the request quota for the

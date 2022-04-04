@@ -17,8 +17,8 @@
 
 package kafka.server
 
-import java.util.Optional
-
+import com.yammer.metrics.core.Meter
+import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.UnsupportedVersionException
@@ -30,6 +30,7 @@ import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
+import java.util.Optional
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -373,5 +374,24 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
 
     serverToShutdown.startup()
     checkMetadata(servers, servers.size)
+  }
+
+  @Test
+  def testMetadataOutgoingBytesMetric(): Unit = {
+    val response = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
+    // The returned value of response must be read.
+    // Otherwise, the subsequent lines in this test can get executed before a response is returned,
+    // which seems to be caused by scala optimizations.
+    assertTrue(!response.brokers().isEmpty)
+
+
+    val filteredMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter{case (name, _) =>
+      name.getMBeanName.contains("MetadataOutgoingBytesPerSec")
+    }
+    assertEquals(1, filteredMetrics.size)
+
+    val metadataOutgoingBytesMetric = filteredMetrics.headOption.get._2
+    assertTrue(metadataOutgoingBytesMetric.asInstanceOf[Meter].count() > 0)
   }
 }
