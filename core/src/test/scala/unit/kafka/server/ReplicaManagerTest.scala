@@ -1303,7 +1303,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchFromFollowerShouldNotRunPreferLeaderSelect(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, "kafka.server.MockReplicaSelector"))
+      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[MockReplicaSelector].getName))
     try {
       val leaderBrokerId = 0
       val followerBrokerId = 1
@@ -1340,7 +1340,7 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.isFired)
 
       // Expect not run the preferred read replica selection
-      assertEquals(0, replicaManager.replicaSelectorOpt.get.asInstanceOf[MockReplicaSelector].getTriggerSelectionCount)
+      assertEquals(0, replicaManager.replicaSelectorOpt.get.asInstanceOf[MockReplicaSelector].getSelectionCount)
 
       // Only leader will compute preferred replica
       assertTrue(consumerResult.assertFired.preferredReadReplica.isEmpty)
@@ -3770,16 +3770,12 @@ class ReplicaManagerTest {
 
 class MockReplicaSelector extends ReplicaSelector {
 
-  private val triggerSelectionCount = new AtomicLong()
+  private val selectionCount = new AtomicLong()
 
-  def getTriggerSelectionCount: Long = triggerSelectionCount.get
+  def getSelectionCount: Long = selectionCount.get
 
-  /**
-   * Select the preferred replica a client should use for fetching. If no replica is available, this will return an
-   * empty optional.
-   */
   override def select(topicPartition: TopicPartition, clientMetadata: ClientMetadata, partitionView: PartitionView): Optional[ReplicaView] = {
-    triggerSelectionCount.incrementAndGet()
+    selectionCount.incrementAndGet()
     Optional.of(partitionView.leader)
   }
 }
