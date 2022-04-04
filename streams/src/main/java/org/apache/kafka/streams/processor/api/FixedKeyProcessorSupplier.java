@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.api;
 
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 
 import java.util.function.Supplier;
