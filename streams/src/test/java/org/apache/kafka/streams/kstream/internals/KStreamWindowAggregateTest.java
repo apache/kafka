@@ -100,7 +100,7 @@ public class KStreamWindowAggregateTest {
     private boolean emitFinal;
 
     @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> getKeySchema() {
+    public static Collection<Object[]> getEmitStrategy() {
         return asList(new Object[][] {
             {StrategyType.ON_WINDOW_UPDATE, EmitStrategy.onWindowUpdate()},
             {StrategyType.ON_WINDOW_CLOSE, EmitStrategy.onWindowClose()}
@@ -546,6 +546,7 @@ public class KStreamWindowAggregateTest {
                 // Window close time is 15 when timestamp is 105
                 assertThat(outputTopic.readRecord(),
                     equalTo(new TestRecord<>("[k@5/15]", "+5+6", null, 6L)));
+                assertEmittedMetrics(driver, is(1.0));
             } else {
                 assertThat(outputTopic.readRecord(),
                     equalTo(new TestRecord<>("[k@95/105]", "+100", null, 100L)));
@@ -1078,5 +1079,33 @@ public class KStreamWindowAggregateTest {
         assertThat(driver.metrics().get(dropRateMetric).metricValue(), not(0.0));
         assertThat(driver.metrics().get(latenessMaxMetric).metricValue(), maxLateness);
         assertThat(driver.metrics().get(latenessAvgMetric).metricValue(), avgLateness);
+    }
+
+    private void assertEmittedMetrics(final TopologyTestDriver driver,
+                                      final Matcher<Object> emittedTotal) {
+
+        final MetricName emittedTotalMetric;
+        final MetricName emittedRateMetric;
+        emittedTotalMetric = new MetricName(
+            "emitted-records-total",
+            "stream-task-metrics",
+            "The total number of emitted records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        emittedRateMetric = new MetricName(
+            "emitted-records-rate",
+            "stream-task-metrics",
+            "The average number of emitted records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+
+        assertThat(driver.metrics().get(emittedTotalMetric).metricValue(), emittedTotal);
+        assertThat(driver.metrics().get(emittedRateMetric).metricValue(), not(0.0));
     }
 }

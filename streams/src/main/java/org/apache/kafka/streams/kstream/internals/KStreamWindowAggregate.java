@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -45,7 +46,10 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.emitFinalLatencySensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.emittedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
@@ -105,10 +109,13 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
         private TimestampedWindowStore<KIn, VAgg> windowStore;
         private TimestampedTupleForwarder<Windowed<KIn>, VAgg> tupleForwarder;
         private Sensor droppedRecordsSensor;
+        private Sensor emittedRecordsSensor;
+        private Sensor emitFinalLatencySensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
         private long lastEmitCloseTime = ConsumerRecord.NO_TIMESTAMP;
         private InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext;
         private final TimeTracker timeTracker = new TimeTracker();
+        private final Time time = Time.SYSTEM;
 
         @Override
         public void init(final ProcessorContext<Windowed<KIn>, Change<VAgg>> context) {
@@ -117,6 +124,8 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
+            emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(), metrics);
+            emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(), metrics);
             windowStore = context.getStateStore(storeName);
 
             if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
@@ -133,19 +142,20 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     sendOldValues);
             }
 
+            log.info("EmitStrategy=" + emitStrategy.type());
             // Restore last emit close time for ON_WINDOW_CLOSE strategy
             if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
                 final Long lastEmitTime = internalProcessorContext.processorMetadataForKey(storeName);
                 if (lastEmitTime != null) {
                     lastEmitCloseTime = lastEmitTime;
                 }
-                timeTracker.setEmitInterval(
-                    StreamsConfig.InternalConfig.getLong(
-                        context.appConfigs(),
-                        EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION,
-                        1000L
-                    )
+                final long emitInterval = StreamsConfig.InternalConfig.getLong(
+                    context.appConfigs(),
+                    EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION,
+                    1000L
                 );
+                timeTracker.setEmitInterval(emitInterval);
+                log.info("EmitInterval=" + emitInterval);
             }
         }
 
@@ -238,69 +248,74 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 }
             }
 
-            tryEmitFinalResult(record, closeTime);
+            maybeMeasureLatency(() -> tryEmitFinalResult(record, closeTime), time, emitFinalLatencySensor);
         }
 
         private void tryEmitFinalResult(final Record<KIn, VIn> record, final long closeTime) {
-            if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
-                final long now = internalProcessorContext.currentSystemTimeMs();
-                // Throttle emit frequency
-                if (now < timeTracker.nextTimeToEmit) {
-                    return;
-                }
-
-                // Schedule next emit time based on now to avoid the case that if system time jumps a lot,
-                // this can be triggered everytime
-                timeTracker.nextTimeToEmit = now;
-                timeTracker.advanceNextTimeToEmit();
-
-                // Close time does not progress
-                if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP && lastEmitCloseTime >= closeTime) {
-                    return;
-                }
-
-                final long emitWindowStart = closeTime - windows.size();
-                if (emitWindowStart < 0) {
-                    // If emitWindowStart is 0, it means first window closes since windowEndTime
-                    // is exclusive
-                    return;
-                }
-
-                // Because we only get here when emitWindowStart > 0 which means closeTime > windows.size()
-                // Since we set lastEmitCloseTime to closeTime before storing to processor metadata
-                // lastEmitCloseTime - windows.size() is always > 0
-                // Set lastEmitWindowStart to -1L if not set so that when we fetchAll, we fetch from 0L
-                final long lastEmitWindowStart = lastEmitCloseTime == ConsumerRecord.NO_TIMESTAMP ?
-                    -1L : lastEmitCloseTime - windows.size();
-
-                if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP) {
-                    final Map<Long, W> matchedCloseWindows = windows.windowsFor(emitWindowStart);
-                    final Map<Long, W> matchedEmitWindows = windows.windowsFor(lastEmitWindowStart);
-
-                    // Don't fetch store if the new emit window close time doesn't progress enough to cover next
-                    // window
-                    if (matchedCloseWindows.equals(matchedEmitWindows)) {
-                        log.debug("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}",
-                            lastEmitCloseTime, closeTime);
-                        return;
-                    }
-                }
-
-                final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
-                    .fetchAll(lastEmitWindowStart + 1, emitWindowStart);
-
-                while (windowToEmit.hasNext()) {
-                    final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
-                    tupleForwarder.maybeForward(
-                        record.withKey(kv.key)
-                            .withValue(new Change<>(kv.value.value(), null))
-                            .withTimestamp(kv.value.timestamp())
-                            .withHeaders(null)); // Don't set header
-                }
-
-                lastEmitCloseTime = closeTime;
-                internalProcessorContext.addProcessorMetadataKeyValue(storeName, closeTime);
+            if (emitStrategy.type() != StrategyType.ON_WINDOW_CLOSE) {
+                return;
             }
+
+            final long now = internalProcessorContext.currentSystemTimeMs();
+            // Throttle emit frequency
+            if (now < timeTracker.nextTimeToEmit) {
+                return;
+            }
+
+            // Schedule next emit time based on now to avoid the case that if system time jumps a lot,
+            // this can be triggered everytime
+            timeTracker.nextTimeToEmit = now;
+            timeTracker.advanceNextTimeToEmit();
+
+            // Close time does not progress
+            if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP && lastEmitCloseTime >= closeTime) {
+                return;
+            }
+
+            final long emitWindowStart = closeTime - windows.size();
+            if (emitWindowStart < 0) {
+                // If emitWindowStart is 0, it means first window closes since windowEndTime
+                // is exclusive
+                return;
+            }
+
+            // Because we only get here when emitWindowStart > 0 which means closeTime > windows.size()
+            // Since we set lastEmitCloseTime to closeTime before storing to processor metadata
+            // lastEmitCloseTime - windows.size() is always > 0
+            // Set lastEmitWindowStart to -1L if not set so that when we fetchAll, we fetch from 0L
+            final long lastEmitWindowStart = lastEmitCloseTime == ConsumerRecord.NO_TIMESTAMP ?
+                -1L : lastEmitCloseTime - windows.size();
+
+            if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP) {
+                final Map<Long, W> matchedCloseWindows = windows.windowsFor(emitWindowStart);
+                final Map<Long, W> matchedEmitWindows = windows.windowsFor(lastEmitWindowStart);
+
+                // Don't fetch store if the new emit window close time doesn't progress enough to cover next
+                // window
+                if (matchedCloseWindows.equals(matchedEmitWindows)) {
+                    log.debug("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}",
+                        lastEmitCloseTime, closeTime);
+                    return;
+                }
+            }
+
+            final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
+                .fetchAll(lastEmitWindowStart + 1, emitWindowStart);
+
+            int emittedCount = 0;
+            while (windowToEmit.hasNext()) {
+                emittedCount++;
+                final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+                tupleForwarder.maybeForward(
+                    record.withKey(kv.key)
+                        .withValue(new Change<>(kv.value.value(), null))
+                        .withTimestamp(kv.value.timestamp())
+                        .withHeaders(null)); // Don't set header
+            }
+            emittedRecordsSensor.record(emittedCount);
+
+            lastEmitCloseTime = closeTime;
+            internalProcessorContext.addProcessorMetadataKeyValue(storeName, closeTime);
         }
     }
 

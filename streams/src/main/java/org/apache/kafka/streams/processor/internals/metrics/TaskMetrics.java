@@ -27,6 +27,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class TaskMetrics {
@@ -72,6 +73,12 @@ public class TaskMetrics {
     private static final String DROPPED_RECORDS_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + DROPPED_RECORDS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
+    private static final String EMITTED_RECORDS = "emitted-records";
+    private static final String EMITTED_RECORDS_DESCRIPTION = "emitted records";
+    private static final String EMITTED_RECORDS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + EMITTED_RECORDS_DESCRIPTION;
+    private static final String EMITTED_RECORDS_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + EMITTED_RECORDS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
     private static final String PROCESS = "process";
     private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
     private static final String PROCESS_DESCRIPTION = "calls to process";
@@ -79,6 +86,11 @@ public class TaskMetrics {
     private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_RATIO_DESCRIPTION = "The fraction of time the thread spent " +
         "on processing this task among all assigned active tasks";
+
+    private static final String EMIT_FINAL_LATENCY = "emit-final" + LATENCY_SUFFIX;
+    private static final String EMIT_FINAL_DESCRIPTION = "calls to emit final";
+    private static final String EMIT_FINAL_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + EMIT_FINAL_DESCRIPTION;
+    private static final String EMIT_FINAL_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + EMIT_FINAL_DESCRIPTION;
 
     private static final String BUFFER_COUNT = "buffer-count";
     private static final String NUM_BUFFERED_RECORDS_DESCRIPTION = "The count of buffered records that are polled " +
@@ -98,6 +110,20 @@ public class TaskMetrics {
             PROCESS_LATENCY,
             PROCESS_AVG_LATENCY_DESCRIPTION,
             PROCESS_MAX_LATENCY_DESCRIPTION,
+            RecordingLevel.DEBUG,
+            streamsMetrics
+        );
+    }
+
+    public static Sensor emitFinalLatencySensor(final String threadId,
+                                              final String taskId,
+                                              final StreamsMetricsImpl streamsMetrics) {
+        return avgAndMaxSensor(
+            threadId,
+            taskId,
+            EMIT_FINAL_LATENCY,
+            EMIT_FINAL_AVG_LATENCY_DESCRIPTION,
+            EMIT_FINAL_MAX_LATENCY_DESCRIPTION,
             RecordingLevel.DEBUG,
             streamsMetrics
         );
@@ -239,6 +265,21 @@ public class TaskMetrics {
             RecordingLevel.INFO,
             streamsMetrics
         );
+    }
+
+    public static Sensor emittedRecordsSensor(final String threadId,
+                                              final String taskId,
+                                              final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, EMITTED_RECORDS, RecordingLevel.INFO);
+        addRateOfSumAndSumMetricsToSensor(
+            sensor,
+            TASK_LEVEL_GROUP,
+            streamsMetrics.taskLevelTagMap(threadId, taskId),
+            EMITTED_RECORDS,
+            EMITTED_RECORDS_RATE_DESCRIPTION,
+            EMITTED_RECORDS_TOTAL_DESCRIPTION
+        );
+        return sensor;
     }
 
     private static Sensor invocationRateAndCountSensor(final String threadId,
