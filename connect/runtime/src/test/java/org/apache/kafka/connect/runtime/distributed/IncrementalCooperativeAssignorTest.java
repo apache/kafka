@@ -47,7 +47,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -89,7 +88,7 @@ public class IncrementalCooperativeAssignorTest {
     @Parameter
     public short protocolVersion;
 
-    private ClusterConfigState configState;
+    private Map<String, Integer> connectors;
     private Map<String, ExtendedWorkerState> memberConfigs;
     private long offset;
     private String leader;
@@ -105,7 +104,9 @@ public class IncrementalCooperativeAssignorTest {
         leader = "worker1";
         leaderUrl = expectedLeaderUrl(leader);
         offset = 10;
-        configState = clusterConfigState(offset, 2, 4);
+        connectors = new HashMap<>();
+        addNewConnector("connector1", 4);
+        addNewConnector("connector2", 4);
         memberConfigs = memberConfigs(leader, offset, "worker1");
         time = Time.SYSTEM;
         rebalanceDelay = DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT;
@@ -127,7 +128,7 @@ public class IncrementalCooperativeAssignorTest {
 
     @Test
     public void testTaskAssignmentWhenWorkerJoins() {
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
@@ -167,7 +168,7 @@ public class IncrementalCooperativeAssignorTest {
         time = new MockTime();
         initAssignor();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
@@ -214,7 +215,7 @@ public class IncrementalCooperativeAssignorTest {
         time = new MockTime();
         initAssignor();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
@@ -272,7 +273,7 @@ public class IncrementalCooperativeAssignorTest {
         time = new MockTime();
         initAssignor();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 3 workers and 2 connectors configured but not yet assigned
@@ -316,7 +317,7 @@ public class IncrementalCooperativeAssignorTest {
         time = new MockTime();
         initAssignor();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 3 workers and 2 connectors configured but not yet assigned
@@ -372,7 +373,7 @@ public class IncrementalCooperativeAssignorTest {
         time = new MockTime();
         initAssignor();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doThrow(new RuntimeException("Unable to send computed assignment with SyncGroupRequest"))
                 .when(assignor).serializeAssignments(assignmentsCapture.capture());
 
@@ -404,7 +405,7 @@ public class IncrementalCooperativeAssignorTest {
         time = new MockTime();
         initAssignor();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
@@ -416,7 +417,7 @@ public class IncrementalCooperativeAssignorTest {
         assertTaskAllocations(4, 4);
         assertBalancedAndCompleteAllocation();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doThrow(new RuntimeException("Unable to send computed assignment with SyncGroupRequest"))
                 .when(assignor).serializeAssignments(assignmentsCapture.capture());
 
@@ -454,7 +455,7 @@ public class IncrementalCooperativeAssignorTest {
         time = new MockTime();
         initAssignor();
 
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
@@ -497,8 +498,8 @@ public class IncrementalCooperativeAssignorTest {
 
     @Test
     public void testTaskAssignmentWhenConnectorsAreDeleted() {
-        configState = clusterConfigState(offset, 3, 4);
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        addNewConnector("connector3", 4);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
@@ -511,8 +512,9 @@ public class IncrementalCooperativeAssignorTest {
         assertBalancedAndCompleteAllocation();
 
         // Second assignment with an updated config state that reflects removal of a connector
-        configState = clusterConfigState(offset + 1, 2, 4);
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        removeConnector("connector3");
+        offset++;
+        updateConfigSnapshot();
         performStandardRebalance();
         assertDelay(0);
         assertConnectorAllocations(1, 1);
@@ -937,7 +939,7 @@ public class IncrementalCooperativeAssignorTest {
 
     @Test
     public void testTaskAssignmentWhenTasksDuplicatedInWorkerAssignment() {
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
@@ -979,7 +981,7 @@ public class IncrementalCooperativeAssignorTest {
 
     @Test
     public void testDuplicatedAssignmentHandleWhenTheDuplicatedAssignmentsDeleted() {
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        updateConfigSnapshot();
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
@@ -991,8 +993,8 @@ public class IncrementalCooperativeAssignorTest {
         assertBalancedAndCompleteAllocation();
 
         // Delete connector1
-        configState = clusterConfigState(offset, 2, 1, 4);
-        when(coordinator.configSnapshot()).thenReturn(configState);
+        removeConnector("connector1");
+        updateConfigSnapshot();
 
         // Second assignment with a second worker with duplicate assignment joining and the duplicated assignment is deleted at the same time
         addNewWorker("worker2", newConnectors(1, 2), newTasks("connector1", 0, 4));
@@ -1126,42 +1128,49 @@ public class IncrementalCooperativeAssignorTest {
                 .collect(Collectors.toList());
     }
 
-    private static ClusterConfigState clusterConfigState(long offset,
-                                                         int connectorNum,
-                                                         int taskNum) {
-        return clusterConfigState(offset, 1, connectorNum, taskNum);
+    private void addNewConnector(String connector, int taskCount) {
+        assertNull(
+                "Connector " + connector + " already exists",
+                connectors.put(connector, taskCount)
+        );
     }
 
-    private static ClusterConfigState clusterConfigState(long offset,
-                                                         int connectorStart,
-                                                         int connectorNum,
-                                                         int taskNum) {
-        int connectorNumEnd = connectorStart + connectorNum - 1;
-
-        Map<String, Integer> connectorTaskCounts = fillMap(connectorStart, connectorNumEnd, i -> "connector" + i, () -> taskNum);
-        Map<String, Map<String, String>> connectorConfigs = fillMap(connectorStart, connectorNumEnd, i -> "connector" + i, HashMap::new);
-        Map<String, TargetState> connectorTargetStates = fillMap(connectorStart, connectorNumEnd, i -> "connector" + i, () -> TargetState.STARTED);
-        Map<ConnectorTaskId, Map<String, String>> taskConfigs = fillMap(
-                0,
-                connectorNum * taskNum,
-                i -> new ConnectorTaskId("connector" + i / connectorNum + 1, i),
-                HashMap::new
+    private void removeConnector(String connector) {
+        assertNotNull(
+                "Connector " + connector + " does not exist",
+                connectors.remove(connector)
         );
+    }
 
+    private void updateConfigSnapshot() {
+        when(coordinator.configSnapshot()).thenReturn(configState());
+    }
+
+    private ClusterConfigState configState() {
+        Map<String, Integer> taskCounts = new HashMap<>(connectors);
+        Map<String, Map<String, String>> connectorConfigs = taskCounts.keySet().stream().collect(Collectors.toMap(
+                Function.identity(),
+                connector -> Collections.emptyMap()
+        ));
+        Map<String, TargetState> targetStates = taskCounts.keySet().stream().collect(Collectors.toMap(
+                Function.identity(),
+                connector -> TargetState.STARTED
+        ));
+        Map<ConnectorTaskId, Map<String, String>> taskConfigs = taskCounts.entrySet().stream()
+                .flatMap(e -> IntStream.range(0, e.getValue()).mapToObj(i -> new ConnectorTaskId(e.getKey(), i)))
+                .collect(Collectors.toMap(
+                        Function.identity(),
+                        connectorTaskId -> Collections.emptyMap()
+                ));
         return new ClusterConfigState(
                 offset,
                 null,
-                connectorTaskCounts,
+                taskCounts,
                 connectorConfigs,
-                connectorTargetStates,
+                targetStates,
                 taskConfigs,
-                Collections.emptySet());
-    }
-
-    private static <K, V> Map<K, V> fillMap(int start, int end, Function<Integer, K> key, Supplier<V> value) {
-        return IntStream.range(start, end + 1)
-                .boxed()
-                .collect(Collectors.toMap(key, i -> value.get()));
+                Collections.emptySet()
+        );
     }
 
     private Map<String, ExtendedWorkerState> memberConfigs(String givenLeader, long givenOffset, String... workers) {
@@ -1347,19 +1356,23 @@ public class IncrementalCooperativeAssignorTest {
         List<String> allAssignedConnectors = extractFromAssignments(memberConfigs, e -> e.assignment().connectors());
         assertEquals(
                 "The set of connectors assigned across the cluster does not match the set of connectors in the config topic",
-                configState.connectors(),
+                connectors.keySet(),
                 new HashSet<>(allAssignedConnectors)
         );
 
         Map<String, List<ConnectorTaskId>> allAssignedTasks = extractFromAssignments(memberConfigs, e -> e.assignment().tasks()).stream()
                 .collect(Collectors.groupingBy(ConnectorTaskId::connector, Collectors.toList()));
-        configState.connectors().forEach(connector ->
+
+        connectors.forEach((connector, taskCount) -> {
+            Set<ConnectorTaskId> expectedTasks = IntStream.range(0, taskCount)
+                    .mapToObj(i -> new ConnectorTaskId(connector, i))
+                    .collect(Collectors.toSet());
             assertEquals(
                     "The set of tasks assigned across the cluster for connector " + connector + " does not match the set of tasks in the config topic",
-                    new HashSet<>(configState.tasks(connector)),
+                    expectedTasks,
                     new HashSet<>(allAssignedTasks.get(connector))
-            )
-        );
+            );
+        });
     }
 
     private void verifyCoordinatorInteractions() {
