@@ -38,7 +38,7 @@ class ReplicaFetcherThread(name: String,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
                            quota: ReplicaQuota,
-                           fetchSessionHandler: FetchSessionHandler,
+                           private[server] val fetchSessionHandler: FetchSessionHandler,
                            logPrefix: String)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,

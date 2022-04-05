@@ -11,7 +11,7 @@ import scala.collection.Map
 
 trait LeaderEndPoint extends Logging {
   val brokerConfig: KafkaConfig
-  val endpoint: BlockingSend = null // setting to null since only RemoteLeaderEndPoint needs to override
+  val endpoint: BlockingSend = null
 
   type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
