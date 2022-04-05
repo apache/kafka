@@ -431,7 +431,7 @@ object DumpLogSegments {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(5 * 1024 * 1024)
-    val maxBytesOpt = parser.accepts("max-bytes", "Limit the amount of total batches in bytes avoiding reading the whole file(s).")
+    val maxBytesOpt = parser.accepts("max-bytes", "Limit the amount of total batches read in bytes avoiding reading the whole .log file(s).")
        .withRequiredArg
        .describedAs("size")
        .ofType(classOf[java.lang.Integer])
