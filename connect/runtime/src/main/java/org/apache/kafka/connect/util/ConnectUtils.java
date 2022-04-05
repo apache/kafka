@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collector;
@@ -172,16 +173,16 @@ public final class ConnectUtils {
         ));
     }
 
-    public static <I> List<I> combineCollections(Collection<Collection<I>> collections) {
+    public static <I> List<I> combineCollections(Collection<? extends Collection<I>> collections) {
         return combineCollections(collections, Function.identity());
     }
 
-    public static <I, T> List<T> combineCollections(Collection<I> collection, Function<I, Collection<T>> extractCollection) {
+    public static <I, T> List<T> combineCollections(Collection<? extends I> collection, Function<I, Collection<T>> extractCollection) {
         return combineCollections(collection, extractCollection, Collectors.toList());
     }
 
     public static <I, T, C> C combineCollections(
-            Collection<I> collection,
+            Collection<? extends I> collection,
             Function<I, Collection<T>> extractCollection,
             Collector<T, ?, C> collector
     ) {
@@ -189,6 +190,16 @@ public final class ConnectUtils {
                 .map(extractCollection)
                 .flatMap(Collection::stream)
                 .collect(collector);
+    }
+
+    public static <E> Set<E> duplicatedElements(Collection<E> collection) {
+        return collection.stream()
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+                .entrySet()
+                .stream()
+                .filter(e -> e.getValue() > 1)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
     }
 
 }

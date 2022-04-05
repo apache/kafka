@@ -43,7 +43,7 @@ public class WorkerTestUtils {
 
     public WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
                                   int taskStart, int taskNum) {
-        return new WorkerLoad.Builder(worker).with(
+        return new WorkerLoad.Builder(worker).withCopies(
                 newConnectors(connectorStart, connectorStart + connectorNum),
                 newTasks(taskStart, taskStart + taskNum)).build();
     }

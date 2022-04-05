@@ -1315,6 +1315,10 @@ public final class Utils {
         return result;
     }
 
+    public static <E> Set<E> intersection(final Collection<E> first, final Collection<E> second) {
+        return intersection(HashSet::new, new HashSet<>(first), new HashSet<>(second));
+    }
+
     @SafeVarargs
     public static <E> Set<E> intersection(final Supplier<Set<E>> constructor, final Set<E> first, final Set<E>... set) {
         final Set<E> result = constructor.get();

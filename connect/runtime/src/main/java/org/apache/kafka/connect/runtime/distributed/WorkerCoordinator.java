@@ -31,14 +31,13 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
@@ -379,9 +378,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         }
     }
 
-    public static <K, V> Map<V, K> invertAssignment(Map<K, Collection<V>> assignment) {
+    public static <K, V> Map<V, K> invertAssignment(Map<K, ? extends Collection<V>> assignment) {
         Map<V, K> inverted = new HashMap<>();
-        for (Map.Entry<K, Collection<V>> assignmentEntry : assignment.entrySet()) {
+        for (Map.Entry<K, ? extends Collection<V>> assignmentEntry : assignment.entrySet()) {
             K key = assignmentEntry.getKey();
             for (V value : assignmentEntry.getValue())
                 inverted.put(value, key);
@@ -395,8 +394,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         private final Map<ConnectorTaskId, String> taskOwners;
 
         public LeaderState(Map<String, ExtendedWorkerState> allMembers,
-                           Map<String, Collection<String>> connectorAssignment,
-                           Map<String, Collection<ConnectorTaskId>> taskAssignment) {
+                           Map<String, ? extends Collection<String>> connectorAssignment,
+                           Map<String, ? extends Collection<ConnectorTaskId>> taskAssignment) {
             this.allMembers = allMembers;
             this.connectorOwners = invertAssignment(connectorAssignment);
             this.taskOwners = invertAssignment(taskAssignment);
@@ -418,77 +417,15 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     }
 
-    public static class ConnectorsAndTasks {
-        public static final ConnectorsAndTasks EMPTY =
-                new ConnectorsAndTasks(Collections.emptyList(), Collections.emptyList());
-
-        private final Collection<String> connectors;
-        private final Collection<ConnectorTaskId> tasks;
-
-        private ConnectorsAndTasks(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
-            this.connectors = connectors;
-            this.tasks = tasks;
-        }
-
-        public static class Builder {
-            private Collection<String> withConnectors;
-            private Collection<ConnectorTaskId> withTasks;
-
-            public Builder() {
-            }
-
-            public ConnectorsAndTasks.Builder withCopies(Collection<String> connectors,
-                                                         Collection<ConnectorTaskId> tasks) {
-                withConnectors = new ArrayList<>(connectors);
-                withTasks = new ArrayList<>(tasks);
-                return this;
-            }
-
-            public ConnectorsAndTasks.Builder with(Collection<String> connectors,
-                                                   Collection<ConnectorTaskId> tasks) {
-                withConnectors = new ArrayList<>(connectors);
-                withTasks = new ArrayList<>(tasks);
-                return this;
-            }
-
-            public ConnectorsAndTasks build() {
-                return new ConnectorsAndTasks(
-                        withConnectors != null ? withConnectors : new ArrayList<>(),
-                        withTasks != null ? withTasks : new ArrayList<>());
-            }
-        }
-
-        public Collection<String> connectors() {
-            return connectors;
-        }
-
-        public Collection<ConnectorTaskId> tasks() {
-            return tasks;
-        }
-
-        public int size() {
-            return connectors.size() + tasks.size();
-        }
-
-        public boolean isEmpty() {
-            return connectors.isEmpty() && tasks.isEmpty();
-        }
-
-        @Override
-        public String toString() {
-            return "{ connectorIds=" + connectors + ", taskIds=" + tasks + '}';
-        }
-    }
-
     public static class WorkerLoad {
         private final String worker;
-        private final Collection<String> connectors;
-        private final Collection<ConnectorTaskId> tasks;
+        private final Set<String> connectors;
+        private final Set<ConnectorTaskId> tasks;
 
         private WorkerLoad(
                 String worker,
-                Collection<String> connectors,
-                Collection<ConnectorTaskId> tasks
+                Set<String> connectors,
+                Set<ConnectorTaskId> tasks
         ) {
             this.worker = worker;
             this.connectors = connectors;
@@ -497,35 +434,36 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
         public static class Builder {
             private final String withWorker;
-            private Collection<String> withConnectors;
-            private Collection<ConnectorTaskId> withTasks;
+            private Set<String> withConnectors;
+            private Set<ConnectorTaskId> withTasks;
 
             public Builder(String worker) {
                 this.withWorker = Objects.requireNonNull(worker, "worker cannot be null");
             }
 
-            public WorkerLoad.Builder withCopies(Collection<String> connectors,
-                                                 Collection<ConnectorTaskId> tasks) {
-                withConnectors = new ArrayList<>(
+            public WorkerLoad.Builder withCopies(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
+                withConnectors = new LinkedHashSet<>(
                         Objects.requireNonNull(connectors, "connectors may be empty but not null"));
-                withTasks = new ArrayList<>(
+                withTasks = new LinkedHashSet<>(
                         Objects.requireNonNull(tasks, "tasks may be empty but not null"));
                 return this;
             }
 
-            public WorkerLoad.Builder with(Collection<String> connectors,
-                                           Collection<ConnectorTaskId> tasks) {
-                withConnectors = Objects.requireNonNull(connectors,
-                        "connectors may be empty but not null");
+            public WorkerLoad.Builder with(Set<String> connectors, Set<ConnectorTaskId> tasks) {
+                withConnectors = Objects.requireNonNull(connectors, "connectors may be empty but not null");
                 withTasks = Objects.requireNonNull(tasks, "tasks may be empty but not null");
                 return this;
+            }
+
+            public WorkerLoad.Builder with(ConnectorsAndTasks connectorsAndTasks) {
+                return withCopies(connectorsAndTasks.connectors(), connectorsAndTasks.tasks());
             }
 
             public WorkerLoad build() {
                 return new WorkerLoad(
                         withWorker,
-                        withConnectors != null ? withConnectors : new ArrayList<>(),
-                        withTasks != null ? withTasks : new ArrayList<>());
+                        withConnectors != null ? withConnectors : new LinkedHashSet<>(),
+                        withTasks != null ? withTasks : new LinkedHashSet<>());
             }
         }
 
@@ -533,11 +471,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             return worker;
         }
 
-        public Collection<String> connectors() {
+        public Set<String> connectors() {
             return connectors;
         }
 
-        public Collection<ConnectorTaskId> tasks() {
+        public Set<ConnectorTaskId> tasks() {
             return tasks;
         }
 
@@ -563,24 +501,6 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
         public boolean isEmpty() {
             return connectors.isEmpty() && tasks.isEmpty();
-        }
-
-        public static Comparator<WorkerLoad> connectorComparator() {
-            return (left, right) -> {
-                int res = left.connectors.size() - right.connectors.size();
-                return res != 0 ? res : left.worker == null
-                                        ? right.worker == null ? 0 : -1
-                                        : left.worker.compareTo(right.worker);
-            };
-        }
-
-        public static Comparator<WorkerLoad> taskComparator() {
-            return (left, right) -> {
-                int res = left.tasks.size() - right.tasks.size();
-                return res != 0 ? res : left.worker == null
-                                        ? right.worker == null ? 0 : -1
-                                        : left.worker.compareTo(right.worker);
-            };
         }
 
         @Override
