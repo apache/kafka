@@ -184,7 +184,7 @@ public class TransactionManager {
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
         private long lastAckedOffset;
 
-        private final Comparator<ProducerBatch> producerBatchComparator = (b1, b2) -> {
+        private static final Comparator<ProducerBatch> PRODUCER_BATCH_COMPARATOR = (b1, b2) -> {
             if (b1.baseSequence() < b2.baseSequence()) return -1;
             else if (b1.baseSequence() > b2.baseSequence()) return 1;
             else return b1.equals(b2) ? 0 : 1;
@@ -195,11 +195,11 @@ public class TransactionManager {
             this.nextSequence = 0;
             this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
             this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
-            this.inflightBatchesBySequence = new TreeSet<>(producerBatchComparator);
+            this.inflightBatchesBySequence = new TreeSet<>(PRODUCER_BATCH_COMPARATOR);
         }
 
         void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
-            TreeSet<ProducerBatch> newInflights = new TreeSet<>(producerBatchComparator);
+            TreeSet<ProducerBatch> newInflights = new TreeSet<>(PRODUCER_BATCH_COMPARATOR);
             for (ProducerBatch inflightBatch : inflightBatchesBySequence) {
                 resetSequence.accept(inflightBatch);
                 newInflights.add(inflightBatch);

@@ -680,13 +680,15 @@ public class TransactionManagerTest {
         initializeIdempotentProducerId(producerId, epoch);
 
         Metrics metrics = new Metrics(time);
+        final int requestTimeout = 10000;
+        final int deliveryTimeout = 15000;
 
         RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L,
-                15000, metrics, "", time, apiVersions, transactionManager,
+                deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
                 new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
 
         Sender sender = new Sender(logContext, this.client, this.metadata, accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, 10000,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, requestTimeout,
                 0, transactionManager, apiVersions);
 
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
@@ -696,7 +698,7 @@ public class TransactionManagerTest {
         sender.runOnce();
         assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
 
-        time.sleep(10000); // request time out
+        time.sleep(requestTimeout);
         sender.runOnce();
         assertEquals(0, client.inFlightRequestCount());
         assertTrue(transactionManager.hasInflightBatches(tp0));
@@ -707,9 +709,15 @@ public class TransactionManagerTest {
         assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
 
         time.sleep(5000); // delivery time out
-        sender.runOnce(); // expired in accumulator
+        sender.runOnce();
+
+        // The retried request will remain inflight until the request timeout
+        // is reached even though the delivery timeout has expired and the
+        // future has completed exceptionally.
+        assertTrue(responseFuture1.isDone());
+        TestUtils.assertFutureThrows(responseFuture1, TimeoutException.class);
         assertFalse(transactionManager.hasInFlightRequest());
-        assertEquals(1, client.inFlightRequestCount()); // not reaching request timeout, so still in flight
+        assertEquals(1, client.inFlightRequestCount());
 
         sender.runOnce(); // bump the epoch
         assertEquals(epoch + 1, transactionManager.producerIdAndEpoch().epoch);
@@ -725,7 +733,6 @@ public class TransactionManagerTest {
         time.sleep(5000); // request time out again
         sender.runOnce();
         assertTrue(transactionManager.hasInflightBatches(tp0)); // the latter batch failed and retried
-        assertTrue(responseFuture1.isDone());
         assertFalse(responseFuture2.isDone());
     }
 
