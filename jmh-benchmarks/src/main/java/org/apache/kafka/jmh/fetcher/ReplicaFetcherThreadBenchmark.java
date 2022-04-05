@@ -28,19 +28,7 @@ import kafka.log.Defaults;
 import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
-import kafka.server.BrokerTopicStats;
-import kafka.server.FailedPartitions;
-import kafka.server.InitialFetchState;
-import kafka.server.KafkaConfig;
-import kafka.server.LogDirFailureChannel;
-import kafka.server.MetadataCache;
-import kafka.server.OffsetAndEpoch;
-import kafka.server.OffsetTruncationState;
-import kafka.server.QuotaFactory;
-import kafka.server.ReplicaFetcherThread;
-import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
+import kafka.server.*;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
@@ -51,6 +39,7 @@ import kafka.utils.MockTime;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
 import kafka.zk.KafkaZkClient;
+import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -67,6 +56,7 @@ import org.apache.kafka.common.record.RecordsSend;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.mockito.Mockito;
@@ -289,13 +279,48 @@ public class ReplicaFetcherThreadBenchmark {
                                   Pool<TopicPartition,
                                   Partition> partitions) {
             super("name",
-                    3,
+                    new RemoteLeaderEndPoint(
+                            new ReplicaFetcherBlockingSend(
+                                    new BrokerEndPoint(3, "host", 3000),
+                                    config,
+                                    new Metrics(),
+                                    Time.SYSTEM,
+                                    3,
+                                    String.format("broker-%d-fetcher-%d", 3, 3),
+                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3))
+                            ),
+                            new FetchSessionHandler(
+                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
+                            config
+                    ) {
+                        @Override
+                        public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
+                            return 0;
+                        }
+
+                        @Override
+                        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
+                            scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
+                            Iterator<TopicPartition> iterator = partitions.keys().iterator();
+                            while (iterator.hasNext()) {
+                                TopicPartition tp = iterator.next();
+                                endOffsets.put(tp, new EpochEndOffset()
+                                        .setPartition(tp.partition())
+                                        .setErrorCode(Errors.NONE.code())
+                                        .setLeaderEpoch(0)
+                                        .setEndOffset(100));
+                            }
+                            return endOffsets;
+                        }
+
+                        @Override
+                        public Map<TopicPartition, FetchResponseData.PartitionData> fetch(FetchRequest.Builder fetchRequest) {
+                            return new scala.collection.mutable.HashMap<>();
+                        }
+                    },
                     new BrokerEndPoint(3, "host", 3000),
-                    config,
                     new FailedPartitions(),
                     replicaManager,
-                    new Metrics(),
-                    Time.SYSTEM,
                     new ReplicaQuota() {
                         @Override
                         public boolean isQuotaExceeded() {
@@ -311,8 +336,11 @@ public class ReplicaFetcherThreadBenchmark {
                             return false;
                         }
                     },
-                    Option.empty());
-            
+                    new FetchSessionHandler(
+                            new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
+                    String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)
+            );
+
             pool = partitions;
         }
 
@@ -345,31 +373,6 @@ public class ReplicaFetcherThreadBenchmark {
         public Option<LogAppendInfo> processPartitionData(TopicPartition topicPartition, long fetchOffset,
                                                           FetchResponseData.PartitionData partitionData) {
             return Option.empty();
-        }
-
-        @Override
-        public long fetchEarliestOffsetFromLeader(TopicPartition topicPartition, int currentLeaderEpoch) {
-            return 0;
-        }
-
-        @Override
-        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
-            scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
-            Iterator<TopicPartition> iterator = partitions.keys().iterator();
-            while (iterator.hasNext()) {
-                TopicPartition tp = iterator.next();
-                endOffsets.put(tp, new EpochEndOffset()
-                    .setPartition(tp.partition())
-                    .setErrorCode(Errors.NONE.code())
-                    .setLeaderEpoch(0)
-                    .setEndOffset(100));
-            }
-            return endOffsets;
-        }
-
-        @Override
-        public Map<TopicPartition, FetchResponseData.PartitionData> fetchFromLeader(FetchRequest.Builder fetchRequest) {
-            return new scala.collection.mutable.HashMap<>();
         }
     }
 }
