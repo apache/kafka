@@ -773,15 +773,18 @@ class AbstractFetcherThreadTest {
       override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
         val fetchedEpochs = super.fetchEpochEndOffsets(partitions)
         if (!fetchEpochsFromLeaderOnce) {
-          // leader epoch changes while fetching epochs from leader
-          fetcherOpt.get.removePartitions(Set(partition))
-          fetcherOpt.get.setReplicaState(partition, PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
-          fetcherOpt.get.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = nextLeaderEpochOnFollower)), forceTruncation = true)
+          responseCallback.foreach(_.apply())
           fetchEpochsFromLeaderOnce = true
         }
         fetchedEpochs
       }
     })
+
+    def changeLeaderEpochWhileFetchEpoch(): Unit = {
+      fetcher.removePartitions(Set(partition))
+      fetcher.setReplicaState(partition, PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
+      fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = nextLeaderEpochOnFollower)), forceTruncation = true)
+    }
 
     fetcher.setReplicaState(partition, PartitionState(leaderEpoch = initialLeaderEpochOnFollower))
     fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = initialLeaderEpochOnFollower)), forceTruncation = true)
@@ -790,7 +793,7 @@ class AbstractFetcherThreadTest {
       mkBatch(baseOffset = 0, leaderEpoch = initialLeaderEpochOnFollower, new SimpleRecord("c".getBytes)))
     val leaderState = PartitionState(leaderLog, leaderEpochOnLeader, highWatermark = 0L)
     fetcher.mockLeader.setLeaderState(partition, leaderState)
-    fetcher.mockLeader.setFetcher(fetcher)
+    fetcher.mockLeader.setResponseCallback(changeLeaderEpochWhileFetchEpoch)
 
     // first round of truncation
     fetcher.doWork()
@@ -820,13 +823,17 @@ class AbstractFetcherThreadTest {
     val fetcher = new MockFetcherThread(new MockLeaderEndPoint(brokerConfig) {
       override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
         val fetchedEpochs = super.fetchEpochEndOffsets(partitions)
-        // leader epoch changes while fetching epochs from leader
-        // at the same time, the replica fetcher manager removes the partition
-        fetcherOpt.get.removePartitions(Set(partition))
-        fetcherOpt.get.setReplicaState(partition, PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
+        responseCallback.foreach(_.apply())
         fetchedEpochs
       }
     })
+
+    def changeLeaderEpochDuringFetchEpoch(): Unit = {
+      // leader epoch changes while fetching epochs from leader
+      // at the same time, the replica fetcher manager removes the partition
+      fetcher.removePartitions(Set(partition))
+      fetcher.setReplicaState(partition, PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
+    }
 
     fetcher.setReplicaState(partition, PartitionState(leaderEpoch = initialLeaderEpochOnFollower))
     fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = initialLeaderEpochOnFollower)))
@@ -835,7 +842,7 @@ class AbstractFetcherThreadTest {
       mkBatch(baseOffset = 0, leaderEpoch = initialLeaderEpochOnFollower, new SimpleRecord("c".getBytes)))
     val leaderState = PartitionState(leaderLog, leaderEpochOnLeader, highWatermark = 0L)
     fetcher.mockLeader.setLeaderState(partition, leaderState)
-    fetcher.mockLeader.setFetcher(fetcher)
+    fetcher.mockLeader.setResponseCallback(changeLeaderEpochDuringFetchEpoch)
 
     // first round of work
     fetcher.doWork()
@@ -999,7 +1006,7 @@ class AbstractFetcherThreadTest {
   class MockLeaderEndPoint(override val brokerConfig: KafkaConfig) extends LeaderEndPoint {
 
     private val leaderPartitionStates = mutable.Map[TopicPartition, PartitionState]()
-    var fetcherOpt: Option[MockFetcherThread] = Option.empty
+    var responseCallback: Option[() => Unit] = Option.empty
 
     def leaderPartitionState(topicPartition: TopicPartition): PartitionState = {
       leaderPartitionStates.getOrElse(topicPartition,
@@ -1010,8 +1017,8 @@ class AbstractFetcherThreadTest {
       leaderPartitionStates.put(topicPartition, state)
     }
 
-    def setFetcher(fetcher: MockFetcherThread): Unit = {
-      fetcherOpt = Some(fetcher)
+    def setResponseCallback(callback: () => Unit): Unit = {
+      responseCallback = Some(callback)
     }
 
     override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
@@ -1341,7 +1348,6 @@ class AbstractFetcherThreadTest {
     override protected val isOffsetForLeaderEpochSupported: Boolean = true
 
     override protected val isTruncationOnFetchSupported: Boolean = truncateOnFetch
-
   }
 
 }
