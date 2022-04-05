@@ -63,7 +63,7 @@ import org.slf4j.Logger;
  * The accumulator uses a bounded amount of memory and append calls will block when that memory is exhausted, unless
  * this behavior is explicitly disabled.
  */
-public final class RecordAccumulator {
+public class RecordAccumulator {
 
     private final Logger log;
     private volatile boolean closed;
