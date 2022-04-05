@@ -93,7 +93,7 @@ class ReplicaFetcherThreadTest {
     TestUtils.clearYammerMetrics()
   }
 
-  protected def createReplicaFetcherThread(name: String,
+  private def createReplicaFetcherThread(name: String,
                                            fetcherId: Int,
                                            sourceBroker: BrokerEndPoint,
                                            brokerConfig: KafkaConfig,
