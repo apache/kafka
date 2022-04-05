@@ -14,9 +14,9 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffset
 import scala.jdk.CollectionConverters._
 import scala.collection.Map
 
-class RemoteLeaderEndPoint(override var endpoint: BlockingSend,
+class RemoteLeaderEndPoint(override val endpoint: BlockingSend,
                            var fetchSessionHandler: FetchSessionHandler,
-                           override var brokerConfig: KafkaConfig) extends LeaderEndPoint {
+                           override val brokerConfig: KafkaConfig) extends LeaderEndPoint {
 
   override def initiateClose(): Unit = endpoint.initiateClose()
 

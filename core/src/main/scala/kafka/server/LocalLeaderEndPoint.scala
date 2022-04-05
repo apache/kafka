@@ -12,7 +12,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUti
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
-class LocalLeaderEndPoint(override var brokerConfig: KafkaConfig,
+class LocalLeaderEndPoint(override val brokerConfig: KafkaConfig,
                           val replicaMgr: ReplicaManager) extends LeaderEndPoint {
 
   override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchData] = {

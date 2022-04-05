@@ -606,7 +606,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     var fetchedEarliestOffset = false
     val fetcher = new MockFetcherThread(new MockLeaderEndPoint(brokerConfig) {
-      override protected def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+      override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
         fetchedEarliestOffset = true
         throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
       }
@@ -676,7 +676,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     val fetcher: MockFetcherThread = new MockFetcherThread(new MockLeaderEndPoint(brokerConfig) {
       val tries = new AtomicInteger(0)
-      override protected def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+      override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
         if (tries.getAndIncrement() == 0)
           throw new UnknownLeaderEpochException("Unexpected leader epoch")
         super.fetchLatestOffset(topicPartition, leaderEpoch)
@@ -996,7 +996,7 @@ class AbstractFetcherThreadTest {
     assertTrue(fetcher.fetchState(unknownPartition).isEmpty)
   }
 
-  class MockLeaderEndPoint(override var brokerConfig: KafkaConfig) extends LeaderEndPoint {
+  class MockLeaderEndPoint(override val brokerConfig: KafkaConfig) extends LeaderEndPoint {
 
     private val leaderPartitionStates = mutable.Map[TopicPartition, PartitionState]()
     var fetcherOpt: Option[MockFetcherThread] = Option.empty
@@ -1054,13 +1054,13 @@ class AbstractFetcherThreadTest {
       }.toMap
     }
 
-    override protected def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+    override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
       leaderState.logStartOffset
     }
 
-    override protected def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+    override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
       leaderState.logEndOffset
@@ -1188,7 +1188,7 @@ class AbstractFetcherThreadTest {
   class MockFetcherThread(val mockLeader : MockLeaderEndPoint, val replicaId: Int = 0, val leaderId: Int = 1, fetchBackOffMs: Int = 0)
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
-      leader = _,
+      leader = mockLeader,
       sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
       failedPartitions,
       fetchBackOffMs = fetchBackOffMs,

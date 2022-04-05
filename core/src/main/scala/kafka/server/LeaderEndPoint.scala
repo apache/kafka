@@ -10,7 +10,8 @@ import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochR
 import scala.collection.Map
 
 trait LeaderEndPoint extends Logging {
-  var brokerConfig: KafkaConfig = _
+  val brokerConfig: KafkaConfig
+  val endpoint: BlockingSend = null // setting to null since only RemoteLeaderEndPoint needs to override
 
   type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -37,8 +38,6 @@ trait LeaderEndPoint extends Logging {
   def initiateClose(): Unit = {}
 
   def close(): Unit = {}
-
-  def endpoint(): BlockingSend = _
 
   def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData]
 
