@@ -83,7 +83,7 @@ public class IncrementalCooperativeAssignorTest {
 
     @Parameters
     public static Iterable<?> mode() {
-        return Arrays.asList(new Object[][] {{CONNECT_PROTOCOL_V1}, {CONNECT_PROTOCOL_V2}});
+        return Arrays.asList(CONNECT_PROTOCOL_V1, CONNECT_PROTOCOL_V2);
     }
 
     @Parameter
@@ -1069,7 +1069,6 @@ public class IncrementalCooperativeAssignorTest {
 
     private void expectGeneration(boolean expectMismatch) {
         when(coordinator.generationId())
-                .thenReturn(assignor.previousGenerationId + 1)
                 .thenReturn(assignor.previousGenerationId + 1);
         int lastCompletedGenerationId = expectMismatch ? assignor.previousGenerationId - 1 : assignor.previousGenerationId;
         when(coordinator.lastCompletedGenerationId()).thenReturn(lastCompletedGenerationId);
