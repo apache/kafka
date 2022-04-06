@@ -279,6 +279,8 @@ public class ConsumerConfig extends AbstractConfig {
             "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
+    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = CommonClientConfigs.LEAVE_GROUP_ON_CLOSE_CONFIG;
+
     /**
      * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
      * Whether or not the consumer should throw when the new stable offset feature is supported.
@@ -532,7 +534,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
-                                .defineInternal(CommonClientConfigs.LEAVE_GROUP_ON_CLOSE_CONFIG,
+                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW)
