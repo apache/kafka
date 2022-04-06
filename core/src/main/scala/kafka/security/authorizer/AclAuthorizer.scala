@@ -192,11 +192,12 @@ class AclAuthorizer extends Authorizer with Logging {
 
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     serverInfo.endpoints.asScala.map { endpoint =>
-      endpoint -> CompletableFuture.completedFuture[Void](null) }.toMap.asJava
+      endpoint -> CompletableFuture.completedFuture[Void](null)
+    }.toMap.asJava
   }
 
   override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-    actions.asScala.map { action => authorizeAction(requestContext, action) }.asJava
+    actions.asScala.map(action => authorizeAction(requestContext, action)).asJava
   }
 
   override def createAcls(requestContext: AuthorizableRequestContext,
@@ -440,7 +441,6 @@ class AclAuthorizer extends Authorizer with Logging {
     false
   }
 
-
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
     val resource = action.resourcePattern
     if (resource.patternType != PatternType.LITERAL) {
@@ -547,7 +547,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   private def loadCache(): Unit = {
     lock synchronized  {
-      ZkAclStore.stores.foreach(store => {
+      ZkAclStore.stores.foreach { store =>
         val resourceTypes = zkClient.getResourceTypes(store.patternType)
         for (rType <- resourceTypes) {
           val resourceType = Try(SecurityUtils.resourceType(rType))
@@ -562,7 +562,7 @@ class AclAuthorizer extends Authorizer with Logging {
             case Failure(_) => warn(s"Ignoring unknown ResourceType: $rType")
           }
         }
-      })
+      }
     }
   }
 
@@ -691,14 +691,14 @@ class AclAuthorizer extends Authorizer with Logging {
     val acesToAdd = newAces.diff(currentAces)
     val acesToRemove = currentAces.diff(newAces)
 
-    acesToAdd.foreach(ace => {
+    acesToAdd.foreach { ace =>
       val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceTypeKey) match {
         case Some(resources) => resourceCache += (resourceTypeKey -> (resources + resource.name()))
         case None => resourceCache += (resourceTypeKey -> immutable.HashSet(resource.name()))
       }
-    })
-    acesToRemove.foreach(ace => {
+    }
+    acesToRemove.foreach { ace =>
       val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceTypeKey) match {
         case Some(resources) =>
@@ -710,7 +710,7 @@ class AclAuthorizer extends Authorizer with Logging {
           }
         case None =>
       }
-    })
+    }
 
     if (versionedAcls.acls.nonEmpty) {
       aclCache = aclCache.updated(resource, versionedAcls)

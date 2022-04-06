@@ -380,8 +380,10 @@ public class AbstractConfig {
      * Log warnings for any unused configurations
      */
     public void logUnused() {
-        for (String key : unused())
-            log.warn("The configuration '{}' was supplied but isn't a known config.", key);
+        Set<String> unusedkeys = unused();
+        if (!unusedkeys.isEmpty()) {
+            log.warn("These configurations '{}' were supplied but are not used yet.", unusedkeys);
+        }
     }
 
     private <T> T getConfiguredInstance(Object klass, Class<T> t, Map<String, Object> configPairs) {

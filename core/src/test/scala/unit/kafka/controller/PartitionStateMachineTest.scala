@@ -16,6 +16,8 @@
  */
 package kafka.controller
 
+import kafka.api.KAFKA_3_1_IV0
+import kafka.api.KAFKA_3_2_IV0
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -28,6 +30,8 @@ import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
 
@@ -275,8 +279,11 @@ class PartitionStateMachineTest {
     assertEquals(OnlinePartition, partitionState(partition))
   }
 
-  @Test
-  def testOfflinePartitionToUncleanOnlinePartitionTransition(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testOfflinePartitionToUncleanOnlinePartitionTransition(
+    isLeaderRecoverySupported: Boolean
+  ): Unit = {
     /* Starting scenario: Leader: X, Isr: [X], Replicas: [X, Y], LiveBrokers: [Y]
      * Ending scenario: Leader: Y, Isr: [Y], Replicas: [X, Y], LiverBrokers: [Y]
      *
@@ -284,6 +291,22 @@ class PartitionStateMachineTest {
      * election on the offline partition results on the first live broker getting
      * elected.
      */
+
+
+    val partitionStateMachine = {
+      val apiVersion = if (isLeaderRecoverySupported) KAFKA_3_2_IV0 else KAFKA_3_1_IV0
+      val properties = TestUtils.createBrokerConfig(brokerId, "zkConnect")
+
+      properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.toString)
+
+      new ZkPartitionStateMachine(
+        KafkaConfig.fromProps(properties),
+        new StateChangeLogger(brokerId, true, None),
+        controllerContext,
+        mockZkClient,
+        mockControllerBrokerRequestBatch
+      )
+    }
     val leaderBrokerId = brokerId + 1
     controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(
@@ -309,7 +332,11 @@ class PartitionStateMachineTest {
       )
     )
 
-    val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
+    val leaderAndIsrAfterElection = if (isLeaderRecoverySupported) {
+      leaderAndIsr.newRecoveringLeaderAndIsr(brokerId, List(brokerId))
+    } else {
+      leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
+    }
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
@@ -484,7 +511,11 @@ class PartitionStateMachineTest {
       controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     }
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     val deletionClient = mock(classOf[DeletionClient])
     val topicDeletionManager = new TopicDeletionManager(config, controllerContext,

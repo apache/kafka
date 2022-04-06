@@ -22,8 +22,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
-import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -47,28 +47,30 @@ import org.apache.kafka.metadata.authorizer.AclMutator;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 
 public interface Controller extends AclMutator, AutoCloseable {
     /**
-     * Change partition ISRs.
+     * Change partition information.
      *
-     * @param request       The AlterIsrRequest data.
+     * @param request       The AlterPartitionRequest data.
      *
      * @return              A future yielding the response.
      */
-    CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request);
+    CompletableFuture<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request);
 
     /**
      * Create a batch of topics.
      *
      * @param request       The CreateTopicsRequest data.
+     * @param describable   The topics which we have DESCRIBE permission on.
      *
      * @return              A future yielding the response.
      */
     CompletableFuture<CreateTopicsResponseData>
-        createTopics(CreateTopicsRequestData request);
+        createTopics(CreateTopicsRequestData request, Set<String> describable);
 
     /**
      * Unregister a broker.

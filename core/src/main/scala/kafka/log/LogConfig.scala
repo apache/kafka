@@ -27,7 +27,10 @@ import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigExceptio
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, TimestampType}
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+import org.apache.kafka.metadata.ConfigSynonym
+import org.apache.kafka.metadata.ConfigSynonym.{HOURS_TO_MILLISECONDS, MINUTES_TO_MILLISECONDS}
 
+import java.util.Arrays.asList
 import java.util.{Collections, Locale, Properties}
 import scala.annotation.nowarn
 import scala.collection.{Map, mutable}
@@ -234,7 +237,7 @@ object LogConfig {
   val LocalLogRetentionMsDoc = TopicConfig.LOCAL_LOG_RETENTION_MS_DOC
   val LocalLogRetentionBytesDoc = TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC
   val MaxMessageSizeDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC
-  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOCS
+  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOC
   val FileDeleteDelayMsDoc = TopicConfig.FILE_DELETE_DELAY_MS_DOC
   val DeleteRetentionMsDoc = TopicConfig.DELETE_RETENTION_MS_DOC
   val MinCompactionLagMsDoc = TopicConfig.MIN_COMPACTION_LAG_MS_DOC
@@ -440,37 +443,86 @@ object LogConfig {
   }
 
   /**
-   * Map topic config to the broker config with highest priority. Some of these have additional synonyms
-   * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
+   * Maps topic configurations to their equivalent broker configurations.
+   *
+   * Topics can be configured either by setting their dynamic topic configurations, or by
+   * setting equivalent broker configurations. For historical reasons, the equivalent broker
+   * configurations have different names. This table maps each topic configuration to its
+   * equivalent broker configurations.
+   *
+   * In some cases, the equivalent broker configurations must be transformed before they
+   * can be used. For example, log.roll.hours must be converted to milliseconds before it
+   * can be used as the value of segment.ms.
+   *
+   * The broker configurations will be used in the order specified here. In other words, if
+   * both the first and the second synonyms are configured, we will use only the value of
+   * the first synonym and ignore the second.
    */
   @nowarn("cat=deprecation")
-  val TopicConfigSynonyms = Map(
-    SegmentBytesProp -> KafkaConfig.LogSegmentBytesProp,
-    SegmentMsProp -> KafkaConfig.LogRollTimeMillisProp,
-    SegmentJitterMsProp -> KafkaConfig.LogRollTimeJitterMillisProp,
-    SegmentIndexBytesProp -> KafkaConfig.LogIndexSizeMaxBytesProp,
-    FlushMessagesProp -> KafkaConfig.LogFlushIntervalMessagesProp,
-    FlushMsProp -> KafkaConfig.LogFlushIntervalMsProp,
-    RetentionBytesProp -> KafkaConfig.LogRetentionBytesProp,
-    RetentionMsProp -> KafkaConfig.LogRetentionTimeMillisProp,
-    MaxMessageBytesProp -> KafkaConfig.MessageMaxBytesProp,
-    IndexIntervalBytesProp -> KafkaConfig.LogIndexIntervalBytesProp,
-    DeleteRetentionMsProp -> KafkaConfig.LogCleanerDeleteRetentionMsProp,
-    MinCompactionLagMsProp -> KafkaConfig.LogCleanerMinCompactionLagMsProp,
-    MaxCompactionLagMsProp -> KafkaConfig.LogCleanerMaxCompactionLagMsProp,
-    FileDeleteDelayMsProp -> KafkaConfig.LogDeleteDelayMsProp,
-    MinCleanableDirtyRatioProp -> KafkaConfig.LogCleanerMinCleanRatioProp,
-    CleanupPolicyProp -> KafkaConfig.LogCleanupPolicyProp,
-    UncleanLeaderElectionEnableProp -> KafkaConfig.UncleanLeaderElectionEnableProp,
-    MinInSyncReplicasProp -> KafkaConfig.MinInSyncReplicasProp,
-    CompressionTypeProp -> KafkaConfig.CompressionTypeProp,
-    PreAllocateEnableProp -> KafkaConfig.LogPreAllocateProp,
-    MessageFormatVersionProp -> KafkaConfig.LogMessageFormatVersionProp,
-    MessageTimestampTypeProp -> KafkaConfig.LogMessageTimestampTypeProp,
-    MessageTimestampDifferenceMaxMsProp -> KafkaConfig.LogMessageTimestampDifferenceMaxMsProp,
-    MessageDownConversionEnableProp -> KafkaConfig.LogMessageDownConversionEnableProp
-  )
+  val AllTopicConfigSynonyms = Map(
+    SegmentBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogSegmentBytesProp)),
+    SegmentMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRollTimeMillisProp),
+      new ConfigSynonym(KafkaConfig.LogRollTimeHoursProp, HOURS_TO_MILLISECONDS)),
+    SegmentJitterMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRollTimeJitterMillisProp),
+      new ConfigSynonym(KafkaConfig.LogRollTimeJitterHoursProp, HOURS_TO_MILLISECONDS)),
+    SegmentIndexBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogIndexSizeMaxBytesProp)),
+    FlushMessagesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogFlushIntervalMessagesProp)),
+    FlushMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogFlushSchedulerIntervalMsProp),
+      new ConfigSynonym(KafkaConfig.LogFlushIntervalMsProp)),
+    RetentionBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRetentionBytesProp)),
+    RetentionMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRetentionTimeMillisProp),
+      new ConfigSynonym(KafkaConfig.LogRetentionTimeMinutesProp, MINUTES_TO_MILLISECONDS),
+      new ConfigSynonym(KafkaConfig.LogRetentionTimeHoursProp, HOURS_TO_MILLISECONDS)),
+    MaxMessageBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.MessageMaxBytesProp)),
+    IndexIntervalBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogIndexIntervalBytesProp)),
+    DeleteRetentionMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerDeleteRetentionMsProp)),
+    MinCompactionLagMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerMinCompactionLagMsProp)),
+    MaxCompactionLagMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerMaxCompactionLagMsProp)),
+    FileDeleteDelayMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogDeleteDelayMsProp)),
+    MinCleanableDirtyRatioProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerMinCleanRatioProp)),
+    CleanupPolicyProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanupPolicyProp)),
+    UncleanLeaderElectionEnableProp -> asList(
+      new ConfigSynonym(KafkaConfig.UncleanLeaderElectionEnableProp)),
+    MinInSyncReplicasProp -> asList(
+      new ConfigSynonym(KafkaConfig.MinInSyncReplicasProp)),
+    CompressionTypeProp -> asList(
+      new ConfigSynonym(KafkaConfig.CompressionTypeProp)),
+    PreAllocateEnableProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogPreAllocateProp)),
+    MessageFormatVersionProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageFormatVersionProp)),
+    MessageTimestampTypeProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageTimestampTypeProp)),
+    MessageTimestampDifferenceMaxMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)),
+    MessageDownConversionEnableProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageDownConversionEnableProp)),
+  ).asJava
 
+  /**
+   * Map topic config to the broker config with highest priority. Some of these have additional synonyms
+   * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
+   * or using [[AllTopicConfigSynonyms]]
+   */
+  val TopicConfigSynonyms = AllTopicConfigSynonyms.asScala.map {
+    case (k, v) => k -> v.get(0).name()
+  }
 
   /**
    * Copy the subset of properties that are relevant to Logs. The individual properties

@@ -19,18 +19,19 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.CompletableFuture
 
-import kafka.common.{InconsistentNodeIdException, KafkaException}
+import kafka.common.InconsistentNodeIdException
 import kafka.log.{LogConfig, UnifiedLog}
-import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
+import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
-import org.apache.kafka.common.utils.{AppInfoParser, Time}
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.common.utils.{AppInfoParser, Time}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -183,5 +184,5 @@ object KafkaRaftServer {
   val configSchema = new KafkaConfigSchema(Map(
     ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
     ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
-  ).asJava)
+  ).asJava, LogConfig.AllTopicConfigSynonyms)
 }

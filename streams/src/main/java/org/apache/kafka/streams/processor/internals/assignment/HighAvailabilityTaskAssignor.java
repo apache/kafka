@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -68,6 +69,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             configs.acceptableRecoveryLag
         );
 
+        final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
+
         // We temporarily need to know which standby tasks were intended as warmups
         // for active tasks, so that we don't move them (again) when we plan standby
         // task movements. We can then immediately treat warmups exactly the same as
@@ -77,6 +80,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         final int neededActiveTaskMovements = assignActiveTaskMovements(
             tasksToCaughtUpClients,
+            tasksToClientByLag,
             clientStates,
             warmups,
             remainingWarmupReplicas
@@ -84,6 +88,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         final int neededStandbyTaskMovements = assignStandbyTaskMovements(
             tasksToCaughtUpClients,
+            tasksToClientByLag,
             clientStates,
             remainingWarmupReplicas,
             warmups
@@ -129,7 +134,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final StandbyTaskAssignor standbyTaskAssignor = createStandbyTaskAssignor(configs);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(configs);
 
         standbyTaskAssignor.assign(clientStates, allTaskIds, statefulTasks, configs);
 
@@ -140,15 +145,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             ClientState::assignStandby,
             standbyTaskAssignor::isAllowedTaskMovement
         );
-    }
-
-    // Visible for testing
-    static StandbyTaskAssignor createStandbyTaskAssignor(final AssignmentConfigs configs) {
-        if (!configs.rackAwareAssignmentTags.isEmpty()) {
-            return new ClientTagAwareStandbyTaskAssignor();
-        } else {
-            return new DefaultStandbyTaskAssignor();
-        }
     }
 
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
@@ -245,6 +241,18 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         }
 
         return taskToCaughtUpClients;
+    }
+
+    private static Map<TaskId, SortedSet<UUID>> tasksToClientByLag(final Set<TaskId> statefulTasks,
+                                                              final Map<UUID, ClientState> clientStates) {
+        final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = new HashMap<>();
+        for (final TaskId task : statefulTasks) {
+            final SortedSet<UUID> clientLag = new TreeSet<>(Comparator.<UUID>comparingLong(a ->
+                    clientStates.get(a).lagFor(task)).thenComparing(a -> a));
+            clientLag.addAll(clientStates.keySet());
+            tasksToClientByLag.put(task, clientLag);
+        }
+        return tasksToClientByLag;
     }
 
     private static boolean unbounded(final long acceptableRecoveryLag) {

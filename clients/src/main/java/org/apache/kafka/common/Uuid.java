@@ -31,13 +31,11 @@ public class Uuid implements Comparable<Uuid> {
      * A UUID for the metadata topic in KRaft mode. Will never be returned by the randomUuid method.
      */
     public static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
-    private static final java.util.UUID METADATA_TOPIC_ID_INTERNAL = new java.util.UUID(0L, 1L);
 
     /**
      * A UUID that represents a null or empty UUID. Will never be returned by the randomUuid method.
      */
     public static final Uuid ZERO_UUID = new Uuid(0L, 0L);
-    private static final java.util.UUID ZERO_ID_INTERNAL = new java.util.UUID(0L, 0L);
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;
@@ -51,15 +49,22 @@ public class Uuid implements Comparable<Uuid> {
         this.leastSignificantBits = leastSigBits;
     }
 
+    private static Uuid unsafeRandomUuid() {
+        java.util.UUID jUuid = java.util.UUID.randomUUID();
+        return new Uuid(jUuid.getMostSignificantBits(), jUuid.getLeastSignificantBits());
+    }
+
     /**
      * Static factory to retrieve a type 4 (pseudo randomly generated) UUID.
+     *
+     * This will not generate a UUID equal to 0, 1, or one whose string representation starts with a dash ("-")
      */
     public static Uuid randomUuid() {
-        java.util.UUID uuid = java.util.UUID.randomUUID();
-        while (uuid.equals(METADATA_TOPIC_ID_INTERNAL) || uuid.equals(ZERO_ID_INTERNAL)) {
-            uuid = java.util.UUID.randomUUID();
+        Uuid uuid = unsafeRandomUuid();
+        while (uuid.equals(METADATA_TOPIC_ID) || uuid.equals(ZERO_UUID) || uuid.toString().startsWith("-")) {
+            uuid = unsafeRandomUuid();
         }
-        return new Uuid(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+        return uuid;
     }
 
     /**

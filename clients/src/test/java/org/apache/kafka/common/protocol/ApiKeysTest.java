@@ -45,7 +45,7 @@ public class ApiKeysTest {
 
     @Test
     public void testAlterIsrIsClusterAction() {
-        assertTrue(ApiKeys.ALTER_ISR.clusterAction);
+        assertTrue(ApiKeys.ALTER_PARTITION.clusterAction);
     }
 
     /**
@@ -62,7 +62,7 @@ public class ApiKeysTest {
     public void testResponseThrottleTime() {
         Set<ApiKeys> authenticationKeys = EnumSet.of(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
         // Newer protocol apis include throttle time ms even for cluster actions
-        Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR, ApiKeys.ALLOCATE_PRODUCER_IDS);
+        Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_PARTITION, ApiKeys.ALLOCATE_PRODUCER_IDS);
         for (ApiKeys apiKey: ApiKeys.zkBrokerApis()) {
             Schema responseSchema = apiKey.messageType.responseSchemas()[apiKey.latestVersion()];
             BoundField throttleTimeField = responseSchema.get("throttle_time_ms");

@@ -18,11 +18,13 @@
 package kafka.server
 
 import java.util
+import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 
+import kafka.api.KAFKA_3_2_IV0
 import kafka.cluster.Broker.ServerInfo
-import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
+import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
@@ -43,6 +45,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
 import scala.jdk.CollectionConverters._
@@ -158,20 +161,31 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val controllerBuilder = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
-        setTime(time).
-        setThreadNamePrefix(threadNamePrefixAsString).
-        setConfigSchema(configSchema).
-        setRaftClient(raftManager.client).
-        setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
-        setDefaultNumPartitions(config.numPartitions.intValue()).
-        setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
-          TimeUnit.MILLISECONDS)).
-        setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
-        setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
-        setCreateTopicPolicy(createTopicPolicy.asJava).
-        setAlterConfigPolicy(alterConfigPolicy.asJava).
-        setConfigurationValidator(new ControllerConfigurationValidator())
+      val controllerBuilder = {
+        val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
+          OptionalLong.of(TimeUnit.NANOSECONDS.convert(config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS))
+        } else {
+          OptionalLong.empty()
+        }
+
+        new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
+          setTime(time).
+          setThreadNamePrefix(threadNamePrefixAsString).
+          setConfigSchema(configSchema).
+          setRaftClient(raftManager.client).
+          setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
+          setDefaultNumPartitions(config.numPartitions.intValue()).
+          setIsLeaderRecoverySupported(config.interBrokerProtocolVersion >= KAFKA_3_2_IV0).
+          setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
+            TimeUnit.MILLISECONDS)).
+          setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
+          setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
+          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+          setCreateTopicPolicy(createTopicPolicy.asJava).
+          setAlterConfigPolicy(alterConfigPolicy.asJava).
+          setConfigurationValidator(new ControllerConfigurationValidator()).
+          setStaticConfig(config.originals)
+      }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
         case _ => // nothing to do

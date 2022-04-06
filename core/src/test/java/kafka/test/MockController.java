@@ -25,8 +25,8 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
-import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -60,6 +60,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -107,13 +108,13 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {
+    public CompletableFuture<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     synchronized public CompletableFuture<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request) {
+            createTopics(CreateTopicsRequestData request, Set<String> describable) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         for (CreatableTopic topic : request.topics()) {
             if (topicNameToId.containsKey(topic.name())) {
@@ -125,13 +126,30 @@ public class MockController implements Controller {
                 Uuid topicUuid = new Uuid(0, topicId);
                 topicNameToId.put(topic.name(), topicUuid);
                 topics.put(topicUuid, new MockTopic(topic.name(), topicUuid));
-                response.topics().add(new CreatableTopicResult().
+                CreatableTopicResult creatableTopicResult = new CreatableTopicResult().
                     setName(topic.name()).
                     setErrorCode(Errors.NONE.code()).
-                    setTopicId(topicUuid));
-                // For a better mock, we might want to return configs, replication factor,
-                // etc.  Right now, the tests that use MockController don't need these
-                // things.
+                    setTopicId(topicUuid);
+                if (describable.contains(topic.name())) {
+                    // Note: we don't simulate topic configs here yet.
+                    // Just returning replication factor and numPartitions.
+                    if (topic.assignments() != null && !topic.assignments().isEmpty()) {
+                        creatableTopicResult.
+                            setTopicConfigErrorCode(Errors.NONE.code()).
+                            setReplicationFactor((short)
+                                topic.assignments().iterator().next().brokerIds().size()).
+                            setNumPartitions(topic.assignments().size());
+                    } else {
+                        creatableTopicResult.
+                            setTopicConfigErrorCode(Errors.NONE.code()).
+                            setReplicationFactor(topic.replicationFactor()).
+                            setNumPartitions(topic.numPartitions());
+                    }
+                } else {
+                    creatableTopicResult.
+                        setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code());
+                }
+                response.topics().add(creatableTopicResult);
             }
         }
         return CompletableFuture.completedFuture(response);

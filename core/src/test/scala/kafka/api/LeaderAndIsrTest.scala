@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.common
 
-/*
- * We inherit from `Product` and `Serializable` because `case` objects and classes inherit from them and if we don't
- * do it here, the compiler will infer types that unexpectedly include `Product` and `Serializable`, see
- * http://underscore.io/blog/posts/2015/06/04/more-on-sealed.html for more information.
- */
-trait BaseEnum extends Product with Serializable {
-  def name: String
+package kafka.api
+
+import org.apache.kafka.metadata.LeaderRecoveryState
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+final class LeaderAndIsrTest {
+  @Test
+  def testRecoveringLeaderAndIsr(): Unit = {
+    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    val recoveringLeaderAndIsr = leaderAndIsr.newRecoveringLeaderAndIsr(3, List(3))
+
+    assertEquals(3, recoveringLeaderAndIsr.leader)
+    assertEquals(List(3), recoveringLeaderAndIsr.isr)
+    assertEquals(LeaderRecoveryState.RECOVERING, recoveringLeaderAndIsr.leaderRecoveryState)
+  }
 }

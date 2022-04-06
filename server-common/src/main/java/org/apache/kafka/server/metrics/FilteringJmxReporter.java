@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.metrics;
+package org.apache.kafka.server.metrics;
 
 import com.yammer.metrics.core.Metric;
 import com.yammer.metrics.core.MetricName;

@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -76,7 +77,8 @@ class ReplicaManagerConcurrencyTest {
     val initialPartitionRegistration = registration(
       replicaIds = Seq(localId, remoteId),
       isr = Seq(localId),
-      leader = localId
+      leader = localId,
+      LeaderRecoveryState.RECOVERED
     )
 
     val topicModel = new TopicModel(Uuid.randomUuid(), "foo", Map(0 -> initialPartitionRegistration))
@@ -439,8 +441,9 @@ class ReplicaManagerConcurrencyTest {
     replicaIds: Seq[Int],
     isr: Seq[Int],
     leader: Int,
+    leaderRecoveryState: LeaderRecoveryState,
     leaderEpoch: Int = 0,
-    version: Int = 0
+    partitionEpoch: Int = 0
   ): PartitionRegistration = {
     new PartitionRegistration(
       replicaIds.toArray,
@@ -448,8 +451,9 @@ class ReplicaManagerConcurrencyTest {
       Array.empty[Int],
       Array.empty[Int],
       leader,
+      leaderRecoveryState,
       leaderEpoch,
-      version
+      partitionEpoch
     )
   }
 

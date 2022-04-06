@@ -123,7 +123,7 @@ public abstract class AbstractJoinIntegrationTest {
 
     void prepareEnvironment() throws InterruptedException {
         if (!cacheEnabled) {
-            STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+            STREAMS_CONFIG.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         }
 
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());

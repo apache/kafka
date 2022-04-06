@@ -120,4 +120,13 @@ public interface InternalProcessorContext<KOut, VOut>
                    final Position position);
 
     String changelogFor(final String storeName);
+
+    void addProcessorMetadataKeyValue(final String key, final long value);
+
+    Long processorMetadataForKey(final String key);
+
+    void setProcessorMetadata(final ProcessorMetadata metadata);
+
+    ProcessorMetadata getProcessorMetadata();
+
 }
