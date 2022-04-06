@@ -448,7 +448,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                                             final long inputRecordTimestamp) {
             final long windowStart = window.start();
             final long windowEnd = window.end();
-            if (windowEnd > closeTime) {
+            if (windowEnd >= closeTime) {
                 //get aggregate from existing window
                 final Agg oldAgg = getValueOrNull(valueAndTime);
                 final Agg newAgg = aggregator.apply(key, value, oldAgg);
