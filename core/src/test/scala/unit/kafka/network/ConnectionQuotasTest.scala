@@ -377,6 +377,10 @@ class ConnectionQuotasTest {
 
     // create connections with the rate < listener quota on every listener, and verify there is no throttling
     val connectionsPerListener = 200 // should take 5 seconds to create 200 connections with rate = 40/sec
+
+    // assert that connection creation rate on listener (per sec) is indeed less than listener quota
+    assertTrue((1000 / connCreateIntervalMs) < listenerRateLimit)
+
     val futures = listeners.values.map { listener =>
       executor.submit((() => acceptConnections(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs)): Runnable)
     }
@@ -403,7 +407,11 @@ class ConnectionQuotasTest {
 
     // create connections with the rate > listener quota on every listener
     // run a bit longer (20 seconds) to also verify the throttle rate
-    val connectionsPerListener = 600 // should take 20 seconds to create 600 connections with rate = 30/sec
+    val connectionsPerListener = 800 // should take 20 seconds to create 800 connections with rate = 40/sec
+
+    // assert that connection creation rate on listener (per sec) is indeed greater than or equal to listener quota
+    assertTrue((1000 / connCreateIntervalMs) >= listenerRateLimit)
+
     val futures = listeners.values.map { listener =>
       executor.submit((() =>
         // epsilon is set to account for the worst-case where the measurement is taken just before or after the quota window
@@ -503,9 +511,9 @@ class ConnectionQuotasTest {
     val numConnections = 35
     val futures = List(
       executor.submit((() => acceptConnections(connectionQuotas, listener, knownHost, numConnections,
-        0, true)): Callable[Boolean]),
+        0, expectIpThrottle = true)): Callable[Boolean]),
       executor.submit((() => acceptConnections(connectionQuotas, listener, unknownHost, numConnections,
-        0, true)): Callable[Boolean])
+        0, expectIpThrottle = true)): Callable[Boolean])
     )
 
     val ipsThrottledResults = futures.map(_.get(3, TimeUnit.SECONDS))
