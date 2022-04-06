@@ -352,6 +352,7 @@ class DumpLogSegmentsTest {
         batchesCounter += 1
       }
     }
+    batchesBytes
   }
 
   private def countBatches(lines: util.ListIterator[String]): Int = {
@@ -362,7 +363,7 @@ class DumpLogSegmentsTest {
         countBatches += 1
       }
     }
-    return countBatches
+    countBatches
   }
 
   private def readBatchRecords(lines: util.ListIterator[String]): Seq[String] = {
