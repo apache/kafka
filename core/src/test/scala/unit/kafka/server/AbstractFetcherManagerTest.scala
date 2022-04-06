@@ -288,10 +288,21 @@ class AbstractFetcherManagerTest {
     Utils.abs(tp.hashCode) % brokerNum
   }
 
+  private class MockLeaderEndPoint(override val brokerConfig: KafkaConfig) extends LeaderEndPoint {
+    override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
+
+    override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
+  }
+
   private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)
     extends AbstractFetcherThread(
       name = "test-resize-fetcher",
       clientId = "mock-fetcher",
+      leader = new MockLeaderEndPoint(new KafkaConfig(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect))),
       sourceBroker,
       failedPartitions,
       fetchBackOffMs = 0,
@@ -314,14 +325,6 @@ class AbstractFetcherManagerTest {
     override protected def logEndOffset(topicPartition: TopicPartition): Long = 1
 
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(OffsetAndEpoch(1, 0))
-
-    override protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
-
-    override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
-
-    override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
-
-    override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
 
     override protected val isOffsetForLeaderEpochSupported: Boolean = false
     override protected val isTruncationOnFetchSupported: Boolean = false
