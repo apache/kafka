@@ -100,7 +100,7 @@ public class FetchResponse extends AbstractResponse {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
-                    // Assigning the lazy-initialized responseData in the last step
+                    // Assigning the lazy-initialized `responseData` in the last step
                     // to avoid other threads accessing a half-initialized object.
                     final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseDataTmp =
                             new LinkedHashMap<>();
