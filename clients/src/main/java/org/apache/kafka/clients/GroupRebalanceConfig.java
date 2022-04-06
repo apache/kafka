@@ -75,7 +75,7 @@ public class GroupRebalanceConfig {
 
         // Internal leave group config is only defined in Consumer.
         if (protocolType == ProtocolType.CONSUMER) {
-            this.leaveGroupOnClose = config.getBoolean("internal.leave.group.on.close");
+            this.leaveGroupOnClose = config.getBoolean(CommonClientConfigs.LEAVE_GROUP_ON_CLOSE_CONFIG);
         } else {
             this.leaveGroupOnClose = true;
         }

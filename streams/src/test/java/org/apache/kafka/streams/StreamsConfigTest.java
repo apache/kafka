@@ -518,7 +518,7 @@ public class StreamsConfigTest {
     public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get("internal.leave.group.on.close"), is(false));
+        assertThat(consumerConfigs.get(CommonClientConfigs.LEAVE_GROUP_ON_CLOSE_CONFIG), is(false));
     }
 
     @Test
