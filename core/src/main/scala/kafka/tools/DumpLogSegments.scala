@@ -59,7 +59,7 @@ object DumpLogSegments {
       suffix match {
         case UnifiedLog.LogFileSuffix =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
-            opts.messageParser, opts.skipRecordMetadata)
+            opts.messageParser, opts.skipRecordMetadata, opts.maxBytes)
         case UnifiedLog.IndexFileSuffix =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case UnifiedLog.TimeIndexFileSuffix =>
@@ -246,10 +246,11 @@ object DumpLogSegments {
                       nonConsecutivePairsForLogFilesMap: mutable.Map[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
                       parser: MessageParser[_, _],
-                      skipRecordMetadata: Boolean): Unit = {
+                      skipRecordMetadata: Boolean,
+                      maxBytes: Int): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val fileRecords = FileRecords.open(file, false)
+    val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
     try {
       var validBytes = 0L
       var lastOffset = -1L
@@ -306,7 +307,7 @@ object DumpLogSegments {
         validBytes += batch.sizeInBytes
       }
       val trailingBytes = fileRecords.sizeInBytes - validBytes
-      if (trailingBytes > 0)
+      if ( (trailingBytes > 0) && (maxBytes == Integer.MAX_VALUE) )
         println(s"Found $trailingBytes invalid bytes at the end of ${file.getName}")
     } finally fileRecords.closeHandlers()
   }
@@ -430,6 +431,11 @@ object DumpLogSegments {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(5 * 1024 * 1024)
+    val maxBytesOpt = parser.accepts("max-bytes", "Limit the amount of total batches read in bytes avoiding reading the whole .log file(s).")
+       .withRequiredArg
+       .describedAs("size")
+       .ofType(classOf[java.lang.Integer])
+       .defaultsTo(Integer.MAX_VALUE)
     val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.")
     val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
       .withOptionalArg()
@@ -473,6 +479,7 @@ object DumpLogSegments {
     lazy val indexSanityOnly: Boolean = options.has(indexSanityOpt)
     lazy val files = options.valueOf(filesOpt).split(",")
     lazy val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
+    lazy val maxBytes = options.valueOf(maxBytesOpt).intValue()
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
