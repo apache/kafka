@@ -33,8 +33,8 @@ import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindo
 public class PrefixedWindowKeySchemas {
 
     private static final int PREFIX_SIZE = 1;
-    private static final byte TIME_FIRST_PREFIX = 0;
-    private static final byte KEY_FIRST_PREFIX = 1;
+    public static final byte TIME_FIRST_PREFIX = 0;
+    public static final byte KEY_FIRST_PREFIX = 1;
     private static final int SEQNUM_SIZE = 4;
 
     private static byte extractPrefix(final byte[] binaryBytes) {
@@ -176,6 +176,14 @@ public class PrefixedWindowKeySchemas {
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
+        public static <K> Bytes toStoreKeyBinary(final K key,
+                                                 final long timestamp,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(key);
+            return toStoreKeyBinary(serializedKey, timestamp, seqnum);
+        }
+
         // for store serdes
         public static Bytes toStoreKeyBinary(final Bytes key,
                                              final long timestamp,
@@ -293,6 +301,14 @@ public class PrefixedWindowKeySchemas {
                                                             final long to,
                                                             final boolean forward) {
             return segments.segments(from, to, forward);
+        }
+
+        public static <K> Bytes toStoreKeyBinary(final K key,
+                                                 final long timestamp,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(key);
+            return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
         public static Bytes toStoreKeyBinary(final Windowed<Bytes> timeKey,
