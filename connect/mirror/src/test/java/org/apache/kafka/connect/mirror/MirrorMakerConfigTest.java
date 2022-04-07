@@ -53,7 +53,7 @@ public class MirrorMakerConfigTest {
             "clusters", "a, b",
             "a.bootstrap.servers", "servers-one",
             "b.bootstrap.servers", "servers-two",
-            "security.protocol", "SASL",
+            "security.protocol", "SSL",
             "replication.factor", "4"));
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(new SourceAndTarget("a", "b"),
             MirrorSourceConnector.class);
@@ -61,7 +61,7 @@ public class MirrorMakerConfigTest {
             "source.cluster.bootstrap.servers is set");
         assertEquals("servers-two", connectorProps.get("target.cluster.bootstrap.servers"),
             "target.cluster.bootstrap.servers is set");
-        assertEquals("SASL", connectorProps.get("security.protocol"),
+        assertEquals("SSL", connectorProps.get("security.protocol"),
             "top-level security.protocol is passed through to connector config");
     }
 
@@ -86,7 +86,7 @@ public class MirrorMakerConfigTest {
             "ssl.key.password", "${fake:secret:password}",  // resolves to "secret2"
             "security.protocol", "SSL", 
             "a.security.protocol", "PLAINTEXT", 
-            "a.producer.security.protocol", "SASL", 
+            "a.producer.security.protocol", "SSL",
             "a.bootstrap.servers", "one:9092, two:9092",
             "metrics.reporter", FakeMetricsReporter.class.getName(),
             "a.metrics.reporter", FakeMetricsReporter.class.getName(),
@@ -103,7 +103,7 @@ public class MirrorMakerConfigTest {
             "client configs include boostrap.servers");
         assertEquals("PLAINTEXT", aClientConfig.adminConfig().get("security.protocol"),
             "client configs include security.protocol");
-        assertEquals("SASL", aClientConfig.producerConfig().get("security.protocol"),
+        assertEquals("SSL", aClientConfig.producerConfig().get("security.protocol"),
             "producer configs include security.protocol");
         assertFalse(aClientConfig.adminConfig().containsKey("xxx"),
             "unknown properties aren't included in client configs");
