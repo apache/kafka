@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
@@ -35,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -279,7 +281,7 @@ public class WorkerConfig extends AbstractConfig {
                         "", Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                 .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
-                        ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+                        ConfigDef.Type.STRING, SslClientAuth.NONE.name().toLowerCase(Locale.ROOT), in(SslClientAuth.names().toArray(new String[0])), ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)

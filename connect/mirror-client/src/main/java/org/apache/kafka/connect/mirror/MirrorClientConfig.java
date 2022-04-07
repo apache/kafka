@@ -21,9 +21,12 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Map;
 import java.util.HashMap;
+
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /** Configuration required for MirrorClient to talk to a given target cluster.
  *  <p>
@@ -99,6 +102,7 @@ public class MirrorClientConfig extends AbstractConfig {
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
             Type.STRING,
             CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+            in(SecurityProtocol.names().toArray(new String[0])),
             Importance.MEDIUM,
             CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .withClientSslSupport()
@@ -125,6 +129,7 @@ public class MirrorClientConfig extends AbstractConfig {
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
                 CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                in(SecurityProtocol.names().toArray(new String[0])),
                 Importance.MEDIUM,
                 CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .withClientSslSupport()

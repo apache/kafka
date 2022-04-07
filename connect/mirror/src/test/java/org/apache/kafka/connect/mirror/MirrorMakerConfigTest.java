@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigData;
@@ -32,6 +34,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorMakerConfigTest {
 
@@ -328,6 +332,24 @@ public class MirrorMakerConfigTest {
 
         assertEquals(3, mirrorConfig.clusterPairs().size(),
             "clusterPairs count should match (x->y.enabled=true or x->y.emit.heartbeats.enabled=true) count");
+    }
+
+    @Test
+    public void testInvalidSecurityProtocol() {
+        ConfigException ce = assertThrows(ConfigException.class,
+                () -> new MirrorMakerConfig(makeProps(
+                        "clusters", "a, b, c",
+                        "a->b.emit.heartbeats.enabled", "false",
+                        "a->c.emit.heartbeats.enabled", "false",
+                        CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testClientInvalidSecurityProtocol() {
+        ConfigException ce = assertThrows(ConfigException.class,
+                () -> new MirrorClientConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
     public static class FakeConfigProvider implements ConfigProvider {

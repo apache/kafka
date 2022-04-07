@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Arrays;
@@ -350,6 +351,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(GROUP_INSTANCE_ID_CONFIG,
                                         Type.STRING,
                                         null,
+                                        new ConfigDef.NonEmptyString(),
                                         Importance.MEDIUM,
                                         GROUP_INSTANCE_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
@@ -486,10 +488,14 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         KEY_DESERIALIZER_CLASS_DOC)
                                 .define(VALUE_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
@@ -571,6 +577,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                                        in(SecurityProtocol.names().toArray(new String[0])),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config.internals;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 
 import java.util.Collections;
@@ -89,4 +91,31 @@ public class BrokerSecurityConfigs {
             + "The broker will disconnect any such connection that is not re-authenticated within the session lifetime and that is then subsequently "
             + "used for any purpose other than re-authentication. Configuration names can optionally be prefixed with listener prefix and SASL "
             + "mechanism name in lower-case. For example, listener.name.sasl_ssl.oauthbearer.connections.max.reauth.ms=3600000";
+
+    public static class SaslEnabledMechanismsValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                throw new ConfigException(name, null, "entry must be non null");
+            }
+
+            @SuppressWarnings("unchecked")
+            List<String> mechanismStrings = (List) value;
+
+            if (mechanismStrings.isEmpty()) {
+                throw new ConfigException(name, null, "entry must be non-empty list");
+            }
+
+            mechanismStrings.forEach(mechanism -> {
+                if (mechanism == null || mechanism.isEmpty()) {
+                    throw new ConfigException(name, mechanism, "enabled mechanism must be non-null or non-empty string");
+                }
+            });
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty list, enabled mechanism must be non-null or non-empty string";
+        }
+    }
 }

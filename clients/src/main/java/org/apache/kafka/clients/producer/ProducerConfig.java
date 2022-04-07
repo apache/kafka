@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -391,10 +392,14 @@ public class ProducerConfig extends AbstractConfig {
                                         MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         KEY_SERIALIZER_CLASS_DOC)
                                 .define(VALUE_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         VALUE_SERIALIZER_CLASS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
@@ -426,6 +431,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                                        in(SecurityProtocol.names().toArray(new String[0])),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .define(SECURITY_PROVIDERS_CONFIG,

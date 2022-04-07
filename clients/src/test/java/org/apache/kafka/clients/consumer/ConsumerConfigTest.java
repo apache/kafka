@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -30,6 +32,8 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConsumerConfigTest {
@@ -107,5 +111,43 @@ public class ConsumerConfigTest {
     public void testDefaultPartitionAssignor() {
         assertEquals(Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class),
             new ConsumerConfig(properties).getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG));
+    }
+
+    @Test
+    public void testInvalidKeyDeserializer() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, null);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+    }
+
+    @Test
+    public void testInvalidValueDeserializer() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, null);
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+    }
+
+    @Test
+    public void testInvalidGroupInstanceId() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "");
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
+    }
+
+    @Test
+    public void testInvalidSecurityProtocol() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 }

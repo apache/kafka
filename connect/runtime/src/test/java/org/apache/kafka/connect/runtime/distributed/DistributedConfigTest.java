@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
 
@@ -31,6 +32,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DistributedConfigTest {
 
@@ -293,5 +295,15 @@ public class DistributedConfigTest {
         Map<String, Object> actual = config.statusStorageTopicSettings();
         assertEquals(expectedTopicSettings, actual);
         assertNotEquals(topicSettings, actual);
+    }
+
+    @Test
+    public void testInvalidSecurityProtocol() {
+        Map<String, String> configs = configs();
+
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        ConfigException ce = assertThrows(ConfigException.class,
+                () -> new DistributedConfig(configs));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 }
