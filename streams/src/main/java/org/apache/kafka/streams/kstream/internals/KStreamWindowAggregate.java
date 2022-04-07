@@ -248,10 +248,10 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 }
             }
 
-            tryEmitFinalResult(record, closeTime);
+            maybeForwardFinalResult(record, closeTime);
         }
 
-        private void tryEmitFinalResult(final Record<KIn, VIn> record, final long closeTime) {
+        private void maybeForwardFinalResult(final Record<KIn, VIn> record, final long closeTime) {
             if (emitStrategy.type() != StrategyType.ON_WINDOW_CLOSE) {
                 return;
             }

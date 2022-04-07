@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -39,6 +40,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
+
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
@@ -98,7 +101,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
                 materialize(materializedInternal),
-                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde());
@@ -142,7 +145,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
                 materialize(materializedInternal),
-                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
+                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, initializer, aggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde());
@@ -187,7 +190,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return aggregateBuilder.build(
                 new NamedInternal(reduceName),
                 materialize(materializedInternal),
-                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
+                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde());
@@ -224,12 +227,20 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                     );
                     break;
                 case ROCKS_DB:
-                    supplier = Stores.persistentTimestampedWindowStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.timeDifferenceMs()),
-                        false
-                    );
+                    supplier = emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE ?
+                        RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            Duration.ofMillis(windows.timeDifferenceMs()),
+                            false,
+                           false
+                        ) :
+                        Stores.persistentTimestampedWindowStore(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            Duration.ofMillis(windows.timeDifferenceMs()),
+                            false
+                        );
                     break;
                 default:
                     throw new IllegalStateException("Unknown store type: " + materialized.storeType());

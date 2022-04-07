@@ -18,12 +18,17 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.SlidingWindows;
+import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -39,7 +44,11 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.emitFinalLatencySensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.emittedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
@@ -50,6 +59,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private final SlidingWindows windows;
     private final Initializer<VAgg> initializer;
     private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
+    private final EmitStrategy emitStrategy;
 
     private boolean sendOldValues = false;
 
@@ -57,10 +67,19 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                                          final String storeName,
                                          final Initializer<VAgg> initializer,
                                          final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
+        this(windows, storeName, EmitStrategy.onWindowUpdate(), initializer, aggregator);
+    }
+
+    public KStreamSlidingWindowAggregate(final SlidingWindows windows,
+                                         final String storeName,
+                                         final EmitStrategy emitStrategy,
+                                         final Initializer<VAgg> initializer,
+                                         final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
+        this.emitStrategy = emitStrategy;
     }
 
     @Override
@@ -81,23 +100,54 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         private TimestampedWindowStore<KIn, VAgg> windowStore;
         private TimestampedTupleForwarder<Windowed<KIn>, VAgg> tupleForwarder;
         private Sensor droppedRecordsSensor;
+        private Sensor emittedRecordsSensor;
+        private Sensor emitFinalLatencySensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+        private long lastEmitCloseTime = ConsumerRecord.NO_TIMESTAMP;
         private Boolean reverseIteratorPossible = null;
+        private InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext;
+        private final TimeTracker timeTracker = new TimeTracker();
+        private final Time time = Time.SYSTEM;
 
         @Override
         public void init(final ProcessorContext<Windowed<KIn>, Change<VAgg>> context) {
             super.init(context);
-            final InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext =
-                (InternalProcessorContext<Windowed<KIn>, Change<VAgg>>) context;
+            internalProcessorContext = (InternalProcessorContext<Windowed<KIn>, Change<VAgg>>) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
+            emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(), metrics);
+            emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(), metrics);
             windowStore = context.getStateStore(storeName);
-            tupleForwarder = new TimestampedTupleForwarder<>(
-                windowStore,
-                context,
-                new TimestampedCacheFlushListener<>(context),
-                sendOldValues);
+            if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                // Don't set flush lister which emit cache results
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    windowStore,
+                    context,
+                    sendOldValues);
+            } else {
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    windowStore,
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
+                    sendOldValues);
+            }
+
+            log.info("EmitStrategy=" + emitStrategy.type());
+            // Restore last emit close time for ON_WINDOW_CLOSE strategy
+            if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                final Long lastEmitTime = internalProcessorContext.processorMetadataForKey(storeName);
+                if (lastEmitTime != null) {
+                    lastEmitCloseTime = lastEmitTime;
+                }
+                final long emitInterval = StreamsConfig.InternalConfig.getLong(
+                    context.appConfigs(),
+                    EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION,
+                    1000L
+                );
+                timeTracker.setEmitInterval(emitInterval);
+                log.info("EmitInterval=" + emitInterval);
+            }
         }
 
         @Override
@@ -178,6 +228,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             } else {
                 processInOrder(record, closeTime);
             }
+
+            maybeMeasureLatency(() -> maybeForwardFinalResult(record, closeTime), time, emitFinalLatencySensor);
         }
 
         public void processInOrder(final Record<KIn, VIn> record, final long closeTime) {
@@ -436,10 +488,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 record.key(),
                 rightWinAgg,
                 window.start());
-            tupleForwarder.maybeForward(
-                record.withKey(new Windowed<>(record.key(), window))
-                    .withValue(new Change<>(rightWinAgg.value(), null))
-                    .withTimestamp(rightWinAgg.timestamp()));
+            maybeForwardUpdate(record, window, null, rightWinAgg.value(), rightWinAgg.timestamp());
         }
 
         private void createPreviousRecordRightWindow(final long windowStart,
@@ -467,6 +516,72 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             return rightWinAgg != null && rightWinAgg.timestamp() > inputRecordTimestamp;
         }
 
+        private void maybeForwardUpdate(final Record<KIn, VIn> record,
+                                  final Window window,
+                                  final VAgg oldAgg,
+                                  final VAgg newAgg,
+                                  final long newTimestamp) {
+
+            if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                return;
+            }
+            tupleForwarder.maybeForward(
+                record.withKey(new Windowed<>(record.key(), window))
+                    .withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                    .withTimestamp(newTimestamp));
+        }
+
+        private void maybeForwardFinalResult(final Record<KIn, VIn> record, final long closeTime) {
+            if (emitStrategy.type() != StrategyType.ON_WINDOW_CLOSE) {
+                return;
+            }
+
+            final long now = internalProcessorContext.currentSystemTimeMs();
+            // Throttle emit frequency
+            if (now < timeTracker.nextTimeToEmit) {
+                return;
+            }
+
+            // Schedule next emit time based on now to avoid the case that if system time jumps a lot,
+            // this can be triggered everytime
+            timeTracker.nextTimeToEmit = now;
+            timeTracker.advanceNextTimeToEmit();
+
+            // Close time does not progress
+            if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP && lastEmitCloseTime >= closeTime) {
+                return;
+            }
+
+            final long emitWindowStart = closeTime - windows.timeDifferenceMs();
+            // When closeTime is on right boundary of a window, the window is not closed
+            // So if emitWindowStart is 0, we shouldn't emit
+            if (emitWindowStart <= 0) {
+                return;
+            }
+
+            final long lastEmitWindowStart = lastEmitCloseTime == ConsumerRecord.NO_TIMESTAMP ?
+                0L : lastEmitCloseTime - windows.timeDifferenceMs();
+
+            // Fetch to emitWindowStart - 1 so avoid close right boundary of window
+            final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
+                .fetchAll(lastEmitWindowStart, emitWindowStart - 1);
+
+            int emittedCount = 0;
+            while (windowToEmit.hasNext()) {
+                emittedCount++;
+                final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+                tupleForwarder.maybeForward(
+                    record.withKey(kv.key)
+                        .withValue(new Change<>(kv.value.value(), null))
+                        .withTimestamp(kv.value.timestamp())
+                        .withHeaders(null)); // Don't set header
+            }
+            emittedRecordsSensor.record(emittedCount);
+
+            lastEmitCloseTime = closeTime;
+            internalProcessorContext.addProcessorMetadataKeyValue(storeName, closeTime);
+        }
+
         private void updateWindowAndForward(final Window window,
                                             final ValueAndTimestamp<VAgg> valueAndTime,
                                             final Record<KIn, VIn> record,
@@ -483,10 +598,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     record.key(),
                     ValueAndTimestamp.make(newAgg, newTimestamp),
                     windowStart);
-                tupleForwarder.maybeForward(
-                    record.withKey(new Windowed<>(record.key(), window))
-                        .withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
-                        .withTimestamp(newTimestamp));
+                maybeForwardUpdate(record, window, oldAgg, newAgg, newTimestamp);
             } else {
                 if (context().recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context().recordMetadata().get();
