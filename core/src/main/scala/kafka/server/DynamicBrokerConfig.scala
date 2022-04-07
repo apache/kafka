@@ -800,12 +800,15 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaBroker) extends Reconf
     updatedConfigs.forEach { (k, v) => props.put(k, v.asInstanceOf[AnyRef]) }
     propsOverride.forKeyValue { (k, v) => props.put(k, v) }
     val reporters = dynamicConfig.currentKafkaConfig.getConfiguredInstances(reporterClasses, classOf[MetricsReporter], props)
+    // Call notifyMetricsReporters first to satisfy the contract for MetricsReporter.contextChange,
+    // which provides that MetricsReporter.contextChange must be called before the first call to MetricsReporter.init.
+    // The first call to MetricsReporter.init is done when we call metrics.addReporter below.
+    KafkaBroker.notifyMetricsReporters(server.clusterId, server.config, reporters.asScala)
     reporters.forEach { reporter =>
       metrics.addReporter(reporter)
       currentReporters += reporter.getClass.getName -> reporter
     }
     KafkaBroker.notifyClusterListeners(server.clusterId, reporters.asScala)
-    KafkaBroker.notifyMetricsReporters(server.clusterId, server.config, reporters.asScala)
   }
 
   private def removeReporter(className: String): Unit = {
