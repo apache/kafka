@@ -25,7 +25,6 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -57,7 +56,7 @@ public class ProducerIdControlManagerTest {
         snapshotRegistry = new SnapshotRegistry(logContext);
         clusterControl = new ClusterControlManager(
             logContext, clusterId, time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(random), new MockControllerMetrics(), MetadataVersion::latest);
+            new StripedReplicaPlacer(random), new MockControllerMetrics());
 
         clusterControl.activate();
         for (int i = 0; i < 4; i++) {

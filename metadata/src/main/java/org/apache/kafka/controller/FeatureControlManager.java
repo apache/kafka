@@ -32,14 +32,16 @@ import java.util.function.Consumer;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FeatureLevelListener;
-import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineObject;
+import org.slf4j.Logger;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 
@@ -49,12 +51,12 @@ public class FeatureControlManager {
         SAFE, UNSAFE, NONE;
     }
 
+    private final Logger log;
+
     /**
      * An immutable map containing the features supported by this controller's software.
      */
     private final QuorumFeatures quorumFeatures;
-
-    private final MetadataVersionProvider metadataVersionProvider;
 
     /**
      * Maps feature names to finalized version ranges.
@@ -62,16 +64,22 @@ public class FeatureControlManager {
     private final TimelineHashMap<String, Short> finalizedVersions;
 
     /**
+     * The current metadata version
+     */
+    private final TimelineObject<MetadataVersion> metadataVersion;
+
+    /**
      * Collection of listeners for when features change
      */
     private final Map<String, FeatureLevelListener> listeners;
 
-    FeatureControlManager(QuorumFeatures quorumFeatures,
-                          SnapshotRegistry snapshotRegistry,
-                          MetadataVersionProvider metadataVersionProvider) {
+    FeatureControlManager(LogContext logContext,
+                          QuorumFeatures quorumFeatures,
+                          SnapshotRegistry snapshotRegistry) {
+        this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
-        this.metadataVersionProvider = metadataVersionProvider;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metadataVersion = new TimelineObject<>(snapshotRegistry, MetadataVersion.UNINITIALIZED);
         this.listeners = new HashMap<>();
     }
 
@@ -105,11 +113,11 @@ public class FeatureControlManager {
             ));
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        ApiError result = updateMetadataVersion(initVersion, initVersion, records::add);
+        ApiError result = updateMetadataVersion(initVersion, records::add);
         return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersion.FEATURE_NAME, result));
     }
 
-    void register(String listenerName, FeatureLevelListener listener) {
+    void registerFeatureListener(String listenerName, FeatureLevelListener listener) {
         this.listeners.putIfAbsent(listenerName, listener);
     }
 
@@ -121,6 +129,11 @@ public class FeatureControlManager {
 
     boolean featureExists(String featureName) {
         return quorumFeatures.localSupportedFeature(featureName).isPresent();
+    }
+
+
+    MetadataVersion metadataVersion() {
+        return metadataVersion.get();
     }
 
     private ApiError updateFeature(String featureName,
@@ -163,13 +176,13 @@ public class FeatureControlManager {
 
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             // Perform additional checks if we're updating metadata.version
-            return updateMetadataVersion(newVersion, metadataVersionProvider.activeVersion().version(), records::add);
+            return updateMetadataVersion(newVersion, records::add);
         } else {
             records.add(new ApiMessageAndVersion(
                 new FeatureLevelRecord()
                     .setName(featureName)
                     .setFeatureLevel(newVersion),
-                metadataVersionProvider.activeVersion().recordVersion(FEATURE_LEVEL_RECORD)));
+                FEATURE_LEVEL_RECORD.highestSupportedVersion()));
             return ApiError.NONE;
         }
     }
@@ -178,7 +191,6 @@ public class FeatureControlManager {
      * Perform some additional validation for metadata.version updates.
      */
     private ApiError updateMetadataVersion(short newVersion,
-                                           short recordVersion,
                                            Consumer<ApiMessageAndVersion> recordConsumer) {
         Optional<VersionRange> quorumSupported = quorumFeatures.quorumSupportedFeature(MetadataVersion.FEATURE_NAME);
         if (!quorumSupported.isPresent()) {
@@ -209,7 +221,7 @@ public class FeatureControlManager {
         recordConsumer.accept(new ApiMessageAndVersion(
             new FeatureLevelRecord()
                 .setName(MetadataVersion.FEATURE_NAME)
-                .setFeatureLevel(newVersion), recordVersion));
+                .setFeatureLevel(newVersion), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
         return ApiError.NONE;
     }
 
@@ -222,25 +234,50 @@ public class FeatureControlManager {
     }
 
     public void replay(FeatureLevelRecord record) {
-        finalizedVersions.put(record.name(), record.featureLevel());
-        listeners.values().forEach(listener ->
-            listener.handle(record.name(), record.featureLevel()));
+        if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
+            log.info("Setting metadata.version to {}", record.featureLevel());
+            metadataVersion.set(MetadataVersion.fromValue(record.featureLevel()));
+        } else {
+            log.info("Setting feature {} to {}", record.name(), record.featureLevel());
+            finalizedVersions.put(record.name(), record.featureLevel());
+        }
+        for (Entry<String, FeatureLevelListener> listenerEntry : listeners.entrySet()) {
+            try {
+                listenerEntry.getValue().handle(record.name(), record.featureLevel());
+            } catch (Throwable t) {
+                log.error("Failure calling feature listener " + listenerEntry.getKey(), t);
+            }
+        }
     }
 
     class FeatureControlIterator implements Iterator<List<ApiMessageAndVersion>> {
         private final Iterator<Entry<String, Short>> iterator;
+        private final MetadataVersion metadataVersion;
+        private boolean wroteVersion = false;
 
         FeatureControlIterator(long epoch) {
             this.iterator = finalizedVersions.entrySet(epoch).iterator();
+            this.metadataVersion = FeatureControlManager.this.metadataVersion.get(epoch);
+            if (this.metadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
+                this.wroteVersion = true;
+            }
         }
 
         @Override
         public boolean hasNext() {
-            return iterator.hasNext();
+            return !wroteVersion || iterator.hasNext();
         }
 
         @Override
         public List<ApiMessageAndVersion> next() {
+            // Write the metadata.version first
+            if (!wroteVersion) {
+                wroteVersion = true;
+                return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
+                    .setName(MetadataVersion.FEATURE_NAME)
+                    .setFeatureLevel(metadataVersion.version()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+            }
+            // Then write the rest of the features
             if (!hasNext()) throw new NoSuchElementException();
             Entry<String, Short> entry = iterator.next();
             return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()

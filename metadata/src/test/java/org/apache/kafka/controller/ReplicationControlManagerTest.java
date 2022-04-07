@@ -69,7 +69,6 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
@@ -142,8 +141,7 @@ public class ReplicationControlManagerTest {
             snapshotRegistry,
             TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
             new StripedReplicaPlacer(random),
-            metrics,
-            MetadataVersion::latest);
+            metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
             new LogContext(),
             snapshotRegistry,

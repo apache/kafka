@@ -898,7 +898,7 @@ public final class QuorumController implements Controller {
                     }
                     log.info(
                         "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
-                        newEpoch, lastCommittedOffset, lastCommittedEpoch, activeMetadataVersion
+                        newEpoch, lastCommittedOffset, lastCommittedEpoch, featureControl.metadataVersion()
                     );
 
                     curClaimEpoch = newEpoch;
@@ -909,7 +909,7 @@ public final class QuorumController implements Controller {
                     // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
                     // write any records to the log since we need the metadata.version to determine the correct
                     // record version
-                    if (activeMetadataVersion == MetadataVersion.UNINITIALIZED.version()) {
+                    if (featureControl.metadataVersion() == MetadataVersion.UNINITIALIZED) {
                         final CompletableFuture<Map<String, ApiError>> future;
                         if (initialMetadataVersion == MetadataVersion.UNINITIALIZED) {
                             future = new CompletableFuture<>();
@@ -977,21 +977,17 @@ public final class QuorumController implements Controller {
      */
     class QuorumFeatureListener implements FeatureLevelListener {
         @Override
-        public void handle(String featureName, short finalizedMaxVersion) {
-            log.debug("Feature flag {} finalized {}", featureName, finalizedMaxVersion);
+        public void handle(String featureName, short finalizedVersion) {
             boolean isActiveController = curClaimEpoch != -1;
-            boolean isFeatureSupported = featureControl.canSupportVersion(featureName, finalizedMaxVersion);
+            boolean isFeatureSupported = featureControl.canSupportVersion(featureName, finalizedVersion);
             if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 if (!isFeatureSupported) {
                     if (isActiveController) {
-                        log.error("Active controller cannot support metadata.version {}", finalizedMaxVersion);
+                        log.error("Active controller cannot support metadata.version {}", finalizedVersion);
                     } else {
-                        log.error("Standby controller cannot support metadata.version {}, shutting down.", finalizedMaxVersion);
+                        log.error("Standby controller cannot support metadata.version {}, shutting down.", finalizedVersion);
                     }
                     beginShutdown();
-                } else {
-                    log.info("Setting our metadata.version to {}", finalizedMaxVersion);
-                    activeMetadataVersion = finalizedMaxVersion;
                 }
             }
             // In the future, handle other feature flags that are relevant to the controller here.
@@ -1213,7 +1209,6 @@ public final class QuorumController implements Controller {
         lastCommittedOffset = -1;
         lastCommittedEpoch = -1;
         lastCommittedTimestamp = -1;
-        activeMetadataVersion = MetadataVersion.UNINITIALIZED.version();
     }
 
     private final LogContext logContext;
@@ -1392,8 +1387,6 @@ public final class QuorumController implements Controller {
 
     private final MetadataVersion initialMetadataVersion;
 
-    private short activeMetadataVersion = MetadataVersion.UNINITIALIZED.version();
-
     private QuorumController(LogContext logContext,
                              int nodeId,
                              String clusterId,
@@ -1434,8 +1427,8 @@ public final class QuorumController implements Controller {
             configurationValidator);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
-            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics, this::activeMetadataVersion);
-        this.featureControl = new FeatureControlManager(quorumFeatures, snapshotRegistry, this::activeMetadataVersion);
+            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
+        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
@@ -1454,7 +1447,7 @@ public final class QuorumController implements Controller {
         resetState();
 
         this.raftClient.register(metaLogListener);
-        this.featureControl.register("quorumController", featureListener);
+        this.featureControl.registerFeatureListener("quorumController", featureListener);
     }
 
     @Override
@@ -1756,10 +1749,6 @@ public final class QuorumController implements Controller {
     @Override
     public int curClaimEpoch() {
         return curClaimEpoch;
-    }
-
-    private MetadataVersion activeMetadataVersion() {
-        return MetadataVersion.fromValue(activeMetadataVersion);
     }
 
     @Override

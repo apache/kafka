@@ -40,7 +40,6 @@ import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
     @SuppressWarnings("unchecked")
@@ -81,10 +80,11 @@ public class FeatureControlManagerTest {
 
     @Test
     public void testUpdateFeatures() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         snapshotRegistry.getOrCreateSnapshot(-1);
-        FeatureControlManager manager = new FeatureControlManager(
-            features("foo", 1, 2), snapshotRegistry, MetadataVersion::latest);
+        FeatureControlManager manager = new FeatureControlManager(logContext,
+            features("foo", 1, 2), snapshotRegistry);
         assertEquals(new FinalizedControllerFeatures(Collections.emptyMap(), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
@@ -110,12 +110,14 @@ public class FeatureControlManagerTest {
 
     @Test
     public void testReplay() {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         FeatureLevelRecord record = new FeatureLevelRecord().
             setName("foo").setFeatureLevel((short) 2);
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+
         snapshotRegistry.getOrCreateSnapshot(-1);
-        FeatureControlManager manager = new FeatureControlManager(
-            features("foo", 1, 2), snapshotRegistry, MetadataVersion::latest);
+        FeatureControlManager manager = new FeatureControlManager(logContext,
+            features("foo", 1, 2), snapshotRegistry);
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
         assertEquals(new FinalizedControllerFeatures(versionMap("foo", 2), 123),
@@ -124,9 +126,10 @@ public class FeatureControlManagerTest {
 
     @Test
     public void testUpdateFeaturesErrorCases() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        FeatureControlManager manager = new FeatureControlManager(
-            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersion::latest);
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        FeatureControlManager manager = new FeatureControlManager(logContext,
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
 
         assertEquals(
             ControllerResult.atomicOf(
@@ -181,14 +184,18 @@ public class FeatureControlManagerTest {
 
     @Test
     public void testFeatureControlIterator() throws Exception {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        FeatureControlManager manager = new FeatureControlManager(
-            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersion::latest);
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        FeatureControlManager manager = new FeatureControlManager(logContext,
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
         ControllerResult<Map<String, ApiError>> result = manager.
             updateFeatures(updateMap("foo", 5, "bar", 1),
                 Collections.emptyMap(), Collections.emptyMap(), false);
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                    setName(MetadataVersion.FEATURE_NAME).
+                    setFeatureLevel((short) 0), (short) 0)),
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("foo").
                 setFeatureLevel((short) 5), (short) 0)),

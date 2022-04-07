@@ -67,10 +67,19 @@ public final class FeaturesImage {
 
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
         List<ApiMessageAndVersion> batch = new ArrayList<>();
+        // Write out the metadata.version record first, and then the rest of the finalized features
+        if (!metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+            batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(metadataVersion.version()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+        }
         for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
+            if (entry.getKey().equals(MetadataVersion.FEATURE_NAME)) {
+                continue;
+            }
             batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(entry.getKey()).
-                setFeatureLevel(entry.getValue()), metadataVersion.recordVersion(FEATURE_LEVEL_RECORD)));
+                setFeatureLevel(entry.getValue()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
         }
         out.accept(batch);
     }

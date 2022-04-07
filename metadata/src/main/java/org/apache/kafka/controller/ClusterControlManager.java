@@ -37,7 +37,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
-import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -119,11 +118,6 @@ public class ClusterControlManager {
     private final ReplicaPlacer replicaPlacer;
 
     /**
-     * The metadata.version provider
-     */
-    private final MetadataVersionProvider metadataVersionProvider;
-
-    /**
      * Maps broker IDs to broker registrations.
      */
     private final TimelineHashMap<Integer, BrokerRegistration> brokerRegistrations;
@@ -150,15 +144,13 @@ public class ClusterControlManager {
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
                           ReplicaPlacer replicaPlacer,
-                          ControllerMetrics metrics,
-                          MetadataVersionProvider metadataVersionProvider) {
+                          ControllerMetrics metrics) {
         this.logContext = logContext;
         this.clusterId = clusterId;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
         this.sessionTimeoutNs = sessionTimeoutNs;
         this.replicaPlacer = replicaPlacer;
-        this.metadataVersionProvider = metadataVersionProvider;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
@@ -266,8 +258,7 @@ public class ClusterControlManager {
         }
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record,
-            metadataVersionProvider.activeVersion().recordVersion(REGISTER_BROKER_RECORD)));
+        records.add(new ApiMessageAndVersion(record, REGISTER_BROKER_RECORD.highestSupportedVersion()));
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -461,8 +452,7 @@ public class ClusterControlManager {
                 setEndPoints(endpoints).
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced()),
-                    metadataVersionProvider.activeVersion().recordVersion(REGISTER_BROKER_RECORD)));
+                setFenced(registration.fenced()), REGISTER_BROKER_RECORD.highestSupportedVersion()));
             return batch;
         }
     }
