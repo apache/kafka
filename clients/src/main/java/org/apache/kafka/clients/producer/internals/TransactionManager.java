@@ -113,16 +113,7 @@ public class TransactionManager {
         }
 
         private TopicPartitionEntry getOrCreatePartition(TopicPartition topicPartition) {
-            TopicPartitionEntry ent = topicPartitions.get(topicPartition);
-            if (ent == null) {
-                ent = new TopicPartitionEntry();
-                topicPartitions.put(topicPartition, ent);
-            }
-            return ent;
-        }
-
-        private void addPartition(TopicPartition topicPartition) {
-            this.topicPartitions.putIfAbsent(topicPartition, new TopicPartitionEntry());
+            return topicPartitions.computeIfAbsent(topicPartition, tp -> new TopicPartitionEntry());
         }
 
         private boolean contains(TopicPartition topicPartition) {
@@ -450,7 +441,7 @@ public class TransactionManager {
                 return;
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
-                topicPartitionBookkeeper.addPartition(topicPartition);
+                topicPartitionBookkeeper.getOrCreatePartition(topicPartition);
                 newPartitionsInTransaction.add(topicPartition);
             }
         }
@@ -698,7 +689,7 @@ public class TransactionManager {
         // response for this. This can happen only if the producer is only idempotent (not transactional) and in
         // this case there will be no tracked bookkeeper entry about it, so we have to insert one.
         if (!lastAckedOffset.isPresent() && !isTransactional()) {
-            topicPartitionBookkeeper.addPartition(batch.topicPartition);
+            topicPartitionBookkeeper.getOrCreatePartition(batch.topicPartition);
         }
         if (lastOffset > lastAckedOffset.orElse(ProduceResponse.INVALID_OFFSET)) {
             topicPartitionBookkeeper.getPartition(batch.topicPartition).lastAckedOffset = lastOffset;
@@ -796,7 +787,6 @@ public class TransactionManager {
                 throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
                         + " for partition " + batch.topicPartition + " is going to become negative: " + newSequence);
 
-            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
         });
     }
