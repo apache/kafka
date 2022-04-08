@@ -2913,7 +2913,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
-      // Send the top-level error only if the client supports parsing it. If not, log it on the broker
+      // Send the top-level error only if the client supports parsing it
       val errorCode = if (DescribeLogDirsResponse.shouldReturnTopLevelError(request.header.apiVersion())) {
         error
       } else {
