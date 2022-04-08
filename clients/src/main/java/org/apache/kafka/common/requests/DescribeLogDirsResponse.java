@@ -39,10 +39,6 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public static boolean shouldReturnTopLevelError(short version) {
-        return version >= 3;
-    }
-
     @Override
     public DescribeLogDirsResponseData data() {
         return data;
