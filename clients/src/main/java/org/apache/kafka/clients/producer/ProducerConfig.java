@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -540,9 +539,7 @@ public class ProducerConfig extends AbstractConfig {
     static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
             Serializer<?> keySerializer,
             Serializer<?> valueSerializer) {
-        Map<String, Object> newConfigs = configs instanceof RecordingMap ?
-                ((RecordingMap<Object>) configs).copy() :
-                new HashMap<>(configs);
+        Map<String, Object> newConfigs = RecordingMap.copyAndPreserve(configs);
         if (keySerializer != null)
             newConfigs.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
         if (valueSerializer != null)

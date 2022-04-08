@@ -55,6 +55,15 @@ public class RecordingMap<V> extends HashMap<String, V> {
         this.withIgnoreFallback = withIgnoreFallback;
     }
 
+    public static <V> Map<String, V> copyAndPreserve(Map<String, V> map) {
+        if (map instanceof RecordingMap) {
+            RecordingMap<V> recordingMap = (RecordingMap<V>) map;
+            return new RecordingMap<>(recordingMap.config, recordingMap, recordingMap.prefix, recordingMap.withIgnoreFallback);
+        } else {
+            return new HashMap<>(map);
+        }
+    }
+
     @Override
     public V get(Object key) {
         if (key instanceof String) {
@@ -70,10 +79,6 @@ public class RecordingMap<V> extends HashMap<String, V> {
                 record(stringKey);
         }
         return super.get(key);
-    }
-
-    public RecordingMap<V> copy() {
-        return new RecordingMap<>(config, this);
     }
 
     private void record(String key) {

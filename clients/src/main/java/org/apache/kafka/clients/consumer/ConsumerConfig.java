@@ -32,7 +32,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -604,9 +603,7 @@ public class ConsumerConfig extends AbstractConfig {
     protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
                                                                     Deserializer<?> keyDeserializer,
                                                                     Deserializer<?> valueDeserializer) {
-        Map<String, Object> newConfigs = configs instanceof RecordingMap ?
-                ((RecordingMap<Object>) configs).copy() :
-                new HashMap<>(configs);
+        Map<String, Object> newConfigs = RecordingMap.copyAndPreserve(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
         if (valueDeserializer != null)
