@@ -29,10 +29,6 @@ public class SaslConfigs {
     public static final String SASL_MECHANISM = "sasl.mechanism";
     public static final String SASL_MECHANISM_DOC = "SASL mechanism used for client connections. This may be any mechanism for which a security provider is available. GSSAPI is the default mechanism.";
     public static final String GSSAPI_MECHANISM = "GSSAPI";
-    public static final String PLAIN_MECHANISM = "PLAIN";
-    public static final String SCRAM_SHA_256_MECHANISM = "SCRAM-SHA-256";
-    public static final String SCRAM_SHA_512_MECHANISM = "SCRAM-SHA-512";
-    public static final String OAUTHBEARER_MECHANISM = "OAUTHBEARER";
     public static final String DEFAULT_SASL_MECHANISM = GSSAPI_MECHANISM;
 
     public static final String SASL_JAAS_CONFIG = "sasl.jaas.config";
