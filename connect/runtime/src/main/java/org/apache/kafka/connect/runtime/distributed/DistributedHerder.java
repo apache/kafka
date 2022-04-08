@@ -608,8 +608,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 taskConfigUpdates = new HashSet<>();
             }
         } else {
-            log.trace("Skipping config updates with incremental cooperative rebalancing " 
-                + "since no config rebalance is required " 
+            log.trace("Skipping config updates with incremental cooperative rebalancing "
+                + "since no config rebalance is required "
                 + "and there are no connector config, task config, or target state changes pending");
         }
         return retValue;
@@ -962,9 +962,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 requestValidationError = new BadRequestException("Internal request missing required signature");
             } else if (!keySignatureVerificationAlgorithms.contains(requestSignature.keyAlgorithm())) {
                 requestValidationError = new BadRequestException(String.format(
-                    "This worker does not support the '%s' key signing algorithm used by other workers. " 
-                        + "This worker is currently configured to use: %s. " 
-                        + "Check that all workers' configuration files permit the same set of signature algorithms, " 
+                    "This worker does not support the '%s' key signing algorithm used by other workers. "
+                        + "This worker is currently configured to use: %s. "
+                        + "Check that all workers' configuration files permit the same set of signature algorithms, "
                         + "and correct any misconfigured worker and restart it.",
                     requestSignature.keyAlgorithm(),
                     keySignatureVerificationAlgorithms
@@ -1597,6 +1597,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                         "because the URL of the leader's REST interface is empty!"), null);
                                 return;
                             }
+                            if (leaderUrl.startsWith("NOTUSED")) {
+                                configBackingStore.putTaskConfigs(connName, rawTaskProps);
+                                cb.onCompletion(null, null);
+                                return;
+                            }
                             String reconfigUrl = UriBuilder.fromUri(leaderUrl)
                                     .path("connectors")
                                     .path(connName)
@@ -1822,7 +1827,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         ClusterConfigState snapshot = configBackingStore.snapshot();
         for (String connector : statusBackingStore.connectors()) {
             Set<ConnectorTaskId> remainingTasks = new HashSet<>(snapshot.tasks(connector));
-            
+
             statusBackingStore.getAll(connector).stream()
                 .map(TaskStatus::id)
                 .filter(task -> !remainingTasks.contains(task))
