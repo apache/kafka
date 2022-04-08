@@ -91,8 +91,8 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
-
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
+import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopicCollection
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -3486,6 +3486,144 @@ class KafkaApisTest {
     assertEquals(Map(Errors.NONE -> 1,
       Errors.LOG_DIR_NOT_FOUND -> 1,
       Errors.INVALID_TOPIC_EXCEPTION -> 1).asJava, response.errorCounts)
+  }
+
+  @Test
+  def testDescribeLogDirsValid(): Unit = {
+    val t0p0 = new TopicPartition("t0", 0)
+    val t0p1 = new TopicPartition("t0", 1)
+    val t0p2 = new TopicPartition("t0", 2)
+    val topicsCollection = new DescribableLogDirTopicCollection()
+    topicsCollection.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
+    .setTopic(t0p0.topic())
+    .setPartitions(asList(t0p0.partition())))
+    topicsCollection.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
+      .setTopic(t0p1.topic())
+      .setPartitions(asList(t0p1.partition())))
+    topicsCollection.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
+      .setTopic(t0p2.topic())
+      .setPartitions(asList(t0p2.partition())))
+    val data = new DescribeLogDirsRequestData().setTopics(topicsCollection)
+
+    val describeLogDirsResults = List[DescribeLogDirsResponseData.DescribeLogDirsResult] (
+      new DescribeLogDirsResponseData.DescribeLogDirsResult()
+        .setErrorCode(Errors.NONE.code())
+        .setLogDir("log0"),
+      new DescribeLogDirsResponseData.DescribeLogDirsResult()
+        .setErrorCode(Errors.NONE.code())
+        .setLogDir("log1"),
+      new DescribeLogDirsResponseData.DescribeLogDirsResult()
+        .setErrorCode(Errors.NONE.code())
+        .setLogDir("log2"))
+
+    // v3
+    var describeLogDirsRequest = new DescribeLogDirsRequest.Builder(data).build()
+    var request = buildRequest(describeLogDirsRequest)
+
+    reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    when(replicaManager.describeLogDirs(ArgumentMatchers.eq(Set(
+      t0p0,
+      t0p1,
+      t0p2))))
+    .thenReturn(describeLogDirsResults)
+
+    createKafkaApis().handleDescribeLogDirsRequest(request)
+
+    var capturedResponse = verifyNoThrottling(request)
+    var response = capturedResponse.getValue.asInstanceOf[DescribeLogDirsResponse]
+    assertEquals(describeLogDirsResults, response.data.results.asScala)
+
+    // 3 (for each topic-partition) + 1 top-level
+    assertEquals(Map(Errors.NONE -> 4).asJava, response.errorCounts)
+
+    // versions lower than v3
+    describeLogDirsRequest = new DescribeLogDirsRequest.Builder(data).build(2)
+    request = buildRequest(describeLogDirsRequest)
+
+    reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    when(replicaManager.describeLogDirs(ArgumentMatchers.eq(Set(
+      t0p0,
+      t0p1,
+      t0p2))))
+      .thenReturn(describeLogDirsResults)
+
+    createKafkaApis().handleDescribeLogDirsRequest(request)
+
+    capturedResponse = verifyNoThrottling(request)
+    response = capturedResponse.getValue.asInstanceOf[DescribeLogDirsResponse]
+    assertEquals(describeLogDirsResults, response.data.results.asScala)
+
+    // 3 (for each topic-partition) + 1 top-level
+    assertEquals(Map(Errors.NONE -> 4).asJava, response.errorCounts)
+  }
+
+  @Test
+  def testDescribeLogDirsError(): Unit = {
+    val t0p0 = new TopicPartition("t0", 0)
+    val t0p1 = new TopicPartition("t0", 1)
+    val t0p2 = new TopicPartition("t0", 2)
+    val topicsCollection = new DescribableLogDirTopicCollection()
+    topicsCollection.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
+      .setTopic(t0p0.topic())
+      .setPartitions(asList(t0p0.partition())))
+    topicsCollection.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
+      .setTopic(t0p1.topic())
+      .setPartitions(asList(t0p1.partition())))
+    topicsCollection.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
+      .setTopic(t0p2.topic())
+      .setPartitions(asList(t0p2.partition())))
+    val data = new DescribeLogDirsRequestData().setTopics(topicsCollection)
+
+    // Deny API access
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[java.util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    val describeLogDirsResults = List[DescribeLogDirsResponseData.DescribeLogDirsResult] ()
+
+    // v3 w/ a top-level authorization error
+    var describeLogDirsRequest = new DescribeLogDirsRequest.Builder(data).build()
+    var request = buildRequest(describeLogDirsRequest)
+
+    reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleDescribeLogDirsRequest(request)
+
+    var capturedResponse = verifyNoThrottling(request)
+    var response = capturedResponse.getValue.asInstanceOf[DescribeLogDirsResponse]
+    assertEquals(describeLogDirsResults, response.data.results.asScala)
+
+    // 1 top-level cluster auth failure error
+    assertEquals(Map(Errors.CLUSTER_AUTHORIZATION_FAILED -> 1).asJava, response.errorCounts)
+
+    // versions lower than v3 - should see no top-level error
+    describeLogDirsRequest = new DescribeLogDirsRequest.Builder(data).build(2)
+    request = buildRequest(describeLogDirsRequest)
+
+    reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleDescribeLogDirsRequest(request)
+
+    capturedResponse = verifyNoThrottling(request)
+    response = capturedResponse.getValue.asInstanceOf[DescribeLogDirsResponse]
+    assertEquals(describeLogDirsResults, response.data.results.asScala)
+
+    // top-level error should be 0
+    assertEquals(Map(Errors.NONE -> 1).asJava, response.errorCounts)
   }
 
   @Test
