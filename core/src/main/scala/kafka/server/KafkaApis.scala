@@ -2911,20 +2911,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         (List.empty[DescribeLogDirsResponseData.DescribeLogDirsResult], Errors.CLUSTER_AUTHORIZATION_FAILED)
       }
     }
-
-    requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
-      // Send the top-level error only if the client supports parsing it
-      val errorCode = if (DescribeLogDirsResponse.shouldReturnTopLevelError(request.header.apiVersion())) {
-        error
-      } else {
-        Errors.NONE
-      }
-
-      new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
-        .setThrottleTimeMs(throttleTimeMs)
-        .setResults(logDirInfos.asJava)
-        .setErrorCode(errorCode.code()))
-    })
+    requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
+      .setThrottleTimeMs(throttleTimeMs)
+      .setResults(logDirInfos.asJava)
+      .setErrorCode(error.code)))
   }
 
   def handleCreateTokenRequest(request: RequestChannel.Request): Unit = {
