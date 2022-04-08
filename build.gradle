@@ -154,8 +154,8 @@ allprojects {
 
 def determineCommitId() {
   def takeFromHash = 16
-  if (project.hasProperty('commitId2')) {
-    commitId2.take(takeFromHash)
+  if (project.hasProperty('commitId')) {
+    commitId.take(takeFromHash)
   } else if (file("$rootDir/.git/HEAD").exists()) {
     def headRef = file("$rootDir/.git/HEAD").text
     if (headRef.contains('ref: ')) {
