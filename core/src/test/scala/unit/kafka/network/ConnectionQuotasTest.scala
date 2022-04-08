@@ -19,14 +19,14 @@ package kafka.network
 
 import java.net.InetAddress
 import java.util
-import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
+import java.util.concurrent.{Callable, CountDownLatch, ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits.MapExtensionMethods
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.{Logging, MockTime, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.internals.MetricsUtils
@@ -40,7 +40,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
 import scala.concurrent.TimeoutException
 
-class ConnectionQuotasTest {
+class ConnectionQuotasTest extends Logging {
   private var metrics: Metrics = _
   private var executor: ExecutorService = _
   private var connectionQuotas: ConnectionQuotas = _
@@ -187,8 +187,7 @@ class ConnectionQuotasTest {
 
     // connections on the same listener but from a different IP should be accepted
     executor.submit((() =>
-      acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp,
-        0, expectIpThrottle = false)): Runnable
+      acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp, 0, expectIpThrottle = false)): Runnable
     ).get(5, TimeUnit.SECONDS)
 
     // remove two "rejected" connections and remove 2 more connections to free up the space for another 2 connections
@@ -394,9 +393,10 @@ class ConnectionQuotasTest {
 
   @Test
   def testListenerConnectionRateLimitWhenActualRateAboveLimit(): Unit = {
-    val brokerRateLimit = 125
     val listenerRateLimit = 30
-    val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
+    val brokerRateLimit = 120 // should be > listenerRateLimit * num_listeners
+    val connCreateIntervalMs = 20 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
+    val connCreateRatePerSec = 1000 / connCreateIntervalMs
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
@@ -410,14 +410,14 @@ class ConnectionQuotasTest {
     val connectionsPerListener = 800 // should take 20 seconds to create 800 connections with rate = 40/sec
 
     // assert that connection creation rate on listener (per sec) is indeed greater than or equal to listener quota
-    assertTrue((1000 / connCreateIntervalMs) >= listenerRateLimit)
+    assertTrue(connCreateRatePerSec >= listenerRateLimit)
 
     val futures = listeners.values.map { listener =>
       executor.submit((() =>
         // epsilon is set to account for the worst-case where the measurement is taken just before or after the quota window
-        acceptConnectionsAndVerifyRate(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs, listenerRateLimit, 7)): Runnable)
+        acceptConnectionsAndVerifyRate(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs, listenerRateLimit, 3)): Runnable)
     }
-    futures.foreach(_.get(30, TimeUnit.SECONDS))
+    futures.foreach(_.get(40, TimeUnit.SECONDS))
 
     // verify that every listener was throttled
     verifyNonZeroBlockedPercentAndThrottleTimeOnAllListeners()
@@ -441,16 +441,14 @@ class ConnectionQuotasTest {
     connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
     val numConnections = 200
     // create connections with the rate < ip quota and verify there is no throttling
-    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs,
-      expectedRate = 25, epsilon = 0)
+    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs, expectedRate = 25, epsilon = 0)
     assertEquals(numConnections, connectionQuotas.get(externalListener.defaultIp),
       s"Number of connections on $externalListener:")
 
     val adminListener = listeners("ADMIN")
     val unthrottledConnectionCreateInterval = 20 // connection creation rate = 50/s
     // create connections with an IP with no quota and verify there is no throttling
-    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, unthrottledConnectionCreateInterval,
-      expectedRate = 50, epsilon = 0)
+    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, unthrottledConnectionCreateInterval, expectedRate = 50, epsilon = 0)
 
     assertEquals(numConnections, connectionQuotas.get(adminListener.defaultIp),
       s"Number of connections on $adminListener:")
@@ -475,8 +473,7 @@ class ConnectionQuotasTest {
     connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
     // create connections with the rate > ip quota
     val numConnections = 80
-    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
-      1, expectIpThrottle = true)
+    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit, 1, expectIpThrottle = true)
     verifyIpThrottleTimeOnListener(externalListener.listenerName, expectThrottle = true)
 
     // verify that default quota applies to IPs without a quota override
@@ -484,8 +481,7 @@ class ConnectionQuotasTest {
     val adminListener = listeners("ADMIN")
     // listener shouldn't have any IP throttle time recorded
     verifyIpThrottleTimeOnListener(adminListener.listenerName, expectThrottle = false)
-    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
-      1, expectIpThrottle = true)
+    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit, 1, expectIpThrottle = true)
     verifyIpThrottleTimeOnListener(adminListener.listenerName, expectThrottle = true)
 
     // acceptor shouldn't block for IP rate throttling
@@ -510,10 +506,8 @@ class ConnectionQuotasTest {
     // use a small number of connections because a longer-running test will have both IPs throttle at different times
     val numConnections = 35
     val futures = List(
-      executor.submit((() => acceptConnections(connectionQuotas, listener, knownHost, numConnections,
-        0, expectIpThrottle = true)): Callable[Boolean]),
-      executor.submit((() => acceptConnections(connectionQuotas, listener, unknownHost, numConnections,
-        0, expectIpThrottle = true)): Callable[Boolean])
+      executor.submit((() => acceptConnections(connectionQuotas, listener, knownHost, numConnections, 0, expectIpThrottle = true)): Callable[Boolean]),
+      executor.submit((() => acceptConnections(connectionQuotas, listener, unknownHost, numConnections, 0, expectIpThrottle = true)): Callable[Boolean])
     )
 
     val ipsThrottledResults = futures.map(_.get(3, TimeUnit.SECONDS))
@@ -886,25 +880,21 @@ class ConnectionQuotasTest {
   // this method must be called on a separate thread, because connectionQuotas.inc() may block
   private def acceptConnections(connectionQuotas: ConnectionQuotas,
                                 listenerDesc: ListenerDesc,
-                                numConnections: Long,
+                                numConnections: Int,
                                 timeIntervalMs: Long = 0L,
                                 expectIpThrottle: Boolean = false) : Unit = {
-    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
-      timeIntervalMs, expectIpThrottle)
+    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections, timeIntervalMs, expectIpThrottle)
   }
 
-  // this method must be called on a separate thread, because connectionQuotas.inc() may block
-  private def acceptConnectionsAndVerifyRate(connectionQuotas: ConnectionQuotas,
-                                             listenerDesc: ListenerDesc,
-                                             numConnections: Long,
-                                             timeIntervalMs: Long,
-                                             expectedRate: Int,
-                                             epsilon: Int,
-                                             expectIpThrottle: Boolean = false) : Unit = {
+  /**
+   * Also see documentation for [[acceptConnections()]]
+   *
+   * This method must be called on a separate thread, because connectionQuotas.inc() may block
+   */
+  private def acceptConnectionsAndVerifyRate(connectionQuotas: ConnectionQuotas, listenerDesc: ListenerDesc, numConnections: Int, timeIntervalMs: Long, expectedRate: Int, epsilon: Int, expectIpThrottle: Boolean = false): Unit = {
     val startTimeMs = time.milliseconds
     val startNumConnections = connectionQuotas.get(listenerDesc.defaultIp)
-    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
-      timeIntervalMs, expectIpThrottle)
+    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections, timeIntervalMs, expectIpThrottle)
     val elapsedSeconds = MetricsUtils.convert(time.milliseconds - startTimeMs, TimeUnit.SECONDS)
     val createdConnections = connectionQuotas.get(listenerDesc.defaultIp) - startNumConnections
     val actualRate = createdConnections.toDouble / elapsedSeconds
@@ -917,32 +907,31 @@ class ConnectionQuotasTest {
    * as long as the rate is below the connection rate limit. Otherwise, connections will be essentially created as
    * fast as possible, which would result in the maximum connection creation rate.
    *
-   * This method must be called on a separate thread, because connectionQuotas.inc() may block
+   * This method must be called on a separate thread, because connectionQuotas.inc() may block.
+   * Note that the first connection is created instantly with an initialDelay of 0.
    */
-  private def acceptConnections(connectionQuotas: ConnectionQuotas,
-                                listenerName: ListenerName,
-                                address: InetAddress,
-                                numConnections: Long,
-                                timeIntervalMs: Long,
-                                expectIpThrottle: Boolean): Boolean = {
-    var nextSendTime = time.milliseconds + timeIntervalMs
+  private def acceptConnections(connectionQuotas: ConnectionQuotas, listenerName: ListenerName, address: InetAddress, numConnections: Int, timeIntervalMs: Long, expectIpThrottle: Boolean) = {
     var ipThrottled = false
-    for (_ <- 0L until numConnections) {
-      // this method may block if broker-wide or listener limit on the number of connections is reached
-      try {
-        connectionQuotas.inc(listenerName, address, blockedPercentMeters(listenerName.value))
-      } catch {
-        case e: ConnectionThrottledException =>
-          if (!expectIpThrottle)
-            throw e
-          ipThrottled = true
-      }
-      val sleepMs = math.max(nextSendTime - time.milliseconds, 0)
-      if (sleepMs > 0)
-        time.sleep(sleepMs)
-
-      nextSendTime = nextSendTime + timeIntervalMs
+    val latch = new CountDownLatch(numConnections)
+    val scheduledExecutor = Executors.newScheduledThreadPool(numConnections)
+    try {
+      scheduledExecutor.scheduleAtFixedRate(() => {
+        try {
+          debug(s"sending connection#${numConnections - latch.getCount}")
+          connectionQuotas.inc(listenerName, address, blockedPercentMeters(listenerName.value))
+          latch.countDown()
+        } catch {
+          case e: ConnectionThrottledException =>
+            if (!expectIpThrottle)
+              throw e
+            ipThrottled = true
+        }
+      }, 0, timeIntervalMs, TimeUnit.MILLISECONDS)
+      latch.await(30, TimeUnit.SECONDS)
+    } finally {
+      scheduledExecutor.shutdownNow
     }
+
     ipThrottled
   }
 
@@ -951,7 +940,7 @@ class ConnectionQuotasTest {
                                             listenerDesc: ListenerDesc,
                                             numConnections: Long) : Unit = {
     val listenerName = listenerDesc.listenerName
-    for (i <- 0L until numConnections) {
+    for (_ <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit is reached
       assertThrows(classOf[TooManyConnectionsException],
         () => connectionQuotas.inc(listenerName, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))

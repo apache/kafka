@@ -87,6 +87,9 @@ public class Rate implements MeasurableStat {
         int numFullWindows = (int) (totalElapsedTimeMs / config.timeWindowMs());
         int minFullWindows = config.samples() - 1;
 
+        if (numFullWindows < 1) {
+            return config.timeWindowMs();
+        }
         // If the available windows are less than the minimum required, add the difference to the totalElapsedTime
         if (numFullWindows < minFullWindows)
             totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
