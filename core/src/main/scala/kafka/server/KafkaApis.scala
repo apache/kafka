@@ -2917,7 +2917,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       val errorCode = if (DescribeLogDirsResponse.shouldReturnTopLevelError(request.header.apiVersion())) {
         error
       } else {
-        debug(s"DescribeLogDirs request failed with error ${error.message()}")
         Errors.NONE
       }
 
