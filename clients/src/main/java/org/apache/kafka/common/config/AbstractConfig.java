@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.internals.RecordingMap;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -227,13 +228,13 @@ public class AbstractConfig {
     }
 
     public Map<String, Object> originals() {
-        Map<String, Object> copy = new RecordingMap<>();
+        Map<String, Object> copy = new RecordingMap<>(this);
         copy.putAll(originals);
         return copy;
     }
 
     public Map<String, Object> originals(Map<String, Object> configOverrides) {
-        Map<String, Object> copy = new RecordingMap<>();
+        Map<String, Object> copy = new RecordingMap<>(this);
         copy.putAll(originals);
         copy.putAll(configOverrides);
         return copy;
@@ -245,7 +246,7 @@ public class AbstractConfig {
      * @throws ClassCastException if any of the values are not strings
      */
     public Map<String, String> originalsStrings() {
-        Map<String, String> copy = new RecordingMap<>();
+        Map<String, String> copy = new RecordingMap<>(this);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (!(entry.getValue() instanceof String))
                 throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
@@ -273,7 +274,7 @@ public class AbstractConfig {
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix, boolean strip) {
-        Map<String, Object> result = new RecordingMap<>(prefix, false);
+        Map<String, Object> result = new RecordingMap<>(this, prefix, false);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
                 if (strip)
@@ -302,7 +303,7 @@ public class AbstractConfig {
      * </p>
      */
     public Map<String, Object> valuesWithPrefixOverride(String prefix) {
-        Map<String, Object> result = new RecordingMap<>(values(), prefix, true);
+        Map<String, Object> result = new RecordingMap<>(this, values(), prefix, true);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
                 String keyWithNoPrefix = entry.getKey().substring(prefix.length());
@@ -331,9 +332,9 @@ public class AbstractConfig {
         Map<String, Object> withPrefix = originalsWithPrefix(prefix, true);
 
         if (withPrefix.isEmpty()) {
-            return new RecordingMap<>(values(), "", true);
+            return new RecordingMap<>(this, values(), "", true);
         } else {
-            Map<String, Object> result = new RecordingMap<>(prefix, true);
+            Map<String, Object> result = new RecordingMap<>(this, prefix, true);
 
             for (Map.Entry<String, ?> entry : withPrefix.entrySet()) {
                 ConfigDef.ConfigKey configKey = definition.configKeys().get(entry.getKey());
@@ -346,11 +347,11 @@ public class AbstractConfig {
     }
 
     public Map<String, ?> values() {
-        return new RecordingMap<>(values);
+        return new RecordingMap<>(this, values);
     }
 
     public Map<String, ?> nonInternalValues() {
-        Map<String, Object> nonInternalConfigs = new RecordingMap<>();
+        Map<String, Object> nonInternalConfigs = new RecordingMap<>(this);
         values.forEach((key, value) -> {
             ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
             if (configKey == null || !configKey.internalConfig) {
@@ -603,57 +604,6 @@ public class AbstractConfig {
     @Override
     public int hashCode() {
         return originals.hashCode();
-    }
-
-    /**
-     * Marks keys retrieved via `get` as used. This is needed because `Configurable.configure` takes a `Map` instead
-     * of an `AbstractConfig` and we can't change that without breaking public API like `Partitioner`.
-     */
-    protected class RecordingMap<V> extends HashMap<String, V> {
-
-        private final String prefix;
-        private final boolean withIgnoreFallback;
-
-        RecordingMap() {
-            this("", false);
-        }
-
-        RecordingMap(String prefix, boolean withIgnoreFallback) {
-            this.prefix = prefix;
-            this.withIgnoreFallback = withIgnoreFallback;
-        }
-
-        RecordingMap(Map<String, ? extends V> m) {
-            this(m, "", false);
-        }
-
-        RecordingMap(Map<String, ? extends V> m, String prefix, boolean withIgnoreFallback) {
-            super(m);
-            this.prefix = prefix;
-            this.withIgnoreFallback = withIgnoreFallback;
-        }
-
-        @Override
-        public V get(Object key) {
-            if (key instanceof String) {
-                String stringKey = (String) key;
-                String keyWithPrefix;
-                if (prefix.isEmpty()) {
-                    keyWithPrefix = stringKey;
-                } else {
-                    keyWithPrefix = prefix + stringKey;
-                }
-                ignore(keyWithPrefix);
-                if (withIgnoreFallback)
-                    ignore(stringKey);
-            }
-            return super.get(key);
-        }
-
-        public RecordingMap<V> copy() {
-            return new RecordingMap<>(this);
-        }
-
     }
 
     /**
