@@ -92,15 +92,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     // set first via configure()
     private String logPrefix;
-    // set second via setLoggingContext()
-    private Supplier<String> loggingContext;
-    private Logger log;
+    // overwritten via setLoggingContext() if it is called.
+    private Logger log = LoggerFactory.getLogger(StreamsPartitionAssignor.class);
 
     @Override
     public void setLoggingContext(final Supplier<String> loggingContext) {
-        this.loggingContext = () -> loggingContext.get() + logPrefix;
         this.log = new DynamicPrefixLogger(
-            this.loggingContext,
+            () -> loggingContext.get() + logPrefix,
             LoggerFactory.getLogger(StreamsPartitionAssignor.class)
         );
     }
