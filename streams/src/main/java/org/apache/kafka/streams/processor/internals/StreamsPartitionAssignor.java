@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ContextualLogging;
-import org.apache.kafka.clients.consumer.internals.DynamicPrefixLogger;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
@@ -31,6 +30,8 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.AbstractLogContext;
+import org.apache.kafka.common.utils.DynamicLogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
@@ -96,11 +97,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Logger log = LoggerFactory.getLogger(StreamsPartitionAssignor.class);
 
     @Override
-    public void setLoggingContext(final Supplier<String> loggingContext) {
-        this.log = new DynamicPrefixLogger(
-            () -> loggingContext.get() + logPrefix,
-            LoggerFactory.getLogger(StreamsPartitionAssignor.class)
-        );
+    public void setLoggingContext(final AbstractLogContext loggingContext) {
+        this.log = loggingContext.logger(StreamsPartitionAssignor.class);
     }
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {

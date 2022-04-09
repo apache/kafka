@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.function.Supplier;
+import org.apache.kafka.common.utils.AbstractLogContext;
 
 public interface ContextualLogging {
-    void setLoggingContext(Supplier<String> loggingContext);
+    void setLoggingContext(AbstractLogContext logContext);
 }

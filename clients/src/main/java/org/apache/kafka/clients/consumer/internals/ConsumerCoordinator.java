@@ -62,6 +62,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.utils.DynamicLogContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -166,12 +167,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               metricGrpPrefix,
               time);
         this.rebalanceConfig = rebalanceConfig;
-        final Supplier<String> dynamicPrefix =
-            () -> logContext.logPrefix() + "[generationId=" + generation().generationId + "] ";
-        this.log = new DynamicPrefixLogger(
-            dynamicPrefix,
-            LoggerFactory.getLogger(ConsumerCoordinator.class)
-        );
+        final DynamicLogContext dynamicLogContext = new DynamicLogContext(
+                () -> logContext.logPrefix() + "[generationId=" + generation().generationId + "] ");
+        this.log = dynamicLogContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
@@ -180,7 +178,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         for (final ConsumerPartitionAssignor assignor : assignors) {
             if (assignor instanceof ContextualLogging) {
-                ((ContextualLogging) assignor).setLoggingContext(dynamicPrefix);
+                ((ContextualLogging) assignor).setLoggingContext(dynamicLogContext);
             }
         }
         this.assignors = assignors;
