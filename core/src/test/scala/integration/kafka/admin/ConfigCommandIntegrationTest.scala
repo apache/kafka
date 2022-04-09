@@ -19,20 +19,56 @@ package kafka.admin
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
-import kafka.server.{ConfigEntityName, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{Exit, Logging, TestInfoUtils}
+import kafka.integration.KafkaServerTestHarness
+import kafka.server.{ConfigEntityName, KafkaConfig}
+import kafka.utils.{Exit, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, BrokerInfo}
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Properties
 import scala.collection.Seq
+import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
-class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
+class ConfigCommandIntegrationTest extends KafkaServerTestHarness with Logging {
+
+  private var adminClient: Admin = _
+
+  override def generateConfigs: Seq[KafkaConfig] = {
+    TestUtils.createBrokerConfigs(
+      numConfigs = 1,
+      zkConnect = zkConnectOrNull,
+    ).map { props =>
+      props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, (128 * 1024 * 1024L).toString)
+      KafkaConfig.fromProps(props)
+    }
+  }
+
+  @BeforeEach
+  override def setUp(info: TestInfo): Unit = {
+    super.setUp(info)
+
+    // create adminClient
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    adminClient = Admin.create(props)
+  }
+
+  @AfterEach
+  def close(): Unit = {
+    if (adminClient != null) {
+      adminClient.close()
+    }
+  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
@@ -76,7 +112,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testDynamicBrokerConfigUpdateUsingZooKeeper(quorum: String): Unit = {
-    val brokerId = "1"
+    val brokerId = this.configs.head.brokerId.toString
     val adminZkClient = new AdminZkClient(zkClient)
     val alterOpts = Array("--zookeeper", zkConnect, "--entity-type", "brokers", "--alter")
 
@@ -108,6 +144,8 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
       verifyConfig(Map.empty, brokerId)
     }
 
+    // We need to kill broker to test this case
+    killBroker(brokerId.toInt)
     // Add config
     alterAndVerifyConfig(Map("message.max.size" -> "110000"), Some(brokerId))
     alterAndVerifyConfig(Map("message.max.size" -> "120000"), None)
@@ -175,5 +213,156 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     val endpoint = new EndPoint("localhost", 9092, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
     val brokerInfo = BrokerInfo(Broker(id, Seq(endpoint), rack = None), ApiVersion.latestVersion, jmxPort = 9192)
     zkClient.registerBroker(brokerInfo)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUpdateInvalidBrokersConfig(quorum: String): Unit = {
+    checkInvalidBrokerConfig(None)
+    checkInvalidBrokerConfig(Some(configs.head.brokerId.toString))
+  }
+
+  def checkInvalidBrokerConfig(entityNameOrDefault: Option[String]): Unit = {
+    val entityNameParams = entityNameOrDefault.map(name => Array("--entity-name", name)).getOrElse(Array("--entity-default"))
+    ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+      Array("--bootstrap-server", s"${bootstrapServers()}",
+        "--alter",
+        "--add-config", "invalid=2",
+        "--entity-type", "brokers")
+        ++ entityNameParams
+    ))
+
+    val describeResult = TestUtils.grabConsoleOutput(
+      ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
+        Array("--bootstrap-server", s"${bootstrapServers()}",
+          "--describe",
+          "--entity-type", "brokers")
+          ++ entityNameParams
+      )))
+    // We will treat unknown config as sensitive
+    assertTrue(describeResult.contains("sensitive=true"))
+    // Sensitive config will not return
+    assertTrue(describeResult.contains("invalid=null"))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUpdateInvalidTopicConfig(quorum: String): Unit = {
+    createTopic("test-config-topic")
+    assertInstanceOf(
+      classOf[InvalidConfigurationException],
+      assertThrows(
+        classOf[ExecutionException],
+        () => ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+          Array("--bootstrap-server", s"${bootstrapServers()}",
+            "--alter",
+            "--add-config", "invalid=2",
+            "--entity-type", "topics",
+            "--entity-name", "test-config-topic")
+        ))).getCause
+    )
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUpdateConfigAndDeleteBrokersConfig(quorum: String): Unit = {
+    checkBrokerConfig(None)
+    checkBrokerConfig(Some(configs.head.brokerId.toString))
+  }
+
+  private def checkBrokerConfig(entityNameOrDefault: Option[String]): Unit = {
+    val entityNameParams = entityNameOrDefault.map(name => Array("--entity-name", name)).getOrElse(Array("--entity-default"))
+    ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+      Array("--bootstrap-server", s"${bootstrapServers()}",
+        "--alter",
+        "--add-config", "log.cleaner.threads=2",
+        "--entity-type", "brokers")
+        ++ entityNameParams
+    ))
+
+    val describeResult = TestUtils.grabConsoleOutput(
+      ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
+        Array("--bootstrap-server", s"${bootstrapServers()}",
+          "--describe",
+          "--entity-type", "brokers")
+          ++ entityNameParams
+      )))
+    assertTrue(describeResult.contains("log.cleaner.threads=2"))
+    assertTrue(describeResult.contains("sensitive=false"))
+
+    ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+      Array("--bootstrap-server", s"${bootstrapServers()}",
+        "--alter",
+        "--delete-config", "log.cleaner.threads",
+        "--entity-type", "brokers")
+        ++ entityNameParams
+    ))
+
+    assertFalse(TestUtils.grabConsoleOutput(
+      ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
+        Array("--bootstrap-server", s"${bootstrapServers()}",
+          "--describe",
+          "--entity-type", "brokers")
+          ++ entityNameParams
+      ))).contains("log.cleaner.threads"))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUpdateConfigAndDeleteTopicConfig(quorum: String): Unit = {
+    createTopic("test-config-topic")
+    ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+      Array("--bootstrap-server", s"${bootstrapServers()}",
+        "--alter",
+        "--add-config", "segment.bytes=10240000",
+        "--entity-type", "topics",
+        "--entity-name", "test-config-topic")
+    ))
+
+    val describeResult = TestUtils.grabConsoleOutput(
+      ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
+        Array("--bootstrap-server", s"${bootstrapServers()}",
+          "--describe",
+          "--entity-type", "topics",
+          "--entity-name", "test-config-topic")
+      )))
+    assertTrue(describeResult.contains("segment.bytes=10240000"))
+    assertTrue(describeResult.contains("sensitive=false"))
+
+    ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+      Array("--bootstrap-server", s"${bootstrapServers()}",
+        "--alter",
+        "--delete-config", "segment.bytes",
+        "--entity-type", "topics",
+        "--entity-name", "test-config-topic")
+    ))
+
+    assertFalse(TestUtils.grabConsoleOutput(
+      ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
+        Array("--bootstrap-server", s"${bootstrapServers()}",
+          "--describe",
+          "--entity-type", "topics",
+          "--entity-name", "test-config-topic")
+      ))).contains("segment.bytes"))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUpdateConfigNotAffectedByInvalidConfig(quorum: String): Unit = {
+    ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+      Array("--bootstrap-server", s"${bootstrapServers()}",
+        "--alter",
+        "--add-config", "log.cleaner.threadzz=2",
+        "--entity-type", "brokers",
+        "--entity-default")
+    ))
+
+    ConfigCommand.alterConfig(adminClient, new ConfigCommandOptions(
+      Array("--bootstrap-server", s"${bootstrapServers()}",
+        "--alter",
+        "--add-config", "log.cleaner.threads=2",
+        "--entity-type", "brokers",
+        "--entity-default")
+    ))
   }
 }
