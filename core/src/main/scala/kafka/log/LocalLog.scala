@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, immutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.util.Try
 
 /**
  * Holds the result of splitting a segment into one or more segments, see LocalLog.splitOverflowedSegment().
@@ -171,7 +172,8 @@ class LocalLog(@volatile private var _dir: File,
     val segmentsToFlush = segments.values(recoveryPoint, offset)
     segmentsToFlush.foreach(_.flush())
     // If there are any new segments, we need to flush the parent directory for crash consistency.
-    segmentsToFlush.lastOption.filter(_.baseOffset >= this.recoveryPoint).foreach(_ => Utils.flushDir(dir.toPath))
+    Try(segmentsToFlush.lastOption).getOrElse(None)
+      .filter(_.baseOffset >= this.recoveryPoint).foreach(_ => Utils.flushDir(dir.toPath))
   }
 
   /**
