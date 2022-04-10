@@ -33,22 +33,46 @@ import org.slf4j.spi.LocationAwareLogger;
  */
 public abstract class AbstractLogContext {
 
+    @FunctionalInterface
+    public interface Context {
+        String addContext(String message);
+    }
+
+    private static final Context EMPTY_CONTEXT = message -> message;
+
+    private final Context context;
+
+    protected AbstractLogContext(Context context) {
+        this.context = context == null ? EMPTY_CONTEXT : context;
+    }
+
     public Logger logger(Class<?> clazz) {
         Logger logger = LoggerFactory.getLogger(clazz);
         if (logger instanceof LocationAwareLogger) {
-            return new LocationAwareKafkaLogger((LocationAwareLogger) logger);
+            return new LocationAwareKafkaLogger(context, (LocationAwareLogger) logger);
         } else {
-            return new LocationIgnorantKafkaLogger(logger);
+            return new LocationIgnorantKafkaLogger(context, logger);
         }
     }
 
-    protected abstract String addContext(String message);
+    private static abstract class AbstractKafkaLogger implements Logger {
+        private final Context context;
 
-    private class LocationAwareKafkaLogger implements Logger {
+        protected AbstractKafkaLogger(final Context context) {
+            this.context = context;
+        }
+
+        protected String addContext(final String message) {
+            return context.addContext(message);
+        }
+    }
+
+    private static class LocationAwareKafkaLogger extends AbstractKafkaLogger {
         private final LocationAwareLogger logger;
         private final String fqcn;
 
-        LocationAwareKafkaLogger(LocationAwareLogger logger) {
+        LocationAwareKafkaLogger(Context context, LocationAwareLogger logger) {
+            super(context);
             this.logger = logger;
             this.fqcn = LocationAwareKafkaLogger.class.getName();
         }
@@ -411,10 +435,11 @@ public abstract class AbstractLogContext {
         }
     }
 
-    private class LocationIgnorantKafkaLogger implements Logger {
+    private static class LocationIgnorantKafkaLogger extends AbstractKafkaLogger {
         private final Logger logger;
 
-        LocationIgnorantKafkaLogger(Logger logger) {
+        LocationIgnorantKafkaLogger(Context context, Logger logger) {
+            super(context);
             this.logger = logger;
         }
 

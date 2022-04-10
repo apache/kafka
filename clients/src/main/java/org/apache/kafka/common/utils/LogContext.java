@@ -28,15 +28,12 @@ public class LogContext extends AbstractLogContext {
     private final String logPrefix;
 
     public LogContext(String logPrefix) {
+        super(logPrefix == null ? null : message -> logPrefix + message);
         this.logPrefix = logPrefix == null ? "" : logPrefix;
     }
 
     public LogContext() {
         this("");
-    }
-
-    protected String addContext(final String message) {
-        return logPrefix + message;
     }
 
     public String logPrefix() {
