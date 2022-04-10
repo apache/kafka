@@ -62,7 +62,7 @@ public abstract class AbstractLogContext {
             this.context = context;
         }
 
-        protected String addContext(final String message) {
+        protected final String addContext(final String message) {
             return context.addContext(message);
         }
     }
