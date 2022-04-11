@@ -139,13 +139,13 @@ class TestDowngrade(EndToEndTest):
 
         self.logger.info("First pass bounce - rolling upgrade")
         self.upgrade_from(kafka_version)
-        self.run_validation()
 
         upgrade_topic_id = self.kafka.topic_id(self.topic)
         assert start_topic_id == upgrade_topic_id
 
         self.logger.info("Second pass bounce - rolling downgrade")
         self.downgrade_to(kafka_version)
+
         self.run_validation()
 
         downgrade_topic_id = self.kafka.topic_id(self.topic)
