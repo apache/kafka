@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -33,7 +32,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,14 +47,14 @@ public class ProducerIdControlManagerTest {
 
     @BeforeEach
     public void setUp() {
-        final LogContext logContext = new LogContext();
-        String clusterId = Uuid.randomUuid().toString();
         final MockTime time = new MockTime();
-        final Random random = new Random();
-        snapshotRegistry = new SnapshotRegistry(logContext);
-        clusterControl = new ClusterControlManager(
-            logContext, clusterId, time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(random), new MockControllerMetrics());
+        snapshotRegistry = new SnapshotRegistry(new LogContext());
+        clusterControl = new ClusterControlManager.Builder().
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setControllerMetrics(new MockControllerMetrics()).
+            build();
 
         clusterControl.activate();
         for (int i = 0; i < 4; i++) {

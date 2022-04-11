@@ -473,8 +473,8 @@ object LogConfig {
     FlushMessagesProp -> asList(
       new ConfigSynonym(KafkaConfig.LogFlushIntervalMessagesProp)),
     FlushMsProp -> asList(
-      new ConfigSynonym(KafkaConfig.LogFlushSchedulerIntervalMsProp),
-      new ConfigSynonym(KafkaConfig.LogFlushIntervalMsProp)),
+      new ConfigSynonym(KafkaConfig.LogFlushIntervalMsProp),
+      new ConfigSynonym(KafkaConfig.LogFlushSchedulerIntervalMsProp)),
     RetentionBytesProp -> asList(
       new ConfigSynonym(KafkaConfig.LogRetentionBytesProp)),
     RetentionMsProp -> asList(

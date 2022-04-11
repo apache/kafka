@@ -68,7 +68,7 @@ import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.controller.QuorumController
-import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
+import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -2071,6 +2071,17 @@ object TestUtils extends Logging {
     }
   }
 
+  val anonymousAuthorizableContext = new AuthorizableRequestContext() {
+    override def listenerName(): String = ""
+    override def securityProtocol(): SecurityProtocol = SecurityProtocol.PLAINTEXT
+    override def principal(): KafkaPrincipal = KafkaPrincipal.ANONYMOUS
+    override def clientAddress(): InetAddress = null
+    override def requestType(): Int = 0
+    override def requestVersion(): Int = 0
+    override def clientId(): String = ""
+    override def correlationId(): Int = 0
+  }
+
   def addAndVerifyAcls[B <: KafkaBroker](
     brokers: Seq[B],
     acls: Set[AccessControlEntry],
@@ -2079,7 +2090,7 @@ object TestUtils extends Logging {
   ): Unit = {
     val authorizerForWrite = pickAuthorizerForWrite(brokers, controllers)
     val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
-    authorizerForWrite.createAcls(null, aclBindings.toList.asJava).asScala
+    authorizerForWrite.createAcls(anonymousAuthorizableContext, aclBindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
         result.exception.ifPresent { e => throw e }
@@ -2100,7 +2111,7 @@ object TestUtils extends Logging {
   ): Unit = {
     val authorizerForWrite = pickAuthorizerForWrite(brokers, controllers)
     val aclBindingFilters = acls.map { acl => new AclBindingFilter(resource.toFilter, acl.toFilter) }
-    authorizerForWrite.deleteAcls(null, aclBindingFilters.toList.asJava).asScala
+    authorizerForWrite.deleteAcls(anonymousAuthorizableContext, aclBindingFilters.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
         result.exception.ifPresent { e => throw e }
