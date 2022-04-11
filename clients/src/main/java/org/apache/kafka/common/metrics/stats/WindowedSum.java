@@ -34,14 +34,14 @@ public class WindowedSum extends SampledStat {
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {
-        sample.value += value;
+        sample.setValue(sample.getValue() + value);
     }
 
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
         double total = 0.0;
         for (Sample sample : samples)
-            total += sample.value;
+            total += sample.getValue();
         return total;
     }
 

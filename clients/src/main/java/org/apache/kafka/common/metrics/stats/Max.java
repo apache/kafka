@@ -31,7 +31,7 @@ public final class Max extends SampledStat {
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {
-        sample.value = Math.max(sample.value, value);
+        sample.setValue(Math.max(sample.getValue(), value));
     }
 
     @Override
@@ -39,8 +39,8 @@ public final class Max extends SampledStat {
         double max = Double.NEGATIVE_INFINITY;
         long count = 0;
         for (Sample sample : samples) {
-            max = Math.max(max, sample.value);
-            count += sample.eventCount;
+            max = Math.max(max, sample.getValue());
+            count += sample.getEventCount();
         }
         return count == 0 ? Double.NaN : max;
     }

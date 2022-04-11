@@ -31,7 +31,7 @@ public class Avg extends SampledStat {
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {
-        sample.value += value;
+        sample.setValue(sample.getValue() + value);
     }
 
     @Override
@@ -39,8 +39,8 @@ public class Avg extends SampledStat {
         double total = 0.0;
         long count = 0;
         for (Sample s : samples) {
-            total += s.value;
-            count += s.eventCount;
+            total += s.getValue();
+            count += s.getEventCount();
         }
         return count == 0 ? Double.NaN : total / count;
     }
