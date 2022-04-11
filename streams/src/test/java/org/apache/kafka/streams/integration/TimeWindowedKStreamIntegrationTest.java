@@ -47,7 +47,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindowedKStreamImpl;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;

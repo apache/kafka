@@ -411,7 +411,7 @@ public class TimeWindowedKStreamImplTest {
         inputTopic.pipeInput("2", "30", 1000L);
     }
 
-    private <K, V, S extends StateStore> Materialized<K, V, S> setMaterializedCache(Materialized<K, V, S> materialized) {
+    private <K, V, S extends StateStore> Materialized<K, V, S> setMaterializedCache(final Materialized<K, V, S> materialized) {
         if (withCache) {
             return materialized.withCachingEnabled();
         }
