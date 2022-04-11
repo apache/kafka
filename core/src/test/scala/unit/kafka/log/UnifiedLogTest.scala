@@ -2253,7 +2253,7 @@ class UnifiedLogTest {
 
     // Ensure that after a directory rename, the epoch cache is written to the right location
     val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp))
+    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(LeaderEpochCheckpointFile.newFile(log.dir).exists())
@@ -2274,7 +2274,7 @@ class UnifiedLogTest {
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
     val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp))
+    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
@@ -2297,7 +2297,7 @@ class UnifiedLogTest {
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
     val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp))
+    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
