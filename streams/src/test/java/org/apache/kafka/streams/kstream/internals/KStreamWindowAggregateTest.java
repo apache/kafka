@@ -41,6 +41,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -95,15 +96,20 @@ public class KStreamWindowAggregateTest {
     public StrategyType type;
 
     @Parameter(1)
+    public boolean withCache;
+
+    @Parameter(2)
     public EmitStrategy emitStrategy;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}")
+    @Parameterized.Parameters(name = "{0}_{1}")
     public static Collection<Object[]> getEmitStrategy() {
         return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_CLOSE, EmitStrategy.onWindowClose()}
+            {StrategyType.ON_WINDOW_UPDATE, true, EmitStrategy.onWindowUpdate()},
+            {StrategyType.ON_WINDOW_UPDATE, false, EmitStrategy.onWindowUpdate()},
+            {StrategyType.ON_WINDOW_CLOSE, true, EmitStrategy.onWindowClose()},
+            {StrategyType.ON_WINDOW_CLOSE, false, EmitStrategy.onWindowClose()}
         });
     }
 
@@ -128,7 +134,7 @@ public class KStreamWindowAggregateTest {
 
         final KTable<Windowed<String>, String> table2 = windowedStream
             .emitStrategy(emitStrategy)
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())));
 
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
@@ -229,7 +235,7 @@ public class KStreamWindowAggregateTest {
 
         final KTable<Windowed<String>, String> table1 = windowedStream1
             .emitStrategy(emitStrategy)
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())));
 
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
@@ -241,7 +247,7 @@ public class KStreamWindowAggregateTest {
 
         final KTable<Windowed<String>, String> table2 = windowedStream2
             .emitStrategy(emitStrategy)
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String()));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String())));
         table2.toStream().process(supplier);
 
         table1.join(table2, (p1, p2) -> p1 + "%" + p2).toStream().process(supplier);
@@ -465,7 +471,7 @@ public class KStreamWindowAggregateTest {
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.toStringInstance("+"),
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String())
+                setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()))
             );
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
@@ -496,11 +502,10 @@ public class KStreamWindowAggregateTest {
             .aggregate(
                 () -> "",
                 MockAggregator.toStringInstance("+"),
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized")
+                setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized")
                     .withValueSerde(Serdes.String())
-                    .withCachingDisabled()
                     .withLoggingDisabled()
-                    .withRetention(Duration.ofMillis(100))
+                    .withRetention(Duration.ofMillis(100)))
             )
             .toStream()
             .map((key, value) -> new KeyValue<>(key.toString(), value))
@@ -586,7 +591,7 @@ public class KStreamWindowAggregateTest {
             .aggregate(
                 () -> "",
                 MockAggregator.toStringInstance("+"),
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()).withCachingDisabled().withLoggingDisabled()
+                setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()).withLoggingDisabled())
             )
             .toStream()
             .map((key, value) -> new KeyValue<>(key.toString(), value))
@@ -1107,5 +1112,12 @@ public class KStreamWindowAggregateTest {
 
         assertThat(driver.metrics().get(emittedTotalMetric).metricValue(), emittedTotal);
         assertThat(driver.metrics().get(emittedRateMetric).metricValue(), not(0.0));
+    }
+
+    private <K, V, S extends StateStore> Materialized<K, V, S> setMaterializedCache(Materialized<K, V, S> materialized) {
+        if (withCache) {
+            return materialized.withCachingEnabled();
+        }
+        return materialized.withCachingDisabled();
     }
 }

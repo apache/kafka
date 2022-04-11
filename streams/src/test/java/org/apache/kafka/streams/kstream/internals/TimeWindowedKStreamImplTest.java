@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
@@ -77,15 +78,20 @@ public class TimeWindowedKStreamImplTest {
     public StrategyType type;
 
     @Parameter(1)
+    public boolean withCache;
+
+    @Parameter(2)
     public EmitStrategy emitStrategy;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}")
+    @Parameterized.Parameters(name = "{0}_{1}")
     public static Collection<Object[]> getKeySchema() {
         return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_CLOSE, EmitStrategy.onWindowClose()}
+            {StrategyType.ON_WINDOW_UPDATE, true, EmitStrategy.onWindowUpdate()},
+            {StrategyType.ON_WINDOW_UPDATE, false, EmitStrategy.onWindowUpdate()},
+            {StrategyType.ON_WINDOW_CLOSE, true, EmitStrategy.onWindowClose()},
+            {StrategyType.ON_WINDOW_CLOSE, false, EmitStrategy.onWindowClose()}
         });
     }
 
@@ -186,7 +192,7 @@ public class TimeWindowedKStreamImplTest {
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.with(Serdes.String(), Serdes.String()))
+                setMaterializedCache(Materialized.with(Serdes.String(), Serdes.String())))
             .toStream()
             .process(supplier);
 
@@ -224,9 +230,9 @@ public class TimeWindowedKStreamImplTest {
         windowedStream
             .emitStrategy(emitStrategy)
             .count(
-                Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
+                setMaterializedCache(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
                     .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.Long()));
+                    .withValueSerde(Serdes.Long())));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -260,9 +266,9 @@ public class TimeWindowedKStreamImplTest {
     public void shouldMaterializeReduced() {
         windowedStream.reduce(
             MockReducer.STRING_ADDER,
-            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
+            setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
                 .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String()));
+                .withValueSerde(Serdes.String())));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -296,9 +302,9 @@ public class TimeWindowedKStreamImplTest {
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
-            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
+            setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
                 .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String()));
+                .withValueSerde(Serdes.String())));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -347,7 +353,7 @@ public class TimeWindowedKStreamImplTest {
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
-            Materialized.as("store")));
+            setMaterializedCache(Materialized.as("store"))));
     }
 
     @Test
@@ -355,7 +361,7 @@ public class TimeWindowedKStreamImplTest {
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             null,
-            Materialized.as("store")));
+            setMaterializedCache(Materialized.as("store"))));
     }
 
     @SuppressWarnings("unchecked")
@@ -371,7 +377,7 @@ public class TimeWindowedKStreamImplTest {
     public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             null,
-            Materialized.as("store")));
+            setMaterializedCache(Materialized.as("store"))));
     }
 
     @Test
@@ -403,5 +409,12 @@ public class TimeWindowedKStreamImplTest {
         inputTopic.pipeInput("2", "10", 550L);
         inputTopic.pipeInput("2", "20", 500L);
         inputTopic.pipeInput("2", "30", 1000L);
+    }
+
+    private <K, V, S extends StateStore> Materialized<K, V, S> setMaterializedCache(Materialized<K, V, S> materialized) {
+        if (withCache) {
+            return materialized.withCachingEnabled();
+        }
+        return materialized.withCachingDisabled();
     }
 }

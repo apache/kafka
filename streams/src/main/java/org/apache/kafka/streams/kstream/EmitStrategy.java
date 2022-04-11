@@ -38,11 +38,16 @@ public interface EmitStrategy {
 
     /**
      * This strategy indicates that the aggregated result for a window will only be outputted when the
-     * window closes instead of when there's an update to the window.
+     * window closes instead of when there's an update to the window. Window close means that current
+     * event time is larger than (window end time + grace period).
      *
-     * <p>This strategy should only be used for window which can close. For example, it doesn't make sense
-     * to be used with {@link UnlimitedWindow}
+     * <p>This strategy should only be used for windows which can close. An exception will be thrown
+     * if it's used with {@link UnlimitedWindow}.
      *
+     * @see TimeWindows
+     * @see SlidingWindows
+     * @see SessionWindows
+     * @see UnlimitedWindows
      * @see WindowUpdateStrategy
      *
      * @return WindowCloseStrategy instance
@@ -55,6 +60,10 @@ public interface EmitStrategy {
      * This strategy indicates that the aggregated result for a window will be outputted everytime
      * when there's an update to the window instead of when the window closes.
      *
+     * @see TimeWindows
+     * @see SlidingWindows
+     * @see SessionWindows
+     * @see UnlimitedWindows
      * @see WindowCloseStrategy
      *
      * @return WindowCloseStrategy instance

@@ -272,35 +272,35 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 return;
             }
 
-            final long emitWindowStart = closeTime - windows.size();
-            if (emitWindowStart < 0) {
-                // If emitWindowStart is 0, it means first window closes since windowEndTime
+            final long emitRangeUpperBoundInclusive = closeTime - windows.size();
+            if (emitRangeUpperBoundInclusive < 0) {
+                // If emitRangeUpperBoundInclusive is 0, it means first window closes since windowEndTime
                 // is exclusive
                 return;
             }
 
-            // Because we only get here when emitWindowStart > 0 which means closeTime > windows.size()
+            // Because we only get here when emitRangeUpperBoundInclusive > 0 which means closeTime > windows.size()
             // Since we set lastEmitCloseTime to closeTime before storing to processor metadata
             // lastEmitCloseTime - windows.size() is always > 0
-            // Set lastEmitWindowStart to -1L if not set so that when we fetchAll, we fetch from 0L
-            final long lastEmitWindowStart = lastEmitCloseTime == ConsumerRecord.NO_TIMESTAMP ?
+            // Set emitRangeLowerBoundInclusive to -1L if not set so that when we fetchAll, we fetch from 0L
+            final long emitRangeLowerBoundInclusive = lastEmitCloseTime == ConsumerRecord.NO_TIMESTAMP ?
                 -1L : lastEmitCloseTime - windows.size();
 
             if (lastEmitCloseTime != ConsumerRecord.NO_TIMESTAMP) {
-                final Map<Long, W> matchedCloseWindows = windows.windowsFor(emitWindowStart);
-                final Map<Long, W> matchedEmitWindows = windows.windowsFor(lastEmitWindowStart);
+                final Map<Long, W> matchedCloseWindows = windows.windowsFor(emitRangeUpperBoundInclusive);
+                final Map<Long, W> matchedEmitWindows = windows.windowsFor(emitRangeLowerBoundInclusive);
 
                 // Don't fetch store if the new emit window close time doesn't progress enough to cover next
                 // window
                 if (matchedCloseWindows.equals(matchedEmitWindows)) {
-                    log.debug("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}",
+                    log.trace("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}",
                         lastEmitCloseTime, closeTime);
                     return;
                 }
             }
 
             final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
-                .fetchAll(lastEmitWindowStart + 1, emitWindowStart);
+                .fetchAll(emitRangeLowerBoundInclusive + 1, emitRangeUpperBoundInclusive);
 
             int emittedCount = 0;
             while (windowToEmit.hasNext()) {
@@ -310,7 +310,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     record.withKey(kv.key)
                         .withValue(new Change<>(kv.value.value(), null))
                         .withTimestamp(kv.value.timestamp())
-                        .withHeaders(null)); // Don't set header
+                        .withHeaders(record.headers()));
             }
             emittedRecordsSensor.record(emittedCount);
 
