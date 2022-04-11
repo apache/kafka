@@ -262,10 +262,10 @@ public class SensorTest {
         assertTrue(sensor.add(metricName, new Rate()));
         final KafkaMetric rateMetric = metrics.metric(metricName);
 
-        // Recording a first value at T+0 to bring the avg rate to 3 which is already
+        // Recording a first value at T+0 to bring the avg rate to 30 which is already
         // above the quota.
         strictRecord(sensor, 30, time.milliseconds());
-        assertEquals(3, rateMetric.measurableValue(time.milliseconds()), 0.1);
+        assertEquals(30, rateMetric.measurableValue(time.milliseconds()), 0.1);
 
         // Theoretically, we should wait 5s to bring back the avg rate to the define quota:
         // ((30 / 10) - 2) / 2 * 10 = 5s

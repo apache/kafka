@@ -608,7 +608,7 @@ public class MetricsTest {
         time.sleep(cfg.timeWindowMs() / 2);
 
         // prior to any time passing
-        double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + (((double)cfg.timeWindowMs()) / 2.0d)) / 1000.0d;
+        double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + (((double) cfg.timeWindowMs()) / 2.0d)) / 1000.0d;
 
         KafkaMetric rateMetric = metrics.metrics().get(rateMetricName);
         KafkaMetric countRateMetric = metrics.metrics().get(countRateMetricName);
