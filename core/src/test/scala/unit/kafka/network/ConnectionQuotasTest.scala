@@ -26,7 +26,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits.MapExtensionMethods
-import kafka.utils.{Logging, MockTime, TestUtils}
+import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.internals.MetricsUtils
@@ -40,7 +40,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
 import scala.concurrent.TimeoutException
 
-class ConnectionQuotasTest extends Logging {
+class ConnectionQuotasTest {
   private var metrics: Metrics = _
   private var executor: ExecutorService = _
   private var connectionQuotas: ConnectionQuotas = _
@@ -187,7 +187,8 @@ class ConnectionQuotasTest extends Logging {
 
     // connections on the same listener but from a different IP should be accepted
     executor.submit((() =>
-      acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp, 0, expectIpThrottle = false)): Runnable
+      acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp,
+        0, expectIpThrottle = false)): Runnable
     ).get(5, TimeUnit.SECONDS)
 
     // remove two "rejected" connections and remove 2 more connections to free up the space for another 2 connections
