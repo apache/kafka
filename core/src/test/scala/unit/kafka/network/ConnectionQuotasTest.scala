@@ -19,7 +19,7 @@ package kafka.network
 
 import java.net.InetAddress
 import java.util
-import java.util.concurrent.{Callable, CountDownLatch, ExecutorService, Executors, TimeUnit}
+import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
@@ -911,27 +911,24 @@ class ConnectionQuotasTest extends Logging {
    * Note that the first connection is created instantly with an initialDelay of 0.
    */
   private def acceptConnections(connectionQuotas: ConnectionQuotas, listenerName: ListenerName, address: InetAddress, numConnections: Int, timeIntervalMs: Long, expectIpThrottle: Boolean) = {
+    var nextSendTime = time.milliseconds + timeIntervalMs
     var ipThrottled = false
-    val latch = new CountDownLatch(numConnections)
-    val scheduledExecutor = Executors.newScheduledThreadPool(numConnections)
-    try {
-      scheduledExecutor.scheduleAtFixedRate(() => {
-        try {
-          debug(s"sending connection#${numConnections - latch.getCount}")
-          connectionQuotas.inc(listenerName, address, blockedPercentMeters(listenerName.value))
-          latch.countDown()
-        } catch {
-          case e: ConnectionThrottledException =>
-            if (!expectIpThrottle)
-              throw e
-            ipThrottled = true
-        }
-      }, 0, timeIntervalMs, TimeUnit.MILLISECONDS)
-      latch.await(30, TimeUnit.SECONDS)
-    } finally {
-      scheduledExecutor.shutdownNow
-    }
+    for (_ <- 0L until numConnections) {
+      // this method may block if broker-wide or listener limit on the number of connections is reached
+      try {
+        connectionQuotas.inc(listenerName, address, blockedPercentMeters(listenerName.value))
+      } catch {
+        case e: ConnectionThrottledException =>
+          if (!expectIpThrottle)
+            throw e
+          ipThrottled = true
+      }
+      val sleepMs = math.max(nextSendTime - time.milliseconds, 0)
+      if (sleepMs > 0)
+        time.sleep(sleepMs)
 
+      nextSendTime = nextSendTime + timeIntervalMs
+    }
     ipThrottled
   }
 
