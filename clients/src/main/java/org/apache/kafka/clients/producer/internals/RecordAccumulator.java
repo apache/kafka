@@ -378,12 +378,12 @@ public class RecordAccumulator {
     // producer id. We will not attempt to reorder messages if the producer id has changed, we will throw an
     // IllegalStateException instead.
     private void insertInSequenceOrder(Deque<ProducerBatch> deque, ProducerBatch batch) {
-        // When we are requeing and have enabled idempotence, the reenqueued batch must always have a sequence.
+        // When we are re-enqueueing and have enabled idempotence, the re-enqueued batch must always have a sequence.
         if (batch.baseSequence() == RecordBatch.NO_SEQUENCE)
             throw new IllegalStateException("Trying to re-enqueue a batch which doesn't have a sequence even " +
                 "though idempotency is enabled.");
 
-        if (transactionManager.nextBatchBySequence(batch.topicPartition) == null)
+        if (!transactionManager.hasInflightBatches(batch.topicPartition))
             throw new IllegalStateException("We are re-enqueueing a batch which is not tracked as part of the in flight " +
                 "requests. batch.topicPartition: " + batch.topicPartition + "; batch.baseSequence: " + batch.baseSequence());
 
