@@ -145,18 +145,18 @@ public class MetricsTest {
         // pretend 2 seconds passed...
         long sleepTimeMs = 2;
         time.sleep(sleepTimeMs * 1000);
-        elapsedSecs += sleepTimeMs;
 
         assertEquals(5.0, metricValueFunc.apply(metrics.metric(metrics.metricName("s2.total", "grp1"))), EPS,
             "s2 reflects the constant value");
-        assertEquals(4.5, metricValueFunc.apply(metrics.metric(metrics.metricName("test.avg", "grp1"))), EPS,
+        assertEquals(sum / (double) count, metricValueFunc.apply(metrics.metric(metrics.metricName("test.avg", "grp1"))), EPS,
             "Avg(0...9) = 4.5");
         assertEquals(count - 1,  metricValueFunc.apply(metrics.metric(metrics.metricName("test.max", "grp1"))), EPS,
             "Max(0...9) = 9");
         assertEquals(0.0, metricValueFunc.apply(metrics.metric(metrics.metricName("test.min", "grp1"))), EPS,
             "Min(0...9) = 0");
+        // rate is calculated over the first ever window. Hence, we don't assume presence of prior
         assertEquals(sum / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.rate", "grp1"))), EPS,
-            "Rate(0...9) = 1.40625");
+            "Rate(0...9) = 1.5");
         assertEquals(count / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.occurences", "grp1"))), EPS,
             String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs));
         assertEquals(count, metricValueFunc.apply(metrics.metric(metrics.metricName("test.count", "grp1"))), EPS,
