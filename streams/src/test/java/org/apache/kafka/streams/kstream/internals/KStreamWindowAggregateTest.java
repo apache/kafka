@@ -46,6 +46,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -1024,6 +1025,8 @@ public class KStreamWindowAggregateTest {
             stateDir
         );
 
+        context.setCurrentNode(new ProcessorNode("testNode"));
+
         // Create, initialize, and register the state store.
         final TimestampedWindowStore<String, String> store = getWindowStore(windowSize);
         store.init(context.getStateStoreContext(), store);
@@ -1092,21 +1095,23 @@ public class KStreamWindowAggregateTest {
         final MetricName emittedTotalMetric;
         final MetricName emittedRateMetric;
         emittedTotalMetric = new MetricName(
-            "emitted-records-total",
-            "stream-task-metrics",
-            "The total number of emitted records",
+            "emit-final-records-total",
+            "stream-processor-node-metrics",
+            "The total number of emit final records",
             mkMap(
                 mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                mkEntry("task-id", "0_0"),
+                mkEntry("processor-node-id","KSTREAM-AGGREGATE-0000000001")
             )
         );
         emittedRateMetric = new MetricName(
-            "emitted-records-rate",
-            "stream-task-metrics",
-            "The average number of emitted records per second",
+            "emit-final-records-rate",
+            "stream-processor-node-metrics",
+            "The average number of emit final records per second",
             mkMap(
                 mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                mkEntry("task-id", "0_0"),
+                mkEntry("processor-node-id","KSTREAM-AGGREGATE-0000000001")
             )
         );
 
