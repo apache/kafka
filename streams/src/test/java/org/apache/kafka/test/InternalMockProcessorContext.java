@@ -502,7 +502,6 @@ public class InternalMockProcessorContext<KOut, VOut>
         return storeToChangelogTopic.get(storeName);
     }
 
-    // TODO validate if needs comment to understand forwarding
     @Override
     public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record) {
         forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));

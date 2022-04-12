@@ -214,7 +214,6 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
         return "mock-changelog";
     }
 
-    // TODO check if need to add detail on forwarding
     @Override
     public void addProcessorMetadataKeyValue(final String key, final long value) {
         processorMetadata.put(key, value);

@@ -188,7 +188,6 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         return "mock-changelog";
     }
 
-    // TODO: Check if needs precision
     @Override
     public void addProcessorMetadataKeyValue(final String key, final long value) {
         processorMetadata.put(key, value);

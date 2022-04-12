@@ -154,7 +154,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
         return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName, taskId().topologyName());
     }
 
-    // TODO check if needs precision
     @Override
     public <K, V> void forward(final FixedKeyRecord<K, V> record) {
         forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
