@@ -130,7 +130,7 @@ class EndToEndTest(Test):
     def run_validation(self, min_records=5000, producer_timeout_sec=30,
                        consumer_timeout_sec=30, enable_idempotence=False):
         try:
-            await_produced_records(min_records, producer_timeout_sec)
+            self.await_produced_records(min_records, producer_timeout_sec)
             self.logger.info("Stopping producer after writing up to offsets %s" %\
                          str(self.producer.last_acked_offsets))
             self.producer.stop()
