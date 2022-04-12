@@ -88,6 +88,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
                 }
             }
         }
+
         if (fixedKeyProcessorSupplier != null) {
             topologyBuilder.addProcessor(processorName, fixedKeyProcessorSupplier, parentNodeNames);
             if (fixedKeyProcessorSupplier.stores() != null) {
