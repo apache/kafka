@@ -30,7 +30,7 @@ public class MockProcessorNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, 
     private static final String NAME = "MOCK-PROCESS-";
     private static final AtomicInteger INDEX = new AtomicInteger(1);
 
-    public final MockProcessor<KIn, VIn> mockProcessor;
+    public final MockApiProcessor<KIn, VIn, KOut, VOut> mockProcessor;
 
     public boolean closed;
     public boolean initialized;
@@ -47,10 +47,11 @@ public class MockProcessorNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, 
         this(new MockProcessor<>());
     }
 
+    @SuppressWarnings("unchecked")
     private MockProcessorNode(final MockProcessor<KIn, VIn> mockProcessor) {
         super(NAME + INDEX.getAndIncrement(), ProcessorAdapter.adapt(mockProcessor), Collections.<String>emptySet());
 
-        this.mockProcessor = mockProcessor;
+        this.mockProcessor = (MockApiProcessor<KIn, VIn, KOut, VOut>) ProcessorAdapter.adapt(mockProcessor);
     }
 
     @Override
