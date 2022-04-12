@@ -75,8 +75,8 @@ class TimeOrderedCachingWindowStore
     private final AtomicLong maxObservedTimestamp;
 
     TimeOrderedCachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
-                       final long windowSize,
-                       final long segmentInterval) {
+                                  final long windowSize,
+                                  final long segmentInterval) {
         super(underlying);
         this.windowSize = windowSize;
         this.baseKeyCacheFunction = new SegmentedCacheFunction(baseKeySchema, segmentInterval);
@@ -142,7 +142,7 @@ class TimeOrderedCachingWindowStore
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
                                     final InternalProcessorContext<?, ?> context) {
         final byte[] binaryWindowKey = baseKeyCacheFunction.key(entry.key()).get();
-        final boolean isBaseKey = binaryWindowKey[0] == PrefixedWindowKeySchemas.TIME_FIRST_PREFIX;
+        final boolean isBaseKey = PrefixedWindowKeySchemas.isTimeFirstSchemaKey(binaryWindowKey);
 
         final Windowed<Bytes> windowedKeyBytes;
         if (isBaseKey) {

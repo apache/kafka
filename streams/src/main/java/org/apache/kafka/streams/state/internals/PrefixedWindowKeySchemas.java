@@ -33,12 +33,16 @@ import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindo
 public class PrefixedWindowKeySchemas {
 
     private static final int PREFIX_SIZE = 1;
-    public static final byte TIME_FIRST_PREFIX = 0;
+    private static final byte TIME_FIRST_PREFIX = 0;
     public static final byte KEY_FIRST_PREFIX = 1;
     private static final int SEQNUM_SIZE = 4;
 
     private static byte extractPrefix(final byte[] binaryBytes) {
         return binaryBytes[0];
+    }
+
+    public static boolean isTimeFirstSchemaKey(final byte[] binaryBytes) {
+        return binaryBytes.length > 0 && binaryBytes[0] == TIME_FIRST_PREFIX;
     }
 
     public static class TimeFirstWindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {

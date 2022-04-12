@@ -30,7 +30,7 @@ import static org.apache.kafka.streams.state.internals.SegmentedCacheFunction.by
  */
 class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStoreIterator<Long, Long, byte[], byte[]> implements WindowStoreIterator<byte[]> {
 
-    private final Function<byte[], Long> tsExtractor;
+    private final Function<byte[], Long> timestampExtractor;
 
     MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                          final KeyValueIterator<Long, byte[]> storeIterator,
@@ -43,7 +43,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
                                          final boolean forward,
                                          final Function<byte[], Long> tsExtractor) {
         super(cacheIterator, storeIterator, forward);
-        this.tsExtractor = tsExtractor;
+        this.timestampExtractor = tsExtractor;
     }
 
     @Override
@@ -54,7 +54,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
     @Override
     Long deserializeCacheKey(final Bytes cacheKey) {
         final byte[] binaryKey = bytesFromCacheKey(cacheKey);
-        return tsExtractor.apply(binaryKey);
+        return timestampExtractor.apply(binaryKey);
     }
 
     @Override
@@ -71,7 +71,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
     public int compare(final Bytes cacheKey, final Long storeKey) {
         final byte[] binaryKey = bytesFromCacheKey(cacheKey);
 
-        final Long cacheTimestamp = tsExtractor.apply(binaryKey);
+        final Long cacheTimestamp = timestampExtractor.apply(binaryKey);
         return cacheTimestamp.compareTo(storeKey);
     }
 }
