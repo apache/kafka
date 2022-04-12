@@ -304,16 +304,15 @@ public class ReplicaFetcherThreadBenchmark {
                                     new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3))
                             ),
                             new FetchSessionHandler(
-                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
-                            config
+                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3)
                     ) {
                         @Override
-                        public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
+                        public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch, Option<KafkaConfig> brokerConfig) {
                             return 0;
                         }
 
                         @Override
-                        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
+                        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions, Option<KafkaConfig> brokerConfig) {
                             scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
                             Iterator<TopicPartition> iterator = partitions.keys().iterator();
                             while (iterator.hasNext()) {
@@ -333,6 +332,7 @@ public class ReplicaFetcherThreadBenchmark {
                         }
                     },
                     new BrokerEndPoint(3, "host", 3000),
+                    config,
                     new FailedPartitions(),
                     replicaManager,
                     new ReplicaQuota() {

@@ -76,7 +76,7 @@ class ReplicaAlterLogDirsThreadTest {
                                               replicaMgr: ReplicaManager,
                                               quota: ReplicationQuotaManager,
                                               brokerTopicStats: BrokerTopicStats): ReplicaAlterLogDirsThread = {
-    val leader = new LocalLeaderEndPoint(brokerConfig, replicaMgr)
+    val leader = new LocalLeaderEndPoint(replicaMgr)
     new ReplicaAlterLogDirsThread(
       name,
       leader,

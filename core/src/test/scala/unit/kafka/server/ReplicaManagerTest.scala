@@ -2038,8 +2038,8 @@ class ReplicaManagerTest {
             val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${sourceBroker.id}, " +
               s"fetcherId=$fetcherId] ")
             val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
-            val leader = new RemoteLeaderEndPoint(blockingSend, fetchSessionHandler, config)
-            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", leader, sourceBroker, failedPartitions, replicaManager,
+            val leader = new RemoteLeaderEndPoint(blockingSend, fetchSessionHandler)
+            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", leader, sourceBroker, config, failedPartitions, replicaManager,
               quotaManager.follower, fetchSessionHandler, logContext.logPrefix) {
               override def doWork(): Unit = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,

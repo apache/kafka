@@ -29,8 +29,11 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUti
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
-class LocalLeaderEndPoint(override val brokerConfig: KafkaConfig,
-                          val replicaMgr: ReplicaManager) extends LeaderEndPoint {
+class LocalLeaderEndPoint(val replicaMgr: ReplicaManager) extends LeaderEndPoint {
+
+  override def initiateClose(): Unit = {} // do nothing
+
+  override def close(): Unit = {} // do nothing
 
   override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchData] = {
     var partitionData: Seq[(TopicPartition, FetchData)] = null
@@ -78,12 +81,12 @@ class LocalLeaderEndPoint(override val brokerConfig: KafkaConfig,
     partitionData.toMap
   }
 
-  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.localLogOrException.logStartOffset
   }
 
-  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.localLogOrException.logEndOffset
   }
@@ -93,7 +96,7 @@ class LocalLeaderEndPoint(override val brokerConfig: KafkaConfig,
    * @param partitions map of topic partition -> leader epoch of the future replica
    * @return map of topic partition -> end offset for a requested leader epoch
    */
-  override def fetchEpochEndOffsets(partitions: collection.Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+  override def fetchEpochEndOffsets(partitions: collection.Map[TopicPartition, EpochData], brokerConfig: Option[KafkaConfig] = Option.empty): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epochData) =>
       try {
         val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {

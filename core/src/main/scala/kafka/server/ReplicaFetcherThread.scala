@@ -35,6 +35,7 @@ import scala.compat.java8.OptionConverters._
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
                            sourceBroker: BrokerEndPoint,
+                           brokerConfig: KafkaConfig,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
                            quota: ReplicaQuota,
@@ -45,7 +46,7 @@ class ReplicaFetcherThread(name: String,
                                 leader = leader,
                                 sourceBroker = sourceBroker,
                                 failedPartitions,
-                                fetchBackOffMs = leader.brokerConfig.replicaFetchBackoffMs,
+                                fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
                                 replicaMgr.brokerTopicStats) {
 
@@ -53,25 +54,25 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
-    if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_3_1_IV0) 13
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_1_1_IV0) 7
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV1) 5
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 4
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV1) 3
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2
-    else if (leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_1_IV0) 13
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_1_1_IV0) 7
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV1) 5
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 4
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV1) 3
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
     else 0
 
-  private val maxWait = leader.brokerConfig.replicaFetchWaitMaxMs
-  private val minBytes = leader.brokerConfig.replicaFetchMinBytes
-  private val maxBytes = leader.brokerConfig.replicaFetchResponseMaxBytes
-  private val fetchSize = leader.brokerConfig.replicaFetchMaxBytes
-  override protected val isOffsetForLeaderEpochSupported: Boolean = leader.brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
-  override protected val isTruncationOnFetchSupported = ApiVersion.isTruncationOnFetchSupported(leader.brokerConfig.interBrokerProtocolVersion)
+  private val maxWait = brokerConfig.replicaFetchWaitMaxMs
+  private val minBytes = brokerConfig.replicaFetchMinBytes
+  private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
+  private val fetchSize = brokerConfig.replicaFetchMaxBytes
+  override protected val isOffsetForLeaderEpochSupported: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
+  override protected val isTruncationOnFetchSupported = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.localLogOrException(topicPartition).latestEpoch
@@ -99,7 +100,7 @@ class ReplicaFetcherThread(name: String,
         leader.initiateClose()
       } catch {
         case t: Throwable =>
-          error(s"Failed to initiate shutdown of leader endpoint ${leader.endpoint} after initiating replica fetcher thread shutdown", t)
+          error(s"Failed to initiate shutdown of ReplicaFetcherBlockingSend after initiating replica fetcher thread shutdown", t)
       }
     }
     justShutdown
@@ -114,7 +115,7 @@ class ReplicaFetcherThread(name: String,
       leader.close()
     } catch {
       case t: Throwable =>
-        error(s"Failed to close leader endpoint ${leader.endpoint} after shutting down replica fetcher thread", t)
+        error(s"Failed to close ReplicaFetcherBlockingSend after shutting down replica fetcher thread", t)
     }
   }
 
@@ -209,7 +210,7 @@ class ReplicaFetcherThread(name: String,
     } else {
       val version: Short = if (fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) 12 else fetchRequestVersion
       val requestBuilder = FetchRequest.Builder
-        .forReplica(version, leader.brokerConfig.brokerId, maxWait, minBytes, fetchData.toSend)
+        .forReplica(version, brokerConfig.brokerId, maxWait, minBytes, fetchData.toSend)
         .setMaxBytes(maxBytes)
         .removed(fetchData.toForget)
         .replaced(fetchData.toReplace)
@@ -236,7 +237,7 @@ class ReplicaFetcherThread(name: String,
 
     // mark the future replica for truncation only when we do last truncation
     if (offsetTruncationState.truncationCompleted)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(leader.brokerConfig.brokerId, tp,
+      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp,
         offsetTruncationState.offset)
   }
 
