@@ -35,7 +35,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
-import org.apache.kafka.common.utils.{LogContext, SystemTime, Time}
+import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentCaptor
@@ -100,16 +100,10 @@ class ReplicaFetcherThreadTest {
                                          failedPartitions: FailedPartitions,
                                          replicaMgr: ReplicaManager,
                                          quota: ReplicaQuota,
-                                         metrics: Metrics = new Metrics,
-                                         time: Time = new SystemTime,
-                                         leaderEndpointBlockingSend: Option[BlockingSend] = Option.empty): ReplicaFetcherThread = {
+                                         leaderEndpointBlockingSend: BlockingSend): ReplicaFetcherThread = {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${sourceBroker.id}, fetcherId=$fetcherId] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
-    val endpoint = leaderEndpointBlockingSend.getOrElse(
-      new ReplicaFetcherBlockingSend(sourceBroker, brokerConfig, metrics, time, fetcherId,
-        s"broker-${brokerConfig.brokerId}-fetcher-$fetcherId",
-        logContext))
-    val leader = new RemoteLeaderEndPoint(endpoint, fetchSessionHandler)
+    val leader = new RemoteLeaderEndPoint(leaderEndpointBlockingSend, fetchSessionHandler, brokerConfig)
     new ReplicaFetcherThread(name,
       leader,
       sourceBroker,
@@ -132,12 +126,12 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val endpoint = new ReplicaFetcherBlockingSend(brokerEndPoint, config, new Metrics, new SystemTime, 0, s"broker-${config.brokerId}-fetcher-0", logContext)
-    val leader = new RemoteLeaderEndPoint(endpoint, fetchSessionHandler) : RemoteLeaderEndPoint
+    val leader = new RemoteLeaderEndPoint(endpoint, fetchSessionHandler, config)
     val thread = new ReplicaFetcherThread("bob", leader, brokerEndPoint, config, failedPartitions, replicaManager, UnboundedQuota, fetchSessionHandler, logContext.logPrefix)
 
     assertEquals(ApiKeys.FETCH.latestVersion, thread.fetchRequestVersion)
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, leader.offsetForLeaderEpochRequestVersion(config))
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, leader.listOffsetRequestVersion(config))
+    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, leader.offsetForLeaderEpochRequestVersion)
+    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, leader.listOffsetRequestVersion)
   }
 
   @Test
@@ -186,7 +180,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork))
+      mockNetwork)
 
     // topic 1 supports epoch, t2 doesn't.
     thread.addPartitions(Map(
@@ -261,7 +255,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       null,
-      leaderEndpointBlockingSend = Some(mockBlockingSend)
+      mockBlockingSend
     )
 
     val result = thread.leader.fetchEpochEndOffsets(Map(
@@ -332,7 +326,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       UnboundedQuota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -399,7 +393,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t2p1 -> initialFetchState(Some(topicId2), 0L)))
 
@@ -460,7 +454,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t2p1 -> initialFetchState(Some(topicId2), 0L)))
 
@@ -524,7 +518,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -597,7 +591,7 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new ReplicaFetcherMockBlockingSend(Collections.emptyMap(), brokerEndPoint, new SystemTime())
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
-    val leader = new RemoteLeaderEndPoint(mockNetwork, fetchSessionHandler)
+    val leader = new RemoteLeaderEndPoint(mockNetwork, fetchSessionHandler, config)
     val thread = new ReplicaFetcherThread("bob", leader, brokerEndPoint, config, failedPartitions, replicaManager, quota, fetchSessionHandler, logContext.logPrefix) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
     }
@@ -721,7 +715,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -786,7 +780,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialFetchOffset)))
 
@@ -848,7 +842,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -911,7 +905,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
 
     //When
@@ -972,7 +966,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      leaderEndpointBlockingSend = Some(mockNetwork)
+      mockNetwork
     )
 
     //When
@@ -1012,7 +1006,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       null,
-      leaderEndpointBlockingSend = Some(mockBlockingSend)
+      mockBlockingSend
     )
     thread.start()
 
@@ -1062,7 +1056,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       replicaQuota,
-      leaderEndpointBlockingSend = Some(mockBlockingSend)
+      mockBlockingSend
     )
 
     val leaderEpoch = 1
@@ -1163,7 +1157,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       replicaQuota,
-      leaderEndpointBlockingSend = Some(mockBlockingSend)
+      mockBlockingSend
     )
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,

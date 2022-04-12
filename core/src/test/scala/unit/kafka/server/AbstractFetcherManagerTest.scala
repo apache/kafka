@@ -295,11 +295,11 @@ class AbstractFetcherManagerTest {
 
     override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
 
-    override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = 1
+    override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
 
-    override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = 1
+    override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
 
-    override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData], brokerConfig: Option[KafkaConfig] = Option.empty): Map[TopicPartition, EpochEndOffset] = Map.empty
+    override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
   }
 
   private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)

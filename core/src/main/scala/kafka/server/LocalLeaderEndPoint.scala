@@ -81,12 +81,12 @@ class LocalLeaderEndPoint(val replicaMgr: ReplicaManager) extends LeaderEndPoint
     partitionData.toMap
   }
 
-  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = {
+  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.localLogOrException.logStartOffset
   }
 
-  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = {
+  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.localLogOrException.logEndOffset
   }
@@ -96,7 +96,7 @@ class LocalLeaderEndPoint(val replicaMgr: ReplicaManager) extends LeaderEndPoint
    * @param partitions map of topic partition -> leader epoch of the future replica
    * @return map of topic partition -> end offset for a requested leader epoch
    */
-  override def fetchEpochEndOffsets(partitions: collection.Map[TopicPartition, EpochData], brokerConfig: Option[KafkaConfig] = Option.empty): Map[TopicPartition, EpochEndOffset] = {
+  override def fetchEpochEndOffsets(partitions: collection.Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epochData) =>
       try {
         val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {

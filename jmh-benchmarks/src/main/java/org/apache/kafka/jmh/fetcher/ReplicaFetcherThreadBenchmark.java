@@ -304,15 +304,16 @@ public class ReplicaFetcherThreadBenchmark {
                                     new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3))
                             ),
                             new FetchSessionHandler(
-                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3)
+                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
+                            config
                     ) {
                         @Override
-                        public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch, Option<KafkaConfig> brokerConfig) {
+                        public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
                             return 0;
                         }
 
                         @Override
-                        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions, Option<KafkaConfig> brokerConfig) {
+                        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
                             scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
                             Iterator<TopicPartition> iterator = partitions.keys().iterator();
                             while (iterator.hasNext()) {

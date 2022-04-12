@@ -32,10 +32,11 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Map
 
 class RemoteLeaderEndPoint(val endpoint: BlockingSend,
-                           val fetchSessionHandler: FetchSessionHandler) extends LeaderEndPoint {
+                           val fetchSessionHandler: FetchSessionHandler,
+                           val brokerConfig: KafkaConfig) extends LeaderEndPoint {
 
   // Visible for testing
-  private[server] def listOffsetRequestVersion(brokerConfig: KafkaConfig): Short = {
+  private[server] val listOffsetRequestVersion: Short = {
     if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV1) 7
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 6
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_2_IV1) 5
@@ -47,7 +48,7 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
   }
 
   // Visible for testing
-  private[server] def offsetForLeaderEpochRequestVersion(brokerConfig: KafkaConfig): Short = {
+  private[server] val offsetForLeaderEpochRequestVersion: Short = {
     if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 4
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 3
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 2
@@ -80,17 +81,15 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
     }
   }
 
-  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = {
-    val config = brokerConfig.getOrElse(throw new NoSuchElementException("brokerConfig not defined when calling RemoteLeaderEndPoint.fetchEarliestOffset."))
-    fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP, config)
+  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+    fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP)
   }
 
-  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, brokerConfig: Option[KafkaConfig] = Option.empty): Long = {
-    val config = brokerConfig.getOrElse(throw new NoSuchElementException("brokerConfig not defined when calling RemoteLeaderEndPoint.fetchLatestOffset."))
-    fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.LATEST_TIMESTAMP, config)
+  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+    fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.LATEST_TIMESTAMP)
   }
 
-  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long, brokerConfig: KafkaConfig): Long = {
+  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long): Long = {
     val topic = new ListOffsetsTopic()
       .setName(topicPartition.topic)
       .setPartitions(Collections.singletonList(
@@ -98,7 +97,7 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
           .setTimestamp(earliestOrLatest)))
-    val requestBuilder = ListOffsetsRequest.Builder.forReplica(listOffsetRequestVersion(brokerConfig), brokerConfig.brokerId)
+    val requestBuilder = ListOffsetsRequest.Builder.forReplica(listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = endpoint.sendRequest(requestBuilder)
@@ -116,10 +115,7 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
     }
   }
 
-  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData], brokerConfig: Option[KafkaConfig] = Option.empty): Map[TopicPartition, EpochEndOffset] = {
-
-    val config = brokerConfig.getOrElse(throw new NoSuchElementException("brokerConfig not defined when calling RemoteLeaderEndPoint.fetchEpochEndOffsets."))
-
+  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
     if (partitions.isEmpty) {
       debug("Skipping leaderEpoch request since all partitions do not have an epoch")
       return Map.empty
@@ -136,7 +132,7 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
     }
 
     val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(
-      offsetForLeaderEpochRequestVersion(config), topics, config.brokerId)
+      offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
     debug(s"Sending offset for leader epoch request $epochRequest")
 
     try {
