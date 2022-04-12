@@ -1101,7 +1101,7 @@ public class KStreamWindowAggregateTest {
             mkMap(
                 mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id","KSTREAM-AGGREGATE-0000000001")
+                mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
         );
         emittedRateMetric = new MetricName(
@@ -1111,7 +1111,7 @@ public class KStreamWindowAggregateTest {
             mkMap(
                 mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id","KSTREAM-AGGREGATE-0000000001")
+                mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
         );
 
