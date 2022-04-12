@@ -26,4 +26,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Evolving
 public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
+    private boolean validateOnly = false;
+
+    public boolean validateOnly() {
+        return validateOnly;
+    }
+
+    public UpdateFeaturesOptions dryRun(boolean dryRun) {
+        this.validateOnly = dryRun;
+        return this;
+    }
 }

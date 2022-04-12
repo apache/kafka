@@ -138,10 +138,10 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
     val newFeatures = new util.HashMap[String, FinalizedVersionRange]()
     newFeatures.putAll(features.features.features())
     featuresDelta.changes().entrySet().forEach { e =>
-      e.getValue().asScala match {
+      e.getValue.asScala match {
         case None => newFeatures.remove(e.getKey)
-        case Some(feature) => newFeatures.put(e.getKey,
-          new FinalizedVersionRange(feature.min(), feature.max()))
+        case Some(version) => newFeatures.put(e.getKey,
+          new FinalizedVersionRange(version, version))
       }
     }
     featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(Features.finalizedFeatures(

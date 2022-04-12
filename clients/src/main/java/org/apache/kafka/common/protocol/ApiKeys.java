@@ -98,7 +98,7 @@ public enum ApiKeys {
     END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, true),
     ALTER_PARTITION(ApiMessageType.ALTER_PARTITION, true),
-    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES),
+    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, true, true),
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false),
     FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
