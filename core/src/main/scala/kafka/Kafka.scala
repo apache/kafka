@@ -110,7 +110,7 @@ object Kafka extends Logging {
       catch {
         case e: Throwable =>
           // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
-          fatal("Exiting Kafka due to fatal exception", e)
+          fatal("Exiting Kafka due to fatal exception during startup.", e)
           Exit.exit(1)
       }
 
