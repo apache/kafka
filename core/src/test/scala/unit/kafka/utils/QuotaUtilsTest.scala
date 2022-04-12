@@ -60,7 +60,7 @@ class QuotaUtilsTest {
   def testThrottleTimeObservedRateAboveQuota(): Unit = {
     val quota = 50.0
     val observedValue = 100.0
-    assertEquals(2000, throttleTime(observedValue, quota, 3))
+    assertEquals(1000, throttleTime(observedValue, quota, 3))
   }
 
   @Test

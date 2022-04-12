@@ -154,8 +154,8 @@ public class MetricsTest {
             "Max(0...9) = 9");
         assertEquals(0.0, metricValueFunc.apply(metrics.metric(metrics.metricName("test.min", "grp1"))), EPS,
             "Min(0...9) = 0");
-        // rate is calculated over the first ever window. Hence, we don't assume presence of prior
-        assertEquals(sum / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.rate", "grp1"))), EPS,
+        // rate is calculated over the first ever window. Hence, we don't assume presence of prior windows with 0 recorded events.
+        assertEquals(sum / config.timeWindowMs(), metricValueFunc.apply(metrics.metric(metrics.metricName("test.rate", "grp1"))), EPS,
             "Rate(0...9) = 1.5");
         assertEquals(count / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.occurences", "grp1"))), EPS,
             String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs));

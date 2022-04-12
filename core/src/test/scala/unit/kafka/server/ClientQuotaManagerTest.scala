@@ -46,7 +46,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
         "Should return the overridden value (4000)")
 
       // p1 should be throttled using the overridden quota
-      var throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 2500 * config.numQuotaSamples)
+      var throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 2500)
       assertTrue(throttleTimeMs > 0, s"throttleTimeMs should be > 0. was $throttleTimeMs")
 
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
@@ -69,7 +69,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(defaultConfigClient.configUser, defaultConfigClient.configClientId, defaultConfigClient.sanitizedConfigClientId, Some(new Quota(4000, true)))
       assertEquals(4000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
 
-      throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 1000 * config.numQuotaSamples)
+      throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 1000)
       assertEquals(0, throttleTimeMs, s"throttleTimeMs should be 0. was $throttleTimeMs")
 
     } finally {
@@ -150,7 +150,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       else Double.MaxValue
     assertEquals(expectedMaxValueInQuotaWindow, quotaManager.getMaxValueInQuotaWindow(session, clientId), 0.01)
 
-    val throttleTimeMs = maybeRecord(quotaManager, user, clientId, value * config.numQuotaSamples)
+    val throttleTimeMs = maybeRecord(quotaManager, user, clientId, value)
     if (expectThrottle)
       assertTrue(throttleTimeMs > 0, s"throttleTimeMs should be > 0. was $throttleTimeMs")
     else
