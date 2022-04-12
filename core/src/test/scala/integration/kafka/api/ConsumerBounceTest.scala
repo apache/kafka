@@ -16,7 +16,6 @@ package kafka.api
 import java.time
 import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
-
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
@@ -27,7 +26,7 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.{AfterEach, Disabled, Test}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -77,7 +76,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @Test
-//  @Disabled // To be re-enabled once we can make it less flaky (KAFKA-4801)
+  @Disabled // To be re-enabled once we can make it less flaky (KAFKA-4801)
   def testConsumptionWithBrokerFailures(): Unit = consumeWithBrokerFailures(10)
 
   /*
