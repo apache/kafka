@@ -120,6 +120,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
 
+    private static final String PROCESSVALUES_NAME = "KSTREAM-PROCESSVALUES-";
+
     private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
     private static final String KEY_SELECT_NAME = "KSTREAM-KEY-SELECT-";
@@ -1512,7 +1514,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
         final String... stateStoreNames
     ) {
-        return process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
+        return process(
+            processorSupplier,
+            Named.as(builder.newProcessorName(PROCESSOR_NAME)),
+            stateStoreNames
+        );
     }
 
     @Override
@@ -1553,7 +1559,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
         final String... stateStoreNames
     ) {
-        return processValues(processorSupplier, NamedInternal.empty(), stateStoreNames);
+        return processValues(
+            processorSupplier,
+            Named.as(builder.newProcessorName(PROCESSVALUES_NAME)),
+            stateStoreNames
+        );
     }
 
     @Override
