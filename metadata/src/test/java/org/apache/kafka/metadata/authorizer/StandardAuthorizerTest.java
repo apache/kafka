@@ -454,6 +454,7 @@ public class StandardAuthorizerTest {
             Action action = new Action(READ, topicResource, 1, false, logIfDenied);
             MockAuthorizableRequestContext requestContext = new MockAuthorizableRequestContext.Builder()
                 .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                .setClientAddress(InetAddress.getByName("127.0.0.1"))
                 .build();
 
             assertEquals(singletonList(DENIED), authorizer.authorize(requestContext, singletonList(action)));
@@ -494,6 +495,7 @@ public class StandardAuthorizerTest {
             Action action = new Action(READ, topicResource, 1, logIfAllowed, false);
             MockAuthorizableRequestContext requestContext = new MockAuthorizableRequestContext.Builder()
                 .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                .setClientAddress(InetAddress.getByName("127.0.0.1"))
                 .build();
 
             assertEquals(singletonList(ALLOWED), authorizer.authorize(requestContext, singletonList(action)));
