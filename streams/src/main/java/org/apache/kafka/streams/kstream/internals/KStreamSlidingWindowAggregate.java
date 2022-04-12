@@ -45,10 +45,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
+import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emitFinalLatencySensor;
+import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emittedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.emitFinalLatencySensor;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.emittedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
@@ -116,8 +117,10 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
-            emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(), metrics);
-            emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(), metrics);
+            emittedRecordsSensor = emitFinalLatencySensor(threadId, context.taskId().toString(),
+                internalProcessorContext.currentNode().name(), metrics);
+            emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(),
+                internalProcessorContext.currentNode().name(), metrics);
             windowStore = context.getStateStore(storeName);
             if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
                 // Don't set flush lister which emit cache results
