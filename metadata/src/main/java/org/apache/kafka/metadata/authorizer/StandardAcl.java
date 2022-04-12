@@ -99,6 +99,10 @@ final public class StandardAcl implements Comparable<StandardAcl> {
 
     public KafkaPrincipal kafkaPrincipal() {
         int colonIndex = principal.indexOf(":");
+        if (colonIndex == -1) {
+            throw new IllegalStateException("Could not parse principal from `" + principal + "` " +
+                "(no colon is present separating the principal type from the principal name)");
+        }
         String principalType = principal.substring(0, colonIndex);
         String principalName = principal.substring(colonIndex + 1);
         return new KafkaPrincipal(principalType, principalName);
