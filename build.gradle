@@ -2038,6 +2038,7 @@ project(':streams:upgrade-system-tests-0100') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_0100
     testRuntimeOnly libs.junitJupiter
   }
@@ -2051,6 +2052,7 @@ project(':streams:upgrade-system-tests-0101') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0101"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_0101
     testRuntimeOnly libs.junitJupiter
   }
@@ -2064,6 +2066,7 @@ project(':streams:upgrade-system-tests-0102') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0102"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_0102
     testRuntimeOnly libs.junitJupiter
   }
@@ -2077,6 +2080,7 @@ project(':streams:upgrade-system-tests-0110') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0110"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_0110
     testRuntimeOnly libs.junitJupiter
   }
@@ -2090,6 +2094,7 @@ project(':streams:upgrade-system-tests-10') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-10"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_10
     testRuntimeOnly libs.junitJupiter
   }
@@ -2103,6 +2108,7 @@ project(':streams:upgrade-system-tests-11') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-11"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_11
     testRuntimeOnly libs.junitJupiter
   }
@@ -2116,6 +2122,7 @@ project(':streams:upgrade-system-tests-20') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-20"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_20
     testRuntimeOnly libs.junitJupiter
   }
@@ -2129,6 +2136,7 @@ project(':streams:upgrade-system-tests-21') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-21"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_21
     testRuntimeOnly libs.junitJupiter
   }
@@ -2142,6 +2150,7 @@ project(':streams:upgrade-system-tests-22') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-22"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_22
     testRuntimeOnly libs.junitJupiter
   }
@@ -2155,6 +2164,7 @@ project(':streams:upgrade-system-tests-23') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-23"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_23
     testRuntimeOnly libs.junitJupiter
   }
@@ -2168,6 +2178,7 @@ project(':streams:upgrade-system-tests-24') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-24"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_24
     testRuntimeOnly libs.junitJupiter
   }
@@ -2181,6 +2192,7 @@ project(':streams:upgrade-system-tests-25') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-25"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_25
     testRuntimeOnly libs.junitJupiter
   }
@@ -2194,6 +2206,7 @@ project(':streams:upgrade-system-tests-26') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-26"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_26
     testRuntimeOnly libs.junitJupiter
   }
@@ -2207,6 +2220,7 @@ project(':streams:upgrade-system-tests-27') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-27"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_27
     testRuntimeOnly libs.junitJupiter
   }
@@ -2220,6 +2234,7 @@ project(':streams:upgrade-system-tests-28') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-28"
 
   dependencies {
+    testImplementation libs.jacksonDatabind // Pin for CVE-2020-36518
     testImplementation libs.kafkaStreams_28
     testRuntimeOnly libs.junitJupiter
   }
