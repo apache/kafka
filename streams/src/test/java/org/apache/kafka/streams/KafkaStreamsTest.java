@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
@@ -798,6 +799,55 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldThrowOnCleanupWhileShuttingDownStreamClosedWithCloseOptionLeaveGroupFalse() throws InterruptedException {
+
+        final RemoveMembersFromConsumerGroupResult result = EasyMock.mock(RemoveMembersFromConsumerGroupResult.class);
+
+        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
+                .addMockedMethod("removeMembersFromConsumerGroup").createMock();
+
+        EasyMock.expect(mockAdminClient.removeMembersFromConsumerGroup(anyObject(), anyObject())).andStubReturn(result);
+
+        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
+                .addMockedMethod("getAdmin").createMock();
+        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
+
+        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time);
+        streams.start();
+        waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING,
+                "Streams never started.");
+
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ZERO);
+        closeOptions.leaveGroup(true);
+
+        streams.close(closeOptions);
+        assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+        assertThrows(IllegalStateException.class, streams::cleanUp);
+        assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+    }
+
+    @Test
+    public void shouldThrowOnCleanupWhileShuttingDownStreamClosedWithCloseOptionLeaveGroupTrue() throws InterruptedException {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING,
+                "Streams never started.");
+
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ZERO);
+
+        streams.close(closeOptions);
+        assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+        assertThrows(IllegalStateException.class, streams::cleanUp);
+        assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+    }
+
+    @Test
     public void shouldNotGetAllTasksWhenNotRunning() throws InterruptedException {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             assertThrows(StreamsNotStartedException.class, streams::metadataForAllStreamsClients);
@@ -916,6 +966,103 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             // with mock time that does not elapse, close would not return if it ever waits on the state transition
             assertFalse(streams.close(Duration.ZERO));
+        }
+    }
+
+    @Test
+    public void shouldReturnFalseOnCloseWithCloseOptionWithLeaveGroupFalseWhenThreadsHaventTerminated() {
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ofMillis(10L));
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+            assertFalse(streams.close(closeOptions));
+        }
+    }
+
+    @Test
+    public void shouldThrowOnNegativeTimeoutForCloseWithCloseOptionLeaveGroupFalse() {
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ofMillis(-1L));
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
+        }
+    }
+
+    @Test
+    public void shouldNotBlockInCloseWithCloseOptionLeaveGroupFalseForZeroDuration() {
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ZERO);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+            assertFalse(streams.close(closeOptions));
+        }
+    }
+
+    @Test
+    public void shouldReturnFalseOnCloseWithCloseOptionWithLeaveGroupTrueWhenThreadsHaventTerminated() {
+
+        final RemoveMembersFromConsumerGroupResult result = EasyMock.mock(RemoveMembersFromConsumerGroupResult.class);
+
+        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
+                .addMockedMethod("removeMembersFromConsumerGroup").createMock();
+
+        EasyMock.expect(mockAdminClient.removeMembersFromConsumerGroup(anyObject(), anyObject())).andStubReturn(result);
+
+        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
+                .addMockedMethod("getAdmin").createMock();
+        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
+
+        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ofMillis(10L));
+        closeOptions.leaveGroup(true);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier)) {
+            assertFalse(streams.close(closeOptions));
+        }
+    }
+
+    @Test
+    public void shouldThrowOnNegativeTimeoutForCloseWithCloseOptionLeaveGroupTrue() {
+        final RemoveMembersFromConsumerGroupResult result = EasyMock.mock(RemoveMembersFromConsumerGroupResult.class);
+
+        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
+                .addMockedMethod("removeMembersFromConsumerGroup").createMock();
+
+        EasyMock.expect(mockAdminClient.removeMembersFromConsumerGroup(anyObject(), anyObject())).andStubReturn(result);
+
+        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
+                .addMockedMethod("getAdmin").createMock();
+        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
+
+        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ofMillis(-1L));
+        closeOptions.leaveGroup(true);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
+            assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
+        }
+    }
+
+    @Test
+    public void shouldNotBlockInCloseWithCloseOptionLeaveGroupTrueForZeroDuration() {
+        final RemoveMembersFromConsumerGroupResult result = EasyMock.mock(RemoveMembersFromConsumerGroupResult.class);
+
+        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
+                .addMockedMethod("removeMembersFromConsumerGroup").createMock();
+
+        EasyMock.expect(mockAdminClient.removeMembersFromConsumerGroup(anyObject(), anyObject())).andStubReturn(result);
+
+        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
+                .addMockedMethod("getAdmin").createMock();
+        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
+
+        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+
+        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
+        closeOptions.timeout(Duration.ZERO);
+        closeOptions.leaveGroup(true);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier)) {
+            assertFalse(streams.close(closeOptions));
         }
     }
 
