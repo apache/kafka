@@ -27,6 +27,8 @@ import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.{mock, when}
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
@@ -258,10 +260,9 @@ class LogOffsetTest extends BaseRequestTest {
   def testFetchOffsetsBeforeWithChangingSegmentSize(): Unit = {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val logSegment: LogSegment = mock(classOf[LogSegment])
-    when(logSegment.size).thenAnswer(_ => {
-      val value = new AtomicInteger(0)
-      def answer: Int = value.getAndIncrement()
-      answer
+    when(logSegment.size).thenAnswer(new Answer[Int] {
+      private[this] val value = new AtomicInteger(0)
+      override def answer(invocation: InvocationOnMock): Int = value.getAndIncrement()
     })
     val logSegments = Seq(logSegment)
     when(log.logSegments).thenReturn(logSegments)
@@ -274,13 +275,12 @@ class LogOffsetTest extends BaseRequestTest {
   def testFetchOffsetsBeforeWithChangingSegments(): Unit = {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val logSegment: LogSegment = mock(classOf[LogSegment])
-    when(log.logSegments).thenAnswer { _ =>
-      def answer = new Iterable[LogSegment] {
+    when(log.logSegments).thenReturn(
+      new Iterable[LogSegment] {
         override def size = 2
-        def iterator = Seq(logSegment).iterator
+        override def iterator = Seq(logSegment).iterator
       }
-      answer
-    }
+    )
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
 
