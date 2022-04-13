@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -25,7 +24,7 @@ import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochR
 
 import scala.collection.Map
 
-trait LeaderEndPoint extends Logging {
+trait LeaderEndPoint {
 
   type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -41,4 +40,6 @@ trait LeaderEndPoint extends Logging {
   def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
   def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
+
+  override def toString: String = super.toString
 }

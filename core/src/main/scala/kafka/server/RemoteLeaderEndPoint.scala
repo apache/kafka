@@ -20,6 +20,7 @@ package kafka.server
 import java.util.Collections
 import kafka.api.{KAFKA_0_10_1_IV2, KAFKA_0_11_0_IV0, KAFKA_2_0_IV0, KAFKA_2_0_IV1, KAFKA_2_1_IV1, KAFKA_2_2_IV1, KAFKA_2_3_IV1, KAFKA_2_8_IV0, KAFKA_3_0_IV1}
 import kafka.utils.Implicits.MapExtensionMethods
+import kafka.utils.Logging
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
@@ -33,7 +34,7 @@ import scala.collection.Map
 
 class RemoteLeaderEndPoint(val endpoint: BlockingSend,
                            val fetchSessionHandler: FetchSessionHandler,
-                           val brokerConfig: KafkaConfig) extends LeaderEndPoint {
+                           val brokerConfig: KafkaConfig) extends LeaderEndPoint with Logging {
 
   // Visible for testing
   private[server] val listOffsetRequestVersion: Short = {
@@ -158,5 +159,7 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
         }
     }
   }
+
+  override def toString: String = s"RemoteLeaderEndPoint with ReplicaFetcherBlockingSend $endpoint"
 }
 

@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.api.Request
 import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.utils.Logging
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
@@ -29,7 +30,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUti
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
-class LocalLeaderEndPoint(val replicaMgr: ReplicaManager) extends LeaderEndPoint {
+class LocalLeaderEndPoint(val replicaMgr: ReplicaManager) extends LeaderEndPoint with Logging {
 
   override def initiateClose(): Unit = {} // do nothing
 
@@ -120,4 +121,6 @@ class LocalLeaderEndPoint(val replicaMgr: ReplicaManager) extends LeaderEndPoint
       }
     }
   }
+
+  override def toString: String = s"LocalLeaderEndPoint with ReplicaManager $replicaMgr"
 }

@@ -100,7 +100,7 @@ class ReplicaFetcherThread(name: String,
         leader.initiateClose()
       } catch {
         case t: Throwable =>
-          error(s"Failed to initiate shutdown of ReplicaFetcherBlockingSend after initiating replica fetcher thread shutdown", t)
+          error(s"Failed to initiate shutdown of $leader after initiating replica fetcher thread shutdown", t)
       }
     }
     justShutdown
@@ -115,7 +115,7 @@ class ReplicaFetcherThread(name: String,
       leader.close()
     } catch {
       case t: Throwable =>
-        error(s"Failed to close ReplicaFetcherBlockingSend after shutting down replica fetcher thread", t)
+        error(s"Failed to close $leader after shutting down replica fetcher thread", t)
     }
   }
 
