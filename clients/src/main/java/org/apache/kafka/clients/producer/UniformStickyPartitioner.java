@@ -23,6 +23,10 @@ import org.apache.kafka.common.Cluster;
 
 
 /**
+ * NOTE this partitioner is deprecated and shouldn't be used.  To use default partitioning logic
+ * remove partitioner.class configuration setting and set partitioner.ignore.keys=true.
+ * See KIP-794 for more info.
+ *
  * The partitioning strategy:
  * <ul>
  * <li>If a partition is specified in the record, use it

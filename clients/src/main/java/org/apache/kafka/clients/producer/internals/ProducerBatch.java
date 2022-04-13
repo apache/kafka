@@ -103,7 +103,18 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
+        return tryAppend(timestamp, key, value, headers, callback, now, null);
+    }
+
+    /**
+     * Append the record to the current record set and return the relative offset within that record set.  An optional
+     * argument recordInfo can be used to return info about the record.
+     *
+     * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
+     */
+    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+                                          Callback callback, long now, MemoryRecordsBuilder.RecordInfo recordInfo) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers, recordInfo)) {
             return null;
         } else {
             this.recordsBuilder.append(timestamp, key, value, headers);
@@ -128,7 +139,7 @@ public final class ProducerBatch {
      * @return true if the record has been successfully appended, false otherwise.
      */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers, null)) {
             return false;
         } else {
             // No need to get the CRC.

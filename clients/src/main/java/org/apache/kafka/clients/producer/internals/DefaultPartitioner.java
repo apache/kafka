@@ -23,6 +23,9 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Map;
 
 /**
+ * NOTE this partitioner is deprecated and shouldn't be used.  To use default partitioning logic
+ * remove partitioner.class configuration setting.  See KIP-794 for more info.
+ *
  * The default partitioning strategy:
  * <ul>
  * <li>If a partition is specified in the record, use it
