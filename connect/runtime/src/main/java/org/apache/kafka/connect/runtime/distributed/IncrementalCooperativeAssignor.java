@@ -296,7 +296,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         final Map<String, ConnectorsAndTasks> nextAssignments = assignments(nextWorkerAssignment);
 
         log.debug("Current complete assignments: {}", memberAssignments);
-        log.debug("New complete assignments: {}", nextAssignments);
+        log.debug("Next complete assignments: {}", nextAssignments);
 
         // The newly-assigned connectors and tasks for each worker during this round
         final Map<String, ConnectorsAndTasks> incrementalAssignments = diff(nextAssignments, memberAssignments);
