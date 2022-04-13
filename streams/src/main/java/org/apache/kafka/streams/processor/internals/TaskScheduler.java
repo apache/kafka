@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-    import org.apache.kafka.common.utils.ExponentialBackoff;
-    import org.apache.kafka.common.utils.LogContext;
-    import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.processor.TaskId;
 
-    import java.util.Map;
-    import java.util.Set;
-    import java.util.concurrent.ConcurrentHashMap;
-    import org.slf4j.Logger;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
 
-    import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
+import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 
 /**
  * Multi-threaded class that tracks the status of active tasks being processed and decides if/when they can
