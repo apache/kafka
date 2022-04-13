@@ -19,12 +19,14 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ProducerConfigTest {
 
@@ -58,5 +60,14 @@ public class ProducerConfigTest {
         newConfigs = ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer);
         assertEquals(newConfigs.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClass);
         assertEquals(newConfigs.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClass);
+    }
+
+    @Test
+    public void testInvalidCompressionType() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "abc");
+        assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
     }
 }
