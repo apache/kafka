@@ -157,7 +157,6 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     1000L
                 );
                 timeTracker.setEmitInterval(emitInterval);
-                log.info("EmitInterval=" + emitInterval);
             }
         }
 
