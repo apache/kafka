@@ -4265,7 +4265,7 @@ public class KafkaAdminClient extends AdminClient {
                         new UpdateFeaturesRequestData.FeatureUpdateKey();
                     requestItem.setFeature(feature);
                     requestItem.setMaxVersionLevel(update.maxVersionLevel());
-                    requestItem.setDowngradeType(update.downgradeType().code());
+                    requestItem.setUpgradeType(update.upgradeType().code());
                     featureUpdatesRequestData.add(requestItem);
                 }
                 return new UpdateFeaturesRequest.Builder(

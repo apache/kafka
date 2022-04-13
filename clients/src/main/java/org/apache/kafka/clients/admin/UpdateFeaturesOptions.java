@@ -32,8 +32,8 @@ public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions
         return validateOnly;
     }
 
-    public UpdateFeaturesOptions dryRun(boolean dryRun) {
-        this.validateOnly = dryRun;
+    public UpdateFeaturesOptions validateOnly(boolean validateOnly) {
+        this.validateOnly = validateOnly;
         return this;
     }
 }

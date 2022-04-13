@@ -150,7 +150,7 @@ class BrokerServer(
 
   var metadataPublisher: BrokerMetadataPublisher = null
 
-  var brokerFeatures: BrokerFeatures = null
+  val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
 
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
@@ -221,8 +221,6 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
-
-      brokerFeatures = BrokerFeatures.createDefault()
 
       val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 

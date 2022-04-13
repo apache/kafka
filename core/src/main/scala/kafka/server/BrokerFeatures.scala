@@ -45,7 +45,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
     Features.finalizedFeatures(
       supportedFeatures.features.asScala.map {
         case(name, versionRange) => (
-          name, new FinalizedVersionRange(versionRange.min, versionRange.max))
+          name, new FinalizedVersionRange(versionRange.max, versionRange.max))
       }.asJava)
   }
 

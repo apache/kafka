@@ -1587,20 +1587,13 @@ public final class QuorumController implements Controller {
             UpdateFeaturesRequestData request) {
         return appendWriteEvent("updateFeatures", () -> {
             Map<String, Short> updates = new HashMap<>();
-            Map<String, FeatureControlManager.DowngradeType> downgrades = new HashMap<>();
+            Map<String, FeatureUpdate.UpgradeType> upgradeTypes = new HashMap<>();
             request.featureUpdates().forEach(featureUpdate -> {
                 String featureName = featureUpdate.feature();
-                if (featureUpdate.downgradeType() == FeatureUpdate.DowngradeType.SAFE.code()) {
-                    downgrades.put(featureName, FeatureControlManager.DowngradeType.SAFE);
-                } else if (featureUpdate.downgradeType() == FeatureUpdate.DowngradeType.UNSAFE.code()) {
-                    downgrades.put(featureName, FeatureControlManager.DowngradeType.UNSAFE);
-                } else {
-                    downgrades.put(featureName, FeatureControlManager.DowngradeType.NONE);
-
-                }
+                upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return featureControl.updateFeatures(updates, downgrades, clusterControl.brokerSupportedVersions(),
+            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
                 request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();

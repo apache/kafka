@@ -31,12 +31,12 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     public static class FeatureUpdateItem {
         private final String featureName;
         private final short featureLevel;
-        private final FeatureUpdate.DowngradeType downgradeType;
+        private final FeatureUpdate.UpgradeType upgradeType;
 
-        public FeatureUpdateItem(String featureName, short featureLevel, FeatureUpdate.DowngradeType downgradeType) {
+        public FeatureUpdateItem(String featureName, short featureLevel, FeatureUpdate.UpgradeType upgradeType) {
             this.featureName = featureName;
             this.featureLevel = featureLevel;
-            this.downgradeType = downgradeType;
+            this.upgradeType = upgradeType;
         }
 
         public String feature() {
@@ -47,12 +47,12 @@ public class UpdateFeaturesRequest extends AbstractRequest {
             return featureLevel;
         }
 
-        public FeatureUpdate.DowngradeType downgradeType() {
-            return downgradeType;
+        public FeatureUpdate.UpgradeType downgradeType() {
+            return upgradeType;
         }
 
         public boolean isDeleteRequest() {
-            return featureLevel < 1 && !downgradeType.equals(FeatureUpdate.DowngradeType.NONE);
+            return featureLevel < 1 && !upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE);
         }
     }
 
@@ -87,12 +87,12 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         UpdateFeaturesRequestData.FeatureUpdateKey update = data.featureUpdates().find(name);
         if (super.version() == 0) {
             if (update.allowDowngrade()) {
-                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.DowngradeType.SAFE);
+                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.UpgradeType.SAFE_DOWNGRADE);
             } else {
-                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.DowngradeType.NONE);
+                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.UpgradeType.UPGRADE);
             }
         } else {
-            return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.DowngradeType.fromCode(update.downgradeType()));
+            return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.UpgradeType.fromCode(update.upgradeType()));
         }
     }
 

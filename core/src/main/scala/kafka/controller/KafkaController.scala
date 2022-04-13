@@ -33,7 +33,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.{FeatureZNodeStatus, _}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
-import org.apache.kafka.clients.admin.FeatureUpdate.DowngradeType
+import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
@@ -1943,7 +1943,7 @@ class KafkaController(val config: KafkaConfig,
     } else {
       var newVersionRange: FinalizedVersionRange = null
       try {
-        newVersionRange = new FinalizedVersionRange(supportedVersionRange.min, update.versionLevel())
+        newVersionRange = new FinalizedVersionRange(update.versionLevel(), update.versionLevel())
       } catch {
         case _: IllegalArgumentException => {
           // This exception means the provided maxVersionLevel is invalid. It is handled below
@@ -1997,6 +1997,8 @@ class KafkaController(val config: KafkaConfig,
     if (update.feature.isEmpty) {
       // Check that the feature name is not empty.
       Right(new ApiError(Errors.INVALID_REQUEST, "Feature name can not be empty."))
+    } else if (update.downgradeType.equals(UpgradeType.UNKNOWN)) {
+      Right(new ApiError(Errors.INVALID_REQUEST, "Received unknown upgrade type."))
     } else {
 
       // We handle deletion requests separately from non-deletion requests.
@@ -2018,17 +2020,17 @@ class KafkaController(val config: KafkaConfig,
           if (update.versionLevel == existing.max) {
             // Disallow a case where target maxVersionLevel matches existing maxVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"Can not ${if (update.downgradeType.equals(DowngradeType.SAFE)) "downgrade" else "upgrade"}" +
+                               s"Can not ${if (update.downgradeType.equals(UpgradeType.SAFE_DOWNGRADE)) "downgrade" else "upgrade"}" +
                                s" a finalized feature from existing maxVersionLevel:${existing.max}" +
                                " to the same value."))
-          } else if (update.versionLevel < existing.max && !update.downgradeType.equals(DowngradeType.SAFE)) {
+          } else if (update.versionLevel < existing.max && !update.downgradeType.equals(UpgradeType.SAFE_DOWNGRADE)) {
             // Disallow downgrade of a finalized feature without the downgradeType set.
             Right(new ApiError(Errors.INVALID_REQUEST,
                                s"Can not downgrade finalized feature from existing" +
                                s" maxVersionLevel:${existing.max} to provided" +
                                s" maxVersionLevel:${update.versionLevel} without setting the" +
                                " downgradeType to SAFE in the request."))
-          } else if (!update.downgradeType.equals(DowngradeType.NONE) && update.versionLevel > existing.max) {
+          } else if (!update.downgradeType.equals(UpgradeType.UPGRADE) && update.versionLevel > existing.max) {
             // Disallow a request that sets downgradeType without specifying a
             // maxVersionLevel that's lower than the existing maxVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,

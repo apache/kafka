@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -90,7 +91,7 @@ public class FeatureControlManagerTest {
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "The controller does not support the given feature range."))),
             manager.updateFeatures(updateMap("foo", 3),
-                Collections.singletonMap("foo", FeatureControlManager.DowngradeType.SAFE),
+                Collections.singletonMap("foo", FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
                 Collections.emptyMap(), false));
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
                 updateMap("foo", 2, "bar", 1), Collections.emptyMap(),
@@ -143,7 +144,7 @@ public class FeatureControlManagerTest {
             ),
             manager.updateFeatures(
                 updateMap("foo", 3),
-                Collections.singletonMap("foo", FeatureControlManager.DowngradeType.SAFE),
+                Collections.singletonMap("foo", FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
                 Collections.singletonMap(5, rangeMap()),
                 false)
         );
@@ -175,7 +176,7 @@ public class FeatureControlManagerTest {
             ),
             manager.updateFeatures(
                 updateMap("foo", 2),
-                Collections.singletonMap("foo", FeatureControlManager.DowngradeType.SAFE),
+                Collections.singletonMap("foo", FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
                 Collections.emptyMap(),
                 false)
         );

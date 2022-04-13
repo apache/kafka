@@ -23,7 +23,7 @@ import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, fileType, storeTrue}
 import net.sourceforge.argparse4j.inf.{Namespace, Subparsers}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.FeatureUpdate.DowngradeType
+import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.clients.admin.{Admin, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.utils.Utils
 
@@ -207,8 +207,8 @@ object FeatureCommand {
 
     val dryRun = namespace.getBoolean("dry_run")
     val updateResult = admin.updateFeatures(featuresToUpgrade.map { case (feature, version) =>
-      feature -> new FeatureUpdate(version, DowngradeType.NONE)
-    }.asJava, new UpdateFeaturesOptions().dryRun(dryRun))
+      feature -> new FeatureUpdate(version, UpgradeType.UPGRADE)
+    }.asJava, new UpdateFeaturesOptions().validateOnly(dryRun))
     handleUpdateFeaturesResponse(updateResult, featuresToUpgrade, dryRun, "upgrade")
   }
 
@@ -223,11 +223,11 @@ object FeatureCommand {
     val unsafe = namespace.getBoolean("unsafe")
     val updateResult = admin.updateFeatures(featuresToDowngrade.map { case (feature, version) =>
       if (unsafe) {
-        feature -> new FeatureUpdate(version, DowngradeType.UNSAFE)
+        feature -> new FeatureUpdate(version, UpgradeType.UNSAFE_DOWNGRADE)
       } else {
-        feature -> new FeatureUpdate(version, DowngradeType.SAFE)
+        feature -> new FeatureUpdate(version, UpgradeType.SAFE_DOWNGRADE)
       }
-    }.asJava, new UpdateFeaturesOptions().dryRun(dryRun))
+    }.asJava, new UpdateFeaturesOptions().validateOnly(dryRun))
 
     handleUpdateFeaturesResponse(updateResult, featuresToDowngrade, dryRun, "downgrade")
   }
@@ -243,11 +243,11 @@ object FeatureCommand {
     val unsafe = namespace.getBoolean("unsafe")
     val updateResult = admin.updateFeatures(featuresToDisable.map { feature =>
       if (unsafe) {
-        feature -> new FeatureUpdate(0.toShort, DowngradeType.UNSAFE)
+        feature -> new FeatureUpdate(0.toShort, UpgradeType.UNSAFE_DOWNGRADE)
       } else {
-        feature -> new FeatureUpdate(0.toShort, DowngradeType.SAFE)
+        feature -> new FeatureUpdate(0.toShort, UpgradeType.SAFE_DOWNGRADE)
       }
-    }.toMap.asJava, new UpdateFeaturesOptions().dryRun(dryRun))
+    }.toMap.asJava, new UpdateFeaturesOptions().validateOnly(dryRun))
 
     handleUpdateFeaturesResponse(updateResult, featuresToDisable.map {
       feature => feature -> 0.toShort

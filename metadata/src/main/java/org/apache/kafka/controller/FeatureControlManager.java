@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -42,10 +43,6 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 
 
 public class FeatureControlManager {
-    public enum DowngradeType {
-        SAFE, UNSAFE, NONE;
-    }
-
     private final Logger log;
 
     /**
@@ -69,14 +66,14 @@ public class FeatureControlManager {
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
             Map<String, Short> updates,
-            Map<String, DowngradeType> downgrades,
+            Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
             Map<Integer, Map<String, VersionRange>> brokerFeatures,
             boolean validateOnly) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
-                downgrades.getOrDefault(entry.getKey(), DowngradeType.NONE), brokerFeatures, records));
+                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), brokerFeatures, records));
         }
 
         if (validateOnly) {
@@ -98,12 +95,17 @@ public class FeatureControlManager {
 
     private ApiError updateFeature(String featureName,
                                    short newVersion,
-                                   DowngradeType downgradeType,
+                                   FeatureUpdate.UpgradeType upgradeType,
                                    Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
                                    List<ApiMessageAndVersion> records) {
         if (!featureExists(featureName)) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "The controller does not support the given feature.");
+        }
+
+        if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                    "The controller does not support the given upgrade type.");
         }
 
         final Short currentVersion = finalizedVersions.get(featureName);
@@ -128,9 +130,9 @@ public class FeatureControlManager {
         }
 
         if (currentVersion != null && newVersion < currentVersion) {
-            if (downgradeType.equals(DowngradeType.NONE)) {
+            if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
                 return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Can't downgrade the maximum version of this feature without setting the downgrade type.");
+                    "Can't downgrade the maximum version of this feature without setting the upgrade type to safe or unsafe downgrade.");
             }
         }
 
