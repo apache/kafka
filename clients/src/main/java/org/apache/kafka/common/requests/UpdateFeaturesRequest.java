@@ -47,7 +47,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
             return featureLevel;
         }
 
-        public FeatureUpdate.UpgradeType downgradeType() {
+        public FeatureUpdate.UpgradeType upgradeType() {
             return upgradeType;
         }
 
