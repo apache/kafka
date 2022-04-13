@@ -641,43 +641,27 @@ public class MetricsTest {
 
         //In the first window the rate is a fraction of the whole (1s) window
         //So when we record 1000 at t0, the rate is calculated assuming presence of a prior window with 0 records.
-        record(rate, config, 1000);
+        record(rate, config, 1000); // T1
         assertEquals(1000, measure(rate, config), 0);
-        time.sleep(100);
-        assertEquals(1000.0d / 1.1d, measure(rate, config), 0); // 1000B / 1.1s
-        time.sleep(100);
-        assertEquals(1000.0d / 1.2d, measure(rate, config), 0); // 1000B / 1.2s
-        time.sleep(200);
-        assertEquals(1000.0d / 1.4d, measure(rate, config), 0); // 1000B / 1.4s
-
-        time.sleep(600);
-        // Time elapsed = 1s. Start of window#2.
-        // Window#2 has no record events but the rate will be in proportion to the elapsed time
-        // So the rate will degrade over time, as the time between measurement and the initial recording grows.
-        assertEquals(1000, measure(rate, config), 0); // 1000B / 1.0s
-        time.sleep(200);
-        assertEquals(1000 / 1.2, measure(rate, config), 0); // 1000B / 1.2s
-        time.sleep(200);
-        assertEquals(1000 / 1.4, measure(rate, config), 0); // 1000B / 1.4s
-        time.sleep(500);
+        time.sleep(30); // T1 + 30ms
         record(rate, config, 1000);
-        time.sleep(100);
-        // End of Window#2
-        // Partial gap < quota window size
-        time.sleep(200);
+        assertEquals(2000.0d / 1.030d, measure(rate, config), 0);
+        time.sleep(965); // T1 + 995ms
         record(rate, config, 1000);
-        // Even though the record arrived at 200ms after the window starting time, we would assume that window starts
-        // at where it should have started and not when the event arrives
-        assertEquals(2000 / 1.2, measure(rate, config), 0); // 1000B / 1.2s
-        // Window#4 have no record events.
-        time.sleep(1800);
-        // Time elapsed = 4s. Start of Window#5
-        // Rate is zero since no recorded events in the window duration used for calculation of rate
-        assertEquals(0, measure(rate, config), 0);
-        time.sleep(200);
+        assertEquals(3000.0d / 1.995d, measure(rate, config), 0);
+        // Start of Window#2
+        time.sleep(25); // T1 + 1020ms
         record(rate, config, 1000);
-        // Unlike the case of first window, the rate is calculated assuming no events in previous window.
-        assertEquals(1000 / 1.2, measure(rate, config), 0); // 1000B / 1.2s
+        assertEquals(4000.0d / 1.02d, measure(rate, config), 0);
+        time.sleep(990); // T1 + 2010ms
+        // Window#1 is purged
+        // Window#2 has ended at T1 + 2000ms
+        // this event belongs to Window#3
+        record(rate, config, 1000);
+        assertEquals(2000.0d / 1.010d, measure(rate, config), 0);
+        time.sleep(2000); // 1 full windows with no data
+        record(rate, config, 1000); // T1 + 4010ms
+        assertEquals(1000.0d / 1.010d, measure(rate, config), 0);
     }
 
     public static class ConstantMeasurable implements Measurable {
