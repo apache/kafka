@@ -47,7 +47,7 @@ public abstract class SourceConnector extends Connector {
      * configuration, and {@link ExactlyOnceSupport#UNSUPPORTED} if it cannot. If this method is overridden by a
      * connector, should not be {@code null}, but if {@code null}, it will be assumed that the connector cannot provide
      * exactly-once guarantees.
-     * @since 3.2
+     * @since 3.3
      */
     public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> connectorConfig) {
         return null;
@@ -66,7 +66,7 @@ public abstract class SourceConnector extends Connector {
      * or {@link ConnectorTransactionBoundaries#UNSUPPORTED} otherwise. If this method is overridden by a
      * connector, should not be {@code null}, but if {@code null}, it will be assumed that the connector cannot define its own
      * transaction boundaries.
-     * @since 3.2
+     * @since 3.3
      * @see TransactionContext
      */
     public ConnectorTransactionBoundaries canDefineTransactionBoundaries(Map<String, String> connectorConfig) {

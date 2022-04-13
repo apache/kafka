@@ -58,7 +58,7 @@ public interface SourceTaskContext {
      * </pre>
      *
      * @return the transaction context, or null if the connector was not configured to specify transaction boundaries
-     * @since 3.2
+     * @since 3.3
      */
     default TransactionContext transactionContext() {
         return null;
