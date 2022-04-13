@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,10 +35,16 @@ import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNA
  * Note: A single instance of this class is shared between all StreamThreads, so it must be thread-safe
  */
 public class TaskScheduler {
+    // Reaches the maximum backoff interval in about 5 attempts, at which point
     private static final long INITIAL_BACKOFF_MS = 3 * 1000L;  // wait 3s after the first task failure
     private static final int RETRY_BACKOFF_EXP_BASE = 2;
     private static final long MAXIMUM_BACKOFF_MS = 60 * 1000L; // back off up to a maximum of 1 minute between retries
-    private static final double RETRY_BACKOFF_JITTER = 0.2;
+    private static final double RETRY_BACKOFF_JITTER = 0.02;
+
+    // Once an individual task has been failing consistently for the past 30s or more, we "extend" the backoff to all
+    // other tasks in that topology, to avoid letting different subtopologies become too far out of sync and potentially
+    // missing for example the output of a join where only one side is blocked upstream due to task errors
+    private static final long EXTEND_TASK_BACKOFF_TO_FULL_TOPOLOGY_MS = 30 * 1000L;
 
     enum TaskStatus {
         RUNNING,  // the task and its topology are healthy and able to be processed
@@ -107,9 +114,7 @@ public class TaskScheduler {
 
         public TaskStatus getTaskStatus(final Task task, final long now) {
             final ErrorMetadata errorMetadata = tasksToErrorTime.get(task.id());
-            if (errorMetadata == null) {
-                return TaskStatus.RUNNING;
-            } else {
+            if (errorMetadata != null) {
                 ++errorMetadata.numAttempts;
 
                 final long remainingBackoffMs = now - errorMetadata.firstErrorTimeMs + taskBackoff.backoff(errorMetadata.numAttempts);
@@ -123,6 +128,10 @@ public class TaskScheduler {
                               task.id(), remainingBackoffMs);
                     return TaskStatus.BACKOFF;
                 }
+            } else {
+                // TODO: implement full backoff for unhealthy topologies with high-frequency task errors
+
+                return TaskStatus.RUNNING;
             }
         }
 

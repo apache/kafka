@@ -36,14 +36,25 @@ public class ExponentialBackoffTest {
         int numAttempts = 0;
         System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
 
-        numAttempts = 10;
+        numAttempts = 1;
         System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
-        numAttempts = 30;
+        numAttempts = 2;
         System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
-        numAttempts = 50;
+        numAttempts = 3;
         System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
-        numAttempts = 100;
+        numAttempts = 4;
         System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 5;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 6;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 7;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 8;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 9;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+
         System.out.println("done");
     }
 
