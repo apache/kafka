@@ -72,7 +72,7 @@ public class TopologyMetadata {
     private final StreamsConfig config;
     private final ProcessingMode processingMode;
     private final TopologyVersion version;
-    private final TaskExecutionMetadata taskExecutionMetadata;
+    private final TaskScheduler taskScheduler;
 
     private final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability
 
@@ -111,7 +111,7 @@ public class TopologyMetadata {
         } else {
             builders.put(UNNAMED_TOPOLOGY, builder);
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet());
+        this.taskScheduler = new TaskScheduler(builders.keySet());
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
@@ -125,7 +125,7 @@ public class TopologyMetadata {
         if (builders.isEmpty()) {
             log.info("Created an empty KafkaStreams app with no topology");
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet());
+        this.taskScheduler = new TaskScheduler(builders.keySet());
     }
 
     // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
@@ -166,8 +166,8 @@ public class TopologyMetadata {
         maybeNotifyTopologyVersionListeners();
     }
 
-    public TaskExecutionMetadata taskExecutionMetadata() {
-        return taskExecutionMetadata;
+    public TaskScheduler taskExecutionMetadata() {
+        return taskScheduler;
     }
 
     public void executeTopologyUpdatesAndBumpThreadVersion(final Consumer<Set<String>> handleTopologyAdditions,
