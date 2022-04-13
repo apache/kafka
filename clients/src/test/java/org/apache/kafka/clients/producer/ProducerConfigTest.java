@@ -65,6 +65,15 @@ public class ProducerConfigTest {
     }
 
     @Test
+    public void testInvalidCompressionType() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "abc");
+        assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+    }
+
+    @Test
     public void testInvalidKeySerializer() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, null);
