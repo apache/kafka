@@ -157,8 +157,8 @@ public class FeatureControlManagerTest {
 
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Can't downgrade the maximum version of this feature without " +
-                    "setting the downgrade type."))),
+                    "Can't downgrade the maximum version of this feature without setting the upgrade type to " +
+                    "safe or unsafe downgrade."))),
             manager.updateFeatures(updateMap("foo", 2),
                 Collections.emptyMap(), Collections.emptyMap(), false));
 

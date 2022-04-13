@@ -81,8 +81,7 @@ class BrokerServer(
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
   val initialOfflineDirs: Seq[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-  val supportedFeatures: util.Map[String, VersionRange]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends KafkaBroker {
 
   override def brokerState: BrokerState = lifecycleManager.state
