@@ -1022,15 +1022,28 @@ public abstract class AbstractCoordinator implements Closeable {
         resetStateAndRejoin("consumer pro-actively leaving the group", true);
     }
 
-    public synchronized void requestRejoinIfNecessary(final String reason) {
+    public synchronized void requestRejoinIfNecessary(final String shortReason,
+                                                      final String fullReason) {
         if (!this.rejoinNeeded) {
-            requestRejoin(reason);
+            requestRejoin(shortReason, fullReason);
         }
     }
 
-    public synchronized void requestRejoin(final String reason) {
-        log.info("Request joining group due to: {}", reason);
-        this.rejoinReason = reason;
+    public synchronized void requestRejoin(final String shortReason) {
+        requestRejoin(shortReason, shortReason);
+    }
+
+    /**
+     * Request to rejoin the group.
+     *
+     * @param shortReason This is the reason passed up to the group coordinator. It must be
+     *                    reasonably small.
+     * @param fullReason This is the reason logged locally.
+     */
+    public synchronized void requestRejoin(final String shortReason,
+                                           final String fullReason) {
+        log.info("Request joining group due to: {}", fullReason);
+        this.rejoinReason = shortReason;
         this.rejoinNeeded = true;
     }
 
