@@ -2025,8 +2025,11 @@ class Log(@volatile private var _dir: File,
               endOffset = targetOffset
             )
           }
+          val messagesTruncated = originalLogEndOffset - targetOffset
           warn(s"Truncated to offset $targetOffset from the log end offset $originalLogEndOffset " +
-            s"with ${originalLogEndOffset - targetOffset} messages and $bytesTruncated bytes truncated")
+            s"with $messagesTruncated messages and $bytesTruncated bytes truncated")
+          LogTruncationStats.logTruncatedBytesRate.mark(bytesTruncated)
+          LogTruncationStats.logTruncatedMessagesRate.mark(messagesTruncated)
           true
         }
       }
@@ -2967,4 +2970,9 @@ case object LogDeletion extends SegmentDeletionReason {
   override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments as the log has been deleted: ${toDelete.mkString(",")}")
   }
+}
+
+object LogTruncationStats extends KafkaMetricsGroup {
+  val logTruncatedBytesRate = newMeter("LogTruncatedBytesPerSec", "log-truncation", TimeUnit.SECONDS)
+  val logTruncatedMessagesRate = newMeter("LogTruncatedMessagesPerSec", "log-truncation", TimeUnit.SECONDS)
 }
