@@ -15,13 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.secured;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-/**
- * @deprecated See org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
- */
+import java.io.IOException;
 
-@Deprecated
-public class OAuthBearerLoginCallbackHandler extends org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler {
+public interface Initable {
+
+    /**
+     * Lifecycle method to perform any one-time initialization of the retriever. This must
+     * be performed by the caller to ensure the correct state before methods are invoked.
+     *
+     * @throws IOException Thrown on errors related to IO during initialization
+     */
+
+    default void init() throws IOException {
+        // This method left intentionally blank.
+    }
 
 }

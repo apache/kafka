@@ -15,13 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.secured;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-/**
- * @deprecated See org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
- */
+public class LoginAccessTokenValidatorTest extends AccessTokenValidatorTest {
 
-@Deprecated
-public class OAuthBearerLoginCallbackHandler extends org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler {
+    @Override
+    protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
+        return new LoginAccessTokenValidator(builder.scopeClaimName(), builder.subjectClaimName());
+    }
 
 }
