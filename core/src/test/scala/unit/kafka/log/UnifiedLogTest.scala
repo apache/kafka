@@ -1853,12 +1853,12 @@ class UnifiedLogTest {
     val record = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("simpleValue".getBytes))
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.record(topicId)
+    log.partitionMetadataFile.get.record(topicId)
 
     // Should trigger a synchronous flush
     log.appendAsLeader(record, leaderEpoch = 0)
-    assertTrue(log.partitionMetadataFile.exists())
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertTrue(log.partitionMetadataFile.get.exists())
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
@@ -1867,15 +1867,15 @@ class UnifiedLogTest {
     var log = createLog(logDir, logConfig)
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.record(topicId)
+    log.partitionMetadataFile.get.record(topicId)
 
     // Should trigger a synchronous flush
     log.close()
 
     // We open the log again, and the partition metadata file should exist with the same ID.
     log = createLog(logDir, logConfig)
-    assertTrue(log.partitionMetadataFile.exists())
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertTrue(log.partitionMetadataFile.get.exists())
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
@@ -1902,14 +1902,14 @@ class UnifiedLogTest {
     val topicId = Uuid.randomUuid()
     log.assignTopicId(topicId)
     // We should not write to this file or set the topic ID
-    assertFalse(log.partitionMetadataFile.exists())
+    assertFalse(log.partitionMetadataFile.get.exists())
     assertEquals(None, log.topicId)
     log.close()
 
     val log2 = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()),  keepPartitionMetadataFile = false)
 
     // We should not write to this file or set the topic ID
-    assertFalse(log2.partitionMetadataFile.exists())
+    assertFalse(log2.partitionMetadataFile.get.exists())
     assertEquals(None, log2.topicId)
     log2.close()
   }
@@ -2283,7 +2283,7 @@ class UnifiedLogTest {
     // Check the topic ID remains in memory and was copied correctly.
     assertTrue(log.topicId.isDefined)
     assertEquals(topicId, log.topicId.get)
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
@@ -2293,7 +2293,7 @@ class UnifiedLogTest {
 
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.record(topicId)
+    log.partitionMetadataFile.get.record(topicId)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
     val tp = UnifiedLog.parseTopicPartitionName(log.dir)
@@ -2302,8 +2302,8 @@ class UnifiedLogTest {
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
     // Check the file holds the correct contents.
-    assertTrue(log.partitionMetadataFile.exists())
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertTrue(log.partitionMetadataFile.get.exists())
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
