@@ -53,7 +53,7 @@ public class TaskScheduler {
     );
 
     // map of topologies experiencing errors/currently under backoff
-    private final ConcurrentHashMap<String, TopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
     private final boolean hasNamedTopologies;
 
     public TaskScheduler(final Set<String> allTopologyNames) {
@@ -66,7 +66,7 @@ public class TaskScheduler {
             // TODO implement error handling/backoff for non-named topologies (needs KIP)
             return TaskStatus.RUNNING;
         } else {
-            final TopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
+            final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
             if (metadata == null) {
                 return TaskStatus.RUNNING;
             } else {
@@ -80,42 +80,49 @@ public class TaskScheduler {
             final String topologyName = task.id().topologyName();
             // Only need to register this error if the task is currently healthy
             if (!topologyNameToErrorMetadata.containsKey(topologyName)) {
-                final TopologyMetadata topologyMetadata = new TopologyMetadata(topologyName);
-                topologyMetadata.registerTaskError(task, now);
+                final NamedTopologyMetadata namedTopologyMetadata = new NamedTopologyMetadata(topologyName);
+                namedTopologyMetadata.registerTaskError(task, now);
+                topologyNameToErrorMetadata.put(topologyName, namedTopologyMetadata);
             }
         }
     }
 
     public void registerTaskSuccess(final Task task) {
         if (hasNamedTopologies && task.id().topologyName() != null) {
-            topologyNameToErrorMetadata.remove(task.id().topologyName());
+            final NamedTopologyMetadata topologyMetadata = topologyNameToErrorMetadata.get(task.id().topologyName());
+            if (topologyMetadata != null) {
+                topologyMetadata.registerRetrySuccess(task);
+            }
         }
     }
 
-    private class TopologyMetadata {
+    private class NamedTopologyMetadata {
         private final Logger log;
         private final Map<TaskId, ErrorMetadata> tasksToErrorTime = new ConcurrentHashMap<>();
 
-        public TopologyMetadata(final String topologyName) {
+        public NamedTopologyMetadata(final String topologyName) {
             final LogContext logContext = new LogContext(String.format("topology-name [%s] ", topologyName));
-            this.log = logContext.logger(TopologyMetadata.class);
+            this.log = logContext.logger(NamedTopologyMetadata.class);
         }
 
         public TaskStatus getTaskStatus(final Task task, final long now) {
             final ErrorMetadata errorMetadata = tasksToErrorTime.get(task.id());
             if (errorMetadata == null) {
                 return TaskStatus.RUNNING;
-            }
-            final long remainingBackoffMs = now - errorMetadata.firstErrorTimeMs + taskBackoff.backoff(errorMetadata.numAttempts);
-
-            if (remainingBackoffMs > 0) {
-                log.info("Task {} is ready to re-attempt processing, retry attempt count is {}",
-                         task.id(), errorMetadata.numAttempts);
-                return TaskStatus.RETRIABLE;
             } else {
-                log.debug("Skip processing for task {} with remaining backoff time = {}ms",
-                          task.id(), remainingBackoffMs);
-                return TaskStatus.BACKOFF;
+                ++errorMetadata.numAttempts;
+
+                final long remainingBackoffMs = now - errorMetadata.firstErrorTimeMs + taskBackoff.backoff(errorMetadata.numAttempts);
+
+                if (remainingBackoffMs > 0) {
+                    log.info("Task {} is ready to re-attempt processing, retry attempt count is {}",
+                             task.id(), errorMetadata.numAttempts);
+                    return TaskStatus.RETRIABLE;
+                } else {
+                    log.debug("Skip processing for task {} with remaining backoff time = {}ms",
+                              task.id(), remainingBackoffMs);
+                    return TaskStatus.BACKOFF;
+                }
             }
         }
 
@@ -134,7 +141,7 @@ public class TaskScheduler {
 
         private class ErrorMetadata {
             public final long firstErrorTimeMs;
-            public final int numAttempts = 0;
+            public int numAttempts = 0;
 
             public ErrorMetadata(final long firstErrorTimeMs) {
                 this.firstErrorTimeMs = firstErrorTimeMs;

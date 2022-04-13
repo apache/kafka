@@ -20,30 +20,31 @@ package org.apache.kafka.common.utils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ExponentialBackoffTest {
     @Test
     public void testExponentialBackoff() {
-        long scaleFactor = 100;
+        long scaleFactor = 3000;
         int ratio = 2;
-        long backoffMax = 2000;
-        double jitter = 0.2;
+        long backoffMax = 60 * 1000;
+        double jitter = 0.02;
         ExponentialBackoff exponentialBackoff = new ExponentialBackoff(
                 scaleFactor, ratio, backoffMax, jitter
         );
 
-        for (int i = 0; i <= 100; i++) {
-            for (int attempts = 0; attempts <= 10; attempts++) {
-                if (attempts <= 4) {
-                    assertEquals(scaleFactor * Math.pow(ratio, attempts),
-                            exponentialBackoff.backoff(attempts),
-                            scaleFactor * Math.pow(ratio, attempts) * jitter);
-                } else {
-                    assertTrue(exponentialBackoff.backoff(attempts) <= backoffMax * (1 + jitter));
-                }
-            }
-        }
+
+        int numAttempts = 0;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+
+        numAttempts = 10;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 30;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 50;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        numAttempts = 100;
+        System.out.println(String.format("backoff with num attempts = %s is %s", numAttempts, exponentialBackoff.backoff(numAttempts)));
+        System.out.println("done");
     }
 
     @Test
