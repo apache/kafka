@@ -31,7 +31,7 @@ public class Min extends SampledStat {
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {
-        sample.value = Math.min(sample.value, value);
+        sample.setValue(Math.min(sample.getValue(), value));
     }
 
     @Override
@@ -39,8 +39,8 @@ public class Min extends SampledStat {
         double min = Double.MAX_VALUE;
         long count = 0;
         for (Sample sample : samples) {
-            min = Math.min(min, sample.value);
-            count += sample.eventCount;
+            min = Math.min(min, sample.getValue());
+            count += sample.getEventCount();
         }
         return count == 0 ? Double.NaN : min;
     }
