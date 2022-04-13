@@ -89,12 +89,14 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
                 prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
     }
 
-    default AGG fetchSession(final K key, final Instant earliestSessionEndTime, final Instant latestSessionStartTime) {
+    default AGG fetchSession(final K key,
+                             final Instant sessionStartTime,
+                             final Instant sessionEndTime) {
         return fetchSession(key,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "startTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "endTime")));
+            ApiUtils.validateMillisecondInstant(sessionStartTime,
+                prepareMillisCheckFailMsgPrefix(sessionStartTime, "sessionStartTime")),
+            ApiUtils.validateMillisecondInstant(sessionEndTime,
+                prepareMillisCheckFailMsgPrefix(sessionEndTime, "sessionEndTime")));
     }
 
     /**
