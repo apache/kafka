@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -72,7 +73,7 @@ public class TimeWindowedKStreamImplTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-    private TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream;
+    private TimeWindowedKStream<String, String> windowedStream;
 
     @Parameter
     public StrategyType type;
@@ -103,9 +104,8 @@ public class TimeWindowedKStreamImplTest {
         props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         // TODO: remove this cast https://issues.apache.org/jira/browse/KAFKA-13800
-        windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) (stream.
-            groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L))));
+        windowedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)));
     }
 
     @Test
