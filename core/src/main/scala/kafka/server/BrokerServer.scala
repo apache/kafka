@@ -308,6 +308,7 @@ class BrokerServer(
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
+        ConfigType.ClientMetrics -> new ClientMetricsConfigHandler,
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
       if (!config.processRoles.contains(ControllerRole)) {
