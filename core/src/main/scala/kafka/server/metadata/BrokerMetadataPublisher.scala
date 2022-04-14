@@ -24,7 +24,7 @@ import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
@@ -188,6 +188,14 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
               dynamicConfigHandlers(ConfigType.Topic).
                 processConfigChanges(resource.name(), props)
               conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
+
+            case CLIENT_METRICS =>
+              // Apply changes to client metrics subscription
+              info(s"Updating client metrics subscription ${resource.name()} with new configuration : " +
+                toLoggableProps(resource, props).mkString(","))
+              dynamicConfigHandlers(ConfigType.ClientMetrics).processConfigChanges(resource.name(), props)
+              conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
+
             case BROKER => if (resource.name().isEmpty) {
               // Apply changes to "cluster configs" (also known as default BROKER configs).
               // These are stored in KRaft with an empty name field.
