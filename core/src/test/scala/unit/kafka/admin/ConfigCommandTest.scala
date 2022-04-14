@@ -43,6 +43,7 @@ import scala.jdk.CollectionConverters._
 class ConfigCommandTest extends Logging {
 
   private val zkConnect = "localhost:2181"
+  private val dummyAdminZkClient = new DummyAdminZkClient(null)
 
   @Test
   def shouldExitWithNonZeroStatusOnArgError(): Unit = {
@@ -371,7 +372,7 @@ class ConfigCommandTest extends Logging {
   def shouldFailIfUnrecognisedEntityTypeUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
-    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(null)))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -385,7 +386,7 @@ class ConfigCommandTest extends Logging {
   def shouldFailIfBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
-    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(null)))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -399,7 +400,7 @@ class ConfigCommandTest extends Logging {
   def shouldFailIfShortBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--broker", "A", "--alter", "--add-config", "a=b,c=d"))
-    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(null)))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -898,7 +899,7 @@ class ConfigCommandTest extends Logging {
     when(mockZkClient.getBroker(1)).thenReturn(Option(mockBroker))
 
     assertThrows(classOf[IllegalArgumentException],
-      () => ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, new DummyAdminZkClient(null)))
+      () => ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -913,7 +914,7 @@ class ConfigCommandTest extends Logging {
     when(mockZkClient.getBroker(1)).thenReturn(Option(mockBroker))
 
     assertThrows(classOf[IllegalArgumentException],
-      () => ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new DummyAdminZkClient(null)))
+      () => ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -1208,7 +1209,7 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "leader.replication.throttled.rate=10"))
-    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(null)))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -1228,7 +1229,7 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a=="))
-    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(null)))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -1248,7 +1249,7 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a=[b,c,d=e"))
-    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(null)))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
   @Test
@@ -1268,7 +1269,7 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "topics",
       "--alter",
       "--delete-config", "missing_config1, missing_config2"))
-    assertThrows(classOf[InvalidConfigurationException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(null)))
+    assertThrows(classOf[InvalidConfigurationException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
   @Test
