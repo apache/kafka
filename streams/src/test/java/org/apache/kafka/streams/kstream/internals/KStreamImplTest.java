@@ -56,12 +56,10 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -2709,16 +2707,10 @@ public class KStreamImplTest {
         final String output = "output";
 
         builder.stream(input, consumed)
-            .process(new ProcessorSupplier<String, String, String, Integer>() {
+            .process(() -> new ContextualProcessor<String, String, String, Integer>() {
                 @Override
-                public Processor<String, String, String, Integer> get() {
-                    return new ContextualProcessor<String, String, String, Integer>() {
-
-                        @Override
-                        public void process(final Record<String, String> record) {
-                            context().forward(record.withValue(record.value().length()));
-                        }
-                    };
+                public void process(final Record<String, String> record) {
+                    context().forward(record.withValue(record.value().length()));
                 }
             }, Named.as("p"))
             .to(output, Produced.valueSerde(Serdes.Integer()));
@@ -2781,23 +2773,10 @@ public class KStreamImplTest {
         final String output = "output";
 
         builder.stream(input, consumed)
-               .processValues(new FixedKeyProcessorSupplier<String, String, Integer>() {
+               .processValues(() -> new ContextualFixedKeyProcessor<String, String, Integer>() {
                    @Override
-                   public FixedKeyProcessor<String, String, Integer> get() {
-                       return new FixedKeyProcessor<String, String, Integer>() {
-                           private FixedKeyProcessorContext<String, Integer> context;
-
-                           @Override
-                           public void init(final FixedKeyProcessorContext<String, Integer> context) {
-                               FixedKeyProcessor.super.init(context);
-                               this.context = context;
-                           }
-
-                           @Override
-                           public void process(final FixedKeyRecord<String, String> record) {
-                               context.forward(record.withValue(record.value().length()));
-                           }
-                       };
+                   public void process(final FixedKeyRecord<String, String> record) {
+                       context().forward(record.withValue(record.value().length()));
                    }
                }, Named.as("fkp"))
                .to(output, Produced.valueSerde(Serdes.Integer()));

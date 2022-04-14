@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.api.FixedKeyContextualProcessor;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
@@ -35,7 +35,7 @@ class KStreamPeek<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
         return new KStreamPeekProcessor();
     }
 
-    private class KStreamPeekProcessor extends FixedKeyContextualProcessor<K, V, V> {
+    private class KStreamPeekProcessor extends ContextualFixedKeyProcessor<K, V, V> {
         @Override
         public void process(final FixedKeyRecord<K, V> record) {
             action.apply(record.key(), record.value());

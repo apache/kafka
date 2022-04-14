@@ -25,11 +25,11 @@ package org.apache.kafka.streams.processor.api;
  * @param <VIn> the type of input values
  * @param <VOut> the type of output values
  */
-public abstract class FixedKeyContextualProcessor<KIn, VIn, VOut> implements FixedKeyProcessor<KIn, VIn, VOut> {
+public abstract class ContextualFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcessor<KIn, VIn, VOut> {
 
     private FixedKeyProcessorContext<KIn, VOut> context;
 
-    protected FixedKeyContextualProcessor() {}
+    protected ContextualFixedKeyProcessor() {}
 
     @Override
     public void init(final FixedKeyProcessorContext<KIn, VOut> context) {

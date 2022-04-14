@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.processor.api.FixedKeyContextualProcessor;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
@@ -35,7 +35,7 @@ class KStreamMapValues<KIn, VIn, VOut> implements FixedKeyProcessorSupplier<KIn,
         return new KStreamMapProcessor();
     }
 
-    private class KStreamMapProcessor extends FixedKeyContextualProcessor<KIn, VIn, VOut> {
+    private class KStreamMapProcessor extends ContextualFixedKeyProcessor<KIn, VIn, VOut> {
         @Override
         public void process(final FixedKeyRecord<KIn, VIn> record) {
             final VOut newValue = mapper.apply(record.key(), record.value());

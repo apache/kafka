@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.api.FixedKeyContextualProcessor;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
@@ -37,7 +37,7 @@ class KStreamFilter<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
         return new KStreamFilterProcessor();
     }
 
-    private class KStreamFilterProcessor extends FixedKeyContextualProcessor<K, V, V> {
+    private class KStreamFilterProcessor extends ContextualFixedKeyProcessor<K, V, V> {
         @Override
         public void process(final FixedKeyRecord<K, V> record) {
             if (filterNot ^ predicate.test(record.key(), record.value())) {
