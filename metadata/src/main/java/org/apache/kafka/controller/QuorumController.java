@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -44,6 +45,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
@@ -74,8 +77,7 @@ import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
-import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -94,6 +96,7 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -143,7 +146,7 @@ public final class QuorumController implements Controller {
         private LogContext logContext = null;
         private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;
         private RaftClient<ApiMessageAndVersion> raftClient = null;
-        private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
+        private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private boolean isLeaderRecoverySupported = false;
@@ -188,8 +191,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSupportedFeatures(Map<String, VersionRange> supportedFeatures) {
-            this.supportedFeatures = supportedFeatures;
+        public Builder setQuorumFeatures(QuorumFeatures quorumFeatures) {
+            this.quorumFeatures = quorumFeatures;
             return this;
         }
 
@@ -263,6 +266,9 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
+            if (quorumFeatures == null) {
+                throw new RuntimeException("You must specify the quorum features");
+            }
             if (threadNamePrefix == null) {
                 threadNamePrefix = String.format("Node%d_", nodeId);
             }
@@ -273,11 +279,12 @@ public final class QuorumController implements Controller {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
+
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, clusterId, queue, time,
-                    configSchema, raftClient, supportedFeatures, defaultReplicationFactor,
+                    configSchema, raftClient, quorumFeatures, defaultReplicationFactor,
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
                     createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
@@ -1312,7 +1319,7 @@ public final class QuorumController implements Controller {
                              Time time,
                              KafkaConfigSchema configSchema,
                              RaftClient<ApiMessageAndVersion> raftClient,
-                             Map<String, VersionRange> supportedFeatures,
+                             QuorumFeatures quorumFeatures,
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              boolean isLeaderRecoverySupported,
@@ -1349,7 +1356,7 @@ public final class QuorumController implements Controller {
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
-        this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
+        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
@@ -1446,7 +1453,7 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<FeatureMapAndEpoch> finalizedFeatures() {
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures() {
         return appendReadEvent("getFinalizedFeatures",
             () -> featureControl.finalizedFeatures(lastCommittedOffset));
     }
@@ -1573,6 +1580,31 @@ public final class QuorumController implements Controller {
             .thenApply(result -> new AllocateProducerIdsResponseData()
                     .setProducerIdStart(result.firstProducerId())
                     .setProducerIdLen(result.size()));
+    }
+
+    @Override
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+            UpdateFeaturesRequestData request) {
+        return appendWriteEvent("updateFeatures", () -> {
+            Map<String, Short> updates = new HashMap<>();
+            Map<String, FeatureUpdate.UpgradeType> upgradeTypes = new HashMap<>();
+            request.featureUpdates().forEach(featureUpdate -> {
+                String featureName = featureUpdate.feature();
+                upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
+                updates.put(featureName, featureUpdate.maxVersionLevel());
+            });
+            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
+                request.validateOnly());
+        }).thenApply(result -> {
+            UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
+            responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
+            result.forEach((featureName, error) -> responseData.results().add(
+                new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                    .setFeature(featureName)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message())));
+            return responseData;
+        });
     }
 
     @Override

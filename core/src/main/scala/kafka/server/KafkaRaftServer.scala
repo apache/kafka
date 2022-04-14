@@ -86,8 +86,7 @@ class KafkaRaftServer(
       metrics,
       threadNamePrefix,
       offlineDirs,
-      controllerQuorumVotersFuture,
-      Server.SUPPORTED_FEATURES
+      controllerQuorumVotersFuture
     ))
   } else {
     None

@@ -20,7 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -43,15 +42,15 @@ public class FeaturesImageTest {
     final static FeaturesImage IMAGE2;
 
     static {
-        Map<String, VersionRange> map1 = new HashMap<>();
-        map1.put("foo", new VersionRange((short) 1, (short) 2));
-        map1.put("bar", new VersionRange((short) 1, (short) 1));
-        map1.put("baz", new VersionRange((short) 1, (short) 8));
+        Map<String, Short> map1 = new HashMap<>();
+        map1.put("foo", (short) 2);
+        map1.put("bar", (short) 1);
+        map1.put("baz", (short) 8);
         IMAGE1 = new FeaturesImage(map1);
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 3),
+            setName("foo").setFeatureLevel((short) 3),
             FEATURE_LEVEL_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveFeatureLevelRecord().
             setName("bar"), REMOVE_FEATURE_LEVEL_RECORD.highestSupportedVersion()));
@@ -61,8 +60,8 @@ public class FeaturesImageTest {
         DELTA1 = new FeaturesDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        Map<String, VersionRange> map2 = new HashMap<>();
-        map2.put("foo", new VersionRange((short) 1, (short) 3));
+        Map<String, Short> map2 = new HashMap<>();
+        map2.put("foo", (short) 3);
         IMAGE2 = new FeaturesImage(map2);
     }
 
