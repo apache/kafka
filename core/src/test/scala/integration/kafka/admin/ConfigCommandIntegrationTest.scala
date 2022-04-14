@@ -34,11 +34,6 @@ import scala.jdk.CollectionConverters._
 class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
 
   @Test
-  def shouldExitWithNonZeroStatusOnArgError(): Unit = {
-    assertNonZeroStatusExit(Array("--blah"))
-  }
-
-  @Test
   def shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
@@ -49,63 +44,12 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   @Test
-  def shouldExitWithNonZeroStatusOnZkCommandWithTopicsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
-      "--entity-type", "topics",
-      "--describe"))
-  }
-
-  @Test
-  def shouldExitWithNonZeroStatusOnZkCommandWithClientsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
-      "--entity-type", "clients",
-      "--describe"))
-  }
-
-  @Test
-  def shouldExitWithNonZeroStatusOnZkCommandWithIpsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
-      "--entity-type", "ips",
-      "--describe"))
-  }
-
-  @Test
   def shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
       "--entity-type", "users",
       "--entity-name", "admin",
       "--alter", "--add-config", "consumer_byte_rate=20000"))
-  }
-
-  @Test
-  def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--bootstrap-server", "localhost:9092",
-      "--entity-type", "users",
-      "--alter", "--add-config", "consumer_byte_rate=20000"))
-  }
-
-
-  @Test
-  def shouldExitWithNonZeroStatusOnBrokerCommandError(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--bootstrap-server", "invalid host",
-      "--entity-type", "brokers",
-      "--entity-name", "1",
-      "--describe"))
-  }
-
-  @Test
-  def shouldExitWithNonZeroStatusOnBrokerCommandWithZkTlsConfigFile(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--bootstrap-server", "invalid host",
-      "--entity-type", "users",
-      "--zk-tls-config-file", "zk_tls_config.properties",
-      "--describe"))
   }
 
   private def assertNonZeroStatusExit(args: Array[String]): Unit = {
