@@ -1136,6 +1136,8 @@ project(':metadata') {
     compileOnly libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
+    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output

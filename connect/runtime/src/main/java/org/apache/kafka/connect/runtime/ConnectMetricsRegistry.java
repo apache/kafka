@@ -129,7 +129,7 @@ public class ConnectMetricsRegistry {
 
         connectorStatus = createTemplate("status", CONNECTOR_GROUP_NAME,
                                          "The status of the connector. One of 'unassigned', 'running', 'paused', 'failed', or " +
-                                         "'destroyed'.",
+                                         "'restarting'.",
                                          connectorTags);
         connectorType = createTemplate("connector-type", CONNECTOR_GROUP_NAME, "The type of the connector. One of 'source' or 'sink'.",
                                        connectorTags);
@@ -144,7 +144,7 @@ public class ConnectMetricsRegistry {
 
         taskStatus = createTemplate("status", TASK_GROUP_NAME,
                                     "The status of the connector task. One of 'unassigned', 'running', 'paused', 'failed', or " +
-                                    "'destroyed'.",
+                                    "'restarting'.",
                                     workerTaskTags);
         taskRunningRatio = createTemplate("running-ratio", TASK_GROUP_NAME,
                                           "The fraction of time this task has spent in the running state.", workerTaskTags);
