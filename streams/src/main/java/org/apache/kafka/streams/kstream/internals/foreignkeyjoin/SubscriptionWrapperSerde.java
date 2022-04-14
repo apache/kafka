@@ -217,8 +217,10 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
 
-            final K primaryKey = primaryKeyDeserializer.deserialize(primaryKeySerializationPseudoTopic,
-                primaryKeyRaw);
+            final K primaryKey = primaryKeyDeserializer.deserialize(
+                primaryKeySerializationPseudoTopic,
+                primaryKeyRaw
+            );
             final Integer primaryPartition;
             if (version > 0) {
                 primaryPartition = buf.getInt();
