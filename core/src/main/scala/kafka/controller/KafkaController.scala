@@ -2037,12 +2037,6 @@ class KafkaController(val config: KafkaConfig,
                                s"When the downgradeType is set to SAFE set in the request, the provided" +
                                s" maxVersionLevel:${update.versionLevel} can not be greater than" +
                                s" existing maxVersionLevel:${existing.max}."))
-          } else if (update.versionLevel < existing.min) {
-            // Disallow downgrade of a finalized feature below the existing finalized
-            // minVersionLevel.
-            Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"Can not downgrade finalized feature to maxVersionLevel:${update.versionLevel}" +
-                               s" because it's lower than the existing minVersionLevel:${existing.min}."))
           } else {
             newVersionRangeOrError(update)
           }

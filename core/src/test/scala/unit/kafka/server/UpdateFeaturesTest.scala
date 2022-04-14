@@ -393,8 +393,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
     val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
     val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.UPGRADE)
 
@@ -427,8 +427,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     updateSupportedFeaturesInAllBrokers(supportedFeatures)
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 2)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 4))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(2, 2)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(4, 4))))
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
     // Below we aim to do the following:
@@ -436,8 +436,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     // - Valid downgrade of feature_2 maxVersionLevel from 4 to 3
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
     val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
     val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)
 
@@ -471,8 +471,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     updateSupportedFeaturesInAllBrokers(supportedFeatures)
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 2)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 4))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(2, 2)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(4, 4))))
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
     // Below we aim to do the following:
@@ -481,8 +481,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     //   (because we intentionally do not set the allowDowngrade flag)
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
     val validUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
     val invalidUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.UPGRADE)
 
@@ -539,8 +539,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 2)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 4))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(2, 2)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(4, 4))))
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
     // Below we aim to do the following:
@@ -549,8 +549,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     // - Valid downgrade of feature_2 maxVersionLevel from 4 to 3
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
     val invalidUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
     val validUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)
 
