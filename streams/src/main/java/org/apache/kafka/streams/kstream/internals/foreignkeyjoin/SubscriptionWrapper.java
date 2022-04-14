@@ -25,12 +25,12 @@ import java.util.Objects;
 public class SubscriptionWrapper<K> {
     static final byte CURRENT_VERSION = 1;
 
-    // v0
+    // v0 fields:
     private final long[] hash;
     private final Instruction instruction;
     private final byte version;
     private final K primaryKey;
-    // v1
+    // v1 fields:
     private final Integer primaryPartition;
 
     public enum Instruction {
