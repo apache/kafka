@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
@@ -133,77 +136,102 @@ class TimeOrderedCachingWindowStore
         cacheName = context.taskId() + "-" + name();
 
         context.registerCacheFlushListener(cacheName, entries -> {
-            for (final ThreadCache.DirtyEntry entry : entries) {
-                putAndMaybeForward(entry, context);
-            }
+            putAndMaybeForward(entries, context);
         });
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
+    private void putAndMaybeForward(final List<DirtyEntry> entries,
                                     final InternalProcessorContext<?, ?> context) {
-        final byte[] binaryWindowKey = baseKeyCacheFunction.key(entry.key()).get();
-        final boolean isBaseKey = PrefixedWindowKeySchemas.isTimeFirstSchemaKey(binaryWindowKey);
 
-        final Windowed<Bytes> windowedKeyBytes;
-        if (isBaseKey) {
-            windowedKeyBytes = TimeFirstWindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
-        } else {
-            windowedKeyBytes = KeyFirstWindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
-        }
+        // Track what base key or index key we already processed so don't reprocess
+        Set<Bytes> processedBasedKey = new HashSet<>();
 
-        final long windowStartTimestamp = windowedKeyBytes.window().start();
-        final Bytes binaryKey = windowedKeyBytes.key();
+        for (final ThreadCache.DirtyEntry entry : entries) {
+            final byte[] binaryWindowKey = baseKeyCacheFunction.key(entry.key()).get();
+            final boolean isBaseKey = PrefixedWindowKeySchemas.isTimeFirstSchemaKey(
+                binaryWindowKey);
 
-        final DirtyEntry finalEntry;
-        if (!isBaseKey) {
-            final Bytes baseKey = indexKeyToBaseKey(Bytes.wrap(binaryWindowKey));
-            final Bytes cachedBaseKey = baseKeyCacheFunction.cacheKey(baseKey);
-            final LRUCacheEntry value = context.cache().get(cacheName, cachedBaseKey);
-            // Base key value is already evicted, which should be handled already
-            if (value == null) {
-                return;
+            final DirtyEntry finalEntry;
+            if (!isBaseKey) {
+                final Bytes baseKey = indexKeyToBaseKey(Bytes.wrap(binaryWindowKey));
+                if (hasIndex && processedBasedKey.contains(baseKey)) {
+                    // Processed in base
+                    continue;
+                }
+
+                final Bytes cachedBaseKey = baseKeyCacheFunction.cacheKey(baseKey);
+                final LRUCacheEntry value = context.cache().get(cacheName, cachedBaseKey);
+                // Base key value is already evicted, which should be handled already
+                if (value == null) {
+                    continue;
+                }
+
+                finalEntry = new DirtyEntry(entry.key(), value.value(), value);
+
+                if (hasIndex) {
+                    processedBasedKey.add(baseKey);
+                }
+            } else {
+                final Bytes baseKey = Bytes.wrap(binaryWindowKey);
+                if (hasIndex && processedBasedKey.contains(baseKey)) {
+                    // Processed in index
+                    continue;
+                }
+                finalEntry = entry;
+                if (hasIndex) {
+                    processedBasedKey.add(Bytes.wrap(binaryWindowKey));
+                }
             }
 
-            finalEntry = new DirtyEntry(entry.key(), value.value(), value);
-        } else {
-            finalEntry = entry;
-        }
+            final Windowed<Bytes> windowedKeyBytes;
+            if (isBaseKey) {
+                windowedKeyBytes = TimeFirstWindowKeySchema.fromStoreBytesKey(binaryWindowKey,
+                    windowSize);
+            } else {
+                windowedKeyBytes = KeyFirstWindowKeySchema.fromStoreBytesKey(binaryWindowKey,
+                    windowSize);
+            }
 
-        if (flushListener != null) {
-            final byte[] rawNewValue = finalEntry.newValue();
-            final byte[] rawOldValue = rawNewValue == null || sendOldValues ?
-                wrapped().fetch(binaryKey, windowStartTimestamp) : null;
+            final long windowStartTimestamp = windowedKeyBytes.window().start();
+            final Bytes binaryKey = windowedKeyBytes.key();
 
-            // this is an optimization: if this key did not exist in underlying store and also not in the cache,
-            // we can skip flushing to downstream as well as writing to underlying store
-            if (rawNewValue != null || rawOldValue != null) {
-                // we need to get the old values if needed, and then put to store, and then flush
+            if (flushListener != null) {
+                final byte[] rawNewValue = finalEntry.newValue();
+                final byte[] rawOldValue = rawNewValue == null || sendOldValues ?
+                    wrapped().fetch(binaryKey, windowStartTimestamp) : null;
+
+                // this is an optimization: if this key did not exist in underlying store and also not in the cache,
+                // we can skip flushing to downstream as well as writing to underlying store
+                if (rawNewValue != null || rawOldValue != null) {
+                    // we need to get the old values if needed, and then put to store, and then flush
+                    final ProcessorRecordContext current = context.recordContext();
+                    try {
+                        context.setRecordContext(finalEntry.entry().context());
+                        wrapped().put(binaryKey, finalEntry.newValue(), windowStartTimestamp);
+
+                        // Only forward for base key to avoid forwarding multiple times for index
+                        if (isBaseKey) {
+                            flushListener.apply(
+                                new Record<>(
+                                    WindowKeySchema.toStoreKeyBinary(binaryKey,
+                                            windowStartTimestamp, 0)
+                                        .get(),
+                                    new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
+                                    finalEntry.entry().context().timestamp(),
+                                    finalEntry.entry().context().headers()));
+                        }
+                    } finally {
+                        context.setRecordContext(current);
+                    }
+                }
+            } else {
                 final ProcessorRecordContext current = context.recordContext();
                 try {
                     context.setRecordContext(finalEntry.entry().context());
                     wrapped().put(binaryKey, finalEntry.newValue(), windowStartTimestamp);
-
-                    // Only forward for base key to avoid forwarding multiple times for index
-                    if (isBaseKey) {
-                        flushListener.apply(
-                            new Record<>(
-                                WindowKeySchema.toStoreKeyBinary(binaryKey, windowStartTimestamp, 0)
-                                    .get(),
-                                new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
-                                finalEntry.entry().context().timestamp(),
-                                finalEntry.entry().context().headers()));
-                    }
                 } finally {
                     context.setRecordContext(current);
                 }
-            }
-        } else {
-            final ProcessorRecordContext current = context.recordContext();
-            try {
-                context.setRecordContext(finalEntry.entry().context());
-                wrapped().put(binaryKey, finalEntry.newValue(), windowStartTimestamp);
-            } finally {
-                context.setRecordContext(current);
             }
         }
     }

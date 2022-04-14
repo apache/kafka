@@ -1060,7 +1060,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         } else {
             verifyKeyValueList(
                 asList(
-                    windowedPair("a", "0005", SEGMENT_INTERVAL), // First because in larger segments
+                    // First because in larger segments
+                    windowedPair("a", "0005", SEGMENT_INTERVAL),
                     windowedPair("aa", "0004", 1),
                     windowedPair("aa", "0002", 0),
                     windowedPair("a", "0003", 1),

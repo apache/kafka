@@ -34,7 +34,7 @@ public class PrefixedWindowKeySchemas {
 
     private static final int PREFIX_SIZE = 1;
     private static final byte TIME_FIRST_PREFIX = 0;
-    public static final byte KEY_FIRST_PREFIX = 1;
+    private static final byte KEY_FIRST_PREFIX = 1;
     private static final int SEQNUM_SIZE = 4;
 
     private static byte extractPrefix(final byte[] binaryBytes) {
