@@ -20,7 +20,6 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
-
 import kafka.api.LeaderAndIsr
 import kafka.log.{AppendOrigin, LogConfig}
 import kafka.server.metadata.MockConfigRepository

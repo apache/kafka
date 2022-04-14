@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -38,7 +39,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
 
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
@@ -65,7 +65,7 @@ public class FeatureControlManagerTest {
     }
 
     public static QuorumFeatures features(Object... args) {
-        return QuorumFeatures.create(0, rangeMap(args));
+        return new QuorumFeatures(0, new ApiVersions(), rangeMap(args), Collections.emptyList());
     }
 
     private static Map<String, Short> updateMap(Object... args) {

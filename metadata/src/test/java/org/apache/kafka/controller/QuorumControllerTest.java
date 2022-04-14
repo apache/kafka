@@ -65,6 +65,7 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -78,6 +79,7 @@ import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceCheck
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -204,7 +206,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty());
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), MetadataVersion.V1);
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -294,7 +296,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs));
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), MetadataVersion.V1);
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -428,7 +430,7 @@ public class QuorumControllerTest {
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                         setFeatures(brokerFeatures()).
                         setListeners(listeners));
-                assertEquals(0L, reply.get().epoch());
+                assertEquals(2L, reply.get().epoch());
                 CreateTopicsRequestData createTopicsRequestData =
                     new CreateTopicsRequestData().setTopics(
                         new CreatableTopicCollection(Collections.singleton(
@@ -442,7 +444,7 @@ public class QuorumControllerTest {
                         Collections.singleton("foo")).get().topics().find("foo").errorMessage());
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
-                            setWantFence(false).setBrokerEpoch(0L).setBrokerId(0).
+                            setWantFence(false).setBrokerEpoch(2L).setBrokerId(0).
                             setCurrentMetadataOffset(100000L)).get());
                 assertEquals(Errors.NONE.code(), active.createTopics(createTopicsRequestData,
                     Collections.singleton("foo")).get().topics().find("foo").errorCode());
@@ -469,6 +471,10 @@ public class QuorumControllerTest {
 
     private BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
+        features.add(new BrokerRegistrationRequestData.Feature()
+            .setName("metadata.version")
+            .setMinSupportedVersion((short) 0)
+            .setMaxSupportedVersion((short) 1));
         return features;
     }
 
@@ -718,7 +724,10 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).
-                setNextProducerId(1000), (short) 0)
+                setNextProducerId(1000), (short) 0),
+            new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName("metadata.version").
+                setFeatureLevel((short) 1), (short) 0)
         );
     }
 
@@ -762,6 +771,9 @@ public class QuorumControllerTest {
             }
             expectedIndex += 1;
         }
+
+        System.err.println(expected);
+        System.err.println(actual);
 
         assertTrue(
             expectedIndex <= expected.size(),

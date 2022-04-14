@@ -71,10 +71,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.FeatureLevelListener;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -133,6 +135,10 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * the fact that the controller may have several operations in progress at any given
  * point.  The future associated with each operation will not be completed until the
  * results of the operation have been made durable to the metadata log.
+ *
+ * The QuorumController uses the "metadata.version" feature flag as a mechanism to control
+ * the usage of new log record schemas. Starting with 3.2, this version must be set before
+ * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
     /**
@@ -160,6 +166,7 @@ public final class QuorumController implements Controller {
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
         private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
+        private MetadataVersion initialMetadataVersion = null;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -236,6 +243,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setInitialMetadataVersion(MetadataVersion metadataVersion) {
+            this.initialMetadataVersion = metadataVersion;
+            return this;
+        }
+
         public Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.createTopicPolicy = createTopicPolicy;
             return this;
@@ -266,6 +278,9 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
+            if (initialMetadataVersion == null || initialMetadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
+                throw new RuntimeException("You must set an initial metadata.version in meta.properties");
+            }
             if (quorumFeatures == null) {
                 throw new RuntimeException("You must specify the quorum features");
             }
@@ -288,7 +303,7 @@ public final class QuorumController implements Controller {
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
                     createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
-                    staticConfig);
+                    staticConfig, initialMetadataVersion);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -752,6 +767,13 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
+    private <T> CompletableFuture<T> prependWriteEvent(String name,
+                                                       ControllerWriteOperation<T> op) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+        queue.prepend(event);
+        return event.future();
+    }
+
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
 
         @Override
@@ -883,14 +905,42 @@ public final class QuorumController implements Controller {
                             curEpoch);
                     }
                     log.info(
-                        "Becoming the active controller at epoch {}, committed offset {} and committed epoch {}.",
-                        newEpoch, lastCommittedOffset, lastCommittedEpoch
+                        "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
+                        newEpoch, lastCommittedOffset, lastCommittedEpoch, featureControl.metadataVersion()
                     );
 
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
+
+                    // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
+                    // write any records to the log since we need the metadata.version to determine the correct
+                    // record version
+                    if (featureControl.metadataVersion() == MetadataVersion.UNINITIALIZED) {
+                        final CompletableFuture<Map<String, ApiError>> future;
+                        if (initialMetadataVersion == MetadataVersion.UNINITIALIZED) {
+                            future = new CompletableFuture<>();
+                            future.completeExceptionally(
+                                new IllegalStateException("Cannot become leader without an initial metadata.version to use."));
+                        } else if (initialMetadataVersion == MetadataVersion.V1) {
+                            future = prependWriteEvent("initializeMetadataVersion", () -> {
+                                log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
+                                return featureControl.initializeMetadataVersion(MetadataVersion.V1.version());
+                            });
+                        } else {
+                            future = prependWriteEvent("initializeMetadataVersion", () -> {
+                                log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
+                                return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
+                            });
+                        }
+                        future.whenComplete((result, exception) -> {
+                            if (exception != null) {
+                                log.error("Failed to initialize metadata.version", exception);
+                                renounce();
+                            }
+                        });
+                    }
 
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is
                     // required because the active controller assumes that there is always an in-memory snapshot at the
@@ -924,6 +974,31 @@ public final class QuorumController implements Controller {
                     runnable.run();
                 }
             });
+        }
+    }
+
+    /**
+     * A callback for changes to feature levels including metadata.version. This is called synchronously from
+     * {@link FeatureControlManager#replay(FeatureLevelRecord)} which is part of a ControllerWriteEvent. It is safe
+     * to modify controller state here. By the time this listener is called, a FeatureLevelRecord has been committed and
+     * the in-memory state of FeatureControlManager has been updated.
+     */
+    class QuorumFeatureListener implements FeatureLevelListener {
+        @Override
+        public void handle(String featureName, short finalizedVersion) {
+            boolean isActiveController = curClaimEpoch != -1;
+            boolean isFeatureSupported = featureControl.canSupportVersion(featureName, finalizedVersion);
+            if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                if (!isFeatureSupported) {
+                    if (isActiveController) {
+                        log.error("Active controller cannot support metadata.version {}", finalizedVersion);
+                    } else {
+                        log.error("Standby controller cannot support metadata.version {}, shutting down.", finalizedVersion);
+                    }
+                    beginShutdown();
+                }
+            }
+            // In the future, handle other feature flags that are relevant to the controller here.
         }
     }
 
@@ -1209,6 +1284,12 @@ public final class QuorumController implements Controller {
     private final ClusterControlManager clusterControl;
 
     /**
+     * A callback that the controller registers with the FeatureControlManager to learn when feature updates
+     * occur.
+     */
+    private final QuorumFeatureListener featureListener;
+
+    /**
      * An object which stores the controller's view of the cluster features.
      * This must be accessed only by the event queue thread.
      */
@@ -1312,6 +1393,8 @@ public final class QuorumController implements Controller {
      */
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
+    private final MetadataVersion initialMetadataVersion;
+
     private QuorumController(LogContext logContext,
                              int nodeId,
                              String clusterId,
@@ -1332,7 +1415,8 @@ public final class QuorumController implements Controller {
                              Optional<AlterConfigPolicy> alterConfigPolicy,
                              ConfigurationValidator configurationValidator,
                              Optional<ClusterMetadataAuthorizer> authorizer,
-                             Map<String, Object> staticConfig) {
+                             Map<String, Object> staticConfig,
+                             MetadataVersion initialMetadataVersion) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1341,6 +1425,7 @@ public final class QuorumController implements Controller {
         this.time = time;
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
+        this.featureListener = new QuorumFeatureListener();
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager.Builder().
@@ -1367,6 +1452,7 @@ public final class QuorumController implements Controller {
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
         this.raftClient = raftClient;
+        this.initialMetadataVersion = initialMetadataVersion;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.writeOffset = -1L;
@@ -1374,6 +1460,7 @@ public final class QuorumController implements Controller {
         resetState();
 
         this.raftClient.register(metaLogListener);
+        this.featureControl.registerFeatureListener("quorumController", featureListener);
     }
 
     @Override

@@ -25,6 +25,7 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -196,6 +197,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         if (!annot.ibp().isEmpty()) {
             builder.ibp(annot.ibp());
+        }
+
+        if (!annot.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+            builder.metadataVersion(annot.metadataVersion());
         }
 
         ClusterConfig config = builder.build();

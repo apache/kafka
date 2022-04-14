@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
+import org.apache.kafka.metadata.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,12 +35,18 @@ public final class FeaturesDelta {
 
     private final Map<String, Optional<Short>> changes = new HashMap<>();
 
+    private Short metadataVersionChange = null;
+
     public FeaturesDelta(FeaturesImage image) {
         this.image = image;
     }
 
     public Map<String, Optional<Short>> changes() {
         return changes;
+    }
+
+    public Optional<Short> metadataVersionChange() {
+        return Optional.ofNullable(metadataVersionChange);
     }
 
     public void finishSnapshot() {
@@ -51,7 +58,11 @@ public final class FeaturesDelta {
     }
 
     public void replay(FeatureLevelRecord record) {
-        changes.put(record.name(), Optional.of(record.featureLevel()));
+        if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
+            metadataVersionChange = record.featureLevel();
+        } else {
+            changes.put(record.name(), Optional.of(record.featureLevel()));
+        }
     }
 
     public void replay(RemoveFeatureLevelRecord record) {
@@ -80,13 +91,20 @@ public final class FeaturesDelta {
             }
         }
 
-        return new FeaturesImage(newFinalizedVersions);
+        final MetadataVersion metadataVersion;
+        if (metadataVersionChange == null) {
+            metadataVersion = image.metadataVersion();
+        } else {
+            metadataVersion = MetadataVersion.fromValue(metadataVersionChange);
+        }
+        return new FeaturesImage(newFinalizedVersions, metadataVersion);
     }
 
     @Override
     public String toString() {
         return "FeaturesDelta(" +
             "changes=" + changes +
+            ", metadataVersionChange=" + metadataVersionChange +
             ')';
     }
 }

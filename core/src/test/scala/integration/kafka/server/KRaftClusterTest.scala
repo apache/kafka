@@ -31,7 +31,6 @@ import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
 import java.util
-import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections, Optional}
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -42,6 +41,7 @@ import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
 import scala.collection.mutable
+import scala.concurrent.ExecutionException
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
@@ -289,6 +289,24 @@ class KRaftClusterTest {
           assertEquals(s"advertised-host-${broker.id}", broker.host, "Did not advertise configured advertised host")
           assertEquals(broker.id + 100, broker.port, "Did not advertise configured advertised port")
         }
+    }
+  }
+
+  @Test
+  def testCreateClusterInvalidMetadataVersion(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setInitialMetadataVersion(-1).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      fail("Should not be able to start up with an invalid version")
+    } catch {
+      case e: ExecutionException => assertTrue(e.getCause.getMessage.contains("Unsupported"))
+    } finally {
+      cluster.close()
     }
   }
 

@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
@@ -29,9 +29,9 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.metadata.MetadataVersion
 
 import scala.collection.mutable
-
 
 object BrokerMetadataPublisher extends Logging {
   /**
@@ -125,19 +125,26 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
+      val metadataVersion: Option[Short] = Option(newImage.features().metadataVersion())
+        .filterNot(mv => mv.equals(MetadataVersion.UNINITIALIZED))
+        .map(_.version)
+
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch  with metadata.version $metadataVersion.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with metadata.version $metadataVersion.")
       }
 
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
+        featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
+          info(s"Updating metadata.version to $metadataVersion at offset $highestOffsetAndEpoch.")
+        }
       }
 
       // Apply topic deltas.

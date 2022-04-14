@@ -19,6 +19,7 @@ package kafka.test;
 
 import kafka.test.annotation.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.metadata.MetadataVersion;
 
 import java.io.File;
 import java.util.HashMap;
@@ -42,6 +43,7 @@ public class ClusterConfig {
     private final String listenerName;
     private final File trustStoreFile;
     private final String ibp;
+    private final MetadataVersion metadataVersion;
 
     private final Properties serverProperties = new Properties();
     private final Properties producerProperties = new Properties();
@@ -53,7 +55,7 @@ public class ClusterConfig {
 
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
-                  String ibp) {
+                  String ibp, MetadataVersion metadataVersion) {
         this.type = type;
         this.brokers = brokers;
         this.controllers = controllers;
@@ -63,6 +65,7 @@ public class ClusterConfig {
         this.listenerName = listenerName;
         this.trustStoreFile = trustStoreFile;
         this.ibp = ibp;
+        this.metadataVersion = metadataVersion;
     }
 
     public Type clusterType() {
@@ -125,21 +128,26 @@ public class ClusterConfig {
         return Optional.ofNullable(ibp);
     }
 
+    public Optional<MetadataVersion> metadataVersion() {
+        return Optional.ofNullable(metadataVersion);
+    }
+
     public Properties brokerServerProperties(int brokerId) {
         return perBrokerOverrideProperties.computeIfAbsent(brokerId, __ -> new Properties());
     }
 
     public Map<String, String> nameTags() {
-        Map<String, String> tags = new LinkedHashMap<>(3);
+        Map<String, String> tags = new LinkedHashMap<>(4);
         name().ifPresent(name -> tags.put("Name", name));
         ibp().ifPresent(ibp -> tags.put("IBP", ibp));
+        metadataVersion().ifPresent(mv -> tags.put("MetadataVersion", mv.toString()));
         tags.put("Security", securityProtocol.name());
         listenerName().ifPresent(listener -> tags.put("Listener", listener));
         return tags;
     }
 
     public ClusterConfig copyOf() {
-        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, ibp);
+        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, ibp, metadataVersion);
         copy.serverProperties.putAll(serverProperties);
         copy.producerProperties.putAll(producerProperties);
         copy.consumerProperties.putAll(consumerProperties);
@@ -166,6 +174,7 @@ public class ClusterConfig {
         private String listenerName;
         private File trustStoreFile;
         private String ibp;
+        private MetadataVersion metadataVersion;
 
         Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
             this.type = type;
@@ -220,8 +229,13 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder metadataVersion(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
+            return this;
+        }
+
         public ClusterConfig build() {
-            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, ibp);
+            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, ibp, metadataVersion);
         }
     }
 }

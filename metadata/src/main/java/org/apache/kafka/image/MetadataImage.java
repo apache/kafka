@@ -120,6 +120,8 @@ public final class MetadataImage {
     }
 
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
+        // Features should be written out first so we can include the metadata.version at the beginning of the
+        // snapshot
         features.write(out);
         cluster.write(out);
         topics.write(out);

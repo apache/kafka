@@ -17,33 +17,75 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.VersionRange;
 
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
- * A holder class of the local node's supported feature flags.
+ * A holder class of the local node's supported feature flags as well as the ApiVersions of other nodes.
  */
 public class QuorumFeatures {
     private final int nodeId;
+    private final ApiVersions apiVersions;
     private final Map<String, VersionRange> supportedFeatures;
+    private final List<Integer> quorumNodeIds;
 
-    QuorumFeatures(int nodeId,
-                          Map<String, VersionRange> supportedFeatures) {
+    public QuorumFeatures(int nodeId,
+                          ApiVersions apiVersions,
+                          Map<String, VersionRange> supportedFeatures,
+                          List<Integer> quorumNodeIds) {
         this.nodeId = nodeId;
+        this.apiVersions = apiVersions;
         this.supportedFeatures = Collections.unmodifiableMap(supportedFeatures);
+        this.quorumNodeIds = Collections.unmodifiableList(quorumNodeIds);
     }
 
     public static QuorumFeatures create(int nodeId,
-                                        Map<String, VersionRange> supportedFeatures) {
-        return new QuorumFeatures(nodeId, supportedFeatures);
+                                        ApiVersions apiVersions,
+                                        Map<String, VersionRange> supportedFeatures,
+                                        Collection<Node> quorumNodes) {
+        List<Integer> nodeIds = quorumNodes.stream().map(Node::id).collect(Collectors.toList());
+        return new QuorumFeatures(nodeId, apiVersions, supportedFeatures, nodeIds);
     }
 
     public static Map<String, VersionRange> defaultFeatureMap() {
-        return Collections.emptyMap();
+        Map<String, VersionRange> features = new HashMap<>(1);
+        features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(MetadataVersion.V1.version(), MetadataVersion.latest().version()));
+        return features;
     }
+
+    Optional<VersionRange> quorumSupportedFeature(String featureName) {
+        List<VersionRange> supportedVersions = quorumNodeIds.stream()
+            .filter(node -> node != nodeId)
+            .map(node -> apiVersions.get(Integer.toString(node)))
+            .filter(Objects::nonNull)
+            .map(apiVersion -> apiVersion.supportedFeatures().get(featureName))
+            .filter(Objects::nonNull)
+            .map(supportedVersionRange -> VersionRange.of(supportedVersionRange.min(), supportedVersionRange.max()))
+            .collect(Collectors.toList());
+
+        localSupportedFeature(featureName).ifPresent(supportedVersions::add);
+
+        if (supportedVersions.isEmpty()) {
+            return Optional.empty();
+        } else {
+            return Optional.of(VersionRange.of(
+                (short) supportedVersions.stream().mapToInt(VersionRange::min).max().getAsInt(),
+                (short) supportedVersions.stream().mapToInt(VersionRange::max).min().getAsInt()
+            ));
+        }
+    }
+
 
     Optional<VersionRange> localSupportedFeature(String featureName) {
         return Optional.ofNullable(supportedFeatures.get(featureName));

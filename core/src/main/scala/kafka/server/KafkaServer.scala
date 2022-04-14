@@ -162,7 +162,7 @@ class KafkaServer(
 
   private var _featureChangeListener: FinalizedFeatureChangeListener = null
 
-  val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
+  val brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty()
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
   override def brokerState: BrokerState = _brokerState

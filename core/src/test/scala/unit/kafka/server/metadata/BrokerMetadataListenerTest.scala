@@ -20,7 +20,6 @@ package kafka.server.metadata
 import java.util
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Optional}
-
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Endpoint, Uuid}
