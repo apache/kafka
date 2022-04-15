@@ -67,13 +67,13 @@ public class ProcessorNodeMetrics {
     private static final String FORWARD_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
-    private static final String EMITTED_RECORDS = "emit-final-records";
+    private static final String EMITTED_RECORDS = "window-aggregate-final-emit";
     private static final String EMITTED_RECORDS_DESCRIPTION = "emit final records";
     private static final String EMITTED_RECORDS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + EMITTED_RECORDS_DESCRIPTION;
     private static final String EMITTED_RECORDS_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + EMITTED_RECORDS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
-    private static final String EMIT_FINAL_LATENCY = "emit-final" + LATENCY_SUFFIX;
+    private static final String EMIT_FINAL_LATENCY = "window-aggregate-final-emit" + LATENCY_SUFFIX;
     private static final String EMIT_FINAL_DESCRIPTION = "calls to emit final";
     private static final String EMIT_FINAL_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + EMIT_FINAL_DESCRIPTION;
     private static final String EMIT_FINAL_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + EMIT_FINAL_DESCRIPTION;

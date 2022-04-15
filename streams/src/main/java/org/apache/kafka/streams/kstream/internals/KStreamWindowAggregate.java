@@ -48,7 +48,6 @@ import java.util.Map;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
 import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emitFinalLatencySensor;
 import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emittedRecordsSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -249,7 +248,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 }
             }
 
-            maybeMeasureLatency(() -> tryEmitFinalResult(record, closeTime), time, emitFinalLatencySensor);
+            tryEmitFinalResult(record, closeTime);
         }
 
         private void tryEmitFinalResult(final Record<KIn, VIn> record, final long closeTime) {
@@ -300,6 +299,8 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 }
             }
 
+            final long startNs = time.nanoseconds();
+
             final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
                 .fetchAll(emitRangeLowerBoundInclusive + 1, emitRangeUpperBoundInclusive);
 
@@ -314,6 +315,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                         .withHeaders(record.headers()));
             }
             emittedRecordsSensor.record(emittedCount);
+            emitFinalLatencySensor.record(time.nanoseconds() - startNs);
 
             lastEmitCloseTime = closeTime;
             internalProcessorContext.addProcessorMetadataKeyValue(storeName, closeTime);

@@ -1095,7 +1095,7 @@ public class KStreamWindowAggregateTest {
         final MetricName emittedTotalMetric;
         final MetricName emittedRateMetric;
         emittedTotalMetric = new MetricName(
-            "emit-final-records-total",
+            "window-aggregate-final-emit-total",
             "stream-processor-node-metrics",
             "The total number of emit final records",
             mkMap(
@@ -1105,7 +1105,7 @@ public class KStreamWindowAggregateTest {
             )
         );
         emittedRateMetric = new MetricName(
-            "emit-final-records-rate",
+            "window-aggregate-final-emit-rate",
             "stream-processor-node-metrics",
             "The average number of emit final records per second",
             mkMap(
