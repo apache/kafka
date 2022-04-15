@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata;
+package org.apache.kafka.metadata.placement;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -24,6 +26,7 @@ import java.util.Optional;
 /**
  * A broker where a replica can be placed.
  */
+@InterfaceStability.Unstable
 public class UsableBroker {
     private final int id;
 
@@ -35,6 +38,7 @@ public class UsableBroker {
         this.id = id;
         this.rack = rack;
         this.fenced = fenced;
+        this.cell = null;
     }
 
     public int id() {
@@ -49,6 +53,10 @@ public class UsableBroker {
         return fenced;
     }
 
+    public String cell() {
+        return cell;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof UsableBroker)) return false;
@@ -58,11 +66,18 @@ public class UsableBroker {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, rack, fenced);
+        return Objects.hash(id,
+            rack,
+            fenced,
+            cell);
     }
 
     @Override
     public String toString() {
-        return "UsableBroker(id=" + id + ", rack=" + rack + ", fenced=" + fenced + ")";
+        return "UsableBroker" +
+            "(id=" + id +
+            ", rack=" + rack +
+            ", fenced=" + fenced +
+            ")";
     }
 }
