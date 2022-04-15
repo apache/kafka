@@ -144,7 +144,7 @@ class TimeOrderedCachingWindowStore
                                     final InternalProcessorContext<?, ?> context) {
 
         // Track what base key or index key we already processed so don't reprocess
-        Set<Bytes> processedBasedKey = new HashSet<>();
+        final Set<Bytes> processedBasedKey = new HashSet<>();
 
         for (final ThreadCache.DirtyEntry entry : entries) {
             final byte[] binaryWindowKey = baseKeyCacheFunction.key(entry.key()).get();
@@ -195,43 +195,47 @@ class TimeOrderedCachingWindowStore
             final long windowStartTimestamp = windowedKeyBytes.window().start();
             final Bytes binaryKey = windowedKeyBytes.key();
 
-            if (flushListener != null) {
-                final byte[] rawNewValue = finalEntry.newValue();
-                final byte[] rawOldValue = rawNewValue == null || sendOldValues ?
-                    wrapped().fetch(binaryKey, windowStartTimestamp) : null;
+            putAndMaybeForward(context, finalEntry, binaryKey, windowStartTimestamp);
+        }
+    }
 
-                // this is an optimization: if this key did not exist in underlying store and also not in the cache,
-                // we can skip flushing to downstream as well as writing to underlying store
-                if (rawNewValue != null || rawOldValue != null) {
-                    // we need to get the old values if needed, and then put to store, and then flush
-                    final ProcessorRecordContext current = context.recordContext();
-                    try {
-                        context.setRecordContext(finalEntry.entry().context());
-                        wrapped().put(binaryKey, finalEntry.newValue(), windowStartTimestamp);
+    private void putAndMaybeForward(final InternalProcessorContext<?, ?> context,
+                                    final DirtyEntry finalEntry,
+                                    final Bytes binaryKey,
+                                    final long windowStartTimestamp) {
+        if (flushListener != null) {
+            final byte[] rawNewValue = finalEntry.newValue();
+            final byte[] rawOldValue = rawNewValue == null || sendOldValues ?
+                wrapped().fetch(binaryKey, windowStartTimestamp) : null;
 
-                        // Only forward for base key to avoid forwarding multiple times for index
-                        if (isBaseKey) {
-                            flushListener.apply(
-                                new Record<>(
-                                    WindowKeySchema.toStoreKeyBinary(binaryKey,
-                                            windowStartTimestamp, 0)
-                                        .get(),
-                                    new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
-                                    finalEntry.entry().context().timestamp(),
-                                    finalEntry.entry().context().headers()));
-                        }
-                    } finally {
-                        context.setRecordContext(current);
-                    }
-                }
-            } else {
+            // this is an optimization: if this key did not exist in underlying store and also not in the cache,
+            // we can skip flushing to downstream as well as writing to underlying store
+            if (rawNewValue != null || rawOldValue != null) {
+                // we need to get the old values if needed, and then put to store, and then flush
                 final ProcessorRecordContext current = context.recordContext();
                 try {
                     context.setRecordContext(finalEntry.entry().context());
                     wrapped().put(binaryKey, finalEntry.newValue(), windowStartTimestamp);
+
+                    flushListener.apply(
+                        new Record<>(
+                            WindowKeySchema.toStoreKeyBinary(binaryKey,
+                                    windowStartTimestamp, 0)
+                                .get(),
+                            new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
+                            finalEntry.entry().context().timestamp(),
+                            finalEntry.entry().context().headers()));
                 } finally {
                     context.setRecordContext(current);
                 }
+            }
+        } else {
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(finalEntry.entry().context());
+                wrapped().put(binaryKey, finalEntry.newValue(), windowStartTimestamp);
+            } finally {
+                context.setRecordContext(current);
             }
         }
     }
