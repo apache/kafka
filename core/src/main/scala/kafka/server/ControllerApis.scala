@@ -46,9 +46,9 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
-import org.apache.kafka.metadata.ControllerRequestContext.requestTimeoutMsToDeadlineNs
-import org.apache.kafka.controller.Controller
-import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply, ControllerRequestContext, VersionRange}
+import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
+import org.apache.kafka.controller.{Controller, ControllerRequestContext}
+import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
@@ -430,8 +430,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleLegacyAlterConfigs(request: RequestChannel.Request): Unit = {
     val response = new AlterConfigsResponseData()
     val alterConfigsRequest = request.body[AlterConfigsRequest]
-    val context = new ControllerRequestContext(request.context.principal,
-      OptionalLong.empty())
+    val context = new ControllerRequestContext(request.context.principal, OptionalLong.empty())
     val duplicateResources = new util.HashSet[ConfigResource]
     val configChanges = new util.HashMap[ConfigResource, util.Map[String, String]]()
     alterConfigsRequest.data.resources.forEach { resource =>

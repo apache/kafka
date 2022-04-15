@@ -49,7 +49,7 @@ import org.apache.kafka.controller.Controller;
 import org.apache.kafka.controller.ResultOrError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.ControllerRequestContext;
+import org.apache.kafka.controller.ControllerRequestContext;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
