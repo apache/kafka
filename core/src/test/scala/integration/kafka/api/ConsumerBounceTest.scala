@@ -313,7 +313,6 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       killBroker(serverIdx)
       val config = newConfigs(serverIdx)
       servers(serverIdx) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
-      restartDeadBrokers()
     }
 
     def raisedExceptions: Seq[Throwable] = {
