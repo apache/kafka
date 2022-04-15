@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{UnifiedLog, LogManager}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
@@ -32,6 +32,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.metadata.MetadataVersion
 
 import scala.collection.mutable
+
 
 object BrokerMetadataPublisher extends Logging {
   /**

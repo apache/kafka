@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
 import java.util.Properties
+
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
@@ -183,7 +184,7 @@ Found problem:
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
-          () => StorageTool.buildMetadataProperties("invalid", config, MetadataVersion.V1.version())).getMessage)
+          () => StorageTool.buildMetadataProperties("invalid", config, MetadataVersion.latest().version())).getMessage)
   }
 
   @Test

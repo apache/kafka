@@ -148,7 +148,6 @@ public class FeatureControlManager {
                     "The controller does not support the given upgrade type.");
         }
 
-
         final Short currentVersion = finalizedVersions.get(featureName);
 
         if (newVersion <= 0) {
@@ -228,12 +227,13 @@ public class FeatureControlManager {
         return ApiError.NONE;
     }
 
-    FinalizedControllerFeatures finalizedFeatures(long lastCommittedOffset) {
+    FinalizedControllerFeatures finalizedFeatures(long epoch) {
         Map<String, Short> features = new HashMap<>();
-        for (Entry<String, Short> entry : finalizedVersions.entrySet(lastCommittedOffset)) {
+        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).version());
+        for (Entry<String, Short> entry : finalizedVersions.entrySet(epoch)) {
             features.put(entry.getKey(), entry.getValue());
         }
-        return new FinalizedControllerFeatures(features, lastCommittedOffset);
+        return new FinalizedControllerFeatures(features, epoch);
     }
 
     public void replay(FeatureLevelRecord record) {

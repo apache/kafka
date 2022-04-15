@@ -120,7 +120,7 @@ object MetaProperties {
     properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
     val nodeId = require(NodeIdKey, properties.nodeId)
-    val metadataVersion = properties.initialMetadataVersion.getOrElse(MetadataVersion.V1.version())
+    val metadataVersion = properties.initialMetadataVersion.getOrElse(MetadataVersion.stable().version())
     new MetaProperties(clusterId, nodeId, metadataVersion)
   }
 

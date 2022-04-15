@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
 
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
@@ -85,7 +87,7 @@ public class FeatureControlManagerTest {
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(logContext,
             features("foo", 1, 2), snapshotRegistry);
-        assertEquals(new FinalizedControllerFeatures(Collections.emptyMap(), -1),
+        assertEquals(new FinalizedControllerFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, (short) 0), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -120,7 +122,7 @@ public class FeatureControlManagerTest {
             features("foo", 1, 2), snapshotRegistry);
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
-        assertEquals(new FinalizedControllerFeatures(versionMap("foo", 2), 123),
+        assertEquals(new FinalizedControllerFeatures(versionMap(MetadataVersion.FEATURE_NAME, 0, "foo", 2), 123),
             manager.finalizedFeatures(123));
     }
 

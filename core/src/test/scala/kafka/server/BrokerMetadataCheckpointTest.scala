@@ -14,6 +14,7 @@ package kafka.server
 
 import java.io.File
 import java.util.Properties
+
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataVersion
 import org.apache.kafka.test.TestUtils

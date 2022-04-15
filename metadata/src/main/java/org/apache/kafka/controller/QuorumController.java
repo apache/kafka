@@ -917,6 +917,7 @@ public final class QuorumController implements Controller {
                     // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
                     // write any records to the log since we need the metadata.version to determine the correct
                     // record version
+
                     if (featureControl.metadataVersion() == MetadataVersion.UNINITIALIZED) {
                         final CompletableFuture<Map<String, ApiError>> future;
                         if (initialMetadataVersion == MetadataVersion.UNINITIALIZED) {
@@ -924,12 +925,12 @@ public final class QuorumController implements Controller {
                             future.completeExceptionally(
                                 new IllegalStateException("Cannot become leader without an initial metadata.version to use."));
                         } else if (initialMetadataVersion == MetadataVersion.V1) {
-                            future = prependWriteEvent("initializeMetadataVersion", () -> {
+                            future = appendWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
                                 return featureControl.initializeMetadataVersion(MetadataVersion.V1.version());
                             });
                         } else {
-                            future = prependWriteEvent("initializeMetadataVersion", () -> {
+                            future = appendWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
                                 return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
                             });
@@ -937,7 +938,12 @@ public final class QuorumController implements Controller {
                         future.whenComplete((result, exception) -> {
                             if (exception != null) {
                                 log.error("Failed to initialize metadata.version", exception);
-                                renounce();
+                                appendRaftEvent("metadataVersionFailure[" + curClaimEpoch + "]", () -> {
+                                    log.warn("Renouncing the leadership at oldEpoch {} since we could not bootstrap" +
+                                             "a metadata.version. Reverting to last committed offset {}.",
+                                        curClaimEpoch, lastCommittedOffset);
+                                    renounce();
+                                });
                             }
                         });
                     }
@@ -954,7 +960,7 @@ public final class QuorumController implements Controller {
             } else if (curClaimEpoch != -1) {
                 appendRaftEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
                     log.warn("Renouncing the leadership at oldEpoch {} due to a metadata " +
-                            "log event. Reverting to last committed offset {}.", curClaimEpoch,
+                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
                         lastCommittedOffset);
                     renounce();
                 });

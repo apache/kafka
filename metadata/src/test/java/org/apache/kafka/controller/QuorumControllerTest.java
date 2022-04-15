@@ -206,7 +206,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), MetadataVersion.V1);
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), MetadataVersion.latest());
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -296,7 +296,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), MetadataVersion.V1);
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), MetadataVersion.latest());
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -474,7 +474,7 @@ public class QuorumControllerTest {
         features.add(new BrokerRegistrationRequestData.Feature()
             .setName("metadata.version")
             .setMinSupportedVersion((short) 0)
-            .setMaxSupportedVersion((short) 1));
+            .setMaxSupportedVersion((short) 2));
         return features;
     }
 
@@ -672,6 +672,9 @@ public class QuorumControllerTest {
 
     private List<ApiMessageAndVersion> expectedSnapshotContent(Uuid fooId, Map<Integer, Long> brokerEpochs) {
         return Arrays.asList(
+            new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(MetadataVersion.latest().version()), (short) 0),
             new ApiMessageAndVersion(new TopicRecord().
                 setName("foo").setTopicId(fooId), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
@@ -724,10 +727,7 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).
-                setNextProducerId(1000), (short) 0),
-            new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName("metadata.version").
-                setFeatureLevel((short) 1), (short) 0)
+                setNextProducerId(1000), (short) 0)
         );
     }
 
@@ -771,9 +771,6 @@ public class QuorumControllerTest {
             }
             expectedIndex += 1;
         }
-
-        System.err.println(expected);
-        System.err.println(actual);
 
         assertTrue(
             expectedIndex <= expected.size(),

@@ -19,6 +19,7 @@ package kafka.server.metadata
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.function.Consumer
+
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
