@@ -34,6 +34,7 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -2615,10 +2616,13 @@ class ReplicaManagerTest {
 
   @Test
   def testStopReplicaWithDeletePartitionAndExistingPartitionAndNewerLeaderEpochAndIOException(): Unit = {
-    // Even though we are trying to trigger an IOException by deleting the underlying log directory,
-    // given the async deletion of a replica no longer needs the underlying directory, the stopReplica operation
-    // should be able to finish without any errors.
-    testStopReplicaWithExistingPartition(2, true, true, Errors.NONE)
+    // 1. Even though we are trying to trigger an IOException by deleting the underlying log directory,
+    // the foreground deletion of a replica no longer reads from the underlying directory, and thus
+    // should trigger no exceptions. It means the stopReplica operation running the foreground
+    // deletion should be able to finish without any errors.
+    // 2. During the background deletion, a FileSystemException will be triggered when we try
+    // to delete the log segments, which is then converted to a KafkaStorageException.
+    testStopReplicaWithExistingPartition(2, true, true, Errors.NONE, true)
   }
 
   @Test
@@ -2644,7 +2648,8 @@ class ReplicaManagerTest {
   private def testStopReplicaWithExistingPartition(leaderEpoch: Int,
                                                    deletePartition: Boolean,
                                                    throwIOException: Boolean,
-                                                   expectedOutput: Errors): Unit = {
+                                                   expectedOutput: Errors,
+                                                   expectedExceptionInBackgroundDeletion: Boolean = false): Unit = {
     val mockTimer = new MockTimer(time)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
 
@@ -2706,6 +2711,26 @@ class ReplicaManagerTest {
       assertEquals(HostedPartition.None, replicaManager.getPartition(tp0))
       assertFalse(readRecoveryPointCheckpoint().contains(tp0))
       assertFalse(readLogStartOffsetCheckpoint().contains(tp0))
+
+      // verify that there is log to be deleted
+      val logsToBeDeleted = replicaManager.logManager.logsToBeDeleted
+      assertEquals(1, logsToBeDeleted.size())
+      val (removedLog, _) = logsToBeDeleted.take()
+      assertFalse(removedLog.logDirFailureChannel.hasOfflineLogDir(logDir.toString))
+
+      // trigger the background deletion
+      var kafkaStorageExceptionCaptured = false
+      try {
+        removedLog.delete()
+      } catch {
+        case _: KafkaStorageException =>
+          kafkaStorageExceptionCaptured = true
+      }
+      assertEquals(expectedExceptionInBackgroundDeletion, kafkaStorageExceptionCaptured)
+
+      if (expectedExceptionInBackgroundDeletion) {
+        assertTrue(removedLog.logDirFailureChannel.hasOfflineLogDir(logDir.toString))
+      }
     }
   }
 

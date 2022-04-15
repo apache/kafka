@@ -583,7 +583,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
               }
             case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
-              "since the field is not initialized")
+              "since the partition is deleted")
           }
         }
     }
@@ -1570,9 +1570,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Completely delete the local log directory and all contents from the file system with no delay
+   * Completely delete the local log directory and all contents from the file system with no delay.
+   *
+   * Visible for testing.
    */
-  private[log] def delete(): Unit = {
+  def delete(): Unit = {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         localLog.checkIfMemoryMappedBufferClosed()
