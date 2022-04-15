@@ -129,6 +129,17 @@ public final class MetadataImage {
         acls.write(out);
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return features.totalRecords()
+            + cluster.totalRecords()
+            + topics.totalRecords()
+            + configs.totalRecords()
+            + clientQuotas.totalRecords()
+            + producerIds.totalRecords()
+            + acls.totalRecords();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof MetadataImage)) return false;

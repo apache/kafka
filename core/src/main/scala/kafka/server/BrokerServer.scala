@@ -60,12 +60,14 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
     extends SnapshotWriterBuilder {
   override def build(committedOffset: Long,
                      committedEpoch: Int,
-                     lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
-    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
+                     lastContainedLogTime: Long,
+                     totalRecords: Long): SnapshotWriter[ApiMessageAndVersion] = {
+    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime, totalRecords).
         asScala.getOrElse(
       throw new RuntimeException("A snapshot already exists with " +
         s"committedOffset=${committedOffset}, committedEpoch=${committedEpoch}, " +
-        s"lastContainedLogTime=${lastContainedLogTime}")
+        s"lastContainedLogTime=${lastContainedLogTime}, " +
+        s"totalRecords = $totalRecords")
     )
   }
 }

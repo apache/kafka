@@ -16,12 +16,13 @@
  */
 package kafka.raft
 
-import kafka.log.{AppendOrigin, Defaults, UnifiedLog, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
+import kafka.log.{AppendOrigin, Defaults, LogConfig, LogOffsetSnapshot, SnapshotGenerated, UnifiedLog}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.message.SnapshotHeaderRecord
 import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Records}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
@@ -317,6 +318,18 @@ final class KafkaMetadataLog private (
     }
   }
 
+  def preferLoadSnapshot(nextExpectedOffset: Long): Boolean = {
+    if (nextExpectedOffset < startOffset) {
+      return true
+    }
+    snapshots synchronized {
+      latestSnapshotId().asScala.flatMap{ snapshotId =>
+        readSnapshotHeader(snapshotId)
+          .map(header => snapshotId.offset - nextExpectedOffset > header.recordsCount())
+      }.getOrElse(false)
+    }
+  }
+
   /**
    * Delete snapshots that come before a given snapshot ID. This is done by advancing the log start offset to the given
    * snapshot and cleaning old log segments.
@@ -361,7 +374,7 @@ final class KafkaMetadataLog private (
   /**
    * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
    */
-  private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
+  private def readSnapshotHeader(snapshotId: OffsetAndEpoch): Option[SnapshotHeaderRecord] = {
     readSnapshot(snapshotId).asScala.flatMap { reader =>
       val batchIterator = reader.records().batchIterator()
 
@@ -369,7 +382,7 @@ final class KafkaMetadataLog private (
       val records = firstBatch.streamingIterator(new BufferSupplier.GrowableBufferSupplier())
       if (firstBatch.isControlBatch) {
         val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next());
-        Some(header.lastContainedLogTimestamp())
+        Some(header)
       } else {
         warn("Did not find control record at beginning of snapshot")
         None
@@ -429,8 +442,8 @@ final class KafkaMetadataLog private (
     // Keep deleting snapshots as long as the
     def shouldClean(snapshotId: OffsetAndEpoch): Boolean = {
       val now = time.milliseconds()
-      readSnapshotTimestamp(snapshotId).exists { timestamp =>
-        if (now - timestamp > config.retentionMillis) {
+      readSnapshotHeader(snapshotId).exists { header =>
+        if (now - header.lastContainedLogTimestamp() > config.retentionMillis) {
           true
         } else {
           false

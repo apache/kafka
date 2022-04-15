@@ -1682,4 +1682,13 @@ public class ReplicationControlManager {
     ReplicationControlIterator iterator(long epoch) {
         return new ReplicationControlIterator(epoch);
     }
+
+    long numRecords(long epoch) {
+        Collection<TopicControlInfo> topicInfos = topics.values(epoch);
+        return topicInfos.size() +
+            topicInfos.stream()
+                .map(topic -> topic.parts.values(epoch).size())
+                .reduce(Integer::sum)
+                .orElse(0);
+    }
 }

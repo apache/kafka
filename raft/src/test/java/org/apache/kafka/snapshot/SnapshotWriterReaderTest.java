@@ -64,7 +64,7 @@ final public class SnapshotWriterReaderTest {
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create an empty snapshot and freeze it immediately
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp).get()) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp, recordsPerBatch * batches).get()) {
             assertEquals(id, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -93,11 +93,10 @@ final public class SnapshotWriterReaderTest {
         RaftClientTestContext context = contextBuilder.build();
 
         context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
-        int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp).get()) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp, recordsPerBatch * batches).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> assertDoesNotThrow(() -> snapshot.append(batch)));
             snapshot.freeze();
@@ -125,11 +124,10 @@ final public class SnapshotWriterReaderTest {
         RaftClientTestContext context = contextBuilder.build();
 
         context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
-        int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0).get()) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0, recordsPerBatch * batches).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
@@ -153,11 +151,10 @@ final public class SnapshotWriterReaderTest {
         RaftClientTestContext context = contextBuilder.build();
 
         context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
-        int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0).get()) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0, recordsPerBatch * batches).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
@@ -238,7 +235,7 @@ final public class SnapshotWriterReaderTest {
         assertTrue(batch.isControlBatch());
 
         SnapshotFooterRecord footerRecord = ControlRecordUtils.deserializedSnapshotFooterRecord(record);
-        assertEquals(footerRecord.version(), ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION);
+        assertEquals(footerRecord.version(), ControlRecordUtils.SNAPSHOT_FOOTER_HIGHEST_VERSION);
 
         return countRecords;
     }

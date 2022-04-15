@@ -70,6 +70,11 @@ public final class ConfigurationsImage {
         }
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return data.values().stream().map(ConfigurationImage::totalRecords).reduce(Long::sum).orElse(0L);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof ConfigurationsImage)) return false;

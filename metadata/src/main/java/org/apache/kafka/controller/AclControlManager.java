@@ -40,6 +40,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -228,5 +229,9 @@ public class AclControlManager {
                 return new StandardAclWithId(entry.getKey(), entry.getValue());
             }
         });
+    }
+
+    long numRecords(long epoch) {
+        return idToAcl.keySet(epoch).size();
     }
 }

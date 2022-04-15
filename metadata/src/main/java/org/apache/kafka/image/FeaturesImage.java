@@ -67,6 +67,11 @@ public final class FeaturesImage {
         out.accept(batch);
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return finalizedVersions.size();
+    }
+
     @Override
     public int hashCode() {
         return finalizedVersions.hashCode();

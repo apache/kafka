@@ -73,6 +73,11 @@ public final class ConfigurationImage {
         out.accept(records);
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return data.size();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof ConfigurationImage)) return false;

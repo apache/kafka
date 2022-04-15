@@ -331,4 +331,12 @@ public class ClientQuotaControlManager {
     ClientQuotaControlIterator iterator(long epoch) {
         return new ClientQuotaControlIterator(epoch);
     }
+
+    long numRecords(long epoch) {
+        Collection<TimelineHashMap<String, Double>> quotas = clientQuotaData.values(epoch);
+        return quotas.stream()
+                .map(quota -> quota.keySet(epoch).size())
+                .reduce(Integer::sum)
+                .orElse(0);
+    }
 }

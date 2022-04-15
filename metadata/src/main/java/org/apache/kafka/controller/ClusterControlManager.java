@@ -462,4 +462,8 @@ public class ClusterControlManager {
     ClusterControlIterator iterator(long epoch) {
         return new ClusterControlIterator(epoch);
     }
+
+    long numRecords(long epoch) {
+        return brokerRegistrations.entrySet(epoch).size();
+    }
 }

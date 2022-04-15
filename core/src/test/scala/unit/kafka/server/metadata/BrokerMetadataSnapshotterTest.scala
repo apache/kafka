@@ -39,7 +39,7 @@ class BrokerMetadataSnapshotterTest {
   @Test
   def testCreateAndClose(): Unit = {
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None,
-      (_, _, _) => throw new RuntimeException("unimplemented"))
+      (_, _, _, _) => throw new RuntimeException("unimplemented"))
     snapshotter.close()
   }
 

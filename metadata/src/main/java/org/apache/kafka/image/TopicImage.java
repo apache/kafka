@@ -78,6 +78,11 @@ public final class TopicImage {
         out.accept(batch);
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return 1 + partitions.size();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof TopicImage)) return false;

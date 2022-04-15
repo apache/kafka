@@ -478,4 +478,12 @@ public class ConfigurationControlManager {
     ConfigurationControlIterator iterator(long epoch) {
         return new ConfigurationControlIterator(epoch);
     }
+
+    long numRecords(long epoch) {
+        Collection<TimelineHashMap<String, String>> configs = configData.values(epoch);
+        return configs.stream()
+                .map(config -> config.values(epoch).size())
+                .reduce(Integer::sum)
+                .orElse(0);
+    }
 }

@@ -215,9 +215,11 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param committedEpoch the epoch of the committed offset
      * @param committedOffset the last committed offset that will be included in the snapshot
      * @param lastContainedLogTime The append time of the highest record contained in this snapshot
+     * @param totalRecords TODO
      * @return a writable snapshot if it doesn't already exists
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime,
+                                               long totalRecords);
 }

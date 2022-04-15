@@ -62,6 +62,11 @@ public final class ClusterImage {
         out.accept(batch);
     }
 
+    // TODO tests
+    public long totalRecords() {
+        return brokers.size();
+    }
+
     @Override
     public int hashCode() {
         return brokers.hashCode();
