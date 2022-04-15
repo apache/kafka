@@ -72,6 +72,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
+import org.apache.kafka.metadata.placement.ReplicaPlacer;
+import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;

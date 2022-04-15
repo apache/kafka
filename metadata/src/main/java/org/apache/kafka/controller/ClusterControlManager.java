@@ -39,6 +39,9 @@ import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.placement.ReplicaPlacer;
+import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -231,6 +234,10 @@ public class ClusterControlManager {
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
         this.controllerMetrics = metrics;
+    }
+
+    ReplicaPlacer replicaPlacer() {
+        return replicaPlacer;
     }
 
     /**
@@ -446,15 +453,12 @@ public class ClusterControlManager {
         }
     }
 
-
-    public List<List<Integer>> placeReplicas(int startPartition,
-                                             int numPartitions,
-                                             short numReplicas) {
+    Iterator<UsableBroker> usableBrokers() {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
-        return heartbeatManager.placeReplicas(startPartition, numPartitions, numReplicas,
-            id -> brokerRegistrations.get(id).rack(), replicaPlacer);
+        return heartbeatManager.usableBrokers(
+            id -> brokerRegistrations.get(id).rack());
     }
 
     public boolean unfenced(int brokerId) {

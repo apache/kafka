@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata;
 
 import java.util.Random;
 

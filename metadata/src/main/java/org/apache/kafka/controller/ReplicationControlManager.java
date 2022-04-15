@@ -74,6 +74,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -221,6 +224,13 @@ public class ReplicationControlManager {
         }
     }
 
+    class KRaftClusterDescriber implements ClusterDescriber {
+        @Override
+        public Iterator<UsableBroker> usableBrokers() {
+            return clusterControl.usableBrokers();
+        }
+    }
+
     static class TopicControlInfo {
         private final String name;
         private final Uuid id;
@@ -341,6 +351,11 @@ public class ReplicationControlManager {
      * The set of topic partitions for which the leader is not the preferred leader.
      */
     private final TimelineHashSet<TopicIdPartition> imbalancedPartitions;
+
+    /**
+     * A ClusterDescriber which supplies cluster information to our ReplicaPlacer.
+     */
+    private final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,
@@ -658,8 +673,11 @@ public class ReplicationControlManager {
             short replicationFactor = topic.replicationFactor() == -1 ?
                 defaultReplicationFactor : topic.replicationFactor();
             try {
-                List<List<Integer>> replicas = clusterControl.
-                    placeReplicas(0, numPartitions, replicationFactor);
+                List<List<Integer>> replicas = clusterControl.replicaPlacer().place(new PlacementSpec(
+                    0,
+                    numPartitions,
+                    replicationFactor
+                ), clusterDescriber);
                 for (int partitionId = 0; partitionId < replicas.size(); partitionId++) {
                     int[] r = Replicas.toArray(replicas.get(partitionId));
                     newParts.put(partitionId,
@@ -1409,8 +1427,11 @@ public class ReplicationControlManager {
                 isrs.add(isr);
             }
         } else {
-            placements = clusterControl.placeReplicas(startPartitionId, additional,
-                replicationFactor);
+            placements = clusterControl.replicaPlacer().place(new PlacementSpec(
+                startPartitionId,
+                additional,
+                replicationFactor
+            ), clusterDescriber);
             isrs = placements;
         }
         int partitionId = startPartitionId;

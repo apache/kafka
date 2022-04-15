@@ -20,7 +20,6 @@ package org.apache.kafka.metadata.placement;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Iterator;
-import java.util.List;
 
 
 /**

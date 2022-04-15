@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import org.apache.kafka.common.Endpoint;
@@ -38,6 +39,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -174,7 +178,17 @@ public class ClusterControlManagerTest {
                 String.format("broker %d was not unfenced.", i));
         }
         for (int i = 0; i < 100; i++) {
-            List<List<Integer>> results = clusterControl.placeReplicas(0, 1, (short) 3);
+            List<List<Integer>> results = clusterControl.replicaPlacer().place(
+                new PlacementSpec(0,
+                    1,
+                    (short) 3),
+                new ClusterDescriber() {
+                    @Override
+                    public Iterator<UsableBroker> usableBrokers() {
+                        return clusterControl.usableBrokers();
+                    }
+                }
+            );
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results.get(0)) {
                 assertTrue(result >= 0);

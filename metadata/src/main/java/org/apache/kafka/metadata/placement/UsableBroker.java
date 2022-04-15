@@ -38,7 +38,6 @@ public class UsableBroker {
         this.id = id;
         this.rack = rack;
         this.fenced = fenced;
-        this.cell = null;
     }
 
     public int id() {
@@ -53,10 +52,6 @@ public class UsableBroker {
         return fenced;
     }
 
-    public String cell() {
-        return cell;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof UsableBroker)) return false;
@@ -68,8 +63,7 @@ public class UsableBroker {
     public int hashCode() {
         return Objects.hash(id,
             rack,
-            fenced,
-            cell);
+            fenced);
     }
 
     @Override
