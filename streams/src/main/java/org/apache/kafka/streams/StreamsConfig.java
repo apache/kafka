@@ -302,6 +302,54 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_23 = "2.3";
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.4.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_24 = "2.4";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.5.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_25 = "2.5";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.6.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_26 = "2.6";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.7.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_27 = "2.7";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.8.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_28 = "2.8";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.0.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_30 = "3.0";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.1.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_31 = "3.1";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.2.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_32 = "3.2";
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -632,11 +680,14 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
     private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
         "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
-        "When upgrading from 2.4 to a newer version it is not required to specify this config. Default is `null`. " +
+        "When upgrading from 3.3 to a newer version it is not required to specify this config. Default is `null`. " +
         "Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" +
         UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" +
         UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" +
-        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
+        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
+        UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
+        UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
+        UPGRADE_FROM_32 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -960,7 +1011,15 @@ public class StreamsConfig extends AbstractConfig {
                        UPGRADE_FROM_20,
                        UPGRADE_FROM_21,
                        UPGRADE_FROM_22,
-                       UPGRADE_FROM_23),
+                       UPGRADE_FROM_23,
+                       UPGRADE_FROM_24,
+                       UPGRADE_FROM_25,
+                       UPGRADE_FROM_26,
+                       UPGRADE_FROM_27,
+                       UPGRADE_FROM_28,
+                       UPGRADE_FROM_30,
+                       UPGRADE_FROM_31,
+                       UPGRADE_FROM_32),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOWED_INNER_CLASS_SERDE,
