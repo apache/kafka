@@ -2352,7 +2352,7 @@ class ReplicaManagerTest {
     val (rm0, rm1) = prepareDifferentReplicaManagers(mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
     try {
-      // make broker 0 the leader of partition 0 and
+      // make broker 1 the leader of partition 0 and
       // make broker 1 the leader of partition 1
       val tp0 = new TopicPartition(topic, 0)
       val tp1 = new TopicPartition(topic, 1)
