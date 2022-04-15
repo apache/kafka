@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -44,6 +45,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
@@ -74,8 +77,7 @@ import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
-import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -94,6 +96,7 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -142,7 +145,7 @@ public final class QuorumController implements Controller {
         private LogContext logContext = null;
         private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;
         private RaftClient<ApiMessageAndVersion> raftClient = null;
-        private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
+        private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private boolean isLeaderRecoverySupported = false;
@@ -187,8 +190,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSupportedFeatures(Map<String, VersionRange> supportedFeatures) {
-            this.supportedFeatures = supportedFeatures;
+        public Builder setQuorumFeatures(QuorumFeatures quorumFeatures) {
+            this.quorumFeatures = quorumFeatures;
             return this;
         }
 
@@ -262,6 +265,9 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
+            if (quorumFeatures == null) {
+                throw new RuntimeException("You must specify the quorum features");
+            }
             if (threadNamePrefix == null) {
                 threadNamePrefix = String.format("Node%d_", nodeId);
             }
@@ -272,11 +278,12 @@ public final class QuorumController implements Controller {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
+
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, clusterId, queue, time,
-                    configSchema, raftClient, supportedFeatures, defaultReplicationFactor,
+                    configSchema, raftClient, quorumFeatures, defaultReplicationFactor,
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
                     createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
@@ -290,7 +297,7 @@ public final class QuorumController implements Controller {
 
     /**
      * Checks that a configuration resource exists.
-     *
+     * <p>
      * This object must be used only from the controller event thread.
      */
     class ConfigResourceExistenceChecker implements Consumer<ConfigResource> {
@@ -381,7 +388,7 @@ public final class QuorumController implements Controller {
             return exception;
         }
         log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
-            "Reverting to last committed offset {}.",
+                "Reverting to last committed offset {}.",
             name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
         raftClient.resign(curClaimEpoch);
@@ -601,17 +608,17 @@ public final class QuorumController implements Controller {
          * operation.  In general, this operation should not modify the "hard state" of
          * the controller.  That modification will happen later on, when we replay the
          * records generated by this function.
-         *
+         * <p>
          * There are cases where this function modifies the "soft state" of the
          * controller.  Mainly, this happens when we process cluster heartbeats.
-         *
+         * <p>
          * This function also generates an RPC result.  In general, if the RPC resulted in
          * an error, the RPC result will be an error, and the generated record list will
          * be empty.  This would happen if we tried to create a topic with incorrect
          * parameters, for example.  Of course, partial errors are possible for batch
          * operations.
          *
-         * @return              A result containing a list of records, and the RPC result.
+         * @return A result containing a list of records, and the RPC result.
          */
         ControllerResult<T> generateRecordsAndResult() throws Exception;
 
@@ -620,7 +627,8 @@ public final class QuorumController implements Controller {
          * with the end offset at which those records were placed.  If there were no
          * records to write, we'll just pass the last write offset.
          */
-        default void processBatchEndOffset(long offset) {}
+        default void processBatchEndOffset(long offset) {
+        }
     }
 
     /**
@@ -832,9 +840,9 @@ public final class QuorumController implements Controller {
                                     reader.snapshotId(),
                                     offset,
                                     messages
-                                      .stream()
-                                      .map(ApiMessageAndVersion::toString)
-                                      .collect(Collectors.joining(", "))
+                                        .stream()
+                                        .map(ApiMessageAndVersion::toString)
+                                        .collect(Collectors.joining(", "))
                                 );
                             } else {
                                 log.debug(
@@ -945,7 +953,7 @@ public final class QuorumController implements Controller {
         queue.scheduleDeferred(name, new EarliestDeadlineFunction(deadlineNs), event);
         event.future.exceptionally(e -> {
             if (e instanceof UnknownServerException && e.getCause() != null &&
-                    e.getCause() instanceof RejectedExecutionException) {
+                e.getCause() instanceof RejectedExecutionException) {
                 log.error("Cancelling deferred write event {} because the event queue " +
                     "is now closed.", name);
                 return null;
@@ -1307,7 +1315,7 @@ public final class QuorumController implements Controller {
                              Time time,
                              KafkaConfigSchema configSchema,
                              RaftClient<ApiMessageAndVersion> raftClient,
-                             Map<String, VersionRange> supportedFeatures,
+                             QuorumFeatures quorumFeatures,
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              boolean isLeaderRecoverySupported,
@@ -1351,7 +1359,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setControllerMetrics(controllerMetrics).
             build();
-        this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
+        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
@@ -1418,7 +1426,8 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         Collection<String> names
     ) {
-        if (names.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
+        if (names.isEmpty())
+            return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendReadEvent("findTopicIds", context.deadlineNs(),
             () -> replicationControl.findTopicIds(lastCommittedOffset, names));
     }
@@ -1436,7 +1445,8 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         Collection<Uuid> ids
     ) {
-        if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
+        if (ids.isEmpty())
+            return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendReadEvent("findTopicNames", context.deadlineNs(),
             () -> replicationControl.findTopicNames(lastCommittedOffset, ids));
     }
@@ -1446,7 +1456,8 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         Collection<Uuid> ids
     ) {
-        if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
+        if (ids.isEmpty())
+            return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendWriteEvent("deleteTopics", context.deadlineNs(),
             () -> replicationControl.deleteTopics(ids));
     }
@@ -1475,7 +1486,7 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<FeatureMapAndEpoch> finalizedFeatures(
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures(
         ControllerRequestContext context
     ) {
         return appendReadEvent("getFinalizedFeatures", context.deadlineNs(),
@@ -1617,8 +1628,35 @@ public final class QuorumController implements Controller {
         return appendWriteEvent("allocateProducerIds", context.deadlineNs(),
             () -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
             .thenApply(result -> new AllocateProducerIdsResponseData()
-                    .setProducerIdStart(result.firstProducerId())
-                    .setProducerIdLen(result.size()));
+                .setProducerIdStart(result.firstProducerId())
+                .setProducerIdLen(result.size()));
+    }
+
+    @Override
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+        ControllerRequestContext context,
+        UpdateFeaturesRequestData request
+    ) {
+        return appendWriteEvent("updateFeatures", context.deadlineNs(), () -> {
+            Map<String, Short> updates = new HashMap<>();
+            Map<String, FeatureUpdate.UpgradeType> upgradeTypes = new HashMap<>();
+            request.featureUpdates().forEach(featureUpdate -> {
+                String featureName = featureUpdate.feature();
+                upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
+                updates.put(featureName, featureUpdate.maxVersionLevel());
+            });
+            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
+                request.validateOnly());
+        }).thenApply(result -> {
+            UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
+            responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
+            result.forEach((featureName, error) -> responseData.results().add(
+                new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                    .setFeature(featureName)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message())));
+            return responseData;
+        });
     }
 
     @Override

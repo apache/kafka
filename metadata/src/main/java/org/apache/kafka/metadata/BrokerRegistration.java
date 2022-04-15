@@ -104,7 +104,7 @@ public class BrokerRegistration {
         }
         Map<String, VersionRange> supportedFeatures = new HashMap<>();
         for (BrokerFeature feature : record.features()) {
-            supportedFeatures.put(feature.name(), new VersionRange(
+            supportedFeatures.put(feature.name(), VersionRange.of(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
         return new BrokerRegistration(record.brokerId(),

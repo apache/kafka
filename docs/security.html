@@ -643,7 +643,7 @@ sasl.kerberos.service.name=kafka</code></pre></li>
         <li><h4><a id="security_sasl_plain" href="#security_sasl_plain">Authentication using SASL/PLAIN</a></h4>
             <p>SASL/PLAIN is a simple username/password authentication mechanism that is typically used with TLS for encryption to implement secure authentication.
                 Kafka supports a default implementation for SASL/PLAIN which can be extended for production use as described <a href="#security_sasl_plain_production">here</a>.</p>
-            The username is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
+            Under the default implementation of <code>principal.builder.class</code>, the username is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
             <ol>
                 <li><h5 class="anchor-heading"><a id="security_sasl_plain_brokerconfig" class="anchor-link"></a><a href="#security_sasl_plain_brokerconfig">Configuring Kafka Brokers</a></h5>
                     <ol>
@@ -712,7 +712,7 @@ sasl.mechanism=PLAIN</code></pre></li>
                 addresses the security concerns with traditional mechanisms that perform username/password authentication
                 like PLAIN and DIGEST-MD5. The mechanism is defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
                 Kafka supports <a href="https://tools.ietf.org/html/rfc7677">SCRAM-SHA-256</a> and SCRAM-SHA-512 which
-                can be used with TLS to perform secure authentication. The username is used as the authenticated
+                can be used with TLS to perform secure authentication. Under the default implementation of <code>principal.builder.class</code>, the username is used as the authenticated
                 <code>Principal</code> for configuration of ACLs etc. The default SCRAM implementation in Kafka
                 stores SCRAM credentials in Zookeeper and is suitable for use in Kafka installations where Zookeeper
                 is on a private network. Refer to <a href="#security_sasl_scram_security">Security Considerations</a>
@@ -806,6 +806,7 @@ sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
                 The default OAUTHBEARER implementation in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>
                 and is only suitable for use in non-production Kafka installations. Refer to <a href="#security_sasl_oauthbearer_security">Security Considerations</a>
                 for more details.</p>
+            Under the default implementation of <code>principal.builder.class</code>, the principalName of OAuthBearerToken is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
             <ol>
                 <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_brokerconfig">Configuring Kafka Brokers</a></h5>
                     <ol>
@@ -1047,6 +1048,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                 frameworks to distribute the workload to available workers in a secure environment without the added cost of distributing
                 Kerberos TGT/keytabs or keystores when 2-way SSL is used. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka">KIP-48</a>
                 for more details.</p>
+            Under the default implementation of <code>principal.builder.class</code>, the owner of delegation token is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
 
             <p>Typical steps for delegation token usage are:</p>
             <ol>

@@ -36,12 +36,14 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.authorizer.AclMutator;
 
 import java.util.Collection;
@@ -177,7 +179,7 @@ public interface Controller extends AclMutator, AutoCloseable {
      *
      * @return              A future yielding the feature ranges.
      */
-    CompletableFuture<FeatureMapAndEpoch> finalizedFeatures(
+    CompletableFuture<FinalizedControllerFeatures> finalizedFeatures(
         ControllerRequestContext context
     );
 
@@ -299,6 +301,19 @@ public interface Controller extends AclMutator, AutoCloseable {
     CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
         ControllerRequestContext context,
         AllocateProducerIdsRequestData request
+    );
+
+    /**
+     * Update a set of feature flags
+     *
+     * @param context   The controller request context.
+     * @param request   The update features request
+     *
+     * @return          A future which yields the result of the action
+     */
+    CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+        ControllerRequestContext context,
+        UpdateFeaturesRequestData request
     );
 
     /**

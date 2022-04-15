@@ -3192,6 +3192,14 @@ class KafkaApisTest {
     )
     val stopReplicaResponse = capturedResponse.getValue
     assertEquals(expectedError, stopReplicaResponse.error())
+    if (expectedError != Errors.STALE_BROKER_EPOCH) {
+      verify(replicaManager).stopReplicas(
+        ArgumentMatchers.eq(request.context.correlationId),
+        ArgumentMatchers.eq(controllerId),
+        ArgumentMatchers.eq(controllerEpoch),
+        ArgumentMatchers.eq(stopReplicaRequest.partitionStates().asScala)
+      )
+    }
   }
 
   @Test
