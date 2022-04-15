@@ -1226,7 +1226,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     var unauthorizedForCreateTopics = Set[String]()
 
     if (authorizedTopics.nonEmpty) {
-      val nonExistingTopics = authorizedTopics.filterNot(metadataCache.contains(_))
+      val nonExistingTopics = authorizedTopics.filterNot(metadataCache.contains)
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
           val authorizedForCreateTopics = authHelper.filterByAuthorized(request.context, CREATE, TOPIC,
@@ -1350,7 +1350,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val payloadOpt = zkSupport.zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
                 payloadOpt match {
                   case Some(payload) =>
-                    (topicPartition, new OffsetFetchResponse.PartitionData(payload.toLong,
+                    (topicPartition, new OffsetFetchResponse.PartitionData(payload,
                       Optional.empty(), OffsetFetchResponse.NO_METADATA, Errors.NONE))
                   case None =>
                     (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
@@ -1615,7 +1615,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val listedGroup = new ListGroupsResponseData.ListedGroup()
                   .setGroupId(group.groupId)
                   .setProtocolType(group.protocolType)
-                  .setGroupState(group.state.toString)
+                  .setGroupState(group.state)
                 listedGroup
             }.asJava)
             .setThrottleTimeMs(throttleMs)
@@ -2156,16 +2156,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DeleteRecordsResponse(new DeleteRecordsResponseData()
           .setThrottleTimeMs(requestThrottleMs)
-          .setTopics(new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(mergedResponseStatus.groupBy(_._1.topic).map { case (topic, partitionMap) => {
+          .setTopics(new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(mergedResponseStatus.groupBy(_._1.topic).map { case (topic, partitionMap) =>
             new DeleteRecordsTopicResult()
               .setName(topic)
-              .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(partitionMap.map { case (topicPartition, partitionResult) => {
+              .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(partitionMap.map { case (topicPartition, partitionResult) =>
                 new DeleteRecordsPartitionResult().setPartitionIndex(topicPartition.partition)
                   .setLowWatermark(partitionResult.lowWatermark)
                   .setErrorCode(partitionResult.errorCode)
-              }
               }.toList.asJava.iterator()))
-          }
           }.toList.asJava.iterator()))))
     }
 
@@ -3356,7 +3354,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setThrottleTimeMs(requestThrottleMs)
         .setClusterId(clusterId)
         .setControllerId(controllerId)
-        .setClusterAuthorizedOperations(clusterAuthorizedOperations);
+        .setClusterAuthorizedOperations(clusterAuthorizedOperations)
 
 
       brokers.foreach { broker =>
