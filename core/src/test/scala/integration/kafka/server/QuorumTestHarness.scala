@@ -85,8 +85,7 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
       metrics = new Metrics(),
       threadNamePrefix = Some("Broker%02d_".format(config.nodeId)),
       initialOfflineDirs = Seq(),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
-      supportedFeatures = Collections.emptyMap())
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture)
     if (startup) broker.startup()
     broker
   }
