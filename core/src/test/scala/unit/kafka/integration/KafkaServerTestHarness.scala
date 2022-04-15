@@ -36,6 +36,7 @@ import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -289,7 +290,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def getTopicIds(names: Seq[String]): Map[String, Uuid] = {
     val result = new util.HashMap[String, Uuid]()
     if (isKRaftTest()) {
-      val topicIdsMap = controllerServer.controller.findTopicIds(Long.MaxValue, names.asJava).get()
+      val topicIdsMap = controllerServer.controller.findTopicIds(ANONYMOUS_CONTEXT, names.asJava).get()
       names.foreach { name =>
         val response = topicIdsMap.get(name)
         result.put(name, response.result())
@@ -305,7 +306,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
   def getTopicIds(): Map[String, Uuid] = {
     if (isKRaftTest()) {
-      controllerServer.controller.findAllTopicIds(Long.MaxValue).get().asScala.toMap
+      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
     } else {
       getController().kafkaController.controllerContext.topicIds.toMap
     }
@@ -314,7 +315,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def getTopicNames(): Map[Uuid, String] = {
     if (isKRaftTest()) {
       val result = new util.HashMap[Uuid, String]()
-      controllerServer.controller.findAllTopicIds(Long.MaxValue).get().entrySet().forEach {
+      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().entrySet().forEach {
         e => result.put(e.getValue(), e.getKey())
       }
       result.asScala.toMap

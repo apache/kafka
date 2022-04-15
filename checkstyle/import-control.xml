@@ -271,6 +271,7 @@
       <allow pkg="org.apache.kafka.common.acl" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
+      <allow pkg="org.apache.kafka.controller" />
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
   </subpackage>

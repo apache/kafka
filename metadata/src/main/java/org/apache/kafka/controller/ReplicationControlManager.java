@@ -74,6 +74,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -132,6 +135,102 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
  * of each partition, as well as administrative tasks like creating or deleting topics.
  */
 public class ReplicationControlManager {
+    static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
+
+    static class Builder {
+        private SnapshotRegistry snapshotRegistry = null;
+        private LogContext logContext = null;
+        private short defaultReplicationFactor = (short) 3;
+        private int defaultNumPartitions = 1;
+        private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
+        private boolean isLeaderRecoverySupported = true;
+        private ConfigurationControlManager configurationControl = null;
+        private ClusterControlManager clusterControl = null;
+        private ControllerMetrics controllerMetrics = null;
+        private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setDefaultReplicationFactor(short defaultReplicationFactor) {
+            this.defaultReplicationFactor = defaultReplicationFactor;
+            return this;
+        }
+
+        Builder setDefaultNumPartitions(int defaultNumPartitions) {
+            this.defaultNumPartitions = defaultNumPartitions;
+            return this;
+        }
+
+        Builder setMaxElectionsPerImbalance(int maxElectionsPerImbalance) {
+            this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+            return this;
+        }
+
+        Builder setIsLeaderRecoverySupported(boolean isLeaderRecoverySupported) {
+            this.isLeaderRecoverySupported = isLeaderRecoverySupported;
+            return this;
+        }
+
+        Builder setConfigurationControl(ConfigurationControlManager configurationControl) {
+            this.configurationControl = configurationControl;
+            return this;
+        }
+
+        Builder setClusterControl(ClusterControlManager clusterControl) {
+            this.clusterControl = clusterControl;
+            return this;
+        }
+
+        Builder setControllerMetrics(ControllerMetrics controllerMetrics) {
+            this.controllerMetrics = controllerMetrics;
+            return this;
+        }
+
+        Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
+            this.createTopicPolicy = createTopicPolicy;
+            return this;
+        }
+
+        ReplicationControlManager build() {
+            if (configurationControl == null) {
+                throw new RuntimeException("You must specify configurationControl.");
+            }
+            if (clusterControl == null) {
+                throw new RuntimeException("You must specify clusterControl.");
+            }
+            if (controllerMetrics == null) {
+                throw new RuntimeException("You must specify controllerMetrics.");
+            }
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
+            return new ReplicationControlManager(snapshotRegistry,
+                logContext,
+                defaultReplicationFactor,
+                defaultNumPartitions,
+                maxElectionsPerImbalance,
+                isLeaderRecoverySupported,
+                configurationControl,
+                clusterControl,
+                controllerMetrics,
+                createTopicPolicy);
+        }
+    }
+
+    class KRaftClusterDescriber implements ClusterDescriber {
+        @Override
+        public Iterator<UsableBroker> usableBrokers() {
+            return clusterControl.usableBrokers();
+        }
+    }
+
     static class TopicControlInfo {
         private final String name;
         private final Uuid id;
@@ -253,16 +352,23 @@ public class ReplicationControlManager {
      */
     private final TimelineHashSet<TopicIdPartition> imbalancedPartitions;
 
-    ReplicationControlManager(SnapshotRegistry snapshotRegistry,
-                              LogContext logContext,
-                              short defaultReplicationFactor,
-                              int defaultNumPartitions,
-                              int maxElectionsPerImbalance,
-                              boolean isLeaderRecoverySupported,
-                              ConfigurationControlManager configurationControl,
-                              ClusterControlManager clusterControl,
-                              ControllerMetrics controllerMetrics,
-                              Optional<CreateTopicPolicy> createTopicPolicy) {
+    /**
+     * A ClusterDescriber which supplies cluster information to our ReplicaPlacer.
+     */
+    private final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
+
+    private ReplicationControlManager(
+        SnapshotRegistry snapshotRegistry,
+        LogContext logContext,
+        short defaultReplicationFactor,
+        int defaultNumPartitions,
+        int maxElectionsPerImbalance,
+        boolean isLeaderRecoverySupported,
+        ConfigurationControlManager configurationControl,
+        ClusterControlManager clusterControl,
+        ControllerMetrics controllerMetrics,
+        Optional<CreateTopicPolicy> createTopicPolicy
+    ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
@@ -567,8 +673,11 @@ public class ReplicationControlManager {
             short replicationFactor = topic.replicationFactor() == -1 ?
                 defaultReplicationFactor : topic.replicationFactor();
             try {
-                List<List<Integer>> replicas = clusterControl.
-                    placeReplicas(0, numPartitions, replicationFactor);
+                List<List<Integer>> replicas = clusterControl.replicaPlacer().place(new PlacementSpec(
+                    0,
+                    numPartitions,
+                    replicationFactor
+                ), clusterDescriber);
                 for (int partitionId = 0; partitionId < replicas.size(); partitionId++) {
                     int[] r = Replicas.toArray(replicas.get(partitionId));
                     newParts.put(partitionId,
@@ -1318,8 +1427,11 @@ public class ReplicationControlManager {
                 isrs.add(isr);
             }
         } else {
-            placements = clusterControl.placeReplicas(startPartitionId, additional,
-                replicationFactor);
+            placements = clusterControl.replicaPlacer().place(new PlacementSpec(
+                startPartitionId,
+                additional,
+                replicationFactor
+            ), clusterDescriber);
             isrs = placements;
         }
         int partitionId = startPartitionId;
