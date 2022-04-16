@@ -320,6 +320,9 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
+    TestUtils.waitUntilTrue(
+      () => brokers.forall(_.metadataCache.getTopicPartitions(testTopicName).size == 3),
+      "Timeout waiting new assignment propagate to broker")
 
     val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
