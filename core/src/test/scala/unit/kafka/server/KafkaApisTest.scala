@@ -924,6 +924,12 @@ class KafkaApisTest {
   }
 
   @Test
+  def testUpdateFeaturesWithForwarding(): Unit = {
+    val requestBuilder = new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
+    testForwardableApi(ApiKeys.UPDATE_FEATURES, requestBuilder)
+  }
+
+  @Test
   def testDeleteTopicsWithForwarding(): Unit = {
     val requestBuilder = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData())
     testForwardableApi(ApiKeys.DELETE_TOPICS, requestBuilder)
