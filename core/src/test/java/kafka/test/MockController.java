@@ -48,6 +48,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.Controller;
+import org.apache.kafka.controller.ControllerRequestContext;
 import org.apache.kafka.controller.ResultOrError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -78,12 +79,18 @@ public class MockController implements Controller {
     private final AtomicLong nextTopicId = new AtomicLong(1);
 
     @Override
-    public CompletableFuture<List<AclCreateResult>> createAcls(List<AclBinding> aclBindings) {
+    public CompletableFuture<List<AclCreateResult>> createAcls(
+        ControllerRequestContext context,
+        List<AclBinding> aclBindings
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> aclBindingFilters) {
+    public CompletableFuture<List<AclDeleteResult>> deleteAcls(
+        ControllerRequestContext context,
+        List<AclBindingFilter> aclBindingFilters
+    ) {
         throw new UnsupportedOperationException();
     }
 
@@ -110,13 +117,19 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request) {
+    public CompletableFuture<AlterPartitionResponseData> alterPartition(
+        ControllerRequestContext context,
+        AlterPartitionRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    synchronized public CompletableFuture<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request, Set<String> describable) {
+    synchronized public CompletableFuture<CreateTopicsResponseData> createTopics(
+        ControllerRequestContext context,
+        CreateTopicsRequestData request,
+        Set<String> describable
+    ) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         for (CreatableTopic topic : request.topics()) {
             if (topicNameToId.containsKey(topic.name())) {
@@ -158,7 +171,10 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<Void> unregisterBroker(int brokerId) {
+    public CompletableFuture<Void> unregisterBroker(
+        ControllerRequestContext context,
+        int brokerId
+    ) {
         throw new UnsupportedOperationException();
     }
 
@@ -179,8 +195,10 @@ public class MockController implements Controller {
     private final Map<ConfigResource, Map<String, String>> configs = new HashMap<>();
 
     @Override
-    synchronized public CompletableFuture<Map<String, ResultOrError<Uuid>>>
-            findTopicIds(long deadlineNs, Collection<String> topicNames) {
+    synchronized public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(
+        ControllerRequestContext context,
+        Collection<String> topicNames
+    ) {
         Map<String, ResultOrError<Uuid>> results = new HashMap<>();
         for (String topicName : topicNames) {
             if (!topicNameToId.containsKey(topicName)) {
@@ -193,7 +211,9 @@ public class MockController implements Controller {
     }
 
     @Override
-    synchronized public CompletableFuture<Map<String, Uuid>> findAllTopicIds(long deadlineNs) {
+    synchronized public CompletableFuture<Map<String, Uuid>> findAllTopicIds(
+        ControllerRequestContext context
+    ) {
         Map<String, Uuid> results = new HashMap<>();
         for (Entry<Uuid, MockTopic> entry : topics.entrySet()) {
             results.put(entry.getValue().name, entry.getKey());
@@ -202,8 +222,10 @@ public class MockController implements Controller {
     }
 
     @Override
-    synchronized public CompletableFuture<Map<Uuid, ResultOrError<String>>>
-            findTopicNames(long deadlineNs, Collection<Uuid> topicIds) {
+    synchronized public CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(
+        ControllerRequestContext context,
+        Collection<Uuid> topicIds
+    ) {
         Map<Uuid, ResultOrError<String>> results = new HashMap<>();
         for (Uuid topicId : topicIds) {
             MockTopic topic = topics.get(topicId);
@@ -217,8 +239,10 @@ public class MockController implements Controller {
     }
 
     @Override
-    synchronized public CompletableFuture<Map<Uuid, ApiError>>
-            deleteTopics(long deadlineNs, Collection<Uuid> topicIds) {
+    synchronized public CompletableFuture<Map<Uuid, ApiError>> deleteTopics(
+        ControllerRequestContext context,
+        Collection<Uuid> topicIds
+    ) {
         if (!active) {
             CompletableFuture<Map<Uuid, ApiError>> future = new CompletableFuture<>();
             future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);
@@ -238,24 +262,34 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>> describeConfigs(Map<ConfigResource, Collection<String>> resources) {
+    public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>> describeConfigs(
+        ControllerRequestContext context,
+        Map<ConfigResource, Collection<String>> resources
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
+    public CompletableFuture<ElectLeadersResponseData> electLeaders(
+        ControllerRequestContext context,
+        ElectLeadersRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures() {
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures(
+        ControllerRequestContext context
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
-            Map<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> configChanges,
-            boolean validateOnly) {
+        ControllerRequestContext context,
+        Map<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> configChanges,
+        boolean validateOnly
+    ) {
         Map<ConfigResource, ApiError> results = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> entry :
                 configChanges.entrySet()) {
@@ -295,20 +329,27 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterPartitionReassignmentsResponseData>
-            alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
+    public CompletableFuture<AlterPartitionReassignmentsResponseData> alterPartitionReassignments(
+        ControllerRequestContext context,
+        AlterPartitionReassignmentsRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<ListPartitionReassignmentsResponseData>
-            listPartitionReassignments(ListPartitionReassignmentsRequestData request) {
+    public CompletableFuture<ListPartitionReassignmentsResponseData> listPartitionReassignments(
+        ControllerRequestContext context,
+        ListPartitionReassignmentsRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
-            Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
+        ControllerRequestContext context,
+        Map<ConfigResource, Map<String, String>> newConfigs,
+        boolean validateOnly
+    ) {
         Map<ConfigResource, ApiError> results = new HashMap<>();
         if (!validateOnly) {
             for (Entry<ConfigResource, Map<String, String>> entry : newConfigs.entrySet()) {
@@ -324,14 +365,18 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<BrokerHeartbeatReply>
-            processBrokerHeartbeat(BrokerHeartbeatRequestData request) {
+    public CompletableFuture<BrokerHeartbeatReply> processBrokerHeartbeat(
+        ControllerRequestContext context,
+        BrokerHeartbeatRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<BrokerRegistrationReply>
-            registerBroker(BrokerRegistrationRequestData request) {
+    public CompletableFuture<BrokerRegistrationReply> registerBroker(
+        ControllerRequestContext context,
+        BrokerRegistrationRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
@@ -341,24 +386,35 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<Map<ClientQuotaEntity, ApiError>>
-            alterClientQuotas(Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly) {
+    public CompletableFuture<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
+        ControllerRequestContext context,
+        Collection<ClientQuotaAlteration> quotaAlterations,
+        boolean validateOnly
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(AllocateProducerIdsRequestData request) {
+    public CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
+        ControllerRequestContext context,
+        AllocateProducerIdsRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(UpdateFeaturesRequestData request) {
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+        ControllerRequestContext context,
+        UpdateFeaturesRequestData request
+    ) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topicList) {
+    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
+        ControllerRequestContext context,
+        List<CreatePartitionsTopic> topicList
+    ) {
         if (!active) {
             CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();
             future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);

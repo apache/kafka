@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.controller.ControllerRequestContext;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -31,6 +32,7 @@ import org.apache.kafka.server.authorizer.Authorizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -88,7 +90,9 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
         List<CompletableFuture<AclCreateResult>> futures = new ArrayList<>(aclBindings.size());
         AclMutator aclMutator = aclMutatorOrException();
         aclBindings.forEach(b -> futures.add(new CompletableFuture<>()));
-        aclMutator.createAcls(aclBindings).whenComplete((results, throwable) -> {
+        ControllerRequestContext context = new ControllerRequestContext(
+            requestContext.principal(), OptionalLong.empty());
+        aclMutator.createAcls(context, aclBindings).whenComplete((results, throwable) -> {
             if (throwable == null && results.size() != futures.size()) {
                 throwable = new UnknownServerException("Invalid size " +
                     "of result set from controller. Expected " + futures.size() +
@@ -126,7 +130,9 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
         List<CompletableFuture<AclDeleteResult>> futures = new ArrayList<>(filters.size());
         AclMutator aclMutator = aclMutatorOrException();
         filters.forEach(b -> futures.add(new CompletableFuture<>()));
-        aclMutator.deleteAcls(filters).whenComplete((results, throwable) -> {
+        ControllerRequestContext context = new ControllerRequestContext(
+            requestContext.principal(), OptionalLong.empty());
+        aclMutator.deleteAcls(context, filters).whenComplete((results, throwable) -> {
             if (throwable == null && results.size() != futures.size()) {
                 throwable = new UnknownServerException("Invalid size " +
                     "of result set from controller. Expected " + futures.size() +

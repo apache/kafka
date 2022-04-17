@@ -17,18 +17,16 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.UsableBroker;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeSet;
@@ -437,27 +435,11 @@ public class BrokerHeartbeatManager {
         return Optional.empty();
     }
 
-    /**
-     * Place replicas on unfenced brokers.
-     *
-     * @param startPartition    The partition ID to start with.
-     * @param numPartitions     The number of partitions to place.
-     * @param numReplicas       The number of replicas for each partition.
-     * @param idToRack          A function mapping broker id to broker rack.
-     * @param placer            The replica placer to use.
-     *
-     * @return                  A list of replica lists.
-     *
-     * @throws InvalidReplicationFactorException    If too many replicas were requested.
-     */
-    List<List<Integer>> placeReplicas(int startPartition,
-                                      int numPartitions,
-                                      short numReplicas,
-                                      Function<Integer, Optional<String>> idToRack,
-                                      ReplicaPlacer placer) {
-        Iterator<UsableBroker> iterator = new UsableBrokerIterator(
-            brokers.values().iterator(), idToRack);
-        return placer.place(startPartition, numPartitions, numReplicas, iterator);
+    Iterator<UsableBroker> usableBrokers(
+        Function<Integer, Optional<String>> idToRack
+    ) {
+        return new UsableBrokerIterator(brokers.values().iterator(),
+            idToRack);
     }
 
     static class UsableBrokerIterator implements Iterator<UsableBroker> {

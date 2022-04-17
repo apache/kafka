@@ -16,7 +16,7 @@
   */
 package kafka.admin
 
-import java.util.{Collection, Collections, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import kafka.admin.TopicCommand.{TopicCommandOptions, TopicService}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -24,19 +24,17 @@ import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, ThrottlingQuotaExceededException, TopicExistsException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers.{eq => eqThat, _}
 import org.mockito.Mockito._
 
 import scala.collection.Seq
@@ -811,76 +809,5 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     assertThrows(classOf[InvalidTopicException],
       () => topicService.createTopic(new TopicCommandOptions(Array("--topic", "foo.bar"))))
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testCreateTopicDoesNotRetryThrottlingQuotaExceededException(quorum: String): Unit = {
-    val adminClient = mock(classOf[Admin])
-    val topicService = TopicService(adminClient)
-
-    val result = AdminClientTestUtils.createTopicsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
-    when(adminClient.createTopics(any(), any())).thenReturn(result)
-
-    assertThrows(classOf[ThrottlingQuotaExceededException],
-      () => topicService.createTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-
-    val expectedNewTopic = new NewTopic(testTopicName, Optional.empty[Integer](), Optional.empty[java.lang.Short]())
-      .configs(Map.empty[String, String].asJava)
-
-    verify(adminClient, times(1)).createTopics(
-      eqThat(Set(expectedNewTopic).asJava),
-      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[CreateTopicsOptions])
-    )
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDeleteTopicDoesNotRetryThrottlingQuotaExceededException(quorum: String): Unit = {
-    val adminClient = mock(classOf[Admin])
-    val topicService = TopicService(adminClient)
-
-    val listResult = AdminClientTestUtils.listTopicsResult(testTopicName)
-    when(adminClient.listTopics(any())).thenReturn(listResult)
-
-    val result = AdminClientTestUtils.deleteTopicsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
-    when(adminClient.deleteTopics(any[Collection[String]](), any())).thenReturn(result)
-
-    val exception = assertThrows(classOf[ExecutionException],
-      () => topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
-
-    verify(adminClient, times(1)).deleteTopics(
-      eqThat(Seq(testTopicName).asJavaCollection),
-      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
-    )
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testCreatePartitionsDoesNotRetryThrottlingQuotaExceededException(quorum: String): Unit = {
-    val adminClient = mock(classOf[Admin])
-    val topicService = TopicService(adminClient)
-
-    val listResult = AdminClientTestUtils.listTopicsResult(testTopicName)
-    when(adminClient.listTopics(any())).thenReturn(listResult)
-
-    val topicPartitionInfo = new TopicPartitionInfo(0, new Node(0, "", 0),
-      Collections.emptyList(), Collections.emptyList())
-    val describeResult = AdminClientTestUtils.describeTopicsResult(testTopicName, new TopicDescription(
-      testTopicName, false, Collections.singletonList(topicPartitionInfo)))
-    when(adminClient.describeTopics(any(classOf[java.util.Collection[String]]))).thenReturn(describeResult)
-
-    val result = AdminClientTestUtils.createPartitionsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
-    when(adminClient.createPartitions(any(), any())).thenReturn(result)
-
-    val exception = assertThrows(classOf[ExecutionException],
-      () => topicService.alterTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "3"))))
-    assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
-
-    verify(adminClient, times(1)).createPartitions(
-      argThat((_.get(testTopicName).totalCount() == 3): ArgumentMatcher[java.util.Map[String, NewPartitions]]),
-      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[CreatePartitionsOptions])
-    )
   }
 }

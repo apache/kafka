@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata.placement;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,7 +28,6 @@ import java.util.Random;
 
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.metadata.OptionalStringComparator;
-import org.apache.kafka.metadata.UsableBroker;
 
 
 /**
@@ -428,17 +427,18 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
     }
 
     @Override
-    public List<List<Integer>> place(int startPartition,
-                                     int numPartitions,
-                                     short replicationFactor,
-                                     Iterator<UsableBroker> iterator) {
-        RackList rackList = new RackList(random, iterator);
-        throwInvalidReplicationFactorIfNonPositive(replicationFactor);
+    public List<List<Integer>> place(
+        PlacementSpec placement,
+        ClusterDescriber cluster
+    ) throws InvalidReplicationFactorException {
+        RackList rackList = new RackList(random, cluster.usableBrokers());
+        throwInvalidReplicationFactorIfNonPositive(placement.numReplicas());
         throwInvalidReplicationFactorIfZero(rackList.numUnfencedBrokers());
-        throwInvalidReplicationFactorIfTooFewBrokers(replicationFactor, rackList.numTotalBrokers());
-        List<List<Integer>> placements = new ArrayList<>(numPartitions);
-        for (int partition = 0; partition < numPartitions; partition++) {
-            placements.add(rackList.place(replicationFactor));
+        throwInvalidReplicationFactorIfTooFewBrokers(placement.numReplicas(),
+            rackList.numTotalBrokers());
+        List<List<Integer>> placements = new ArrayList<>(placement.numPartitions());
+        for (int partition = 0; partition < placement.numPartitions(); partition++) {
+            placements.add(rackList.place(placement.numReplicas()));
         }
         return placements;
     }
