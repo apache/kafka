@@ -404,12 +404,15 @@ class LogLoader(
 
     // If we have the clean shutdown marker, skip recovery.
     if (!hadCleanShutdown) {
-      val unflushed = segments.values(recoveryPointCheckpoint, Long.MaxValue).iterator
+      val unflushed = segments.values(recoveryPointCheckpoint, Long.MaxValue)
+      val unflushedSize = unflushed.size
+      val unflushedIter = unflushed.iterator
       var truncated = false
+      var numFlushed = 0
 
-      while (unflushed.hasNext && !truncated) {
-        val segment = unflushed.next()
-        info(s"Recovering unflushed segment ${segment.baseOffset}")
+      while (unflushedIter.hasNext && !truncated) {
+        val segment = unflushedIter.next()
+        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed++/$unflushedSize recovered.")
         val truncatedBytes =
           try {
             recoverSegment(segment)
