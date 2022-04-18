@@ -925,12 +925,12 @@ public final class QuorumController implements Controller {
                             future.completeExceptionally(
                                 new IllegalStateException("Cannot become leader without an initial metadata.version to use."));
                         } else if (initialMetadataVersion == MetadataVersion.V1) {
-                            future = appendWriteEvent("initializeMetadataVersion", () -> {
+                            future = appendWriteEvent("initializeMetadataVersion", OptionalLong.empty(), () -> {
                                 log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
                                 return featureControl.initializeMetadataVersion(MetadataVersion.V1.version());
                             });
                         } else {
-                            future = appendWriteEvent("initializeMetadataVersion", () -> {
+                            future = appendWriteEvent("initializeMetadataVersion", OptionalLong.empty(), () -> {
                                 log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
                                 return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
                             });
