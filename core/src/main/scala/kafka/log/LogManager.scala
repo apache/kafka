@@ -375,8 +375,9 @@ class LogManager(logDirs: Seq[File],
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
               val currentNumLoaded = numLogsLoaded.incrementAndGet()
 
+              numRemainingLogs.decrementAndGet()
               info(s"Completed load of $log with ${log.numberOfSegments} segments in ${logLoadDurationMs}ms " +
-                s"($currentNumLoaded/${logsToLoad.length} loaded in $logDirAbsolutePath)")
+                s"($currentNumLoaded/${logsToLoad.length} loaded in $logDirAbsolutePath), with ${numRemainingLogs.get()} remaining")
             } catch {
               case e: IOException =>
                 offlineDirs.add((logDirAbsolutePath, e))
