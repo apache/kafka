@@ -362,7 +362,7 @@ class LogManager(logDirs: Seq[File],
           logDir.isDirectory && UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         val numLogsLoaded = new AtomicInteger(0)
         numTotalLogs += logsToLoad.length
-        numRemainingLogs.getAndAdd(numTotalLogs)
+        numRemainingLogs.getAndAdd(logsToLoad.length)
 
         val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
