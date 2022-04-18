@@ -1019,11 +1019,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 tp = ProducerInterceptors.extractTopicPartition(record);
             }
 
-            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
-
-            // The onCompletion callback does expect a non-null metadata, but one will be created inside
-            // the interceptor's onCompletion implementation before the user's callback is invoked.
-            interceptCallback.onCompletion(null, e);
+            if (callback != null) {
+                RecordMetadata nullMetadata = new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
+                callback.onCompletion(nullMetadata, e);
+            }
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
             if (transactionManager != null) {
