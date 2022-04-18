@@ -247,7 +247,6 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             ));
         }
 
-
         @Override
         public ClusterType clusterType() {
             return ClusterType.ZK;
