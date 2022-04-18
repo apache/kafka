@@ -89,6 +89,7 @@ class LogManager(logDirs: Seq[File],
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
+  @volatile private val numRemainingLogs = new AtomicInteger(0)
 
   // This map contains all partitions whose logs are getting loaded and initialized. If log configuration
   // of these partitions get updated at the same time, the corresponding entry in this map is set to "true",
@@ -134,6 +135,8 @@ class LogManager(logDirs: Seq[File],
       () => if (_liveLogDirs.contains(dir)) 0 else 1,
       Map("logDirectory" -> dir.getAbsolutePath))
   }
+
+  newGauge("remainingLogsToRecovery", () => numRemainingLogs.get())
 
   /**
    * Create and check validity of the given directories that are not in the given offline directories, specifically:
@@ -359,11 +362,12 @@ class LogManager(logDirs: Seq[File],
           logDir.isDirectory && UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         val numLogsLoaded = new AtomicInteger(0)
         numTotalLogs += logsToLoad.length
+        numRemainingLogs.getAndAdd(numTotalLogs)
 
         val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
             try {
-              debug(s"Loading log $logDir")
+              debug(s"Loading log $logDir, with ${numRemainingLogs.get()} logs remaining")
 
               val logLoadStartMs = time.hiResClockMs()
               val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
