@@ -20,9 +20,9 @@ package org.apache.kafka.controller;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
@@ -39,6 +39,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -59,9 +62,12 @@ public class ClusterControlManagerTest {
         MockTime time = new MockTime(0, 0, 0);
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
-                new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setControllerMetrics(new MockControllerMetrics()).
+            build();
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
 
@@ -90,10 +96,13 @@ public class ClusterControlManagerTest {
     @Test
     public void testRegistrationWithIncorrectClusterId() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), "fPZv1VBsRFmnlRvmGcOW9w", new MockTime(0, 0, 0),
-            snapshotRegistry, 1000,
-            new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setTime(new MockTime(0, 0, 0)).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setControllerMetrics(new MockControllerMetrics()).
+            build();
         clusterControl.activate();
         assertThrows(InconsistentClusterIdException.class, () ->
             clusterControl.registerBroker(new BrokerRegistrationRequestData().
@@ -118,10 +127,12 @@ public class ClusterControlManagerTest {
             setName("PLAINTEXT").
             setHost("example.com"));
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), Uuid.randomUuid().toString(), new MockTime(0, 0, 0),
-            snapshotRegistry, 1000,
-            new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setTime(new MockTime(0, 0, 0)).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setControllerMetrics(new MockControllerMetrics()).
+            build();
         clusterControl.activate();
         clusterControl.replay(brokerRecord);
         assertEquals(new BrokerRegistration(1, 100,
@@ -141,10 +152,12 @@ public class ClusterControlManagerTest {
     public void testPlaceReplicas(int numUsableBrokers) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        MockRandom random = new MockRandom();
-        ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(),  Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(random), new MockControllerMetrics());
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setControllerMetrics(new MockControllerMetrics()).
+            build();
         clusterControl.activate();
         for (int i = 0; i < numUsableBrokers; i++) {
             RegisterBrokerRecord brokerRecord =
@@ -165,7 +178,17 @@ public class ClusterControlManagerTest {
                 String.format("broker %d was not unfenced.", i));
         }
         for (int i = 0; i < 100; i++) {
-            List<List<Integer>> results = clusterControl.placeReplicas(0, 1, (short) 3);
+            List<List<Integer>> results = clusterControl.replicaPlacer().place(
+                new PlacementSpec(0,
+                    1,
+                    (short) 3),
+                new ClusterDescriber() {
+                    @Override
+                    public Iterator<UsableBroker> usableBrokers() {
+                        return clusterControl.usableBrokers();
+                    }
+                }
+            );
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results.get(0)) {
                 assertTrue(result >= 0);
@@ -179,9 +202,12 @@ public class ClusterControlManagerTest {
     public void testIterator() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setControllerMetrics(new MockControllerMetrics()).
+            build();
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
         for (int i = 0; i < 3; i++) {

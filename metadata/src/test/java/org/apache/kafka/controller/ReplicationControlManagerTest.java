@@ -68,9 +68,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.MockRandom;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -135,14 +137,14 @@ public class ReplicationControlManagerTest {
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
         final ControllerMetrics metrics = new MockControllerMetrics();
-        final String clusterId = Uuid.randomUuid().toString();
-        final ClusterControlManager clusterControl = new ClusterControlManager(logContext,
-            clusterId,
-            time,
-            snapshotRegistry,
-            TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
-            new StripedReplicaPlacer(random),
-            metrics);
+        final ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setLogContext(logContext).
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
+            setReplicaPlacer(new StripedReplicaPlacer(random)).
+            setControllerMetrics(metrics).
+            build();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             build();
@@ -159,16 +161,15 @@ public class ReplicationControlManagerTest {
         }
 
         ReplicationControlTestContext(Optional<CreateTopicPolicy> createTopicPolicy) {
-            this.replicationControl = new ReplicationControlManager(snapshotRegistry,
-                new LogContext(),
-                (short) 3,
-                1,
-                Integer.MAX_VALUE,
-                true,
-                configurationControl,
-                clusterControl,
-                metrics,
-                createTopicPolicy);
+            this.replicationControl = new ReplicationControlManager.Builder().
+                setSnapshotRegistry(snapshotRegistry).
+                setLogContext(logContext).
+                setMaxElectionsPerImbalance(Integer.MAX_VALUE).
+                setConfigurationControl(configurationControl).
+                setClusterControl(clusterControl).
+                setControllerMetrics(metrics).
+                setCreateTopicPolicy(createTopicPolicy).
+                build();
             clusterControl.activate();
         }
 

@@ -923,7 +923,7 @@ object LocalLog extends Logging {
                                    isRecoveredSwapFile: Boolean = false): Iterable[LogSegment] = {
     val sortedNewSegments = newSegments.sortBy(_.baseOffset)
     // Some old segments may have been removed from index and scheduled for async deletion after the caller reads segments
-    // but before this method is executed. We want to filter out those segments to avoid calling asyncDeleteSegment()
+    // but before this method is executed. We want to filter out those segments to avoid calling deleteSegmentFiles()
     // multiple times for the same segment.
     val sortedOldSegments = oldSegments.filter(seg => existingSegments.contains(seg.baseOffset)).sortBy(_.baseOffset)
 

@@ -148,6 +148,10 @@ public class ConfigurationControlManager {
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
     }
 
+    SnapshotRegistry snapshotRegistry() {
+        return snapshotRegistry;
+    }
+
     /**
      * Determine the result of applying a batch of incremental configuration changes.  Note
      * that this method does not change the contents of memory.  It just generates a
@@ -390,7 +394,7 @@ public class ConfigurationControlManager {
         for (Entry<ConfigResource, Collection<String>> resourceEntry : resources.entrySet()) {
             ConfigResource resource = resourceEntry.getKey();
             try {
-                validator.validate(resource, Collections.emptyMap());
+                validator.validate(resource);
             } catch (Throwable e) {
                 results.put(resource, new ResultOrError<>(ApiError.fromThrowable(e)));
                 continue;
