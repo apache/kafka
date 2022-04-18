@@ -412,7 +412,7 @@ class LogLoader(
 
       while (unflushedIter.hasNext && !truncated) {
         val segment = unflushedIter.next()
-        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered.")
+        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
         val truncatedBytes =
           try {
             recoverSegment(segment)
