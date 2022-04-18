@@ -105,7 +105,7 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
               finalizedFeatureCache.clear()
             }
             case FeatureZNodeStatus.Enabled => {
-              finalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+              finalizedFeatureCache.updateOrThrow(featureZNode.features.toMap, version)
             }
             case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
           }

@@ -18,12 +18,12 @@ package kafka.server
 
 import kafka.network
 import kafka.network.RequestChannel
-import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.server.common.MetadataVersion
 
+import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 trait ApiVersionManager {
@@ -86,7 +86,7 @@ class DefaultApiVersionManager(
         throttleTimeMs,
         interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
-        finalizedFeatures.features,
+        finalizedFeatures.features.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
         finalizedFeatures.epoch,
         controllerApiVersions.orNull,
         listenerType)
@@ -94,7 +94,7 @@ class DefaultApiVersionManager(
         throttleTimeMs,
         interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
-        Features.emptyFinalizedFeatures,
+        Collections.emptyMap(),
         ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
         controllerApiVersions.orNull,
         listenerType)
