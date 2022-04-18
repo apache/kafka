@@ -281,7 +281,7 @@ public class WorkerConfig extends AbstractConfig {
                         "", Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                 .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
-                        ConfigDef.Type.STRING, SslClientAuth.NONE.name().toLowerCase(Locale.ROOT), in(SslClientAuth.names().toArray(new String[0])), ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+                        ConfigDef.Type.STRING, SslClientAuth.NONE.name().toLowerCase(Locale.ROOT), in(Utils.enumOptions(SslClientAuth.class)), ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)

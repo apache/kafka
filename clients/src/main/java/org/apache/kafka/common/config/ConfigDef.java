@@ -1083,26 +1083,6 @@ public class ConfigDef {
         }
     }
 
-    public static class NonNullAndEmptyString implements Validator {
-
-        @Override
-        public void ensureValid(String name, Object o) {
-            if (o == null) {
-                // Pass in the string null to avoid the spotbugs warning
-                throw new ConfigException(name, "null", "entry must be non null");
-            }
-            String s = (String) o;
-            if (s.isEmpty()) {
-                throw new ConfigException(name, o, "String must be non-empty");
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "non-null and non-empty string";
-        }
-    }
-
     public static class NonEmptyStringWithoutControlChars implements Validator {
 
         public static NonEmptyStringWithoutControlChars nonEmptyStringWithoutControlChars() {
