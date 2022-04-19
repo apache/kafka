@@ -197,7 +197,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                   toLoggableProps(resource, props).mkString(","))
                 dynamicConfigHandlers(ConfigType.Broker).
                   processConfigChanges(ConfigEntityName.Default, props)
-              } else if (resource.name().equals(brokerId.toString)) {
+              } else if (resource.name() == brokerId.toString) {
                 // Apply changes to this broker's dynamic configuration.
                 info(s"Updating broker ${brokerId} with new configuration : " +
                   toLoggableProps(resource, props).mkString(","))
