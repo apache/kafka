@@ -306,7 +306,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     TestUtils.waitUntilTrue(
       () => brokers.forall(_.metadataCache.getTopicPartitions(testTopicName).size == 3),
-      "Timeout waiting for new assignment propagate to broker")
+      "Timeout waiting for new assignment propagating to broker")
     val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
   }
@@ -322,7 +322,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
     TestUtils.waitUntilTrue(
       () => brokers.forall(_.metadataCache.getTopicPartitions(testTopicName).size == 3),
-      "Timeout waiting for new assignment propagate to broker")
+      "Timeout waiting for new assignment propagating to broker")
 
     val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
@@ -407,7 +407,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     TestUtils.waitUntilTrue(
       () => brokers.forall(_.metadataCache.getTopicPartitions(testTopicName).size == alteredNumPartitions),
-      "Timeout waiting for new assignment propagate to broker")
+      "Timeout waiting for new assignment propagating to broker")
     assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
       .allTopicNames().get().get(testTopicName).partitions()
       .asScala.map(info => info.partition() -> info.replicas().asScala.map(_.id())).toMap
