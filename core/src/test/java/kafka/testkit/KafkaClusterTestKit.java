@@ -167,7 +167,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
 
                     // reduce log cleaner offset map memory usage
-                    props.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), "2097152");
+                    props.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), "1048576");
 
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
