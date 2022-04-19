@@ -82,7 +82,7 @@ public class RecordAccumulator {
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
-    private Map<String,Integer> nodesDrainIndex;
+    private Map<String, Integer> nodesDrainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
 
@@ -563,12 +563,9 @@ public class RecordAccumulator {
         /* to make starvation less likely this loop doesn't start at 0 */
         int drainIndex = getDrainIndex(node.idString());
         int start = drainIndex = drainIndex % parts.size();
-        updateDrainIndex(node.idString(),drainIndex);
         do {
             PartitionInfo part = parts.get(drainIndex);
             TopicPartition tp = new TopicPartition(part.topic(), part.partition());
-            drainIndex = (drainIndex + 1) % parts.size();
-            updateDrainIndex(node.idString(),drainIndex);
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp))
                 continue;
@@ -637,16 +634,18 @@ public class RecordAccumulator {
             ready.add(batch);
 
             batch.drained(now);
+            drainIndex = (drainIndex + 1) % parts.size();
         } while (start != drainIndex);
+        updateDrainIndex(node.idString(), drainIndex);
         return ready;
     }
 
-    private int getDrainIndex(String idString) {
+    int getDrainIndex(String idString) {
         return nodesDrainIndex.computeIfAbsent(idString, s -> 0);
     }
 
-    private void updateDrainIndex(String idString, int drainIndex){
-        nodesDrainIndex.put(idString,drainIndex);
+    void updateDrainIndex(String idString, int drainIndex) {
+        nodesDrainIndex.put(idString, drainIndex);
     }
 
     /**
