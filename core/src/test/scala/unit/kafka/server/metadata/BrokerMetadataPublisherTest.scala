@@ -17,15 +17,30 @@
 
 package unit.kafka.server.metadata
 
+import java.util.Collections.{singleton, singletonMap}
+import java.util.Properties
+import java.util.concurrent.atomic.AtomicInteger
+
 import kafka.log.UnifiedLog
+import kafka.server.KafkaConfig
 import kafka.server.metadata.BrokerMetadataPublisher
+import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type.BROKER
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
+
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataPublisherTest {
@@ -142,4 +157,56 @@ class BrokerMetadataPublisherTest {
     new TopicsImage(idsMap.asJava, namesMap.asJava)
   }
 
+  @Test
+  def testReloadUpdatedFilesWithoutConfigChange(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val broker = cluster.brokers().values().iterator().next()
+      val publisher = Mockito.spy(new BrokerMetadataPublisher(
+        conf = broker.config,
+        metadataCache = broker.metadataCache,
+        logManager = broker.logManager,
+        replicaManager = broker.replicaManager,
+        groupCoordinator = broker.groupCoordinator,
+        txnCoordinator = broker.transactionCoordinator,
+        clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
+        featureCache = broker.featureCache,
+        dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
+        _authorizer = Option.empty
+      ))
+      val numTimesReloadCalled = new AtomicInteger(0)
+      Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
+        thenAnswer(new Answer[Unit]() {
+          override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
+        })
+      broker.metadataListener.alterPublisher(publisher).get()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        assertEquals(0, numTimesReloadCalled.get())
+        admin.incrementalAlterConfigs(singletonMap(
+          new ConfigResource(BROKER, ""),
+          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+        TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 0,
+          "numTimesConfigured never reached desired value")
+
+        // Setting the foo.bar.test.configuration to 1 will still trigger reconfiguration because
+        // reloadUpdatedFilesWithoutConfigChange will be called.
+        admin.incrementalAlterConfigs(singletonMap(
+          new ConfigResource(BROKER, broker.config.nodeId.toString),
+          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+        TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 1,
+          "numTimesConfigured never reached desired value")
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
 }
