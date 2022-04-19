@@ -32,7 +32,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{BeforeEach, Disabled, Tag}
+import org.junit.jupiter.api.{BeforeEach, Tag}
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
@@ -86,7 +86,6 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
-  @Disabled // TODO: re-enable until we fixed KAFKA-8541
   def testTopicPartition(): Unit = {
     val topic = "unclean-topic"
     val partition = 0
@@ -120,7 +119,6 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
-  @Disabled // TODO: re-enable until we fixed KAFKA-8785
   def testPathToJsonFile(): Unit = {
     val topic = "unclean-topic"
     val partition = 0
@@ -155,7 +153,6 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
-  @Disabled // TODO: re-enable after KAFKA-13737 is fixed
   def testPreferredReplicaElection(): Unit = {
     val topic = "preferred-topic"
     val partition = 0
