@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 
-class KStreamFlatMapValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn, KIn, VOut> {
+class KStreamFlatMapValues<KIn, VIn, VOut> implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {
 
     private final ValueMapperWithKey<? super KIn, ? super VIn, ? extends Iterable<? extends VOut>> mapper;
 
@@ -31,13 +31,14 @@ class KStreamFlatMapValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn
     }
 
     @Override
-    public Processor<KIn, VIn, KIn, VOut> get() {
+    public FixedKeyProcessor<KIn, VIn, VOut> get() {
         return new KStreamFlatMapValuesProcessor();
     }
 
-    private class KStreamFlatMapValuesProcessor extends ContextualProcessor<KIn, VIn, KIn, VOut> {
+    private class KStreamFlatMapValuesProcessor extends
+        ContextualFixedKeyProcessor<KIn, VIn, VOut> {
         @Override
-        public void process(final Record<KIn, VIn> record) {
+        public void process(final FixedKeyRecord<KIn, VIn> record) {
             final Iterable<? extends VOut> newValues = mapper.apply(record.key(), record.value());
             for (final VOut v : newValues) {
                 context().forward(record.withValue(v));

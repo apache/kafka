@@ -16,14 +16,8 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,13 +25,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcessor<KIn, VIn, VOut> {
 
-public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
-
-    private final ArrayList<Record<KIn, VIn>> processed = new ArrayList<>();
+    private final ArrayList<FixedKeyRecord<KIn, VIn>> processed = new ArrayList<>();
     private final Map<KIn, ValueAndTimestamp<VIn>> lastValueAndTimestampPerKey = new HashMap<>();
 
     private final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
@@ -49,20 +48,20 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     private final long scheduleInterval;
 
     private boolean commitRequested = false;
-    private ProcessorContext<KOut, VOut> context;
+    private FixedKeyProcessorContext<KIn, VOut> context;
 
-    public MockApiProcessor(final PunctuationType punctuationType,
+    public MockApiFixedKeyProcessor(final PunctuationType punctuationType,
                             final long scheduleInterval) {
         this.punctuationType = punctuationType;
         this.scheduleInterval = scheduleInterval;
     }
 
-    public MockApiProcessor() {
+    public MockApiFixedKeyProcessor() {
         this(PunctuationType.STREAM_TIME, -1);
     }
 
     @Override
-    public void init(final ProcessorContext<KOut, VOut> context) {
+    public void init(final FixedKeyProcessorContext<KIn, VOut> context) {
         this.context = context;
         if (scheduleInterval > 0L) {
             scheduleCancellable = context.schedule(
@@ -74,7 +73,7 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     }
 
     @Override
-    public void process(final Record<KIn, VIn> record) {
+    public void process(final FixedKeyRecord<KIn, VIn> record) {
         final KIn key = record.key();
         final VIn value = record.value();
         final KeyValueTimestamp<KIn, VIn> keyValueTimestamp = new KeyValueTimestamp<>(key, value, record.timestamp());
@@ -96,7 +95,7 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
         assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
         for (int i = 0; i < expected.length; i++) {
-            final Record<KIn, VIn> record = processed.get(i);
+            final FixedKeyRecord<KIn, VIn> record = processed.get(i);
             assertThat(
                 "output[" + i + "]:",
                 new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()),
@@ -136,12 +135,6 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         processed.clear();
     }
 
-    public void addProcessorMetadata(final String key, final long value) {
-        if (context instanceof InternalProcessorContext) {
-            ((InternalProcessorContext<KOut, VOut>) context).addProcessorMetadataKeyValue(key, value);
-        }
-    }
-
     public ArrayList<KeyValueTimestamp<KIn, VIn>> processed() {
         return processed
             .stream()
@@ -161,11 +154,11 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         return scheduleCancellable;
     }
 
-    public ProcessorContext<KOut, VOut> context() {
+    public FixedKeyProcessorContext<KIn, VOut> context() {
         return context;
     }
 
-    public void context(final ProcessorContext<KOut, VOut> context) {
+    public void context(final FixedKeyProcessorContext<KIn, VOut> context) {
         this.context = context;
     }
 }

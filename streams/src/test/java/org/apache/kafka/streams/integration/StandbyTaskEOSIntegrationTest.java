@@ -342,6 +342,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
         final StreamsBuilder builder = new StreamsBuilder();
 
