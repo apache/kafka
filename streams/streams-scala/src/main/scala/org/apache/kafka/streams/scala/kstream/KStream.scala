@@ -18,10 +18,30 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{GlobalKTable, JoinWindows, Printed, TransformerSupplier, ValueTransformerSupplier, ValueTransformerWithKeySupplier, KStream => KStreamJ}
+import org.apache.kafka.streams.kstream.{
+  GlobalKTable,
+  JoinWindows,
+  Printed,
+  TransformerSupplier,
+  ValueTransformerSupplier,
+  ValueTransformerWithKeySupplier,
+  KStream => KStreamJ
+}
 import org.apache.kafka.streams.processor.TopicNameExtractor
 import org.apache.kafka.streams.processor.api.{FixedKeyProcessorSupplier, ProcessorSupplier}
-import org.apache.kafka.streams.scala.FunctionsCompatConversions.{FlatValueMapperFromFunction, FlatValueMapperWithKeyFromFunction, ForeachActionFromFunction, KeyValueMapperFromFunction, MapperFromFunction, PredicateFromFunction, TransformerSupplierAsJava, ValueMapperFromFunction, ValueMapperWithKeyFromFunction, ValueTransformerSupplierAsJava, ValueTransformerSupplierWithKeyAsJava}
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
+  FlatValueMapperFromFunction,
+  FlatValueMapperWithKeyFromFunction,
+  ForeachActionFromFunction,
+  KeyValueMapperFromFunction,
+  MapperFromFunction,
+  PredicateFromFunction,
+  TransformerSupplierAsJava,
+  ValueMapperFromFunction,
+  ValueMapperWithKeyFromFunction,
+  ValueTransformerSupplierAsJava,
+  ValueTransformerSupplierWithKeyAsJava
+}
 
 import scala.jdk.CollectionConverters._
 
@@ -873,7 +893,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process[KR, VR](processorSupplier: ProcessorSupplier[K, V, KR, VR], named: Named, stateStoreNames: String*): KStream[KR, VR] =
+  def process[KR, VR](
+    processorSupplier: ProcessorSupplier[K, V, KR, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[KR, VR] =
     new KStream(inner.process(processorSupplier, named, stateStoreNames: _*))
 
   /**
@@ -891,7 +915,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def processValues[VR](processorSupplier: FixedKeyProcessorSupplier[K, V, VR], stateStoreNames: String*): KStream[K, VR] =
+  def processValues[VR](
+    processorSupplier: FixedKeyProcessorSupplier[K, V, VR],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.processValues(processorSupplier, stateStoreNames: _*))
 
   /**
@@ -910,7 +937,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def processValues[VR](processorSupplier: FixedKeyProcessorSupplier[K, V, VR], named: Named, stateStoreNames: String*): KStream[K, VR] =
+  def processValues[VR](
+    processorSupplier: FixedKeyProcessorSupplier[K, V, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.processValues(processorSupplier, named, stateStoreNames: _*))
 
   /**
