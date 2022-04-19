@@ -127,6 +127,8 @@ class BrokerServer(
 
   var forwardingManager: ForwardingManager = null
 
+  @volatile var featureCache: FinalizedFeatureCache = null
+
   var alterIsrManager: AlterIsrManager = null
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
@@ -221,7 +223,7 @@ class BrokerServer(
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
-      val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
+      featureCache = new FinalizedFeatureCache(brokerFeatures)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,

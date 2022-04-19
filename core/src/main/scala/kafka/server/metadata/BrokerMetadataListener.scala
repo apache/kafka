@@ -248,6 +248,24 @@ class BrokerMetadataListener(
     }
   }
 
+  // This is used in tests to alter the publisher that is in use by the broker.
+  def alterPublisher(publisher: MetadataPublisher): CompletableFuture[Void] = {
+    val event = new AlterPublisherEvent(publisher)
+    eventQueue.append(event)
+    event.future
+  }
+
+  class AlterPublisherEvent(publisher: MetadataPublisher)
+    extends EventQueue.FailureLoggingEvent(log) {
+    val future = new CompletableFuture[Void]()
+
+    override def run(): Unit = {
+      _publisher = Some(publisher)
+      log.info(s"Set publisher to ${publisher}")
+      future.complete(null)
+    }
+  }
+
   private def publish(publisher: MetadataPublisher): Unit = {
     val delta = _delta
     _image = _delta.apply()
