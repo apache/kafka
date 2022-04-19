@@ -413,7 +413,7 @@ class LogCleanerManagerTest extends Logging {
 
     // updateCheckpoints should remove the topicPartition data in the logDir
     cleanerManager.updateCheckpoints(logDir, partitionToRemove = Option(topicPartition))
-    assertTrue(!cleanerManager.allCleanerCheckpoints.contains(topicPartition))
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -717,7 +717,7 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(Some(endOffset), cleanerManager.allCleanerCheckpoints.get(topicPartition))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningAborted)
-    cleanerManager.doneCleaning(topicPartition, log.dir, 1)
+    cleanerManager.doneCleaning(topicPartition, log.dir, endOffset)
     assertEquals(LogCleaningPaused(1), cleanerManager.cleaningState(topicPartition).get)
     assertTrue(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
