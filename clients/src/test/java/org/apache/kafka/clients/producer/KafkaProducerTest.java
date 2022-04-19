@@ -1901,7 +1901,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCallbackHandlesError() throws Exception {
+    public void testCallbackAndInterceptorHandleError() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000");
