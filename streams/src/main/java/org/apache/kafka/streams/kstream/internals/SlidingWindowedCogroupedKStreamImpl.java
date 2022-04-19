@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
@@ -113,14 +114,28 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
                     + "]");
             }
 
-            supplier = Stores.persistentTimestampedWindowStore(
-                materialized.storeName(),
-                Duration.ofMillis(retentionPeriod),
-                Duration.ofMillis(windows.timeDifferenceMs()),
-                false
-            );
-
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemoryWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.timeDifferenceMs()),
+                        false
+                    );
+                    break;
+                case ROCKS_DB:
+                    supplier = Stores.persistentTimestampedWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.timeDifferenceMs()),
+                        false
+                    );
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
+            }
         }
+
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
             .timestampedWindowStoreBuilder(
                 supplier,

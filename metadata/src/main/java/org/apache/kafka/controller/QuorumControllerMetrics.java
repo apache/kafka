@@ -21,6 +21,7 @@ import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -210,9 +211,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     private static MetricName getMetricName(String type, String name) {
-        final String group = "kafka.controller";
-        final StringBuilder mbeanNameBuilder = new StringBuilder();
-        mbeanNameBuilder.append(group).append(":type=").append(type).append(",name=").append(name);
-        return new MetricName(group, type, name, null, mbeanNameBuilder.toString());
+        return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
     }
 }

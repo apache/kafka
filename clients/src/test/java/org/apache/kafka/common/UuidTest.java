@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common;
 
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -72,12 +74,13 @@ public class UuidTest {
         assertEquals(Uuid.fromString(zeroIdString), Uuid.ZERO_UUID);
     }
 
-    @Test
+    @RepeatedTest(100)
     public void testRandomUuid() {
         Uuid randomID = Uuid.randomUuid();
 
         assertNotEquals(randomID, Uuid.ZERO_UUID);
         assertNotEquals(randomID, Uuid.METADATA_TOPIC_ID);
+        assertFalse(randomID.toString().startsWith("-"));
     }
 
     @Test

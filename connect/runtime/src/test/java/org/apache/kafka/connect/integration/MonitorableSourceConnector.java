@@ -21,7 +21,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
-import org.apache.kafka.connect.runtime.TestSourceConnector;
+import org.apache.kafka.connect.runtime.SampleSourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.tools.ThroughputThrottler;
@@ -43,7 +43,7 @@ import java.util.stream.LongStream;
  * that generates records of a fixed structure. The rate of record production can be adjusted
  * through the configs 'throughput' and 'messages.per.poll'
  */
-public class MonitorableSourceConnector extends TestSourceConnector {
+public class MonitorableSourceConnector extends SampleSourceConnector {
     private static final Logger log = LoggerFactory.getLogger(MonitorableSourceConnector.class);
 
     public static final String TOPIC_CONFIG = "topic";

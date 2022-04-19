@@ -213,8 +213,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     val targetMaxVersionLevel = (defaultFinalizedFeatures().get("feature_1").max() - 1).asInstanceOf[Short]
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_1",
-      new FeatureUpdate(targetMaxVersionLevel,false),
-      ".*Can not downgrade finalized feature.*allowDowngrade.*".r)
+      new FeatureUpdate(targetMaxVersionLevel, FeatureUpdate.UpgradeType.UPGRADE),
+      ".*Can not downgrade finalized feature.*".r)
   }
 
   /**
@@ -226,8 +226,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     val targetMaxVersionLevel = (defaultFinalizedFeatures().get("feature_1").max() + 1).asInstanceOf[Short]
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_1",
-      new FeatureUpdate(targetMaxVersionLevel, true),
-      ".*When the allowDowngrade flag set in the request, the provided maxVersionLevel:3.*existing maxVersionLevel:2.*".r)
+      new FeatureUpdate(targetMaxVersionLevel,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+      ".*When the downgradeType is set to SAFE set in the request, the provided maxVersionLevel:3.*existing maxVersionLevel:2.*".r)
   }
 
   /**
@@ -264,7 +264,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     assertEquals(Errors.INVALID_REQUEST, Errors.forCode(result.errorCode))
     assertNotNull(result.errorMessage)
     assertFalse(result.errorMessage.isEmpty)
-    val exceptionMsgPattern = ".*Can not provide maxVersionLevel: 0 less than 1.*allowDowngrade.*".r
+    val exceptionMsgPattern = ".*Can not provide maxVersionLevel: 0 less than 1.*".r
     assertTrue(exceptionMsgPattern.findFirstIn(result.errorMessage).isDefined, result.errorMessage)
     checkFeatures(
       adminClient,
@@ -282,7 +282,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   def testShouldFailRequestDuringDeletionOfNonExistingFeature(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_non_existing",
-      new FeatureUpdate(3, true),
+      new FeatureUpdate(3.toShort,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
       ".*Could not apply finalized feature update because the provided feature is not supported.*".r)
   }
 
@@ -295,7 +295,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     val targetMaxVersionLevel = defaultFinalizedFeatures().get("feature_1").max()
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_1",
-      new FeatureUpdate(targetMaxVersionLevel, false),
+      new FeatureUpdate(targetMaxVersionLevel,  FeatureUpdate.UpgradeType.UPGRADE),
       ".*Can not upgrade a finalized feature.*to the same value.*".r)
   }
 
@@ -331,7 +331,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     ).getOrElse(Features.emptyFinalizedFeatures())
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
-    val invalidUpdate = new FeatureUpdate(supportedVersionRange.max(), false)
+    val invalidUpdate = new FeatureUpdate(supportedVersionRange.max(),  FeatureUpdate.UpgradeType.UPGRADE)
     val nodeBefore = getFeatureZNode()
     val adminClient = createAdminClient()
     val result = adminClient.updateFeatures(
@@ -393,10 +393,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
-    val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(), false)
-    val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(), false)
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
+    val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
+    val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.UPGRADE)
 
     val adminClient = createAdminClient()
     adminClient.updateFeatures(
@@ -427,8 +427,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     updateSupportedFeaturesInAllBrokers(supportedFeatures)
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 2)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 4))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(2, 2)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(4, 4))))
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
     // Below we aim to do the following:
@@ -436,10 +436,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
     // - Valid downgrade of feature_2 maxVersionLevel from 4 to 3
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
-    val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(), false)
-    val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(), true)
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
+    val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
+    val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)
 
     val adminClient = createAdminClient()
     adminClient.updateFeatures(
@@ -471,8 +471,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     updateSupportedFeaturesInAllBrokers(supportedFeatures)
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 2)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 4))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(2, 2)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(4, 4))))
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
     // Below we aim to do the following:
@@ -481,10 +481,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
     //   (because we intentionally do not set the allowDowngrade flag)
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
-    val validUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(), false)
-    val invalidUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(), false)
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
+    val validUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
+    val invalidUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.UPGRADE)
 
     val adminClient = createAdminClient()
     val result = adminClient.updateFeatures(
@@ -495,7 +495,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     result.values().get("feature_1").get()
     // Expect update for "feature_2" to have failed.
     checkException[InvalidRequestException](
-      result, Map("feature_2" -> ".*Can not downgrade finalized feature.*allowDowngrade.*".r))
+      result, Map("feature_2" -> ".*Can not downgrade finalized feature.*".r))
     val expectedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
         Utils.mkEntry("feature_1", targetFinalizedFeatures.get("feature_1")),
@@ -539,8 +539,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 2)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 4))))
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(2, 2)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(4, 4))))
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
     // Below we aim to do the following:
@@ -549,10 +549,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
     // - Valid downgrade of feature_2 maxVersionLevel from 4 to 3
     val targetFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
-        Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
-    val invalidUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(), false)
-    val validUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(), true)
+        Utils.mkEntry("feature_1", new FinalizedVersionRange(3, 3)),
+        Utils.mkEntry("feature_2", new FinalizedVersionRange(3, 3))))
+    val invalidUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(),  FeatureUpdate.UpgradeType.UPGRADE)
+    val validUpdate = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(),  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)
 
     val adminClient = createAdminClient()
     val result = adminClient.updateFeatures(

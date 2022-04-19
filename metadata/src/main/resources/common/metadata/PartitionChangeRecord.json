@@ -38,6 +38,8 @@
       "about": "null if the removing replicas didn't change; the new removing replicas otherwise." },
     { "name": "AddingReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 4,
-      "about": "null if the adding replicas didn't change; the new adding replicas otherwise." }
+      "about": "null if the adding replicas didn't change; the new adding replicas otherwise." },
+    { "name": "LeaderRecoveryState", "type": "int8", "default": "-1", "versions": "0+", "taggedVersions": "0+", "tag": 5,
+      "about": "-1 if it didn't change; 0 if the leader was elected from the ISR or recovered from an unclean election; 1 if the leader that was elected using unclean leader election and it is still recovering." }
   ]
 }

@@ -32,6 +32,12 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -40,7 +46,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -118,8 +123,6 @@ public class StandardAuthorizerTest {
         return new Action(aclOperation,
             new ResourcePattern(resourceType, resourceName, LITERAL), 1, false, false);
     }
-
-    private final static AtomicLong NEXT_ID = new AtomicLong(0);
 
     static StandardAcl newFooAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(
@@ -428,4 +431,87 @@ public class StandardAuthorizerTest {
                     newAction(WRITE, GROUP, "arbitrary"),
                     newAction(READ, TOPIC, "ala"))));
     }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDenyAuditLogging(boolean logIfDenied) throws Exception {
+        try (MockedStatic<LoggerFactory> mockedLoggerFactory = Mockito.mockStatic(LoggerFactory.class)) {
+            Logger otherLog = Mockito.mock(Logger.class);
+            Logger auditLog = Mockito.mock(Logger.class);
+            mockedLoggerFactory
+                .when(() -> LoggerFactory.getLogger("kafka.authorizer.logger"))
+                .thenReturn(auditLog);
+
+            mockedLoggerFactory
+                .when(() -> LoggerFactory.getLogger(Mockito.any(Class.class)))
+                .thenReturn(otherLog);
+
+            Mockito.when(auditLog.isDebugEnabled()).thenReturn(true);
+            Mockito.when(auditLog.isTraceEnabled()).thenReturn(true);
+
+            StandardAuthorizer authorizer = createAuthorizerWithManyAcls();
+            ResourcePattern topicResource = new ResourcePattern(TOPIC, "alpha", LITERAL);
+            Action action = new Action(READ, topicResource, 1, false, logIfDenied);
+            MockAuthorizableRequestContext requestContext = new MockAuthorizableRequestContext.Builder()
+                .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                .setClientAddress(InetAddress.getByName("127.0.0.1"))
+                .build();
+
+            assertEquals(singletonList(DENIED), authorizer.authorize(requestContext, singletonList(action)));
+
+            String expectedAuditLog = "Principal = User:bob is Denied operation = READ " +
+                "from host = 127.0.0.1 on resource = Topic:LITERAL:alpha for request = Fetch " +
+                "with resourceRefCount = 1 based on rule MatchingAcl(acl=StandardAcl(resourceType=TOPIC, " +
+                "resourceName=alp, patternType=PREFIXED, principal=User:bob, host=*, operation=READ, " +
+                "permissionType=DENY))";
+
+            if (logIfDenied) {
+                Mockito.verify(auditLog).info(expectedAuditLog);
+            } else {
+                Mockito.verify(auditLog).trace(expectedAuditLog);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testAllowAuditLogging(boolean logIfAllowed) throws Exception {
+        try (MockedStatic<LoggerFactory> mockedLoggerFactory = Mockito.mockStatic(LoggerFactory.class)) {
+            Logger otherLog = Mockito.mock(Logger.class);
+            Logger auditLog = Mockito.mock(Logger.class);
+            mockedLoggerFactory
+                .when(() -> LoggerFactory.getLogger("kafka.authorizer.logger"))
+                .thenReturn(auditLog);
+
+            mockedLoggerFactory
+                .when(() -> LoggerFactory.getLogger(Mockito.any(Class.class)))
+                .thenReturn(otherLog);
+
+            Mockito.when(auditLog.isDebugEnabled()).thenReturn(true);
+            Mockito.when(auditLog.isTraceEnabled()).thenReturn(true);
+
+            StandardAuthorizer authorizer = createAuthorizerWithManyAcls();
+            ResourcePattern topicResource = new ResourcePattern(TOPIC, "green1", LITERAL);
+            Action action = new Action(READ, topicResource, 1, logIfAllowed, false);
+            MockAuthorizableRequestContext requestContext = new MockAuthorizableRequestContext.Builder()
+                .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                .setClientAddress(InetAddress.getByName("127.0.0.1"))
+                .build();
+
+            assertEquals(singletonList(ALLOWED), authorizer.authorize(requestContext, singletonList(action)));
+
+            String expectedAuditLog = "Principal = User:bob is Allowed operation = READ " +
+                "from host = 127.0.0.1 on resource = Topic:LITERAL:green1 for request = Fetch " +
+                "with resourceRefCount = 1 based on rule MatchingAcl(acl=StandardAcl(resourceType=TOPIC, " +
+                "resourceName=green, patternType=PREFIXED, principal=User:bob, host=*, operation=READ, " +
+                "permissionType=ALLOW))";
+
+            if (logIfAllowed) {
+                Mockito.verify(auditLog).debug(expectedAuditLog);
+            } else {
+                Mockito.verify(auditLog).trace(expectedAuditLog);
+            }
+        }
+    }
+
 }

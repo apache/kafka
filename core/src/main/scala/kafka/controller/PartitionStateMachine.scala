@@ -16,6 +16,7 @@
 */
 package kafka.controller
 
+import kafka.api.KAFKA_3_2_IV0
 import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
@@ -130,6 +131,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
                               zkClient: KafkaZkClient,
                               controllerBrokerRequestBatch: ControllerBrokerRequestBatch)
   extends PartitionStateMachine(controllerContext) {
+
+  private val isLeaderRecoverySupported = config.interBrokerProtocolVersion >= KAFKA_3_2_IV0
 
   private val controllerId = config.brokerId
   this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
@@ -410,7 +413,12 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           validLeaderAndIsrs,
           allowUnclean
         )
-        leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState).partition(_.leaderAndIsr.isEmpty)
+        leaderForOffline(
+          controllerContext,
+          isLeaderRecoverySupported,
+          partitionsWithUncleanLeaderElectionState
+        ).partition(_.leaderAndIsr.isEmpty)
+
       case ReassignPartitionLeaderElectionStrategy =>
         leaderForReassign(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
       case PreferredReplicaPartitionLeaderElectionStrategy =>

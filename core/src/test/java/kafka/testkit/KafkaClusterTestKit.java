@@ -24,7 +24,6 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
-import kafka.server.Server;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -184,7 +183,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         Option.apply(threadNamePrefix),
-                        connectFutureManager.future
+                        connectFutureManager.future,
+                        KafkaRaftServer.configSchema()
                     );
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
@@ -237,8 +237,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         new Metrics(),
                         Option.apply(threadNamePrefix),
                         JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq(),
-                        connectFutureManager.future,
-                        Server.SUPPORTED_FEATURES()
+                        connectFutureManager.future
                     );
                     brokers.put(node.id(), broker);
                     raftManagers.put(node.id(), raftManager);

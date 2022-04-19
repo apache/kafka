@@ -1067,6 +1067,17 @@ public class TaskManager {
     }
 
     /**
+     *  Fetch all non-empty partitions for pausing
+     */
+    Set<TopicPartition> nonEmptyPartitions() {
+        final Set<TopicPartition> nonEmptyPartitions = new HashSet<>();
+        for (final Task task : activeTaskIterable()) {
+            nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
+        }
+        return nonEmptyPartitions;
+    }
+
+    /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      * @throws TimeoutException if task.timeout.ms has been exceeded (non-EOS)
@@ -1129,13 +1140,25 @@ public class TaskManager {
      * added NamedTopology and create them if so, then close any tasks whose named topology no longer exists
      */
     void handleTopologyUpdates() {
-        tasks.maybeCreateTasksFromNewTopologies();
+        topologyMetadata.executeTopologyUpdatesAndBumpThreadVersion(
+            tasks::maybeCreateTasksFromNewTopologies,
+            this::maybeCloseTasksFromRemovedTopologies
+        );
 
+        if (topologyMetadata.isEmpty()) {
+            log.info("Proactively unsubscribing from all topics due to empty topology");
+            mainConsumer.unsubscribe();
+        }
+
+        topologyMetadata.maybeNotifyTopologyVersionListeners();
+    }
+
+    void maybeCloseTasksFromRemovedTopologies(final Set<String> currentNamedTopologies) {
         try {
             final Set<Task> activeTasksToRemove = new HashSet<>();
             final Set<Task> standbyTasksToRemove = new HashSet<>();
             for (final Task task : tasks.allTasks()) {
-                if (!topologyMetadata.namedTopologiesView().contains(task.id().topologyName())) {
+                if (!currentNamedTopologies.contains(task.id().topologyName())) {
                     if (task.isActive()) {
                         activeTasksToRemove.add(task);
                     } else {
@@ -1155,6 +1178,14 @@ public class TaskManager {
             //  the user of an error in this named topology without killing the thread and delaying the others
             log.error("Caught the following exception while closing tasks from a removed topology:", e);
         }
+    }
+
+    long getInputBufferSizeInBytes() {
+        long bytesBuffered = 0L;
+        for (final Task task : activeTaskIterable()) {
+            bytesBuffered += ((StreamTask) task).totalBytesBuffered();
+        }
+        return bytesBuffered;
     }
 
     /**

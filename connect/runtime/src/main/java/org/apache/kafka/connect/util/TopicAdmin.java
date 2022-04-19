@@ -655,7 +655,7 @@ public class TopicAdmin implements AutoCloseable {
      * @throws TimeoutException if the offset metadata could not be fetched before the amount of time allocated
      *         by {@code request.timeout.ms} expires, and this call can be retried
      * @throws LeaderNotAvailableException if the leader was not available and this call can be retried
-     * @throws RetriableException if a retriable error occurs, or the thread is interrupted while attempting 
+     * @throws RetriableException if a retriable error occurs, or the thread is interrupted while attempting
      *         to perform this operation
      * @throws ConnectException if a non retriable error occurs
      */
@@ -701,6 +701,37 @@ public class TopicAdmin implements AutoCloseable {
             }
         }
         return result;
+    }
+
+    /**
+     * Fetch the most recent offset for each of the supplied {@link TopicPartition} objects, and performs retry when
+     * {@link org.apache.kafka.connect.errors.RetriableException} is thrown.
+     *
+     * @param partitions        the topic partitions
+     * @param timeoutDuration   timeout duration; may not be null
+     * @param retryBackoffMs    the number of milliseconds to delay upon receiving a
+     *                          {@link org.apache.kafka.connect.errors.RetriableException} before retrying again;
+     *                          must be 0 or more
+     * @return                  the map of offset for each topic partition, or an empty map if the supplied partitions
+     *                          are null or empty
+     * @throws UnsupportedVersionException if the broker is too old to support the admin client API to read end offsets
+     * @throws ConnectException if {@code timeoutDuration} is exhausted
+     * @see TopicAdmin#endOffsets(Set)
+     */
+    public Map<TopicPartition, Long> retryEndOffsets(Set<TopicPartition> partitions, Duration timeoutDuration, long retryBackoffMs) {
+
+        try {
+            return RetryUtil.retryUntilTimeout(
+                    () -> endOffsets(partitions),
+                    () -> "list offsets for topic partitions",
+                    timeoutDuration,
+                    retryBackoffMs);
+        } catch (UnsupportedVersionException e) {
+            // Older brokers don't support this admin method, so rethrow it without wrapping it
+            throw e;
+        } catch (Exception e) {
+            throw new ConnectException("Failed to list offsets for topic partitions.", e);
+        }
     }
 
     @Override

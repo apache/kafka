@@ -18,33 +18,34 @@
 package kafka.server
 
 import java.util
+import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 
+import kafka.api.KAFKA_3_2_IV0
 import kafka.cluster.Broker.ServerInfo
-import kafka.log.LogConfig
-import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
+import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
-import org.apache.kafka.metadata.VersionRange
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
+import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
 import scala.jdk.CollectionConverters._
@@ -60,7 +61,8 @@ class ControllerServer(
   val time: Time,
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val configSchema: KafkaConfigSchema,
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -77,7 +79,6 @@ class ControllerServer(
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = null
-  val supportedFeatures: Map[String, VersionRange] = Map()
   var quotaManagers: QuotaManagers = null
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
@@ -152,8 +153,6 @@ class ControllerServer(
         throw new ConfigException("No controller.listener.names defined for controller");
       }
 
-      val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
-        ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava
       val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
 
       createTopicPolicy = Option(config.
@@ -161,20 +160,34 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val controllerBuilder = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
-        setTime(time).
-        setThreadNamePrefix(threadNamePrefixAsString).
-        setConfigDefs(configDefs).
-        setRaftClient(raftManager.client).
-        setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
-        setDefaultNumPartitions(config.numPartitions.intValue()).
-        setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
-          TimeUnit.MILLISECONDS)).
-        setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
-        setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
-        setCreateTopicPolicy(createTopicPolicy.asJava).
-        setAlterConfigPolicy(alterConfigPolicy.asJava).
-        setConfigurationValidator(new ControllerConfigurationValidator())
+      val quorumFeatures = QuorumFeatures.create(config.nodeId, QuorumFeatures.defaultFeatureMap())
+
+      val controllerBuilder = {
+        val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
+          OptionalLong.of(TimeUnit.NANOSECONDS.convert(config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS))
+        } else {
+          OptionalLong.empty()
+        }
+
+        new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
+          setTime(time).
+          setThreadNamePrefix(threadNamePrefixAsString).
+          setConfigSchema(configSchema).
+          setRaftClient(raftManager.client).
+          setQuorumFeatures(quorumFeatures).
+          setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
+          setDefaultNumPartitions(config.numPartitions.intValue()).
+          setIsLeaderRecoverySupported(config.interBrokerProtocolVersion >= KAFKA_3_2_IV0).
+          setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
+            TimeUnit.MILLISECONDS)).
+          setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
+          setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
+          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+          setCreateTopicPolicy(createTopicPolicy.asJava).
+          setAlterConfigPolicy(alterConfigPolicy.asJava).
+          setConfigurationValidator(new ControllerConfigurationValidator()).
+          setStaticConfig(config.originals)
+      }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
         case _ => // nothing to do
@@ -187,7 +200,6 @@ class ControllerServer(
         authorizer,
         quotaManagers,
         time,
-        supportedFeatures,
         controller,
         raftManager,
         config,

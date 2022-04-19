@@ -69,7 +69,8 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, files, startup_timeout_sec = 60):
+    def __init__(self, context, num_nodes, kafka, files, startup_timeout_sec=60,
+                 include_filestream_connectors=False):
         super(ConnectServiceBase, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -78,6 +79,8 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.startup_timeout_sec = startup_timeout_sec
         self.environment = {}
         self.external_config_template_func = None
+        self.include_filestream_connectors = include_filestream_connectors
+        self.logger.debug("include_filestream_connectors % s", include_filestream_connectors)
 
     def pids(self, node):
         """Return process ids for Kafka Connect processes."""
@@ -279,12 +282,34 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             env_opts = "\"%s %s\"" % (env_opts.strip('\"'), value)
         self.environment[envvar] = env_opts
 
+    def append_filestream_connectors_to_classpath(self):
+        if self.include_filestream_connectors:
+            cwd = os.getcwd()
+            self.logger.info("Including filestream connectors when starting Connect. "
+                             "Looking for jar locally in: %s" % cwd)
+            relative_path = "/connect/file/build/libs/"
+            local_dir = cwd + relative_path
+            lib_dir = self.path.home() + relative_path
+            for pwd, dirs, files in os.walk(local_dir):
+                for file in files:
+                    if file.startswith("connect-file") and file.endswith(".jar"):
+                        # Use the expected directory on the node instead of the path in the driver node
+                        file_path = lib_dir + file
+                        self.logger.debug("Appending %s to Connect worker's CLASSPATH" % file_path)
+                        return "export CLASSPATH=${CLASSPATH}:%s; " % file_path
+            self.logger.info("Jar with filestream connectors was not found under %s" % lib_dir)
+        else:
+            self.logger.info("Starting Connect without filestream connectors in the CLASSPATH")
+
+        return None
+
 
 class ConnectStandaloneService(ConnectServiceBase):
     """Runs Kafka Connect in standalone mode."""
 
-    def __init__(self, context, kafka, files, startup_timeout_sec = 60):
-        super(ConnectStandaloneService, self).__init__(context, 1, kafka, files, startup_timeout_sec)
+    def __init__(self, context, kafka, files, startup_timeout_sec=60, include_filestream_connectors=False):
+        super(ConnectStandaloneService, self).__init__(context, 1, kafka, files, startup_timeout_sec,
+                                                       include_filestream_connectors)
 
     # For convenience since this service only makes sense with a single node
     @property
@@ -299,6 +324,9 @@ class ConnectStandaloneService(ConnectServiceBase):
 
         cmd += fix_opts_for_new_jvm(node)
         cmd += "export KAFKA_OPTS=\"%s %s\"; " % (heap_kafka_opts, other_kafka_opts)
+        classpath = self.append_filestream_connectors_to_classpath()
+        cmd += classpath if classpath else ""
+
         for envvar in self.environment:
             cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
         cmd += "%s %s " % (self.path.script("connect-standalone.sh", node), self.CONFIG_FILE)
@@ -339,8 +367,9 @@ class ConnectDistributedService(ConnectServiceBase):
     """Runs Kafka Connect in distributed mode."""
 
     def __init__(self, context, num_nodes, kafka, files, offsets_topic="connect-offsets",
-                 configs_topic="connect-configs", status_topic="connect-status", startup_timeout_sec = 60):
-        super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files, startup_timeout_sec)
+                 configs_topic="connect-configs", status_topic="connect-status", startup_timeout_sec=60,
+                 include_filestream_connectors=False):
+        super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files, startup_timeout_sec, include_filestream_connectors)
         self.startup_mode = self.STARTUP_MODE_JOIN
         self.offsets_topic = offsets_topic
         self.configs_topic = configs_topic
@@ -355,6 +384,9 @@ class ConnectDistributedService(ConnectServiceBase):
         cmd += "export KAFKA_OPTS=\"%s %s\"; " % (heap_kafka_opts, other_kafka_opts)
         for envvar in self.environment:
             cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
+
+        classpath = self.append_filestream_connectors_to_classpath()
+        cmd += classpath if classpath else ""
         cmd += "%s %s " % (self.path.script("connect-distributed.sh", node), self.CONFIG_FILE)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
