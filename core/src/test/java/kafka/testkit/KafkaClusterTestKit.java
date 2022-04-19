@@ -372,6 +372,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     /**
      * Wait for a controller to mark all the brokers as ready (registered and unfenced).
+     * And also wait for the metadata cache up-to-date in each broker server.
      */
     public void waitForReadyBrokers() throws ExecutionException, InterruptedException {
         // We can choose any controller, not just the active controller.
@@ -379,6 +380,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
         ControllerServer controllerServer = controllers.values().iterator().next();
         Controller controller = controllerServer.controller();
         controller.waitForReadyBrokers(brokers.size()).get();
+
+        // make sure metadata cache in each broker server is up-to-date
+        TestUtils.waitForCondition(() ->
+                brokers().values().stream().allMatch(brokerServer -> brokerServer.metadataCache().getAliveBrokers().size() == brokers.size()),
+            "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
     public Properties controllerClientProperties() throws ExecutionException, InterruptedException {
@@ -403,7 +409,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public Properties clientProperties() {
-        Properties properties = new Properties();
+        return clientProperties(new Properties());
+    }
+
+    public Properties clientProperties(Properties configOverrides) {
         if (!brokers.isEmpty()) {
             StringBuilder bld = new StringBuilder();
             String prefix = "";
@@ -420,9 +429,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 bld.append(prefix).append("localhost:").append(port);
                 prefix = ",";
             }
-            properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
+            configOverrides.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
         }
-        return properties;
+        return configOverrides;
     }
 
     public Map<Integer, ControllerServer> controllers() {
