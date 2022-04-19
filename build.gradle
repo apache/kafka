@@ -447,7 +447,7 @@ subprojects {
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
-    maxHeapSize = "3g"
+    maxHeapSize = "2.2g"
     jvmArgs = defaultJvmArgs
 
 
