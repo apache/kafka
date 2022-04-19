@@ -17,6 +17,8 @@
 
 package kafka.server.metadata
 
+import java.util.Properties
+
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
@@ -187,21 +189,26 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.Topic).
                 processConfigChanges(resource.name(), props)
-              conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
-            case BROKER => if (resource.name().isEmpty) {
-              // Apply changes to "cluster configs" (also known as default BROKER configs).
-              // These are stored in KRaft with an empty name field.
-              info(s"Updating cluster configuration : " +
-                toLoggableProps(resource, props).mkString(","))
-              dynamicConfigHandlers(ConfigType.Broker).
-                processConfigChanges(ConfigEntityName.Default, props)
-            } else if (resource.name().equals(brokerId.toString)) {
-              // Apply changes to this broker's dynamic configuration.
-              info(s"Updating broker ${brokerId} with new configuration : " +
-                toLoggableProps(resource, props).mkString(","))
-              dynamicConfigHandlers(ConfigType.Broker).
-                processConfigChanges(resource.name(), props)
-            }
+            case BROKER =>
+              if (resource.name().isEmpty) {
+                // Apply changes to "cluster configs" (also known as default BROKER configs).
+                // These are stored in KRaft with an empty name field.
+                info("Updating cluster configuration : " +
+                  toLoggableProps(resource, props).mkString(","))
+                dynamicConfigHandlers(ConfigType.Broker).
+                  processConfigChanges(ConfigEntityName.Default, props)
+              } else if (resource.name() == brokerId.toString) {
+                // Apply changes to this broker's dynamic configuration.
+                info(s"Updating broker ${brokerId} with new configuration : " +
+                  toLoggableProps(resource, props).mkString(","))
+                dynamicConfigHandlers(ConfigType.Broker).
+                  processConfigChanges(resource.name(), props)
+                // When applying a per broker config (not a cluster config), we also
+                // reload any associated file. For example, if the ssl.keystore is still
+                // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
+                // have changed. This doesn't apply to topic configs or cluster configs.
+                reloadUpdatedFilesWithoutConfigChange(props)
+              }
             case _ => // nothing to do
           }
         }
@@ -248,6 +255,10 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
     } finally {
       _firstPublish = false
     }
+  }
+
+  def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
+    conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
   }
 
   /**
