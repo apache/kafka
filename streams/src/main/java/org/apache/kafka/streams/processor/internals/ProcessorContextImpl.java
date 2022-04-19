@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -206,6 +207,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
             headers()
         );
         forward(toForward, toInternal.child());
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
     }
 
     @Override
