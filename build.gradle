@@ -516,8 +516,8 @@ subprojects {
   // remove test output from all test types
   tasks.withType(Test).all { t ->
     cleanTest {
-      delete t.reports.junitXml.destination
-      delete t.reports.html.destination
+      delete t.reports.junitXml.outputLocation
+      delete t.reports.html.outputLocation
     }
   }
 
@@ -926,7 +926,7 @@ project(':core') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
+    mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", "kafka.internals.generated",
              "-o", "src/generated/java/kafka/internals/generated",
@@ -941,77 +941,77 @@ project(':core') {
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.Errors'
+    mainClass = 'org.apache.kafka.common.protocol.Errors'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_errors.html").newOutputStream()
   }
 
   task genProtocolTypesDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.types.Type'
+    mainClass = 'org.apache.kafka.common.protocol.types.Type'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_types.html").newOutputStream()
   }
 
   task genProtocolApiKeyDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.ApiKeys'
+    mainClass = 'org.apache.kafka.common.protocol.ApiKeys'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_api_keys.html").newOutputStream()
   }
 
   task genProtocolMessageDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.Protocol'
+    mainClass = 'org.apache.kafka.common.protocol.Protocol'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
   }
 
   task genAdminClientConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.clients.admin.AdminClientConfig'
+    mainClass = 'org.apache.kafka.clients.admin.AdminClientConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
   }
 
   task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.clients.producer.ProducerConfig'
+    mainClass = 'org.apache.kafka.clients.producer.ProducerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_config.html").newOutputStream()
   }
 
   task genConsumerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.clients.consumer.ConsumerConfig'
+    mainClass = 'org.apache.kafka.clients.consumer.ConsumerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_config.html").newOutputStream()
   }
 
   task genKafkaConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'kafka.server.KafkaConfig'
+    mainClass = 'kafka.server.KafkaConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
   }
 
   task genTopicConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'kafka.log.LogConfig'
+    mainClass = 'kafka.log.LogConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
 
   task genConsumerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    main = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
 
   task genProducerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    main = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
+    mainClass = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
   }
@@ -1144,7 +1144,7 @@ project(':metadata') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
+    mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", "org.apache.kafka.common.metadata",
              "-o", "src/generated/java/org/apache/kafka/common/metadata",
@@ -1259,7 +1259,7 @@ project(':clients') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
+    mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", "org.apache.kafka.common.message",
              "-o", "src/generated/java/org/apache/kafka/common/message",
@@ -1272,7 +1272,7 @@ project(':clients') {
   }
 
   task processTestMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
+    mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", "org.apache.kafka.common.message",
              "-o", "src/generated-test/java/org/apache/kafka/common/message",
@@ -1364,7 +1364,7 @@ project(':raft') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
+    mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", "org.apache.kafka.raft.generated",
              "-o", "src/generated/java/org/apache/kafka/raft/generated",
@@ -1566,7 +1566,7 @@ project(':storage') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
+    mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", " org.apache.kafka.server.log.remote.metadata.storage.generated",
              "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
@@ -1786,7 +1786,7 @@ project(':streams') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
+    mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", "org.apache.kafka.streams.internals.generated",
              "-o", "src/generated/java/org/apache/kafka/streams/internals/generated",
@@ -1855,7 +1855,7 @@ project(':streams') {
 
   task genStreamsConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.streams.StreamsConfig'
+    mainClass = 'org.apache.kafka.streams.StreamsConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
@@ -2268,7 +2268,7 @@ project(':jmh-benchmarks') {
 
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 
-    main="-jar"
+    mainClass = "-jar"
 
     doFirst {
       if (System.getProperty("jmhArgs")) {
@@ -2482,42 +2482,42 @@ project(':connect:runtime') {
 
   task genConnectConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
+    mainClass = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
   }
 
   task genSinkConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
+    mainClass = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "sink_connector_config.html").newOutputStream()
   }
 
   task genSourceConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
+    mainClass = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "source_connector_config.html").newOutputStream()
   }
 
   task genConnectTransformationDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.tools.TransformationDoc'
+    mainClass = 'org.apache.kafka.connect.tools.TransformationDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
   }
 
   task genConnectPredicateDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.tools.PredicateDoc'
+    mainClass = 'org.apache.kafka.connect.tools.PredicateDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_predicates.html").newOutputStream()
   }
 
   task genConnectMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.ConnectMetrics'
+    mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
   }
