@@ -2697,6 +2697,85 @@ public class KStreamImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldProcessWithOldProcessorAndState() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String input = "input";
+
+        builder.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("sum"),
+            Serdes.String(),
+            Serdes.Integer()
+        ));
+
+        builder.stream(input, consumed)
+            .process(() -> new org.apache.kafka.streams.processor.Processor<String, String>() {
+                private KeyValueStore<String, Integer> sumStore;
+
+                @Override
+                public void init(final ProcessorContext context) {
+                    this.sumStore = context.getStateStore("sum");
+                }
+
+                @Override
+                public void process(final String key, final String value) {
+                    final Integer counter = sumStore.get(key);
+                    if (counter == null) {
+                        sumStore.putIfAbsent(key, value.length());
+                    } else {
+                        if (value == null) {
+                            sumStore.delete(key);
+                        } else {
+                            sumStore.put(key, counter + value.length());
+                        }
+                    }
+                }
+
+                @Override
+                public void close() {
+                }
+            }, Named.as("p"), "sum");
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n"
+                + "      --> p\n"
+                + "    Processor: p (stores: [sum])\n"
+                + "      --> none\n"
+                + "      <-- KSTREAM-SOURCE-0000000000\n\n")
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    input,
+                    Serdes.String().serializer(),
+                    Serdes.String().serializer()
+                );
+
+            inputTopic.pipeInput("A", "0", 5L);
+            inputTopic.pipeInput("B", "00", 100L);
+            inputTopic.pipeInput("C", "000", 0L);
+            inputTopic.pipeInput("D", "0000", 0L);
+            inputTopic.pipeInput("A", "00000", 10L);
+            inputTopic.pipeInput("A", "000000", 8L);
+
+            final KeyValueStore<String, Integer> sumStore = driver.getKeyValueStore("sum");
+            assertEquals(12, sumStore.get("A").intValue());
+            assertEquals(2, sumStore.get("B").intValue());
+            assertEquals(3, sumStore.get("C").intValue());
+            assertEquals(4, sumStore.get("D").intValue());
+        }
+    }
+
     @Test
     public void shouldProcess() {
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
