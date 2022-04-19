@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -65,6 +67,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiFixedKeyProcessorSupplier;
@@ -2776,8 +2779,99 @@ public class KStreamImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldProcess() {
+    public void shouldBindStateWithOldProcessorSupplier() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String input = "input";
+
+        builder.stream(input, consumed)
+            .process(new org.apache.kafka.streams.processor.ProcessorSupplier<String, String>() {
+
+                @Override
+                public org.apache.kafka.streams.processor.Processor<String, String> get() {
+                    return new org.apache.kafka.streams.processor.Processor<String, String>() {
+                        private KeyValueStore<String, Integer> sumStore;
+
+                        @Override
+                        public void init(final ProcessorContext context) {
+                            this.sumStore = context.getStateStore("sum");
+                        }
+
+                        @Override
+                        public void process(final String key, final String value) {
+                            final Integer counter = sumStore.get(key);
+                            if (counter == null) {
+                                sumStore.putIfAbsent(key, value.length());
+                            } else {
+                                if (value == null) {
+                                    sumStore.delete(key);
+                                } else {
+                                    sumStore.put(key, counter + value.length());
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void close() {
+                        }
+                    };
+                }
+
+                @SuppressWarnings("unchecked")
+                @Override
+                public Set<StoreBuilder<?>> stores() {
+                    final Set<StoreBuilder<?>> stores = new HashSet<>();
+                    stores.add(Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore("sum"),
+                        Serdes.String(),
+                        Serdes.Integer()
+                    ));
+                    return stores;
+                }
+            }, Named.as("p"));
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n"
+                + "      --> p\n"
+                + "    Processor: p (stores: [sum])\n"
+                + "      --> none\n"
+                + "      <-- KSTREAM-SOURCE-0000000000\n\n")
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    input,
+                    Serdes.String().serializer(),
+                    Serdes.String().serializer()
+                );
+
+            inputTopic.pipeInput("A", "0", 5L);
+            inputTopic.pipeInput("B", "00", 100L);
+            inputTopic.pipeInput("C", "000", 0L);
+            inputTopic.pipeInput("D", "0000", 0L);
+            inputTopic.pipeInput("A", "00000", 10L);
+            inputTopic.pipeInput("A", "000000", 8L);
+
+            final KeyValueStore<String, Integer> sumStore = driver.getKeyValueStore("sum");
+            assertEquals(12, sumStore.get("A").intValue());
+            assertEquals(2, sumStore.get("B").intValue());
+            assertEquals(3, sumStore.get("C").intValue());
+            assertEquals(4, sumStore.get("D").intValue());
+        }
+    }
+
+    @Test
+    public void shouldBindStateWithOldProcessor() {
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
 
         final StreamsBuilder builder = new StreamsBuilder();
