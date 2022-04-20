@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.TopologyConfig;
@@ -734,32 +735,56 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowNullNameWhenAddingSink() {
-        assertThrows(NullPointerException.class, () -> builder.addSink(null, "topic", null, null, null));
+        assertThrows(
+            NullPointerException.class,
+            () -> builder.addSink(null, "topic", null, null, null)
+        );
     }
 
     @Test
     public void shouldNotAllowNullTopicWhenAddingSink() {
-        assertThrows(NullPointerException.class, () -> builder.addSink("name", (String) null, null, null, null));
+        assertThrows(
+            NullPointerException.class,
+            () -> builder.addSink("name", (String) null, null, null, null)
+        );
     }
 
     @Test
     public void shouldNotAllowNullTopicChooserWhenAddingSink() {
-        assertThrows(NullPointerException.class, () -> builder.addSink("name", (TopicNameExtractor<Object, Object>) null, null, null, null));
+        assertThrows(
+            NullPointerException.class,
+            () -> builder.addSink("name", (TopicNameExtractor<Object, Object>) null, null, null, null)
+        );
     }
 
     @Test
     public void shouldNotAllowNullNameWhenAddingProcessor() {
-        assertThrows(NullPointerException.class, () -> builder.addProcessor(null, () -> null));
+        assertThrows(
+            NullPointerException.class,
+            () -> builder.addProcessor(
+                null,
+                (ProcessorSupplier<Object, Object, Object, Object>) () -> null
+            )
+        );
     }
 
     @Test
     public void shouldNotAllowNullProcessorSupplier() {
-        assertThrows(NullPointerException.class, () -> builder.addProcessor("name", null));
+        assertThrows(
+            NullPointerException.class,
+            () -> builder.addProcessor(
+                "name",
+                (ProcessorSupplier<Object, Object, Object, Object>) null
+            )
+        );
     }
 
     @Test
     public void shouldNotAllowNullNameWhenAddingSource() {
-        assertThrows(NullPointerException.class, () -> builder.addSource(null, null, null, null, null, Pattern.compile(".*")));
+        assertThrows(
+            NullPointerException.class,
+            () -> builder.addSource(null, null, null, null, null, Pattern.compile(".*"))
+        );
     }
 
     @Test

@@ -328,21 +328,27 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                         root.removeChild(graphNode);
                     }
                 } else {
-                    for (final String topic : currentSourceNode.topicNames().get()) {
-                        if (!topicsToSourceNodes.containsKey(topic)) {
-                            topicsToSourceNodes.put(topic, currentSourceNode);
-                        } else {
-                            final StreamSourceNode<?, ?> mainSourceNode = topicsToSourceNodes.get(topic);
-                            // TODO we only merge source nodes if the subscribed topic(s) are an exact match, so it's still not
-                            // possible to subscribe to topicA in one KStream and topicA + topicB in another. We could achieve
-                            // this by splitting these source nodes into one topic per node and routing to the subscribed children
-                            if (!mainSourceNode.topicNames().equals(currentSourceNode.topicNames())) {
-                                LOG.error("Topic {} was found in  subscription for non-equal source nodes {} and {}",
-                                          topic, mainSourceNode, currentSourceNode);
-                                throw new TopologyException("Two source nodes are subscribed to overlapping but not equal input topics");
+                    if (currentSourceNode.topicNames().isPresent()) {
+                        for (final String topic : currentSourceNode.topicNames().get()) {
+                            if (!topicsToSourceNodes.containsKey(topic)) {
+                                topicsToSourceNodes.put(topic, currentSourceNode);
+                            } else {
+                                final StreamSourceNode<?, ?> mainSourceNode = topicsToSourceNodes.get(
+                                    topic);
+                                // TODO we only merge source nodes if the subscribed topic(s) are an exact match, so it's still not
+                                // possible to subscribe to topicA in one KStream and topicA + topicB in another. We could achieve
+                                // this by splitting these source nodes into one topic per node and routing to the subscribed children
+                                if (!mainSourceNode.topicNames()
+                                    .equals(currentSourceNode.topicNames())) {
+                                    LOG.error(
+                                        "Topic {} was found in  subscription for non-equal source nodes {} and {}",
+                                        topic, mainSourceNode, currentSourceNode);
+                                    throw new TopologyException(
+                                        "Two source nodes are subscribed to overlapping but not equal input topics");
+                                }
+                                mainSourceNode.merge(currentSourceNode);
+                                root.removeChild(graphNode);
                             }
-                            mainSourceNode.merge(currentSourceNode);
-                            root.removeChild(graphNode);
                         }
                     }
                 }
