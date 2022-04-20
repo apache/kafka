@@ -394,14 +394,10 @@ public class ProducerConfig extends AbstractConfig {
                                         MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        ConfigDef.NO_DEFAULT_VALUE,
-                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         KEY_SERIALIZER_CLASS_DOC)
                                 .define(VALUE_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        ConfigDef.NO_DEFAULT_VALUE,
-                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         VALUE_SERIALIZER_CLASS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
@@ -548,8 +544,16 @@ public class ProducerConfig extends AbstractConfig {
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keySerializer != null)
             newConfigs.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
+        else {
+            if (newConfigs.get(KEY_SERIALIZER_CLASS_CONFIG) == null)
+                throw new ConfigException(KEY_SERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+        }
         if (valueSerializer != null)
             newConfigs.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass());
+        else {
+            if (newConfigs.get(VALUE_SERIALIZER_CLASS_CONFIG) == null)
+                throw new ConfigException(VALUE_SERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+        }
         return newConfigs;
     }
 

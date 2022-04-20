@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
@@ -489,14 +490,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        ConfigDef.NO_DEFAULT_VALUE,
-                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         KEY_DESERIALIZER_CLASS_DOC)
                                 .define(VALUE_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        ConfigDef.NO_DEFAULT_VALUE,
-                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
@@ -612,8 +609,16 @@ public class ConsumerConfig extends AbstractConfig {
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
+        else {
+            if (newConfigs.get(KEY_DESERIALIZER_CLASS_CONFIG) == null)
+                throw new ConfigException(KEY_DESERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+        }
         if (valueDeserializer != null)
             newConfigs.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        else {
+            if (newConfigs.get(VALUE_DESERIALIZER_CLASS_CONFIG) == null)
+                throw new ConfigException(VALUE_DESERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+        }
         return newConfigs;
     }
 
