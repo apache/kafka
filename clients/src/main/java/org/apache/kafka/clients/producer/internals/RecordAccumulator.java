@@ -82,7 +82,7 @@ public class RecordAccumulator {
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
-    private Map<String, Integer> nodesDrainIndex;
+    private final Map<String, Integer> nodesDrainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
 
@@ -560,7 +560,7 @@ public class RecordAccumulator {
         int size = 0;
         List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
-        /* to make starvation less likely this loop doesn't start at 0 */
+        /* to make starvation less likely each node has it's own drainIndex */
         int drainIndex = getDrainIndex(node.idString());
         int start = drainIndex = drainIndex % parts.size();
         do {
@@ -640,11 +640,11 @@ public class RecordAccumulator {
         return ready;
     }
 
-    int getDrainIndex(String idString) {
+    private int getDrainIndex(String idString) {
         return nodesDrainIndex.computeIfAbsent(idString, s -> 0);
     }
 
-    void updateDrainIndex(String idString, int drainIndex) {
+    private void updateDrainIndex(String idString, int drainIndex) {
         nodesDrainIndex.put(idString, drainIndex);
     }
 
