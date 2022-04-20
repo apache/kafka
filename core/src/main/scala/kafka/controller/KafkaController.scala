@@ -1231,7 +1231,7 @@ class KafkaController(val config: KafkaConfig,
               val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, epoch)
               controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
               finalLeaderIsrAndControllerEpoch = Some(leaderIsrAndControllerEpoch)
-              info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}, zkVersion=${leaderAndIsr.zkVersion}")
+              info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}, zkVersion=${leaderAndIsr.partitionEpoch}")
               true
             case Some(Left(e)) => throw e
             case None => false
@@ -2298,7 +2298,7 @@ class KafkaController(val config: KafkaConfig,
                         .setLeaderEpoch(leaderAndIsr.leaderEpoch)
                         .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
                         .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
-                        .setPartitionEpoch(leaderAndIsr.zkVersion)
+                        .setPartitionEpoch(leaderAndIsr.partitionEpoch)
                     )
                 }
             }
@@ -2366,7 +2366,7 @@ class KafkaController(val config: KafkaConfig,
               } else if (newLeaderAndIsr.leaderEpoch < currentLeaderAndIsr.leaderEpoch) {
                 partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
                 None
-              } else if (newLeaderAndIsr.equalsIgnoreZk(currentLeaderAndIsr)) {
+              } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
                 // If a partition is already in the desired state, just return it
                 partitionResponses(tp) = Right(currentLeaderAndIsr)
                 None
@@ -2388,7 +2388,7 @@ class KafkaController(val config: KafkaConfig,
         case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>
           isrOrError match {
             case Right(updatedIsr) =>
-              debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.zkVersion}]")
+              debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.partitionEpoch}]")
               partitionResponses(partition) = Right(updatedIsr)
               Some(partition -> updatedIsr)
             case Left(e) =>
@@ -2681,7 +2681,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
     leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.mkString(","))
     leaderAndIsrInfo.append(",LeaderRecoveryState:" + leaderAndIsr.leaderRecoveryState)
     leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
-    leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.zkVersion)
+    leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.partitionEpoch)
     leaderAndIsrInfo.append(",ControllerEpoch:" + controllerEpoch + ")")
     leaderAndIsrInfo.toString()
   }

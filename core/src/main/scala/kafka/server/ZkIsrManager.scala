@@ -63,7 +63,7 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
     controllerEpoch: Int
   ): CompletableFuture[LeaderAndIsr]= {
     debug(s"Writing new ISR ${leaderAndIsr.isr} to ZooKeeper with version " +
-      s"${leaderAndIsr.zkVersion} for partition $topicPartition")
+      s"${leaderAndIsr.partitionEpoch} for partition $topicPartition")
 
     val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition,
       leaderAndIsr, controllerEpoch)
@@ -78,7 +78,7 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
 
       // We rely on Partition#isrState being properly set to the pending ISR at this point since we are synchronously
       // applying the callback
-      future.complete(leaderAndIsr.withZkVersion(newVersion))
+      future.complete(leaderAndIsr.withPartitionEpoch(newVersion))
     } else {
       future.completeExceptionally(new InvalidUpdateVersionException(
         s"ISR update $leaderAndIsr for partition $topicPartition with controller epoch $controllerEpoch " +
