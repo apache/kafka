@@ -279,6 +279,9 @@ class ConfigCommandIntegrationTest extends KafkaServerTestHarness with Logging {
         "--entity-type", "brokers")
         ++ entityNameParams
     ))
+    TestUtils.waitUntilTrue(
+      () => brokers.forall(broker => broker.config.getInt("log.cleaner.threads") == 2),
+      "Timeout waiting for topic config propagating to broker")
 
     val describeResult = TestUtils.grabConsoleOutput(
       ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
@@ -297,6 +300,9 @@ class ConfigCommandIntegrationTest extends KafkaServerTestHarness with Logging {
         "--entity-type", "brokers")
         ++ entityNameParams
     ))
+    TestUtils.waitUntilTrue(
+      () => brokers.forall(broker => broker.config.getInt("log.cleaner.threads") != 2),
+      "Timeout waiting for topic config propagating to broker")
 
     assertFalse(TestUtils.grabConsoleOutput(
       ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
@@ -318,6 +324,9 @@ class ConfigCommandIntegrationTest extends KafkaServerTestHarness with Logging {
         "--entity-type", "topics",
         "--entity-name", "test-config-topic")
     ))
+    TestUtils.waitUntilTrue(
+      () => brokers.forall(broker => broker.logManager.logsByTopic("test-config-topic").head.config.getInt("segment.bytes") == 10240000),
+      "Timeout waiting for topic config propagating to broker")
 
     val describeResult = TestUtils.grabConsoleOutput(
       ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
@@ -336,6 +345,9 @@ class ConfigCommandIntegrationTest extends KafkaServerTestHarness with Logging {
         "--entity-type", "topics",
         "--entity-name", "test-config-topic")
     ))
+    TestUtils.waitUntilTrue(
+      () => brokers.forall(broker => broker.logManager.logsByTopic("test-config-topic").head.config.getInt("segment.bytes") != 10240000),
+      "Timeout waiting for topic config propagating to broker")
 
     assertFalse(TestUtils.grabConsoleOutput(
       ConfigCommand.describeConfig(adminClient, new ConfigCommandOptions(
