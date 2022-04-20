@@ -1115,8 +1115,11 @@ public class InternalTopologyBuilder {
 
                     // remember the changelog topic if this state store is change-logging enabled
                     if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
+                        final String prefix = topologyConfigs == null ?
+                                applicationId :
+                                ProcessorContextUtils.getPrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
                         final String changelogTopic =
-                            ProcessorStateManager.storeChangelogTopic(getPrefix(), stateStoreName, topologyName);
+                            ProcessorStateManager.storeChangelogTopic(prefix, stateStoreName, topologyName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                         changelogTopicToStore.put(changelogTopic, stateStoreName);
                     }
@@ -1408,22 +1411,15 @@ public class InternalTopologyBuilder {
                                             + "applicationId hasn't been set. Call "
                                             + "setApplicationId first");
         }
-        if (hasNamedTopology()) {
-            return getPrefix() + "-" + topologyName + "-" + topic;
-        } else {
-            return getPrefix() + "-" + topic;
-        }
-    }
+        final String prefix = topologyConfigs == null ?
+                                applicationId :
+                                ProcessorContextUtils.getPrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
 
-    String getPrefix() {
-        if (topologyConfigs == null) {
-            return applicationId;
+        if (hasNamedTopology()) {
+            return prefix + "-" + topologyName + "-" + topic;
+        } else {
+            return prefix + "-" + topic;
         }
-        return StreamsConfig.InternalConfig.getString(
-            topologyConfigs.applicationConfigs.originals(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            applicationId
-        );
     }
 
 
