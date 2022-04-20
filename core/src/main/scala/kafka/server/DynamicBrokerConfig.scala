@@ -823,8 +823,12 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaBroker) extends Reconf
     configs.get(KafkaConfig.MetricReporterClassesProp).asInstanceOf[util.List[String]].asScala
   }
 }
-object DynamicListenerConfig {
 
+object DynamicListenerConfig {
+  /**
+   * The set of configurations which the DynamicListenerConfig object listens for. Many of
+   * these are also monitored by other objects such as ChannelBuilders and SocketServers.
+   */
   val ReconfigurableConfigs = Set(
     // Listener configs
     KafkaConfig.AdvertisedListenersProp,
@@ -912,11 +916,32 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     DynamicListenerConfig.ReconfigurableConfigs
   }
 
+  private def listenerRegistrationsAltered(
+    oldAdvertisedListeners: Map[ListenerName, EndPoint],
+    newAdvertisedListeners: Map[ListenerName, EndPoint]
+  ): Boolean = {
+    if (oldAdvertisedListeners.size != newAdvertisedListeners.size) return true
+    oldAdvertisedListeners.forKeyValue {
+      case (oldListenerName, oldEndpoint) =>
+        newAdvertisedListeners.get(oldListenerName) match {
+          case None => return true
+          case Some(newEndpoint) => if (!newEndpoint.equals(oldEndpoint)) {
+            return true
+          }
+        }
+    }
+    false
+  }
+
+  private def verifyListenerRegistrationAlterationSupported(): Unit = {
+    if (!server.config.requiresZookeeper) {
+      throw new ConfigException("Advertised listeners cannot be altered when using a " +
+        "Raft-based metadata quorum.")
+    }
+  }
+
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val oldConfig = server.config
-    if (!oldConfig.requiresZookeeper) {
-      throw new ConfigException("Dynamic reconfiguration of listeners is not yet supported when using a Raft-based metadata quorum")
-    }
     val newListeners = listenersToMap(newConfig.listeners)
     val newAdvertisedListeners = listenersToMap(newConfig.effectiveAdvertisedListeners)
     val oldListeners = listenersToMap(oldConfig.listeners)
@@ -939,6 +964,13 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     }
     if (!newAdvertisedListeners.contains(newConfig.interBrokerListenerName))
       throw new ConfigException(s"Advertised listener must be specified for inter-broker listener ${newConfig.interBrokerListenerName}")
+
+    // Currently, we do not support adding or removing listeners when in KRaft mode.
+    // However, we support changing other listener configurations (max connections, etc.)
+    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedListeners),
+        listenersToMap(newConfig.effectiveAdvertisedListeners))) {
+      verifyListenerRegistrationAlterationSupported()
+    }
   }
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
@@ -948,18 +980,18 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val oldListenerMap = listenersToMap(oldListeners)
     val listenersRemoved = oldListeners.filterNot(e => newListenerMap.contains(e.listenerName))
     val listenersAdded = newListeners.filterNot(e => oldListenerMap.contains(e.listenerName))
-
-    // Clear SASL login cache to force re-login
-    if (listenersAdded.nonEmpty || listenersRemoved.nonEmpty)
-      LoginManager.closeAll()
-
-    server.socketServer.removeListeners(listenersRemoved)
-    if (listenersAdded.nonEmpty)
-      server.socketServer.addListeners(listenersAdded)
-
-    server match {
-      case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo)
-      case _ =>
+    if (listenersRemoved.nonEmpty || listenersAdded.nonEmpty) {
+      LoginManager.closeAll() // Clear SASL login cache to force re-login
+      if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
+      if (listenersAdded.nonEmpty) server.socketServer.addListeners(listenersAdded)
+    }
+    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedListeners),
+        listenersToMap(newConfig.effectiveAdvertisedListeners))) {
+      verifyListenerRegistrationAlterationSupported()
+      server match {
+        case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo)
+        case _ => throw new RuntimeException("Unable to handle non-kafkaServer")
+      }
     }
   }
 

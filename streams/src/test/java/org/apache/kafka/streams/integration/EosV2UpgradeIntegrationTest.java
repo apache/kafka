@@ -862,6 +862,7 @@ public class EosV2UpgradeIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreams getKafkaStreams(final String appDir,
                                          final String processingGuarantee) {
         final StreamsBuilder builder = new StreamsBuilder();
