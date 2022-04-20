@@ -546,13 +546,13 @@ public class ProducerConfig extends AbstractConfig {
             newConfigs.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
         else {
             if (newConfigs.get(KEY_SERIALIZER_CLASS_CONFIG) == null)
-                throw new ConfigException(KEY_SERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+                throw new ConfigException(KEY_SERIALIZER_CLASS_CONFIG + " configuration for KafkaProducer must be non-null.");
         }
         if (valueSerializer != null)
             newConfigs.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass());
         else {
             if (newConfigs.get(VALUE_SERIALIZER_CLASS_CONFIG) == null)
-                throw new ConfigException(VALUE_SERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+                throw new ConfigException(VALUE_SERIALIZER_CLASS_CONFIG + " configuration for KafkaProducer must be non-null.");
         }
         return newConfigs;
     }

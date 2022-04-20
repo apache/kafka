@@ -611,13 +611,13 @@ public class ConsumerConfig extends AbstractConfig {
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
         else {
             if (newConfigs.get(KEY_DESERIALIZER_CLASS_CONFIG) == null)
-                throw new ConfigException(KEY_DESERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+                throw new ConfigException(KEY_DESERIALIZER_CLASS_CONFIG + " configuration for KafkaConsumer must be non-null.");
         }
         if (valueDeserializer != null)
             newConfigs.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
         else {
             if (newConfigs.get(VALUE_DESERIALIZER_CLASS_CONFIG) == null)
-                throw new ConfigException(VALUE_DESERIALIZER_CLASS_CONFIG + " configuration must be non-null.");
+                throw new ConfigException(VALUE_DESERIALIZER_CLASS_CONFIG + " configuration for KafkaConsumer must be non-null.");
         }
         return newConfigs;
     }
