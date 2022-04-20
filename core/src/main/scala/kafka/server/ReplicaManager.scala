@@ -711,7 +711,7 @@ class ReplicaManager(val config: KafkaConfig,
           /* If the topic name is exceptionally long, we can't support altering the log directory.
            * See KAFKA-4893 for details.
            * TODO: fix this by implementing topic IDs. */
-          if (UnifiedLog.logFutureDirName(topicPartition).size > 255)
+          if (UnifiedLog.logFutureDirName(topicPartition).length > 255)
             throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
@@ -2082,28 +2082,27 @@ class ReplicaManager(val config: KafkaConfig,
                                           topicId: Uuid): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
       case HostedPartition.Offline =>
-        stateChangeLogger.warn(s"Unable to bring up new local leader ${tp} " +
-          s"with topic id ${topicId} because it resides in an offline log " +
+        stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
+          s"with topic id $topicId because it resides in an offline log " +
           "directory.")
         None
 
-      case HostedPartition.Online(partition) => {
+      case HostedPartition.Online(partition) =>
         if (partition.topicId.exists(_ != topicId)) {
           // Note: Partition#topicId will be None here if the Log object for this partition
           // has not been created.
-          throw new IllegalStateException(s"Topic ${tp} exists, but its ID is " +
-            s"${partition.topicId.get}, not ${topicId} as expected")
+          throw new IllegalStateException(s"Topic $tp exists, but its ID is " +
+            s"${partition.topicId.get}, not $topicId as expected")
         }
         Some(partition, false)
-      }
 
       case HostedPartition.None =>
         if (delta.image().topicsById().containsKey(topicId)) {
-          stateChangeLogger.error(s"Expected partition ${tp} with topic id " +
-            s"${topicId} to exist, but it was missing. Creating...")
+          stateChangeLogger.error(s"Expected partition $tp with topic id " +
+            s"$topicId to exist, but it was missing. Creating...")
         } else {
-          stateChangeLogger.info(s"Creating new partition ${tp} with topic id " +
-            s"${topicId}.")
+          stateChangeLogger.info(s"Creating new partition $tp with topic id " +
+            s"$topicId.")
         }
         // it's a partition that we don't know about yet, so create it and mark it online
         val partition = Partition(tp, time, this)
@@ -2130,10 +2129,10 @@ class ReplicaManager(val config: KafkaConfig,
         stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
         stopPartitions(deletes).forKeyValue { (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
-            stateChangeLogger.error(s"Unable to delete replica ${topicPartition} because " +
+            stateChangeLogger.error(s"Unable to delete replica $topicPartition because " +
               "the local replica for the partition is in an offline log directory")
           } else {
-            stateChangeLogger.error(s"Unable to delete replica ${topicPartition} because " +
+            stateChangeLogger.error(s"Unable to delete replica $topicPartition because " +
               s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}")
           }
         }
