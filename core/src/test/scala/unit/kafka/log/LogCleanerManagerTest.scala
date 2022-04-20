@@ -431,7 +431,7 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.handleLogDirFailure(logDir.getAbsolutePath)
     // verify the partition data in logDir is gone, and data in logDir2 is still there
     assertEquals(offset, cleanerManager.allCleanerCheckpoints(topicPartition2))
-    assertTrue(!cleanerManager.allCleanerCheckpoints.contains(topicPartition))
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -471,7 +471,7 @@ class LogCleanerManagerTest extends Logging {
 
     // force delete the logDir2 from checkpoints, so that the partition data should also be deleted
     cleanerManager.handleLogDirFailure(logDir2.getAbsolutePath)
-    assertTrue(!cleanerManager.allCleanerCheckpoints.contains(topicPartition))
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   /**
