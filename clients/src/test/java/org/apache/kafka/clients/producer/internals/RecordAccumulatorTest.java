@@ -61,7 +61,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -100,7 +99,6 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testDrainBatchesStarve() throws Exception {
         // test case: node1(tp1,tp2) , node2(tp3,tp4)
         // add tp-4
@@ -122,7 +120,7 @@ public class RecordAccumulatorTest {
         // drain 2 record for tp1 , tp3
         Map<Integer, List<ProducerBatch>> batches1 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1,node2)), (int) batchSize, 0);
         assertEquals(2,batches1.size());
-        judgeValidTp(batches1,tp1,tp3);
+        verifyTopicPartitionInBatches(batches1,tp1,tp3);
 
         // add record for tp1, tp3
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
@@ -130,20 +128,20 @@ public class RecordAccumulatorTest {
 
         // drain 2 record for tp2, tp4
         Map<Integer, List<ProducerBatch>> batchss2 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1,node2)), (int) batchSize, 0);
-        judgeValidTp(batchss2,tp2,tp4);
+        verifyTopicPartitionInBatches(batchss2,tp2,tp4);
     }
 
-    @SuppressWarnings("unchecked")
-    private void judgeValidTp(Map<Integer, List<ProducerBatch>> batches1, TopicPartition... tp) {
-        assertEquals(tp.length,batches1.entrySet().size());
-        List<ProducerBatch> list = new ArrayList();;
-        for (Map.Entry<Integer, List<ProducerBatch>> entry : batches1.entrySet()) {
-            List<ProducerBatch> batches = entry.getValue();
-            list.add(batches.get(0));
+    private void verifyTopicPartitionInBatches(Map<Integer, List<ProducerBatch>> batches, TopicPartition... tp) {
+        assertEquals(tp.length,batches.size());
+        List<TopicPartition> topicPartitionsInBatch = new ArrayList<TopicPartition>();
+        for (Map.Entry<Integer, List<ProducerBatch>> entry : batches.entrySet()) {
+            List<ProducerBatch> batchList = entry.getValue();
+            assertEquals(batchList.size(),1);
+            topicPartitionsInBatch.add(batchList.get(0).topicPartition);
         }
 
         for (int i = 0 ; i < tp.length ; i++){
-            assertEquals(list.get(i).topicPartition,tp[i]);
+            assertEquals(topicPartitionsInBatch.get(i),tp[i]);
         }
     }
 
