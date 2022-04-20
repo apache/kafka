@@ -145,7 +145,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
         }
 
         if (localLogRetentionBytes > retentionSize) {
-          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.");
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.")
         }
 
         localLogRetentionBytes
@@ -268,7 +268,7 @@ object LogConfig {
 
   private[log] val ServerDefaultHeaderName = "Server Default Property"
 
-  val configsWithNoServerDefaults: Set[String] = Set(RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp);
+  val configsWithNoServerDefaults: Set[String] = Set(RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp)
 
   // Package private for testing
   private[log] class LogConfigDef(base: ConfigDef) extends ConfigDef(base) {
@@ -331,9 +331,9 @@ object LogConfig {
         KafkaConfig.LogRollTimeMillisProp)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
-      .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc,
+      .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(4), MEDIUM, MaxIndexSizeDoc,
         KafkaConfig.LogIndexSizeMaxBytesProp)
-      .define(FlushMessagesProp, LONG, Defaults.FlushInterval, atLeast(0), MEDIUM, FlushIntervalDoc,
+      .define(FlushMessagesProp, LONG, Defaults.FlushInterval, atLeast(1), MEDIUM, FlushIntervalDoc,
         KafkaConfig.LogFlushIntervalMessagesProp)
       .define(FlushMsProp, LONG, Defaults.FlushMs, atLeast(0), MEDIUM, FlushMsDoc,
         KafkaConfig.LogFlushIntervalMsProp)
@@ -473,8 +473,8 @@ object LogConfig {
     FlushMessagesProp -> asList(
       new ConfigSynonym(KafkaConfig.LogFlushIntervalMessagesProp)),
     FlushMsProp -> asList(
-      new ConfigSynonym(KafkaConfig.LogFlushSchedulerIntervalMsProp),
-      new ConfigSynonym(KafkaConfig.LogFlushIntervalMsProp)),
+      new ConfigSynonym(KafkaConfig.LogFlushIntervalMsProp),
+      new ConfigSynonym(KafkaConfig.LogFlushSchedulerIntervalMsProp)),
     RetentionBytesProp -> asList(
       new ConfigSynonym(KafkaConfig.LogRetentionBytesProp)),
     RetentionMsProp -> asList(

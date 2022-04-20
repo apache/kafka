@@ -2510,13 +2510,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val aclEntryFilter = new AccessControlEntryFilter(clientPrincipalString, null, AclOperation.ANY, AclPermissionType.ANY)
     val aclFilter = new AclBindingFilter(ResourcePatternFilter.ANY, aclEntryFilter)
 
-    authorizerForWrite.deleteAcls(null, List(aclFilter).asJava).asScala.map(_.toCompletableFuture.get).flatMap { deletion =>
-      deletion.aclBindingDeleteResults().asScala.map(_.aclBinding.pattern).toSet
-    }.foreach { resource =>
-      (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { authorizer =>
-        TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource, aclEntryFilter)
+    authorizerForWrite.deleteAcls(TestUtils.anonymousAuthorizableContext, List(aclFilter).asJava).asScala.
+      map(_.toCompletableFuture.get).flatMap { deletion =>
+        deletion.aclBindingDeleteResults().asScala.map(_.aclBinding.pattern).toSet
+      }.foreach { resource =>
+        (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { authorizer =>
+          TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource, aclEntryFilter)
+        }
       }
-    }
   }
 
   private def sendRequestAndVerifyResponseError(request: AbstractRequest,

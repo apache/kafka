@@ -25,109 +25,140 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.TreeMap;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.metadata.FeatureMap;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.slf4j.Logger;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 
 
 public class FeatureControlManager {
+    private final Logger log;
+
     /**
      * An immutable map containing the features supported by this controller's software.
      */
-    private final Map<String, VersionRange> supportedFeatures;
+    private final QuorumFeatures quorumFeatures;
 
     /**
      * Maps feature names to finalized version ranges.
      */
-    private final TimelineHashMap<String, VersionRange> finalizedVersions;
+    private final TimelineHashMap<String, Short> finalizedVersions;
 
-    FeatureControlManager(Map<String, VersionRange> supportedFeatures,
+
+    FeatureControlManager(LogContext logContext,
+                          QuorumFeatures quorumFeatures,
                           SnapshotRegistry snapshotRegistry) {
-        this.supportedFeatures = supportedFeatures;
+        this.log = logContext.logger(FeatureControlManager.class);
+        this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
-            Map<String, VersionRange> updates, Set<String> downgradeables,
-            Map<Integer, Map<String, VersionRange>> brokerFeatures) {
+            Map<String, Short> updates,
+            Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
+            Map<Integer, Map<String, VersionRange>> brokerFeatures,
+            boolean validateOnly) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        for (Entry<String, VersionRange> entry : updates.entrySet()) {
+        for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
-                downgradeables.contains(entry.getKey()), brokerFeatures, records));
+                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), brokerFeatures, records));
         }
 
-        return ControllerResult.atomicOf(records, results);
+        if (validateOnly) {
+            return ControllerResult.of(Collections.emptyList(), results);
+        } else {
+            return ControllerResult.atomicOf(records, results);
+        }
+    }
+
+    boolean canSupportVersion(String featureName, short versionRange) {
+        return quorumFeatures.localSupportedFeature(featureName)
+            .filter(localRange -> localRange.contains(versionRange))
+            .isPresent();
+    }
+
+    boolean featureExists(String featureName) {
+        return quorumFeatures.localSupportedFeature(featureName).isPresent();
     }
 
     private ApiError updateFeature(String featureName,
-                                   VersionRange newRange,
-                                   boolean downgradeable,
-                                   Map<Integer, Map<String, VersionRange>> brokerFeatures,
+                                   short newVersion,
+                                   FeatureUpdate.UpgradeType upgradeType,
+                                   Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
                                    List<ApiMessageAndVersion> records) {
-        if (newRange.min() <= 0) {
+        if (!featureExists(featureName)) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The lower value for the new range cannot be less than 1.");
+                    "The controller does not support the given feature.");
         }
-        if (newRange.max() <= 0) {
+
+        if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                    "The controller does not support the given upgrade type.");
+        }
+
+        final Short currentVersion = finalizedVersions.get(featureName);
+
+        if (newVersion <= 0) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The upper value for the new range cannot be less than 1.");
         }
-        VersionRange localRange = supportedFeatures.get(featureName);
-        if (localRange == null || !localRange.contains(newRange)) {
+
+        if (!canSupportVersion(featureName, newVersion)) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The controller does not support the given feature range.");
         }
-        for (Entry<Integer, Map<String, VersionRange>> brokerEntry :
-            brokerFeatures.entrySet()) {
+
+        for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokersAndFeatures.entrySet()) {
             VersionRange brokerRange = brokerEntry.getValue().get(featureName);
-            if (brokerRange == null || !brokerRange.contains(newRange)) {
+            if (brokerRange == null || !brokerRange.contains(newVersion)) {
                 return new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "Broker " + brokerEntry.getKey() + " does not support the given " +
                         "feature range.");
             }
         }
-        VersionRange currentRange = finalizedVersions.get(featureName);
-        if (currentRange != null && currentRange.max() > newRange.max()) {
-            if (!downgradeable) {
+
+        if (currentVersion != null && newVersion < currentVersion) {
+            if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
                 return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Can't downgrade the maximum version of this feature without " +
-                    "setting downgradable to true.");
+                    "Can't downgrade the maximum version of this feature without setting the upgrade type to safe or unsafe downgrade.");
             }
         }
+
         records.add(new ApiMessageAndVersion(
-            new FeatureLevelRecord().setName(featureName).
-                setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
+            new FeatureLevelRecord()
+                .setName(featureName)
+                .setFeatureLevel(newVersion),
             FEATURE_LEVEL_RECORD.highestSupportedVersion()));
         return ApiError.NONE;
     }
 
-    FeatureMapAndEpoch finalizedFeatures(long lastCommittedOffset) {
-        Map<String, VersionRange> features = new HashMap<>();
-        for (Entry<String, VersionRange> entry : finalizedVersions.entrySet(lastCommittedOffset)) {
+    FinalizedControllerFeatures finalizedFeatures(long lastCommittedOffset) {
+        Map<String, Short> features = new HashMap<>();
+        for (Entry<String, Short> entry : finalizedVersions.entrySet(lastCommittedOffset)) {
             features.put(entry.getKey(), entry.getValue());
         }
-        return new FeatureMapAndEpoch(new FeatureMap(features), lastCommittedOffset);
+        return new FinalizedControllerFeatures(features, lastCommittedOffset);
     }
 
     public void replay(FeatureLevelRecord record) {
-        finalizedVersions.put(record.name(),
-            new VersionRange(record.minFeatureLevel(), record.maxFeatureLevel()));
+        log.info("Setting feature {} to {}", record.name(), record.featureLevel());
+        finalizedVersions.put(record.name(), record.featureLevel());
     }
 
     class FeatureControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final Iterator<Entry<String, VersionRange>> iterator;
+        private final Iterator<Entry<String, Short>> iterator;
 
         FeatureControlIterator(long epoch) {
             this.iterator = finalizedVersions.entrySet(epoch).iterator();
@@ -141,12 +172,10 @@ public class FeatureControlManager {
         @Override
         public List<ApiMessageAndVersion> next() {
             if (!hasNext()) throw new NoSuchElementException();
-            Entry<String, VersionRange> entry = iterator.next();
-            VersionRange versions = entry.getValue();
-            return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(entry.getKey()).
-                setMinFeatureLevel(versions.min()).
-                setMaxFeatureLevel(versions.max()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+            Entry<String, Short> entry = iterator.next();
+            return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(entry.getKey())
+                .setFeatureLevel(entry.getValue()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
         }
     }
 

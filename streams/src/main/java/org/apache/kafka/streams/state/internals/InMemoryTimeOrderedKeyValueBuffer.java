@@ -25,7 +25,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -35,7 +34,6 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
@@ -203,12 +201,14 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         init(root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         init(root);
     }
 
@@ -229,13 +229,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             streamsMetrics
         );
 
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
-        changelogTopic = ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
+        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition();

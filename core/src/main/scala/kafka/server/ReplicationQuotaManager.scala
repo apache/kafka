@@ -79,7 +79,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   private var quota: Quota = null
   private val sensorAccess = new SensorAccess(lock, metrics)
   private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString,
-    s"Tracking byte-rate for ${replicationType}")
+    s"Tracking byte-rate for $replicationType")
 
   /**
     * Update the quota

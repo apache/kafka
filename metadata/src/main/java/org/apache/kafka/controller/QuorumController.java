@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -44,6 +45,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
@@ -69,13 +72,14 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
+import org.apache.kafka.metadata.placement.ReplicaPlacer;
+import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
-import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -94,6 +98,7 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -111,7 +116,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
@@ -143,14 +147,14 @@ public final class QuorumController implements Controller {
         private LogContext logContext = null;
         private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;
         private RaftClient<ApiMessageAndVersion> raftClient = null;
-        private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
+        private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private boolean isLeaderRecoverySupported = false;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
-        private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
+        private long sessionTimeoutNs = ClusterControlManager.DEFAULT_SESSION_TIMEOUT_NS;
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
@@ -188,8 +192,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSupportedFeatures(Map<String, VersionRange> supportedFeatures) {
-            this.supportedFeatures = supportedFeatures;
+        public Builder setQuorumFeatures(QuorumFeatures quorumFeatures) {
+            this.quorumFeatures = quorumFeatures;
             return this;
         }
 
@@ -263,6 +267,9 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
+            if (quorumFeatures == null) {
+                throw new RuntimeException("You must specify the quorum features");
+            }
             if (threadNamePrefix == null) {
                 threadNamePrefix = String.format("Node%d_", nodeId);
             }
@@ -273,11 +280,12 @@ public final class QuorumController implements Controller {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
+
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, clusterId, queue, time,
-                    configSchema, raftClient, supportedFeatures, defaultReplicationFactor,
+                    configSchema, raftClient, quorumFeatures, defaultReplicationFactor,
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
                     createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
@@ -291,7 +299,7 @@ public final class QuorumController implements Controller {
 
     /**
      * Checks that a configuration resource exists.
-     *
+     * <p>
      * This object must be used only from the controller event thread.
      */
     class ConfigResourceExistenceChecker implements Consumer<ConfigResource> {
@@ -382,7 +390,7 @@ public final class QuorumController implements Controller {
             return exception;
         }
         log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
-            "Reverting to last committed offset {}.",
+                "Reverting to last committed offset {}.",
             name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
         raftClient.resign(curClaimEpoch);
@@ -582,16 +590,17 @@ public final class QuorumController implements Controller {
         return replicationControl;
     }
 
-    // VisibleForTesting
-    <T> CompletableFuture<T> appendReadEvent(String name, Supplier<T> handler) {
+    <T> CompletableFuture<T> appendReadEvent(
+        String name,
+        OptionalLong deadlineNs,
+        Supplier<T> handler
+    ) {
         ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
-        queue.append(event);
-        return event.future();
-    }
-
-    <T> CompletableFuture<T> appendReadEvent(String name, long deadlineNs, Supplier<T> handler) {
-        ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
-        queue.appendWithDeadline(deadlineNs, event);
+        if (deadlineNs.isPresent()) {
+            queue.appendWithDeadline(deadlineNs.getAsLong(), event);
+        } else {
+            queue.append(event);
+        }
         return event.future();
     }
 
@@ -601,17 +610,17 @@ public final class QuorumController implements Controller {
          * operation.  In general, this operation should not modify the "hard state" of
          * the controller.  That modification will happen later on, when we replay the
          * records generated by this function.
-         *
+         * <p>
          * There are cases where this function modifies the "soft state" of the
          * controller.  Mainly, this happens when we process cluster heartbeats.
-         *
+         * <p>
          * This function also generates an RPC result.  In general, if the RPC resulted in
          * an error, the RPC result will be an error, and the generated record list will
          * be empty.  This would happen if we tried to create a topic with incorrect
          * parameters, for example.  Of course, partial errors are possible for batch
          * operations.
          *
-         * @return              A result containing a list of records, and the RPC result.
+         * @return A result containing a list of records, and the RPC result.
          */
         ControllerResult<T> generateRecordsAndResult() throws Exception;
 
@@ -620,7 +629,8 @@ public final class QuorumController implements Controller {
          * with the end offset at which those records were placed.  If there were no
          * records to write, we'll just pass the last write offset.
          */
-        default void processBatchEndOffset(long offset) {}
+        default void processBatchEndOffset(long offset) {
+        }
     }
 
     /**
@@ -731,17 +741,14 @@ public final class QuorumController implements Controller {
     }
 
     private <T> CompletableFuture<T> appendWriteEvent(String name,
-                                                      long deadlineNs,
+                                                      OptionalLong deadlineNs,
                                                       ControllerWriteOperation<T> op) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
-        queue.appendWithDeadline(deadlineNs, event);
-        return event.future();
-    }
-
-    private <T> CompletableFuture<T> appendWriteEvent(String name,
-                                                      ControllerWriteOperation<T> op) {
-        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
-        queue.append(event);
+        if (deadlineNs.isPresent()) {
+            queue.appendWithDeadline(deadlineNs.getAsLong(), event);
+        } else {
+            queue.append(event);
+        }
         return event.future();
     }
 
@@ -835,9 +842,9 @@ public final class QuorumController implements Controller {
                                     reader.snapshotId(),
                                     offset,
                                     messages
-                                      .stream()
-                                      .map(ApiMessageAndVersion::toString)
-                                      .collect(Collectors.joining(", "))
+                                        .stream()
+                                        .map(ApiMessageAndVersion::toString)
+                                        .collect(Collectors.joining(", "))
                                 );
                             } else {
                                 log.debug(
@@ -948,7 +955,7 @@ public final class QuorumController implements Controller {
         queue.scheduleDeferred(name, new EarliestDeadlineFunction(deadlineNs), event);
         event.future.exceptionally(e -> {
             if (e instanceof UnknownServerException && e.getCause() != null &&
-                    e.getCause() instanceof RejectedExecutionException) {
+                e.getCause() instanceof RejectedExecutionException) {
                 log.error("Cancelling deferred write event {} because the event queue " +
                     "is now closed.", name);
                 return null;
@@ -987,8 +994,6 @@ public final class QuorumController implements Controller {
     }
 
     private static final String MAYBE_BALANCE_PARTITION_LEADERS = "maybeBalancePartitionLeaders";
-
-    private static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
     private void maybeScheduleNextBalancePartitionLeaders() {
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
@@ -1312,7 +1317,7 @@ public final class QuorumController implements Controller {
                              Time time,
                              KafkaConfigSchema configSchema,
                              RaftClient<ApiMessageAndVersion> raftClient,
-                             Map<String, VersionRange> supportedFeatures,
+                             QuorumFeatures quorumFeatures,
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              boolean isLeaderRecoverySupported,
@@ -1347,15 +1352,31 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             build();
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
-        this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
-            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
-        this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
+        this.clusterControl = new ClusterControlManager.Builder().
+            setLogContext(logContext).
+            setClusterId(clusterId).
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(sessionTimeoutNs).
+            setReplicaPlacer(replicaPlacer).
+            setControllerMetrics(controllerMetrics).
+            build();
+        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
-        this.replicationControl = new ReplicationControlManager(snapshotRegistry,
-            logContext, defaultReplicationFactor, defaultNumPartitions, MAX_ELECTIONS_PER_IMBALANCE,
-            isLeaderRecoverySupported, configurationControl, clusterControl, controllerMetrics, createTopicPolicy);
+        this.replicationControl = new ReplicationControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setLogContext(logContext).
+            setDefaultReplicationFactor(defaultReplicationFactor).
+            setDefaultNumPartitions(defaultNumPartitions).
+            setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
+            setIsLeaderRecoverySupported(isLeaderRecoverySupported).
+            setConfigurationControl(configurationControl).
+            setClusterControl(clusterControl).
+            setControllerMetrics(controllerMetrics).
+            setCreateTopicPolicy(createTopicPolicy).
+            build();
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
@@ -1370,95 +1391,120 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request) {
+    public CompletableFuture<AlterPartitionResponseData> alterPartition(
+        ControllerRequestContext context,
+        AlterPartitionRequestData request
+    ) {
         if (request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(new AlterPartitionResponseData());
         }
-        return appendWriteEvent("alterPartition", () ->
-            replicationControl.alterPartition(request));
+        return appendWriteEvent("alterPartition", context.deadlineNs(),
+            () -> replicationControl.alterPartition(request));
     }
 
     @Override
-    public CompletableFuture<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request, Set<String> describable) {
+    public CompletableFuture<CreateTopicsResponseData> createTopics(
+        ControllerRequestContext context,
+        CreateTopicsRequestData request, Set<String> describable
+    ) {
         if (request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
-        return appendWriteEvent("createTopics",
-            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
+        return appendWriteEvent("createTopics", context.deadlineNs(),
             () -> replicationControl.createTopics(request, describable));
     }
 
     @Override
-    public CompletableFuture<Void> unregisterBroker(int brokerId) {
-        return appendWriteEvent("unregisterBroker",
+    public CompletableFuture<Void> unregisterBroker(
+        ControllerRequestContext context,
+        int brokerId
+    ) {
+        return appendWriteEvent("unregisterBroker", context.deadlineNs(),
             () -> replicationControl.unregisterBroker(brokerId));
     }
 
     @Override
-    public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(long deadlineNs,
-                                                                            Collection<String> names) {
-        if (names.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
-        return appendReadEvent("findTopicIds", deadlineNs,
+    public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(
+        ControllerRequestContext context,
+        Collection<String> names
+    ) {
+        if (names.isEmpty())
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        return appendReadEvent("findTopicIds", context.deadlineNs(),
             () -> replicationControl.findTopicIds(lastCommittedOffset, names));
     }
 
     @Override
-    public CompletableFuture<Map<String, Uuid>> findAllTopicIds(long deadlineNs) {
-        return appendReadEvent("findAllTopicIds", deadlineNs,
+    public CompletableFuture<Map<String, Uuid>> findAllTopicIds(
+        ControllerRequestContext context
+    ) {
+        return appendReadEvent("findAllTopicIds", context.deadlineNs(),
             () -> replicationControl.findAllTopicIds(lastCommittedOffset));
     }
 
     @Override
-    public CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(long deadlineNs,
-                                                                              Collection<Uuid> ids) {
-        if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
-        return appendReadEvent("findTopicNames", deadlineNs,
+    public CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(
+        ControllerRequestContext context,
+        Collection<Uuid> ids
+    ) {
+        if (ids.isEmpty())
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        return appendReadEvent("findTopicNames", context.deadlineNs(),
             () -> replicationControl.findTopicNames(lastCommittedOffset, ids));
     }
 
     @Override
-    public CompletableFuture<Map<Uuid, ApiError>> deleteTopics(long deadlineNs,
-                                                               Collection<Uuid> ids) {
-        if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
-        return appendWriteEvent("deleteTopics", deadlineNs,
+    public CompletableFuture<Map<Uuid, ApiError>> deleteTopics(
+        ControllerRequestContext context,
+        Collection<Uuid> ids
+    ) {
+        if (ids.isEmpty())
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        return appendWriteEvent("deleteTopics", context.deadlineNs(),
             () -> replicationControl.deleteTopics(ids));
     }
 
     @Override
-    public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
-            describeConfigs(Map<ConfigResource, Collection<String>> resources) {
-        return appendReadEvent("describeConfigs", () ->
-            configurationControl.describeConfigs(lastCommittedOffset, resources));
+    public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>> describeConfigs(
+        ControllerRequestContext context,
+        Map<ConfigResource, Collection<String>> resources
+    ) {
+        return appendReadEvent("describeConfigs", context.deadlineNs(),
+            () -> configurationControl.describeConfigs(lastCommittedOffset, resources));
     }
 
     @Override
-    public CompletableFuture<ElectLeadersResponseData>
-            electLeaders(ElectLeadersRequestData request) {
+    public CompletableFuture<ElectLeadersResponseData> electLeaders(
+        ControllerRequestContext context,
+        ElectLeadersRequestData request
+    ) {
         // If topicPartitions is null, we will try to trigger a new leader election on
         // all partitions (!).  But if it's empty, there is nothing to do.
         if (request.topicPartitions() != null && request.topicPartitions().isEmpty()) {
             return CompletableFuture.completedFuture(new ElectLeadersResponseData());
         }
-        return appendWriteEvent("electLeaders",
-            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
+        return appendWriteEvent("electLeaders", context.deadlineNs(),
             () -> replicationControl.electLeaders(request));
     }
 
     @Override
-    public CompletableFuture<FeatureMapAndEpoch> finalizedFeatures() {
-        return appendReadEvent("getFinalizedFeatures",
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures(
+        ControllerRequestContext context
+    ) {
+        return appendReadEvent("getFinalizedFeatures", context.deadlineNs(),
             () -> featureControl.finalizedFeatures(lastCommittedOffset));
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
+        ControllerRequestContext context,
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
-        boolean validateOnly) {
+        boolean validateOnly
+    ) {
         if (configChanges.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
-        return appendWriteEvent("incrementalAlterConfigs", () -> {
+        return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
                 configurationControl.incrementalAlterConfigs(configChanges, false);
             if (validateOnly) {
@@ -1470,35 +1516,39 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterPartitionReassignmentsResponseData>
-            alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
+    public CompletableFuture<AlterPartitionReassignmentsResponseData> alterPartitionReassignments(
+        ControllerRequestContext context,
+        AlterPartitionReassignmentsRequestData request
+    ) {
         if (request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(new AlterPartitionReassignmentsResponseData());
         }
-        return appendWriteEvent("alterPartitionReassignments",
-            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
+        return appendWriteEvent("alterPartitionReassignments", context.deadlineNs(),
             () -> replicationControl.alterPartitionReassignments(request));
     }
 
     @Override
-    public CompletableFuture<ListPartitionReassignmentsResponseData>
-            listPartitionReassignments(ListPartitionReassignmentsRequestData request) {
+    public CompletableFuture<ListPartitionReassignmentsResponseData> listPartitionReassignments(
+        ControllerRequestContext context,
+        ListPartitionReassignmentsRequestData request
+    ) {
         if (request.topics() != null && request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(
                 new ListPartitionReassignmentsResponseData().setErrorMessage(null));
         }
-        return appendReadEvent("listPartitionReassignments",
-            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
+        return appendReadEvent("listPartitionReassignments", context.deadlineNs(),
             () -> replicationControl.listPartitionReassignments(request.topics()));
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
-            Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
+        ControllerRequestContext context,
+        Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly
+    ) {
         if (newConfigs.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
-        return appendWriteEvent("legacyAlterConfigs", () -> {
+        return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
                 configurationControl.legacyAlterConfigs(newConfigs, false);
             if (validateOnly) {
@@ -1510,9 +1560,11 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<BrokerHeartbeatReply>
-            processBrokerHeartbeat(BrokerHeartbeatRequestData request) {
-        return appendWriteEvent("processBrokerHeartbeat",
+    public CompletableFuture<BrokerHeartbeatReply> processBrokerHeartbeat(
+        ControllerRequestContext context,
+        BrokerHeartbeatRequestData request
+    ) {
+        return appendWriteEvent("processBrokerHeartbeat", context.deadlineNs(),
             new ControllerWriteOperation<BrokerHeartbeatReply>() {
                 private final int brokerId = request.brokerId();
                 private boolean inControlledShutdown = false;
@@ -1537,9 +1589,11 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<BrokerRegistrationReply>
-            registerBroker(BrokerRegistrationRequestData request) {
-        return appendWriteEvent("registerBroker", () -> {
+    public CompletableFuture<BrokerRegistrationReply> registerBroker(
+        ControllerRequestContext context,
+        BrokerRegistrationRequestData request
+    ) {
+        return appendWriteEvent("registerBroker", context.deadlineNs(), () -> {
             ControllerResult<BrokerRegistrationReply> result = clusterControl.
                 registerBroker(request, writeOffset + 1, featureControl.
                     finalizedFeatures(Long.MAX_VALUE));
@@ -1550,11 +1604,14 @@ public final class QuorumController implements Controller {
 
     @Override
     public CompletableFuture<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
-            Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly) {
+        ControllerRequestContext context,
+        Collection<ClientQuotaAlteration> quotaAlterations,
+        boolean validateOnly
+    ) {
         if (quotaAlterations.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
-        return appendWriteEvent("alterClientQuotas", () -> {
+        return appendWriteEvent("alterClientQuotas", context.deadlineNs(), () -> {
             ControllerResult<Map<ClientQuotaEntity, ApiError>> result =
                 clientQuotaControlManager.alterClientQuotas(quotaAlterations);
             if (validateOnly) {
@@ -1567,21 +1624,52 @@ public final class QuorumController implements Controller {
 
     @Override
     public CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
-            AllocateProducerIdsRequestData request) {
-        return appendWriteEvent("allocateProducerIds",
+        ControllerRequestContext context,
+        AllocateProducerIdsRequestData request
+    ) {
+        return appendWriteEvent("allocateProducerIds", context.deadlineNs(),
             () -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
             .thenApply(result -> new AllocateProducerIdsResponseData()
-                    .setProducerIdStart(result.firstProducerId())
-                    .setProducerIdLen(result.size()));
+                .setProducerIdStart(result.firstProducerId())
+                .setProducerIdLen(result.size()));
     }
 
     @Override
-    public CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topics) {
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+        ControllerRequestContext context,
+        UpdateFeaturesRequestData request
+    ) {
+        return appendWriteEvent("updateFeatures", context.deadlineNs(), () -> {
+            Map<String, Short> updates = new HashMap<>();
+            Map<String, FeatureUpdate.UpgradeType> upgradeTypes = new HashMap<>();
+            request.featureUpdates().forEach(featureUpdate -> {
+                String featureName = featureUpdate.feature();
+                upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
+                updates.put(featureName, featureUpdate.maxVersionLevel());
+            });
+            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
+                request.validateOnly());
+        }).thenApply(result -> {
+            UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
+            responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
+            result.forEach((featureName, error) -> responseData.results().add(
+                new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                    .setFeature(featureName)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message())));
+            return responseData;
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
+        ControllerRequestContext context,
+        List<CreatePartitionsTopic> topics
+    ) {
         if (topics.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyList());
         }
-        return appendWriteEvent("createPartitions", deadlineNs,
+        return appendWriteEvent("createPartitions", context.deadlineNs(),
             () -> replicationControl.createPartitions(topics));
     }
 
@@ -1602,13 +1690,21 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<List<AclCreateResult>> createAcls(List<AclBinding> aclBindings) {
-        return appendWriteEvent("createAcls", () -> aclControlManager.createAcls(aclBindings));
+    public CompletableFuture<List<AclCreateResult>> createAcls(
+        ControllerRequestContext context,
+        List<AclBinding> aclBindings
+    ) {
+        return appendWriteEvent("createAcls", context.deadlineNs(),
+            () -> aclControlManager.createAcls(aclBindings));
     }
 
     @Override
-    public CompletableFuture<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> filters) {
-        return appendWriteEvent("deleteAcls", () -> aclControlManager.deleteAcls(filters));
+    public CompletableFuture<List<AclDeleteResult>> deleteAcls(
+        ControllerRequestContext context,
+        List<AclBindingFilter> filters
+    ) {
+        return appendWriteEvent("deleteAcls", context.deadlineNs(),
+            () -> aclControlManager.deleteAcls(filters));
     }
 
     @Override

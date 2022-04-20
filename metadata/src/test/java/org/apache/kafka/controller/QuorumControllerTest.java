@@ -41,6 +41,7 @@ import java.util.stream.StreamSupport;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -90,13 +91,13 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static java.util.concurrent.TimeUnit.HOURS;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
+import static org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -134,7 +135,8 @@ public class QuorumControllerTest {
                 b.setConfigSchema(SCHEMA);
             })
         ) {
-            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+            controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
+                new BrokerRegistrationRequestData().
                 setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
         }
@@ -142,18 +144,18 @@ public class QuorumControllerTest {
 
     private void testConfigurationOperations(QuorumController controller) throws Throwable {
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
-            controller.incrementalAlterConfigs(Collections.singletonMap(
+            controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get());
         assertEquals(Collections.singletonMap(BROKER0,
             new ResultOrError<>(Collections.emptyMap())),
-            controller.describeConfigs(Collections.singletonMap(
+            controller.describeConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
-            controller.incrementalAlterConfigs(Collections.singletonMap(
+            controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false).get());
         assertEquals(Collections.singletonMap(BROKER0, new ResultOrError<>(Collections.
                 singletonMap("baz", "123"))),
-            controller.describeConfigs(Collections.singletonMap(
+            controller.describeConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
     }
 
@@ -169,8 +171,9 @@ public class QuorumControllerTest {
                 b.setConfigSchema(SCHEMA);
             })
         ) {
-            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
-                setBrokerId(0).setClusterId(logEnv.clusterId())).get();
+            controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
+                new BrokerRegistrationRequestData().
+                    setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
         }
     }
@@ -178,16 +181,16 @@ public class QuorumControllerTest {
     private void testDelayedConfigurationOperations(LocalLogManagerTestEnv logEnv,
                                                     QuorumController controller)
                                                     throws Throwable {
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(0L));
+        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(1L));
         CompletableFuture<Map<ConfigResource, ApiError>> future1 =
-            controller.incrementalAlterConfigs(Collections.singletonMap(
+            controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false);
         assertFalse(future1.isDone());
         assertEquals(Collections.singletonMap(BROKER0,
             new ResultOrError<>(Collections.emptyMap())),
-            controller.describeConfigs(Collections.singletonMap(
+            controller.describeConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2L));
+        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(3L));
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE), future1.get());
     }
 
@@ -213,6 +216,7 @@ public class QuorumControllerTest {
 
             for (Integer brokerId : allBrokers) {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    ANONYMOUS_CONTEXT,
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
@@ -234,7 +238,8 @@ public class QuorumControllerTest {
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
                         setReplicationFactor(replicationFactor)).iterator()));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
-                createTopicsRequestData, Collections.singleton("foo")).get();
+                ANONYMOUS_CONTEXT, createTopicsRequestData,
+                Collections.singleton("foo")).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
 
@@ -303,6 +308,7 @@ public class QuorumControllerTest {
 
             for (Integer brokerId : allBrokers) {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    ANONYMOUS_CONTEXT,
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
@@ -324,7 +330,7 @@ public class QuorumControllerTest {
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
                         setReplicationFactor(replicationFactor)).iterator()));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
-                createTopicsRequestData, Collections.singleton("foo")).get();
+                ANONYMOUS_CONTEXT, createTopicsRequestData, Collections.singleton("foo")).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
 
@@ -362,6 +368,7 @@ public class QuorumControllerTest {
             // Re-register all fenced brokers
             for (Integer brokerId : brokersToFence) {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    ANONYMOUS_CONTEXT,
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
@@ -393,7 +400,7 @@ public class QuorumControllerTest {
                 .setBrokerEpoch(brokerEpochs.get(partitionRegistration.leader));
             alterPartitionRequest.topics().add(topicData);
 
-            active.alterPartition(alterPartitionRequest).get();
+            active.alterPartition(ANONYMOUS_CONTEXT, alterPartitionRequest).get();
 
             // Check that partitions are balanced
             AtomicLong lastHeartbeat = new AtomicLong(active.time().milliseconds());
@@ -422,10 +429,12 @@ public class QuorumControllerTest {
                     setHost("localhost").setPort(9092));
                 QuorumController active = controlEnv.activeController();
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    ANONYMOUS_CONTEXT,
                     new BrokerRegistrationRequestData().
                         setBrokerId(0).
                         setClusterId(active.clusterId()).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
+                        setFeatures(brokerFeatures()).
                         setListeners(listeners));
                 assertEquals(0L, reply.get().epoch());
                 CreateTopicsRequestData createTopicsRequestData =
@@ -434,28 +443,31 @@ public class QuorumControllerTest {
                             new CreatableTopic().setName("foo").setNumPartitions(1).
                                 setReplicationFactor((short) 1)).iterator()));
                 assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(), active.createTopics(
+                    ANONYMOUS_CONTEXT,
                     createTopicsRequestData, Collections.singleton("foo")).get().
                         topics().find("foo").errorCode());
                 assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
-                    "are currently fenced.", active.createTopics(createTopicsRequestData,
-                        Collections.singleton("foo")).get().topics().find("foo").errorMessage());
+                    "are currently fenced.", active.createTopics(ANONYMOUS_CONTEXT,
+                        createTopicsRequestData, Collections.singleton("foo")).
+                            get().topics().find("foo").errorMessage());
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                    active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
+                    active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(0L).setBrokerId(0).
                             setCurrentMetadataOffset(100000L)).get());
-                assertEquals(Errors.NONE.code(), active.createTopics(createTopicsRequestData,
-                    Collections.singleton("foo")).get().topics().find("foo").errorCode());
+                assertEquals(Errors.NONE.code(), active.createTopics(ANONYMOUS_CONTEXT,
+                    createTopicsRequestData, Collections.singleton("foo")).
+                        get().topics().find("foo").errorCode());
                 CompletableFuture<TopicIdPartition> topicPartitionFuture = active.appendReadEvent(
-                    "debugGetPartition", () -> {
+                    "debugGetPartition", OptionalLong.empty(), () -> {
                         Iterator<TopicIdPartition> iterator = active.
                             replicationControl().brokersToIsrs().iterator(0, true);
                         assertTrue(iterator.hasNext());
                         return iterator.next();
                     });
                 assertEquals(0, topicPartitionFuture.get().partitionId());
-                active.unregisterBroker(0).get();
+                active.unregisterBroker(ANONYMOUS_CONTEXT, 0).get();
                 topicPartitionFuture = active.appendReadEvent(
-                    "debugGetPartition", () -> {
+                    "debugGetPartition", OptionalLong.empty(), () -> {
                         Iterator<TopicIdPartition> iterator = active.
                             replicationControl().brokersToIsrs().partitionsWithNoLeader();
                         assertTrue(iterator.hasNext());
@@ -464,6 +476,11 @@ public class QuorumControllerTest {
                 assertEquals(0, topicPartitionFuture.get().partitionId());
             }
         }
+    }
+
+    private BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
+        BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
+        return features;
     }
 
     @Test
@@ -478,7 +495,7 @@ public class QuorumControllerTest {
             })) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
-                    BrokerRegistrationReply reply = active.registerBroker(
+                    BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
@@ -491,11 +508,11 @@ public class QuorumControllerTest {
                 }
                 for (int i = 0; i < numBrokers - 1; i++) {
                     assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                        active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
+                        active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
                             setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
                 }
-                CreateTopicsResponseData fooData = active.createTopics(
+                CreateTopicsResponseData fooData = active.createTopics(ANONYMOUS_CONTEXT,
                     new CreateTopicsRequestData().setTopics(
                         new CreatableTopicCollection(Collections.singleton(
                             new CreatableTopic().setName("foo").setNumPartitions(-1).
@@ -510,7 +527,7 @@ public class QuorumControllerTest {
                                             iterator()))).iterator())),
                     Collections.singleton("foo")).get();
                 fooId = fooData.topics().find("foo").topicId();
-                active.allocateProducerIds(
+                active.allocateProducerIds(ANONYMOUS_CONTEXT,
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
                 long snapshotLogOffset = active.beginWritingSnapshot().get();
                 reader = logEnv.waitForSnapshot(snapshotLogOffset);
@@ -548,7 +565,7 @@ public class QuorumControllerTest {
             })) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
-                    BrokerRegistrationReply reply = active.registerBroker(
+                    BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
@@ -561,11 +578,11 @@ public class QuorumControllerTest {
                 }
                 for (int i = 0; i < numBrokers - 1; i++) {
                     assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                        active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
+                        active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
                             setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
                 }
-                CreateTopicsResponseData fooData = active.createTopics(
+                CreateTopicsResponseData fooData = active.createTopics(ANONYMOUS_CONTEXT,
                     new CreateTopicsRequestData().setTopics(
                         new CreatableTopicCollection(Collections.singleton(
                             new CreatableTopic().setName("foo").setNumPartitions(-1).
@@ -580,7 +597,7 @@ public class QuorumControllerTest {
                                             iterator()))).iterator())),
                     Collections.singleton("foo")).get();
                 fooId = fooData.topics().find("foo").topicId();
-                active.allocateProducerIds(
+                active.allocateProducerIds(ANONYMOUS_CONTEXT,
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
 
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(logEnv.waitForLatestSnapshot());
@@ -604,7 +621,7 @@ public class QuorumControllerTest {
             })) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
-                    BrokerRegistrationReply reply = active.registerBroker(
+                    BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
@@ -615,7 +632,7 @@ public class QuorumControllerTest {
                                 setPort(9092 + i)).iterator()))).get();
                     brokerEpochs.put(i, reply.epoch());
                     assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                        active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
+                        active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
                             setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
                 }
@@ -630,7 +647,7 @@ public class QuorumControllerTest {
                 while (logEnv.appendedBytes() < maxNewRecordBytes) {
                     counter += 1;
                     String topicName = String.format("foo-%s", counter);
-                    active.createTopics(new CreateTopicsRequestData().setTopics(
+                    active.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().setTopics(
                             new CreatableTopicCollection(Collections.singleton(
                                 new CreatableTopic().setName(topicName).setNumPartitions(-1).
                                     setReplicationFactor((short) -1).
@@ -775,30 +792,32 @@ public class QuorumControllerTest {
             })) {
                 QuorumController controller = controlEnv.activeController();
                 CountDownLatch countDownLatch = controller.pause();
+                long now = controller.time().nanoseconds();
+                ControllerRequestContext context0 = new ControllerRequestContext(
+                    KafkaPrincipal.ANONYMOUS, OptionalLong.of(now));
                 CompletableFuture<CreateTopicsResponseData> createFuture =
-                    controller.createTopics(new CreateTopicsRequestData().setTimeoutMs(0).
+                    controller.createTopics(context0, new CreateTopicsRequestData().setTimeoutMs(0).
                         setTopics(new CreatableTopicCollection(Collections.singleton(
                             new CreatableTopic().setName("foo")).iterator())),
                         Collections.emptySet());
-                long now = controller.time().nanoseconds();
                 CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
-                    controller.deleteTopics(now, Collections.singletonList(Uuid.ZERO_UUID));
+                    controller.deleteTopics(context0, Collections.singletonList(Uuid.ZERO_UUID));
                 CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIdsFuture =
-                    controller.findTopicIds(now, Collections.singletonList("foo"));
+                    controller.findTopicIds(context0, Collections.singletonList("foo"));
                 CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNamesFuture =
-                    controller.findTopicNames(now, Collections.singletonList(Uuid.ZERO_UUID));
+                    controller.findTopicNames(context0, Collections.singletonList(Uuid.ZERO_UUID));
                 CompletableFuture<List<CreatePartitionsTopicResult>> createPartitionsFuture =
-                    controller.createPartitions(now, Collections.singletonList(
+                    controller.createPartitions(context0, Collections.singletonList(
                         new CreatePartitionsTopic()));
                 CompletableFuture<ElectLeadersResponseData> electLeadersFuture =
-                    controller.electLeaders(new ElectLeadersRequestData().setTimeoutMs(0).
+                    controller.electLeaders(context0, new ElectLeadersRequestData().setTimeoutMs(0).
                         setTopicPartitions(null));
                 CompletableFuture<AlterPartitionReassignmentsResponseData> alterReassignmentsFuture =
-                    controller.alterPartitionReassignments(
+                    controller.alterPartitionReassignments(context0,
                         new AlterPartitionReassignmentsRequestData().setTimeoutMs(0).
                             setTopics(Collections.singletonList(new ReassignableTopic())));
                 CompletableFuture<ListPartitionReassignmentsResponseData> listReassignmentsFuture =
-                    controller.listPartitionReassignments(
+                    controller.listPartitionReassignments(context0,
                         new ListPartitionReassignmentsRequestData().setTopics(null).setTimeoutMs(0));
                 while (controller.time().nanoseconds() == now) {
                     Thread.sleep(0, 10);
@@ -834,22 +853,21 @@ public class QuorumControllerTest {
                 QuorumController controller = controlEnv.activeController();
                 CountDownLatch countDownLatch = controller.pause();
                 CompletableFuture<CreateTopicsResponseData> createFuture =
-                    controller.createTopics(new CreateTopicsRequestData().setTimeoutMs(120000),
-                        Collections.emptySet());
-                long deadlineMs = controller.time().nanoseconds() + HOURS.toNanos(1);
+                    controller.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().
+                        setTimeoutMs(120000), Collections.emptySet());
                 CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
-                    controller.deleteTopics(deadlineMs, Collections.emptyList());
+                    controller.deleteTopics(ANONYMOUS_CONTEXT, Collections.emptyList());
                 CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIdsFuture =
-                    controller.findTopicIds(deadlineMs, Collections.emptyList());
+                    controller.findTopicIds(ANONYMOUS_CONTEXT, Collections.emptyList());
                 CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNamesFuture =
-                    controller.findTopicNames(deadlineMs, Collections.emptyList());
+                    controller.findTopicNames(ANONYMOUS_CONTEXT, Collections.emptyList());
                 CompletableFuture<List<CreatePartitionsTopicResult>> createPartitionsFuture =
-                    controller.createPartitions(deadlineMs, Collections.emptyList());
+                    controller.createPartitions(ANONYMOUS_CONTEXT, Collections.emptyList());
                 CompletableFuture<ElectLeadersResponseData> electLeadersFuture =
-                    controller.electLeaders(new ElectLeadersRequestData().setTimeoutMs(120000));
+                    controller.electLeaders(ANONYMOUS_CONTEXT, new ElectLeadersRequestData());
                 CompletableFuture<AlterPartitionReassignmentsResponseData> alterReassignmentsFuture =
-                    controller.alterPartitionReassignments(
-                        new AlterPartitionReassignmentsRequestData().setTimeoutMs(12000));
+                    controller.alterPartitionReassignments(ANONYMOUS_CONTEXT,
+                        new AlterPartitionReassignmentsRequestData());
                 createFuture.get();
                 deleteFuture.get();
                 findTopicIdsFuture.get();
@@ -885,7 +903,7 @@ public class QuorumControllerTest {
                 )
                 .collect(Collectors.toList());
 
-            Uuid topicId = controller.createTopics(new CreateTopicsRequestData()
+            Uuid topicId = controller.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData()
                     .setTopics(new CreatableTopicCollection(Collections.singleton(new CreatableTopic()
                         .setName(topicName)
                         .setNumPartitions(-1)
@@ -924,10 +942,8 @@ public class QuorumControllerTest {
             logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
 
             int oldClaimEpoch = controller.curClaimEpoch();
-            assertThrows(
-                ExecutionException.class,
-                () -> controller.alterPartition(alterPartitionRequest).get()
-            );
+            assertThrows(ExecutionException.class,
+                () -> controller.alterPartition(ANONYMOUS_CONTEXT, alterPartitionRequest).get());
 
             // Wait for the controller to become active again
             assertSame(controller, controlEnv.activeController());
@@ -967,7 +983,7 @@ public class QuorumControllerTest {
     private Map<Integer, Long> registerBrokers(QuorumController controller, int numBrokers) throws Exception {
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         for (int brokerId = 0; brokerId < numBrokers; brokerId++) {
-            BrokerRegistrationReply reply = controller.registerBroker(
+            BrokerRegistrationReply reply = controller.registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData()
                     .setBrokerId(brokerId)
                     .setRack(null)
@@ -987,7 +1003,7 @@ public class QuorumControllerTest {
             brokerEpochs.put(brokerId, reply.epoch());
 
             // Send heartbeat to unfence
-            controller.processBrokerHeartbeat(
+            controller.processBrokerHeartbeat(ANONYMOUS_CONTEXT,
                 new BrokerHeartbeatRequestData()
                     .setWantFence(false)
                     .setBrokerEpoch(brokerEpochs.get(brokerId))
@@ -1008,7 +1024,7 @@ public class QuorumControllerTest {
             return;
         }
         for (Integer brokerId : brokers) {
-            BrokerHeartbeatReply reply = controller.processBrokerHeartbeat(
+            BrokerHeartbeatReply reply = controller.processBrokerHeartbeat(ANONYMOUS_CONTEXT,
                 new BrokerHeartbeatRequestData()
                     .setWantFence(false)
                     .setBrokerEpoch(brokerEpochs.get(brokerId))
@@ -1027,7 +1043,7 @@ public class QuorumControllerTest {
             })) {
                 QuorumController active = controlEnv.activeController();
                 registerBrokers(active, 5);
-                active.createTopics(new CreateTopicsRequestData().
+                active.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().
                     setTopics(new CreatableTopicCollection(Collections.singleton(
                         new CreatableTopic().setName("foo").
                             setReplicationFactor((short) 3).

@@ -115,6 +115,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldTransform() {
         builder.addStateStore(storeBuilder());
 
@@ -133,6 +134,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldTransformWithConnectedStoreProvider() {
         stream
             .transform(new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
@@ -185,6 +187,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFlatTransform() {
         builder.addStateStore(storeBuilder());
 
@@ -215,6 +218,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFlatTransformWithConnectedStoreProvider() {
         stream
             .flatTransform(new TransformerSupplier<Integer, Integer, Iterable<KeyValue<Integer, Integer>>>() {
@@ -275,6 +279,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldTransformValuesWithValueTransformerWithKey() {
         builder.addStateStore(storeBuilder());
 
@@ -293,6 +298,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldTransformValuesWithValueTransformerWithKeyWithConnectedStoreProvider() {
         stream
             .transformValues(new ValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
@@ -331,6 +337,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldTransformValuesWithValueTransformerWithoutKey() {
         builder.addStateStore(storeBuilder());
 
@@ -349,6 +356,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldTransformValuesWithValueTransformerWithoutKeyWithConnectedStoreProvider() {
         stream
             .transformValues(new ValueTransformerSupplier<Integer, Integer>() {
@@ -400,6 +408,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFlatTransformValuesWithKey() {
         builder.addStateStore(storeBuilder());
 
@@ -430,6 +439,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFlatTransformValuesWithKeyWithConnectedStoreProvider() {
         stream
             .flatTransformValues(new ValueTransformerWithKeySupplier<Integer, Integer, Iterable<Integer>>() {
@@ -493,6 +503,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFlatTransformValuesWithValueTransformerWithoutKey() {
         builder.addStateStore(storeBuilder());
 
@@ -523,6 +534,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFlatTransformValuesWithValueTransformerWithoutKeyWithConnectedStoreProvider() {
         stream
             .flatTransformValues(new ValueTransformerSupplier<Integer, Iterable<Integer>>() {

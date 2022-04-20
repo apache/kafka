@@ -53,7 +53,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.{ElectionType, Uuid}
-import org.apache.kafka.controller.Controller
+import org.apache.kafka.controller.{Controller, ControllerRequestContext}
+import org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions._
@@ -101,7 +102,6 @@ class ControllerApisTest {
       authorizer,
       quotas,
       time,
-      Map.empty,
       controller,
       raftManager,
       new KafkaConfig(props),
@@ -518,7 +518,7 @@ class ControllerApisTest {
         setTopicConfigErrorCode(TOPIC_AUTHORIZATION_FAILED.code()),
       new CreatableTopicResult().setName("quux").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()))
-    assertEquals(expectedResponse, controllerApis.createTopics(request,
+    assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       false,
       _ => Set("baz", "indescribable"),
       _ => Set("baz")).get().topics().asScala.toSet)
@@ -538,7 +538,7 @@ class ControllerApisTest {
         setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
         setErrorMessage("This server does not host this topic-partition."),
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
-    assertEquals(expectedResponse, controllerApis.deleteTopics(request,
+    assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       true,
       _ => Set.empty,
@@ -564,7 +564,7 @@ class ControllerApisTest {
         setErrorCode(UNKNOWN_TOPIC_ID.code()).
         setErrorMessage("This server does not host this topic ID."),
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
-    assertEquals(response, controllerApis.deleteTopics(request,
+    assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       true,
       _ => Set.empty,
@@ -606,7 +606,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName(null).setTopicId(bazId).
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate topic id."))
-    assertEquals(response, controllerApis.deleteTopics(request,
+    assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
       names => names.toSet,
@@ -642,7 +642,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName("foo").setTopicId(fooId).
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message))
-    assertEquals(response, controllerApis.deleteTopics(request,
+    assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
       _ => Set("foo", "baz"),
@@ -667,7 +667,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName(null).setTopicId(barId).
         setErrorCode(UNKNOWN_TOPIC_ID.code).
         setErrorMessage(UNKNOWN_TOPIC_ID.message))
-    assertEquals(expectedResponse, controllerApis.deleteTopics(request,
+    assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
       _ => Set("foo"),
@@ -686,7 +686,7 @@ class ControllerApisTest {
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(fooId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
     assertEquals(classOf[NotControllerException], assertThrows(
-      classOf[ExecutionException], () => controllerApis.deleteTopics(request,
+      classOf[ExecutionException], () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
         false,
         _ => Set("foo", "bar"),
@@ -703,12 +703,14 @@ class ControllerApisTest {
     val controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
-    assertThrows(classOf[TopicDeletionDisabledException], () => controllerApis.deleteTopics(request,
+    assertThrows(classOf[TopicDeletionDisabledException],
+      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
         false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
-    assertThrows(classOf[InvalidRequestException], () => controllerApis.deleteTopics(request,
+    assertThrows(classOf[InvalidRequestException],
+      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         1,
         false,
         _ => Set("foo", "bar"),
@@ -736,7 +738,8 @@ class ControllerApisTest {
       new CreatePartitionsTopicResult().setName("baz").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
         setErrorMessage(null)),
-      controllerApis.createPartitions(request, _ => Set("foo", "bar")).get().asScala.toSet)
+      controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
+        _ => Set("foo", "bar")).get().asScala.toSet)
   }
 
   @Test
@@ -815,8 +818,8 @@ class ControllerApisTest {
     val responseData = new ElectLeadersResponseData()
         .setErrorCode(Errors.NOT_CONTROLLER.code)
 
-    when(controller.electLeaders(
-      request.data
+    when(controller.electLeaders(any[ControllerRequestContext],
+      ArgumentMatchers.eq(request.data)
     )).thenReturn(CompletableFuture.completedFuture(responseData))
 
     val response = handleRequest[ElectLeadersResponse](request, controllerApis)
