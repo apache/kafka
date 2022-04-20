@@ -29,9 +29,12 @@ import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, TimestampTyp
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.metadata.ConfigSynonym
 import org.apache.kafka.metadata.ConfigSynonym.{HOURS_TO_MILLISECONDS, MINUTES_TO_MILLISECONDS}
-
 import java.util.Arrays.asList
 import java.util.{Collections, Locale, Properties}
+
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion._
+
 import scala.annotation.nowarn
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -560,17 +563,19 @@ object LogConfig {
     logProps
   }
 
-  def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: ApiVersion): Boolean =
-    interBrokerProtocolVersion >= KAFKA_3_0_IV1
+  // ahu todo: should we move this into `MetadataVersion.java`?
+  def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: MetadataVersion): Boolean =
+    interBrokerProtocolVersion.compareTo(IBP_3_0_IV1) >= 0
 
   class MessageFormatVersion(messageFormatVersionString: String, interBrokerProtocolVersionString: String) {
-    val messageFormatVersion = ApiVersion(messageFormatVersionString)
-    private val interBrokerProtocolVersion = ApiVersion(interBrokerProtocolVersionString)
+    val messageFormatVersion = MetadataVersion.apply(messageFormatVersionString)
+    private val interBrokerProtocolVersion = MetadataVersion.apply(interBrokerProtocolVersionString)
 
     def shouldIgnore: Boolean = shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion)
 
+    // ahu todo: should we move this into `MetadataVersion.java`?
     def shouldWarn: Boolean =
-      interBrokerProtocolVersion >= KAFKA_3_0_IV1 && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
+      interBrokerProtocolVersion.compareTo(IBP_3_0_IV1) >= 0 && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
 
     @nowarn("cat=deprecation")
     def topicWarningMessage(topicName: String): String = {

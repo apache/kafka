@@ -22,7 +22,6 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -50,6 +49,7 @@ import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -625,11 +625,11 @@ class KafkaServer(
               if (!NetworkClientUtils.awaitReady(networkClient, prevController, time, socketTimeoutMs))
                 throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
-              // send the controlled shutdown request
+              // send the controlled shutdown request // ahu todo: move this into MetadataVersion?
               val controlledShutdownApiVersion: Short =
-                if (config.interBrokerProtocolVersion < KAFKA_0_9_0) 0
-                else if (config.interBrokerProtocolVersion < KAFKA_2_2_IV0) 1
-                else if (config.interBrokerProtocolVersion < KAFKA_2_4_IV1) 2
+                if (config.interBrokerProtocolVersion.compareTo(IBP_0_9_0) < 0) 0
+                else if (config.interBrokerProtocolVersion.compareTo(IBP_2_2_IV0) < 0) 1
+                else if (config.interBrokerProtocolVersion.compareTo(IBP_2_4_IV1) < 0) 2
                 else 3
 
               val controlledShutdownRequest = new ControlledShutdownRequest.Builder(
