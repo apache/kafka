@@ -447,7 +447,8 @@ subprojects {
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
-    maxHeapSize = "2253m" // 2.2g
+    // Increase heap size for integration tests
+    maxHeapSize = "2253m"
     jvmArgs = defaultJvmArgs
 
 
