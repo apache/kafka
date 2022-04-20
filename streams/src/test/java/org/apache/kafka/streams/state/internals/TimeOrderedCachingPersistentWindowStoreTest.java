@@ -187,6 +187,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotReturnDuplicatesInRanges() {
         final StreamsBuilder builder = new StreamsBuilder();
 
