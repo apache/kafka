@@ -20,6 +20,9 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.InternalFixedKeyRecordFactory;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 
@@ -35,12 +38,13 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private final Map<String, ProcessorNode<KOut, VOut, ?, ?>> childByName;
 
     private final Processor<KIn, VIn, KOut, VOut> processor;
+    private final FixedKeyProcessor<KIn, VIn, VOut> fixedKeyProcessor;
     private final String name;
     private final Time time;
 
     public final Set<String> stateStores;
 
-    private InternalProcessorContext internalProcessorContext;
+    private InternalProcessorContext<KOut, VOut> internalProcessorContext;
     private String threadId;
 
     private boolean closed = true;
@@ -55,6 +59,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
         this.name = name;
         this.processor = processor;
+        this.fixedKeyProcessor = null;
         this.children = new ArrayList<>();
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
@@ -62,11 +67,12 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public ProcessorNode(final String name,
-                         @SuppressWarnings("deprecation") final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor,
+                         final FixedKeyProcessor<KIn, VIn, VOut> processor,
                          final Set<String> stateStores) {
 
         this.name = name;
-        this.processor = ProcessorAdapter.adapt(processor);
+        this.processor = null;
+        this.fixedKeyProcessor = processor;
         this.children = new ArrayList<>();
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
@@ -75,10 +81,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     public final String name() {
         return name;
-    }
-
-    public final Processor<KIn, VIn, KOut, VOut> processor() {
-        return processor;
     }
 
     public List<ProcessorNode<KOut, VOut, ?, ?>> children() {
@@ -104,6 +106,11 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             if (processor != null) {
                 processor.init(context);
             }
+            if (fixedKeyProcessor != null) {
+                @SuppressWarnings("unchecked") final FixedKeyProcessorContext<KIn, VOut> fixedKeyProcessorContext =
+                    (FixedKeyProcessorContext<KIn, VOut>) context;
+                fixedKeyProcessor.init(fixedKeyProcessorContext);
+            }
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
@@ -119,6 +126,9 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         try {
             if (processor != null) {
                 processor.close();
+            }
+            if (fixedKeyProcessor != null) {
+                fixedKeyProcessor.close();
             }
             internalProcessorContext.metrics().removeAllNodeLevelSensors(
                 threadId,
@@ -143,7 +153,17 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         throwIfClosed();
 
         try {
-            processor.process(record);
+            if (processor != null) {
+                processor.process(record);
+            } else if (fixedKeyProcessor != null) {
+                fixedKeyProcessor.process(
+                    InternalFixedKeyRecordFactory.create(record)
+                );
+            } else {
+                throw new IllegalStateException(
+                    "neither the processor nor the fixed key processor were set."
+                );
+            }
         } catch (final ClassCastException e) {
             final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
             final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();
