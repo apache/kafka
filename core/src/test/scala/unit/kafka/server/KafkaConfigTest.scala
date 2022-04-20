@@ -1526,45 +1526,4 @@ class KafkaConfigTest {
     assertTrue(ce.getMessage.contains(KafkaConfig.InterBrokerSecurityProtocolProp))
   }
 
-  @Test
-  def testInvalidSaslEnabledMechanisms(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    val configs = new util.HashMap[Object, Object](props)
-    configs.put(KafkaConfig.SaslEnabledMechanismsProp, null)
-    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-    assertTrue(ce.getMessage.contains(KafkaConfig.SaslEnabledMechanismsProp))
-
-    configs.put(KafkaConfig.SaslEnabledMechanismsProp, Collections.EMPTY_LIST)
-    assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-
-    configs.put(KafkaConfig.SaslEnabledMechanismsProp, "")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-
-    configs.put(KafkaConfig.SaslEnabledMechanismsProp, util.Arrays.asList("PLAIN", ""))
-    assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-  }
-
-  @Test
-  def testInvalidSaslMechanismControllerProtocol(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    val configs = new util.HashMap[Object, Object](props)
-    configs.put(KafkaConfig.SaslMechanismControllerProtocolProp, null)
-    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-    assertTrue(ce.getMessage.contains(KafkaConfig.SaslMechanismControllerProtocolProp))
-
-    configs.put(KafkaConfig.SaslMechanismControllerProtocolProp, "")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-  }
-
-  @Test
-  def testInvalidSaslMechanismInterBrokerProtocol(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    val configs = new util.HashMap[Object, Object](props)
-    configs.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, null)
-    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-    assertTrue(ce.getMessage.contains(KafkaConfig.SaslMechanismInterBrokerProtocolProp))
-
-    configs.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, "")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
-  }
 }

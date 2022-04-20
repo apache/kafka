@@ -48,6 +48,6 @@ public enum SslClientAuth {
 
     @Override
     public String toString() {
-        return name().toLowerCase(Locale.ROOT);
+        return super.toString().toLowerCase(Locale.ROOT);
     }
 }

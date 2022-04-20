@@ -18,7 +18,6 @@ package org.apache.kafka.common.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -124,15 +123,4 @@ public class SaslConfigsTest {
         assertThrows(ConfigException.class, () -> new ConfigDef().withClientSaslSupport().parse(props));
     }
 
-    @Test
-    public void testInvalidSaslMechanism() {
-        Map<Object, Object> props = new HashMap<>();
-        props.put(SaslConfigs.SASL_MECHANISM, "");
-        ConfigException ce = assertThrows(ConfigException.class, () -> new ConfigDef().withClientSaslSupport().parse(props));
-        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
-
-        props.put(SaslConfigs.SASL_MECHANISM, null);
-        ce = assertThrows(ConfigException.class, () -> new ConfigDef().withClientSaslSupport().parse(props));
-        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
-    }
 }

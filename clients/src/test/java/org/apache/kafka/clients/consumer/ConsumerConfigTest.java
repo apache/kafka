@@ -120,6 +120,22 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(ce.getMessage().contains(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, " ");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, 1);
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "abc");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
     }
 
     @Test
@@ -129,6 +145,24 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, null);
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(ce.getMessage().contains(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, " ");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, 1);
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "abc");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+
+
     }
 
     @Test

@@ -76,9 +76,25 @@ public class ProducerConfigTest {
     @Test
     public void testInvalidKeySerializer() {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, null);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, null);
         ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "");
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, " ");
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, 1);
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "abc");
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertTrue(ce.getMessage().contains(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
     }
 
@@ -88,6 +104,22 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, null);
         ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "");
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, " ");
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, 1);
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "abc");
+        ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertTrue(ce.getMessage().contains(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
     }
 
