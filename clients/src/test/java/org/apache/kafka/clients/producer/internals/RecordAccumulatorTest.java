@@ -117,8 +117,8 @@ public class RecordAccumulatorTest {
         accum.append(tp3, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         accum.append(tp4, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
 
-        // drain 2 record for tp1 , tp3
-        Map<Integer, List<ProducerBatch>> batches1 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1,node2)), (int) batchSize, 0);
+        // drain batches from 2 nodes: node1 => tp1, node2 => tp3, because the max request size is full after the first batch drained
+        Map<Integer, List<ProducerBatch>> batches1 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
         assertEquals(2,batches1.size());
         verifyTopicPartitionInBatches(batches1,tp1,tp3);
 
@@ -126,8 +126,9 @@ public class RecordAccumulatorTest {
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         accum.append(tp3, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
 
-        // drain 2 record for tp2, tp4
-        Map<Integer, List<ProducerBatch>> batchss2 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1,node2)), (int) batchSize, 0);
+        // drain batches from 2 nodes: node1 => tp2, node2 => tp4, because the max request size is full after the first batch drained
+        // The drain index should start from next topic partition, that is, node1 => tp2, node2 => tp4
+        Map<Integer, List<ProducerBatch>> batchss2 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batchss2,tp2,tp4);
     }
 
