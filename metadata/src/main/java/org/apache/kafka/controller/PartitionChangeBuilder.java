@@ -48,6 +48,7 @@ public class PartitionChangeBuilder {
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
+        if (record.leaderRecoveryState() != LeaderRecoveryState.NO_CHANGE) return false;
         return true;
     }
 
