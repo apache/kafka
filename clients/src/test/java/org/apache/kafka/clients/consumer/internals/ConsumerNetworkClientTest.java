@@ -57,6 +57,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 public class ConsumerNetworkClientTest {
 
@@ -170,7 +171,7 @@ public class ConsumerNetworkClientTest {
 
         // expect poll, but with no timeout
         consumerClient.poll(time.timer(Long.MAX_VALUE), () -> false);
-        verify(mockNetworkClient).poll(eq(0L), anyLong());
+        verify(mockNetworkClient, times(2)).poll(eq(0L), anyLong());
     }
 
     @Test
@@ -283,7 +284,7 @@ public class ConsumerNetworkClientTest {
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.pollNoWakeup(); // dequeue and send the request
 
-        client.enableBlockingUntilWakeup(2);
+        client.enableBlockingUntilWakeup(1);
         Thread t1 = new Thread() {
             @Override
             public void run() {
@@ -410,9 +411,9 @@ public class ConsumerNetworkClientTest {
         isReady.set(true);
         consumerClient.trySend(time.milliseconds());
         // check node ready or not for every request
-        assertEquals(2, checkCount.getAndSet(0));
+        assertEquals(1, checkCount.getAndSet(0));
         assertEquals(2, consumerClient.pendingRequestCount(node));
-        assertEquals(2, client.inFlightRequestCount(node.idString()));
+        assertEquals(1, client.inFlightRequestCount(node.idString()));
     }
 
     private HeartbeatRequest.Builder heartbeat() {
