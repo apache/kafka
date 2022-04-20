@@ -93,7 +93,7 @@ public class ProducerConfigTest {
         ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertTrue(ce.getMessage().contains(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
 
-        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "abc");
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "abcd");
         ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertTrue(ce.getMessage().contains(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
     }
