@@ -122,5 +122,4 @@ public class SaslConfigsTest {
         props.put(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS, "3601");
         assertThrows(ConfigException.class, () -> new ConfigDef().withClientSaslSupport().parse(props));
     }
-
 }
