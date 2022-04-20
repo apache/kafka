@@ -108,7 +108,7 @@ public class RecordAccumulatorTest {
 
         long batchSize = value.length + DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
         RecordAccumulator accum = createTestRecordAccumulator( (int) batchSize, 1024, CompressionType.NONE, 10);
-        Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1,part2, part3,part4),
+        Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3, part4),
                 Collections.emptySet(), Collections.emptySet());
 
         //  initial data
@@ -119,8 +119,8 @@ public class RecordAccumulatorTest {
 
         // drain batches from 2 nodes: node1 => tp1, node2 => tp3, because the max request size is full after the first batch drained
         Map<Integer, List<ProducerBatch>> batches1 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
-        assertEquals(2,batches1.size());
-        verifyTopicPartitionInBatches(batches1,tp1,tp3);
+        assertEquals(2, batches1.size());
+        verifyTopicPartitionInBatches(batches1, tp1, tp3);
 
         // add record for tp1, tp3
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
@@ -129,7 +129,7 @@ public class RecordAccumulatorTest {
         // drain batches from 2 nodes: node1 => tp2, node2 => tp4, because the max request size is full after the first batch drained
         // The drain index should start from next topic partition, that is, node1 => tp2, node2 => tp4
         Map<Integer, List<ProducerBatch>> batchss2 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
-        verifyTopicPartitionInBatches(batchss2,tp2,tp4);
+        verifyTopicPartitionInBatches(batchss2, tp2, tp4);
     }
 
     private void verifyTopicPartitionInBatches(Map<Integer, List<ProducerBatch>> batches, TopicPartition... tp) {
@@ -137,12 +137,12 @@ public class RecordAccumulatorTest {
         List<TopicPartition> topicPartitionsInBatch = new ArrayList<TopicPartition>();
         for (Map.Entry<Integer, List<ProducerBatch>> entry : batches.entrySet()) {
             List<ProducerBatch> batchList = entry.getValue();
-            assertEquals(batchList.size(),1);
+            assertEquals(batchList.size(), 1);
             topicPartitionsInBatch.add(batchList.get(0).topicPartition);
         }
 
         for (int i = 0 ; i < tp.length ; i++){
-            assertEquals(topicPartitionsInBatch.get(i),tp[i]);
+            assertEquals(topicPartitionsInBatch.get(i), tp[i]);
         }
     }
 
