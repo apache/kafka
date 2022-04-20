@@ -431,7 +431,8 @@ class BrokerServer(
         clientQuotaMetadataManager,
         featureCache,
         dynamicConfigHandlers.toMap,
-        authorizer)
+        authorizer,
+        credentialProvider)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

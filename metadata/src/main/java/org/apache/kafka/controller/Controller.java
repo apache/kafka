@@ -26,6 +26,8 @@ import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -65,6 +67,19 @@ public interface Controller extends AclMutator, AutoCloseable {
     CompletableFuture<AlterPartitionResponseData> alterPartition(
         ControllerRequestContext context,
         AlterPartitionRequestData request
+    );
+
+    /**
+     * Alter the user SCRAM credentials.
+     *
+     * @param context       The controller request context.
+     * @param request       The AlterUserScramCredentialsRequest data.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<AlterUserScramCredentialsResponseData> alterUserScramCredentials(
+        ControllerRequestContext context,
+        AlterUserScramCredentialsRequestData request
     );
 
     /**

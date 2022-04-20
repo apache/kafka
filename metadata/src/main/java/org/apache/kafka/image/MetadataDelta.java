@@ -31,9 +31,11 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
+import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -69,6 +71,8 @@ public final class MetadataDelta {
     private ProducerIdsDelta producerIdsDelta = null;
 
     private AclsDelta aclsDelta = null;
+
+    private ScramDelta scramDelta = null;
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
@@ -145,6 +149,15 @@ public final class MetadataDelta {
         return aclsDelta;
     }
 
+    public ScramDelta scramDelta() {
+        return scramDelta;
+    }
+
+    public ScramDelta getOrCreateScramDelta() {
+        if (scramDelta == null) scramDelta = new ScramDelta(image.scram());
+        return scramDelta;
+    }
+
     public Optional<MetadataVersion> metadataVersionChanged() {
         if (featuresDelta == null) {
             return Optional.empty();
@@ -195,6 +208,9 @@ public final class MetadataDelta {
             case REMOVE_TOPIC_RECORD:
                 replay((RemoveTopicRecord) record);
                 break;
+            case USER_SCRAM_CREDENTIAL_RECORD:
+                replay((UserScramCredentialRecord) record);
+                break;
             case FEATURE_LEVEL_RECORD:
                 replay((FeatureLevelRecord) record);
                 break;
@@ -215,6 +231,9 @@ public final class MetadataDelta {
                 break;
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
                 replay((RemoveAccessControlEntryRecord) record);
+                break;
+            case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
+                replay((UserScramCredentialRecord) record);
                 break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
@@ -261,6 +280,10 @@ public final class MetadataDelta {
         getOrCreateConfigsDelta().replay(record, topicName);
     }
 
+    public void replay(UserScramCredentialRecord record) {
+        getOrCreateScramDelta().replay(record);
+    }
+
     public void replay(FeatureLevelRecord record) {
         getOrCreateFeaturesDelta().replay(record);
         featuresDelta.metadataVersionChange().ifPresent(changedMetadataVersion -> {
@@ -271,6 +294,7 @@ public final class MetadataDelta {
             getOrCreateClientQuotasDelta().handleMetadataVersionChange(changedMetadataVersion);
             getOrCreateProducerIdsDelta().handleMetadataVersionChange(changedMetadataVersion);
             getOrCreateAclsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateScramDelta().handleMetadataVersionChange(changedMetadataVersion);
         });
     }
 
@@ -298,6 +322,10 @@ public final class MetadataDelta {
         getOrCreateAclsDelta().replay(record);
     }
 
+    public void replay(RemoveUserScramCredentialRecord record) {
+        getOrCreateScramDelta().replay(record);
+    }
+
     /**
      * Create removal deltas for anything which was in the base image, but which was not
      * referenced in the snapshot records we just applied.
@@ -310,6 +338,7 @@ public final class MetadataDelta {
         getOrCreateClientQuotasDelta().finishSnapshot();
         getOrCreateProducerIdsDelta().finishSnapshot();
         getOrCreateAclsDelta().finishSnapshot();
+        getOrCreateScramDelta().finishSnapshot();
     }
 
     public MetadataImage apply() {
@@ -355,6 +384,12 @@ public final class MetadataDelta {
         } else {
             newAcls = aclsDelta.apply();
         }
+        ScramImage newScram;
+        if (scramDelta == null) {
+            newScram = image.scram();
+        } else {
+            newScram = scramDelta.apply();
+        }
         return new MetadataImage(
             new OffsetAndEpoch(highestOffset, highestEpoch),
             newFeatures,
@@ -363,7 +398,8 @@ public final class MetadataDelta {
             newConfigs,
             newClientQuotas,
             newProducerIds,
-            newAcls
+            newAcls,
+            newScram
         );
     }
 
@@ -379,6 +415,7 @@ public final class MetadataDelta {
             ", clientQuotasDelta=" + clientQuotasDelta +
             ", producerIdsDelta=" + producerIdsDelta +
             ", aclsDelta=" + aclsDelta +
+            ", scramDelta=" + scramDelta +
             ')';
     }
 }

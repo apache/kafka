@@ -245,6 +245,7 @@
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.quota" />
+    <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.metadata" />

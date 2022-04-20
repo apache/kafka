@@ -97,6 +97,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -778,9 +779,26 @@ class ControllerApis(val requestChannel: RequestChannel,
     authHelper.authorizeClusterOperation(request, ALTER)
     val context = new ControllerRequestContext(request.context.principal,
       requestTimeoutMsToDeadlineNs(time, alterRequest.data().timeoutMs()))
-    val response = controller.alterPartitionReassignments(context, alterRequest.data()).get()
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new AlterPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    controller.alterPartitionReassignments(context, alterRequest.data()).thenApply {
+      response => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new AlterPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    }
+  }
+
+  def handleAlterUserScramCredentials(request: RequestChannel.Request): Unit = {
+    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
+    }
+    val alterRequest = request.body[AlterUserScramCredentialsRequest]
+    val context = new ControllerRequestContext(request.context.principal,
+      OptionalLong.empty())
+    controller.alterUserScramCredentials(context, alterRequest.data()).whenComplete((response, e) =>
+      if (e != null) {
+        requestHelper.handleError(request, e)
+      } else {
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      })
   }
 
   def handleListPartitionReassignments(request: RequestChannel.Request): Unit = {
@@ -788,9 +806,13 @@ class ControllerApis(val requestChannel: RequestChannel,
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     val context = new ControllerRequestContext(request.context.principal,
       OptionalLong.empty())
-    val response = controller.listPartitionReassignments(context, listRequest.data()).get()
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new ListPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    controller.listPartitionReassignments(context, listRequest.data()).whenComplete((response, e) =>
+      if (e != null) {
+        requestHelper.handleError(request, e)
+      } else {
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new ListPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      })
   }
 
   def handleAllocateProducerIdsRequest(request: RequestChannel.Request): Unit = {

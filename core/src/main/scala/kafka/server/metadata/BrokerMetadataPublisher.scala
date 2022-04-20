@@ -19,10 +19,10 @@ package kafka.server.metadata
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicLong
-
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
+import kafka.security.CredentialProvider
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
@@ -105,7 +105,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
                               featureCache: FinalizedFeatureCache,
                               dynamicConfigHandlers: Map[String, ConfigHandler],
-                              private val _authorizer: Option[Authorizer]) extends MetadataPublisher with Logging {
+                              private val _authorizer: Option[Authorizer],
+                              credentialProvider: CredentialProvider) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -232,6 +233,21 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Apply client quotas delta.
       Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
         clientQuotaMetadataManager.update(clientQuotasDelta)
+      }
+
+      // Apply changes to SCRAM credentials.
+      Option(delta.scramDelta()).foreach { scramDelta =>
+        scramDelta.changes().forEach {
+          case (mechanism, userChanges) =>
+            userChanges.forEach {
+              case (userName, change) =>
+                if (change.isPresent) {
+                  credentialProvider.updateCredential(mechanism, userName, change.get().toCredential(mechanism))
+                } else {
+                  credentialProvider.removeCredentials(mechanism, userName)
+                }
+            }
+        }
       }
 
       // Apply changes to ACLs. This needs to be handled carefully because while we are
