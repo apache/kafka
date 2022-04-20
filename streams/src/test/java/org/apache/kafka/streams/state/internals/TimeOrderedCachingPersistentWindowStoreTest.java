@@ -32,11 +32,12 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
-import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -204,14 +205,13 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
         builder.stream(TOPIC,
             Consumed.with(Serdes.String(), Serdes.String()))
-            .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
+            .process(() -> new Processor<String, String, String, String>() {
                 private WindowStore<String, ValueAndTimestamp<String>> store;
                 private int numRecordsProcessed;
-                private ProcessorContext context;
+                private org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
 
-                @SuppressWarnings("unchecked")
                 @Override
-                public void init(final ProcessorContext processorContext) {
+                public void init(final org.apache.kafka.streams.processor.api.ProcessorContext<String, String> processorContext) {
                     this.context = processorContext;
                     this.store = processorContext.getStateStore("store-name");
                     int count = 0;
@@ -227,7 +227,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 }
 
                 @Override
-                public KeyValue<String, String> transform(final String key, final String value) {
+                public void process(final Record<String, String> record) {
                     int count = 0;
 
                     try (final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> all = store.all()) {
@@ -239,12 +239,13 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
                     assertThat(count, equalTo(numRecordsProcessed));
 
-                    store.put(value, ValueAndTimestamp.make(value, context.timestamp()), context.timestamp());
+                    store.put(record.value(), ValueAndTimestamp.make(record.value(), record.timestamp()), record.timestamp());
 
                     numRecordsProcessed++;
 
-                    return new KeyValue<>(key, value);
+                    context.forward(record);
                 }
+
 
                 @Override
                 public void close() {
