@@ -97,10 +97,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         maybeLeader match {
           case None =>
             val error = if (!image.cluster().brokers.containsKey(partition.leader)) {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: leader not available")
+              debug(s"Error while fetching metadata for $topicName-$partitionId: leader not available")
               Errors.LEADER_NOT_AVAILABLE
             } else {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: listener $listenerName " +
+              debug(s"Error while fetching metadata for $topicName-$partitionId: listener $listenerName " +
                 s"not found on leader ${partition.leader}")
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
@@ -113,12 +113,12 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
               .setIsrNodes(filteredIsr)
               .setOfflineReplicas(offlineReplicas)
           case Some(leader) =>
-            val error = if (filteredReplicas.size < partition.replicas.size) {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: replica information not available for " +
+            val error = if (filteredReplicas.size < partition.replicas.length) {
+              debug(s"Error while fetching metadata for $topicName-$partitionId: replica information not available for " +
                 s"following brokers ${partition.replicas.filterNot(filteredReplicas.contains).mkString(",")}")
               Errors.REPLICA_NOT_AVAILABLE
-            } else if (filteredIsr.size < partition.isr.size) {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: in sync replica information not available for " +
+            } else if (filteredIsr.size < partition.isr.length) {
+              debug(s"Error while fetching metadata for $topicName-$partitionId: in sync replica information not available for " +
                 s"following brokers ${partition.isr.filterNot(filteredIsr.contains).mkString(",")}")
               Errors.REPLICA_NOT_AVAILABLE
             } else {
@@ -266,8 +266,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val image = _currentImage
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
-      topic.partitions().values().forEach { case partition =>
-        partition.replicas.map { case replicaId =>
+      topic.partitions().values().forEach { partition =>
+        partition.replicas.map { replicaId =>
           result.put(replicaId, Option(image.cluster().broker(replicaId)) match {
             case None => Node.noNode()
             case Some(broker) => broker.node(listenerName.value()).asScala.getOrElse(Node.noNode())
@@ -288,7 +288,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
    */
   private def getRandomAliveBroker(image: MetadataImage): Option[Int] = {
     val aliveBrokers = getAliveBrokers(image).toList
-    if (aliveBrokers.size == 0) {
+    if (aliveBrokers.isEmpty) {
       None
     } else {
       Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
@@ -315,8 +315,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
     image.topics().topicsByName().values().forEach { topic =>
       topic.partitions().entrySet().forEach { entry =>
-        val partitionId = entry.getKey()
-        val partition = entry.getValue()
+        val partitionId = entry.getKey
+        val partition = entry.getValue
         partitionInfos.add(new PartitionInfo(topic.name(),
           partitionId,
           node(partition.leader),

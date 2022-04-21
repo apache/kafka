@@ -64,8 +64,8 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
     raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
         asScala.getOrElse(
       throw new RuntimeException("A snapshot already exists with " +
-        s"committedOffset=${committedOffset}, committedEpoch=${committedEpoch}, " +
-        s"lastContainedLogTime=${lastContainedLogTime}")
+        s"committedOffset=$committedOffset, committedEpoch=$committedEpoch, " +
+        s"lastContainedLogTime=$lastContainedLogTime")
     )
   }
 }

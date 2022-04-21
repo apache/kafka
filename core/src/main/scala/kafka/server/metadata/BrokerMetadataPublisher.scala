@@ -111,7 +111,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
   /**
    * The broker ID.
    */
-  val brokerId = conf.nodeId
+  val brokerId: Int = conf.nodeId
 
   /**
    * True if this is the first time we have published metadata.
@@ -199,7 +199,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                   processConfigChanges(ConfigEntityName.Default, props)
               } else if (resource.name() == brokerId.toString) {
                 // Apply changes to this broker's dynamic configuration.
-                info(s"Updating broker ${brokerId} with new configuration : " +
+                info(s"Updating broker $brokerId with new configuration : " +
                   toLoggableProps(resource, props).mkString(","))
                 dynamicConfigHandlers(ConfigType.Broker).
                   processConfigChanges(resource.name(), props)
@@ -227,7 +227,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // there could be a window during which incorrect authorization results are returned.
       Option(delta.aclsDelta()).foreach( aclsDelta =>
         _authorizer match {
-          case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta()) {
+          case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta) {
             // If the delta resulted from a snapshot load, we want to apply the new changes
             // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
             // first snapshot load, it will also complete the futures returned by
@@ -237,10 +237,10 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
             // Because the changes map is a LinkedHashMap, the deltas will be returned in
             // the order they were performed.
             aclsDelta.changes().entrySet().forEach(e =>
-              if (e.getValue().isPresent()) {
-                authorizer.addAcl(e.getKey(), e.getValue().get())
+              if (e.getValue.isPresent) {
+                authorizer.addAcl(e.getKey, e.getValue.get())
               } else {
-                authorizer.removeAcl(e.getKey())
+                authorizer.removeAcl(e.getKey)
               })
           }
           case _ => // No ClusterMetadataAuthorizer is configured. There is nothing to do.

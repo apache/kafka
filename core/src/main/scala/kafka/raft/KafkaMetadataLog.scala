@@ -368,7 +368,7 @@ final class KafkaMetadataLog private (
       val firstBatch = batchIterator.next()
       val records = firstBatch.streamingIterator(new BufferSupplier.GrowableBufferSupplier())
       if (firstBatch.isControlBatch) {
-        val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next());
+        val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next())
         Some(header.lastContainedLogTimestamp())
       } else {
         warn("Did not find control record at beginning of snapshot")
@@ -405,7 +405,7 @@ final class KafkaMetadataLog private (
    *
    * For the given predicate, we are testing if the snapshot identified by the first argument should be deleted.
    */
-  private def cleanSnapshots(predicate: (OffsetAndEpoch) => Boolean): Boolean = {
+  private def cleanSnapshots(predicate: OffsetAndEpoch => Boolean): Boolean = {
     if (snapshots.size < 2)
       return false
 
