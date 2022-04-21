@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_3_0_IV1}
 import kafka.log.LogConfig.configDef
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
@@ -32,7 +31,7 @@ import org.apache.kafka.metadata.ConfigSynonym.{HOURS_TO_MILLISECONDS, MINUTES_T
 import java.util.Arrays.asList
 import java.util.{Collections, Locale, Properties}
 
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
 
 import scala.annotation.nowarn
@@ -106,7 +105,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
   @deprecated("3.0")
-  val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
+  val messageFormatVersion = MetadataVersion.apply(getString(LogConfig.MessageFormatVersionProp))
 
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
@@ -370,7 +369,7 @@ object LogConfig {
         MEDIUM, CompressionTypeDoc, KafkaConfig.CompressionTypeProp)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable, MEDIUM, PreAllocateEnableDoc,
         KafkaConfig.LogPreAllocateProp)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, ApiVersionValidator, MEDIUM, MessageFormatVersionDoc,
+      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, new MetadataVersionValidator, MEDIUM, MessageFormatVersionDoc,
         KafkaConfig.LogMessageFormatVersionProp)
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc,
         KafkaConfig.LogMessageTimestampTypeProp)
@@ -565,7 +564,7 @@ object LogConfig {
 
   // ahu todo: should we move this into `MetadataVersion.java`?
   def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: MetadataVersion): Boolean =
-    interBrokerProtocolVersion.compareTo(IBP_3_0_IV1) >= 0
+    interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)
 
   class MessageFormatVersion(messageFormatVersionString: String, interBrokerProtocolVersionString: String) {
     val messageFormatVersion = MetadataVersion.apply(messageFormatVersionString)
@@ -575,7 +574,7 @@ object LogConfig {
 
     // ahu todo: should we move this into `MetadataVersion.java`?
     def shouldWarn: Boolean =
-      interBrokerProtocolVersion.compareTo(IBP_3_0_IV1) >= 0 && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
+      interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1) && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
 
     @nowarn("cat=deprecation")
     def topicWarningMessage(topicName: String): String = {

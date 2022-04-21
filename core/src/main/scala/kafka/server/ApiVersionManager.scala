@@ -16,15 +16,16 @@
  */
 package kafka.server
 
-import kafka.api.ApiVersion
 import kafka.network
 import kafka.network.RequestChannel
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.jdk.CollectionConverters._
 
+// ahu todo: check if this is all converted
 trait ApiVersionManager {
   def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
@@ -69,7 +70,7 @@ class SimpleApiVersionManager(
 
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
-  interBrokerProtocolVersion: ApiVersion,
+  interBrokerProtocolVersion: MetadataVersion,
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
   featureCache: FinalizedFeatureCache
@@ -81,19 +82,19 @@ class DefaultApiVersionManager(
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
     finalizedFeaturesOpt match {
-      case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
+      case Some(finalizedFeatures) => MetadataVersion.apiVersionsResponse(
         throttleTimeMs,
         interBrokerProtocolVersion.recordVersion,
         supportedFeatures,
         finalizedFeatures.features,
         finalizedFeatures.epoch,
-        controllerApiVersions,
+        controllerApiVersions.getOrElse(null),
         listenerType)
-      case None => ApiVersion.apiVersionsResponse(
+      case None => MetadataVersion.apiVersionsResponse(
         throttleTimeMs,
         interBrokerProtocolVersion.recordVersion,
         supportedFeatures,
-        controllerApiVersions,
+        controllerApiVersions.getOrElse(null),
         listenerType)
     }
   }

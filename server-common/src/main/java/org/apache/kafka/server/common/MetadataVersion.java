@@ -1,29 +1,37 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.server.common;
 
-//public interface SupportedVersions {
-//  boolean isAlterIsrSupported();
-//  boolean isAllocateProducerIdsSupported();
-//  boolean isSettingLeaderRecoveryStateSupported();
-//
-//
-//}
-
 import static java.lang.Integer.min;
-import static java.lang.String.join;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.FinalizedVersionRange;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.ApiMessageType.ListenerType;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.record.RecordVersion;
-
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 
 public enum MetadataVersion {
   IBP_0_8_0(-1),
@@ -62,10 +70,11 @@ public enum MetadataVersion {
   // KRaft preview
   IBP_3_0_IV0(1),
   IBP_3_0_IV1(2),
-  IBP_3_1_IV1(3),
-  IBP_3_2_IV0(4),
+  IBP_3_1_IV0(3),
+  IBP_3_1_IV1(4),
+  IBP_3_2_IV0(5),
   // KRaft GA
-  IBP_3_3_IV0(5);
+  IBP_3_3_IV0(6);
 
   private final Optional<Short> metadataVersion;
 
@@ -78,27 +87,31 @@ public enum MetadataVersion {
   }
 
   public boolean isAlterIsrSupported() {
-    return this.compareTo(IBP_2_7_IV2) >= 0;
+    return this.isAtLeast(IBP_2_7_IV2);
   }
 
   public boolean isAllocateProducerIdsSupported() {
-    return this.compareTo(IBP_3_0_IV0) >= 0;
+    return this.isAtLeast(IBP_3_0_IV0);
   }
 
   public boolean isTruncationOnFetchSupported() {
-    return this.compareTo(IBP_2_7_IV1) >= 0;
+    return this.isAtLeast(IBP_2_7_IV1);
+  }
+
+  public boolean isOffsetForLeaderEpochSupported() {
+    return this.isAtLeast(IBP_0_11_0_IV2);
   }
 
   public boolean isTopicIdsSupported() {
-    return this.compareTo(IBP_2_8_IV0) >= 0;
+    return this.isAtLeast(IBP_2_8_IV0);
   }
 
   public boolean isFeatureVersioningSupported() {
-    return this.compareTo(IBP_2_7_IV1) >= 0;
+    return this.isAtLeast(IBP_2_7_IV1);
   }
 
   public boolean isSaslInterBrokerHandshakeRequestEnabled() {
-    return this.compareTo(IBP_0_10_0_IV1) >= 0;
+    return this.isAtLeast(IBP_0_10_0_IV1);
   }
 
   public RecordVersion recordVersion() {
@@ -214,6 +227,58 @@ public enum MetadataVersion {
     }
   }
 
+  public static ApiVersionsResponse apiVersionsResponse(
+      Integer throttleTimeMs,
+      RecordVersion minRecordVersion,
+      Features<SupportedVersionRange> latestSupportedFeatures,
+      NodeApiVersions controllerApiVersions,
+      ListenerType listenerType
+  ) {
+    return apiVersionsResponse(
+        throttleTimeMs,
+        minRecordVersion,
+        latestSupportedFeatures,
+        Features.emptyFinalizedFeatures(),
+        ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+        controllerApiVersions,
+        listenerType
+    );
+  }
+
+  public static ApiVersionsResponse apiVersionsResponse(
+      Integer throttleTimeMs,
+      RecordVersion minRecordVersion,
+      Features<SupportedVersionRange> latestSupportedFeatures,
+      Features<FinalizedVersionRange> finalizedFeatures,
+      Long finalizedFeaturesEpoch,
+      NodeApiVersions controllerApiVersions,
+      ListenerType listenerType
+  ) {
+    ApiVersionCollection apiKeys;
+    if (controllerApiVersions != null) {
+      apiKeys = ApiVersionsResponse.intersectForwardableApis(
+          listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
+    } else {
+      apiKeys = ApiVersionsResponse.filterApis(minRecordVersion, listenerType);
+    }
+
+    return ApiVersionsResponse.createApiVersionsResponse(
+        throttleTimeMs,
+        apiKeys,
+        latestSupportedFeatures,
+        finalizedFeatures,
+        finalizedFeaturesEpoch
+    );
+  }
+
+  public boolean isAtLeast(MetadataVersion otherVersion) {
+    return this.compareTo(otherVersion) >= 0;
+  }
+
+  public boolean isLessThan(MetadataVersion otherVersion) {
+    return this.compareTo(otherVersion) < 0;
+  }
+
   public static MetadataVersion latest() {
     MetadataVersion[] values = MetadataVersion.values();
     return values[values.length - 1];
@@ -225,24 +290,6 @@ public enum MetadataVersion {
 
   public Optional<Short> metadataVersion() {
     return metadataVersion;
-  }
-}
-
-public class MetadataVersionValidator implements Validator {
-
-  @Override
-  void ensureValid(String name, Object value) {
-    try {
-      new MetadataVersion.apply(value.toString()); // ahu todo: fix
-    } catch (IllegalArgumentException e) {
-      throw new ConfigException(name, value.toString(), e.getMessage());
-    }
-  }
-
-  @Override
-  public String toString() {
-    return "[" + Arrays.stream(MetadataVersion.values()).distinct().map(m -> m.version()).collect(
-        Collectors.joining(", ")) + "]";
   }
 }
 

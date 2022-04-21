@@ -24,6 +24,7 @@ import kafka.api.KAFKA_2_6_IV0
  * EpochDrivenReplicationProtocolAcceptanceTest tests epochs with latest version. This test
  * verifies that we handle older IBP versions with truncation on leader/follower change correctly.
  */
+// ahu todo: convert?
 class EpochDrivenReplicationProtocolAcceptanceWithIbp26Test extends EpochDrivenReplicationProtocolAcceptanceTest {
   override val apiVersion = KAFKA_2_6_IV0
 }
