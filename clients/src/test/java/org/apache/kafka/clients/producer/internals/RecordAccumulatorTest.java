@@ -107,7 +107,7 @@ public class RecordAccumulatorTest {
         PartitionInfo part4 = new PartitionInfo(topic, partition4, node2, null, null);
 
         long batchSize = value.length + DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
-        RecordAccumulator accum = createTestRecordAccumulator( (int) batchSize, 1024, CompressionType.NONE, 10);
+        RecordAccumulator accum = createTestRecordAccumulator((int) batchSize, 1024, CompressionType.NONE, 10);
         Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3, part4),
                 Collections.emptySet(), Collections.emptySet());
 
@@ -153,7 +153,7 @@ public class RecordAccumulatorTest {
             topicPartitionsInBatch.add(batchList.get(0).topicPartition);
         }
 
-        for (int i = 0 ; i < tp.length ; i++){
+        for (int i = 0; i < tp.length; i++) {
             assertEquals(tp[i], topicPartitionsInBatch.get(i));
         }
     }
