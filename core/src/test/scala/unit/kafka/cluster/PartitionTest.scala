@@ -1047,10 +1047,11 @@ class PartitionTest extends AbstractPartitionTest {
           .setIsNew(true),
         offsetCheckpoints, None), "Expected become leader transition to succeed")
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     time.sleep(500)
 
@@ -1060,9 +1061,11 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L)
 
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(3L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = 0L,
+      logEndOffset = 3L
+    )
 
     time.sleep(500)
 
@@ -1072,10 +1075,11 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L)
 
-    assertEquals(time.milliseconds(), remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(6L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
-
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = 6L
+    )
   }
 
   @Test
@@ -1102,9 +1106,11 @@ class PartitionTest extends AbstractPartitionTest {
         offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(Set(brokerId), partition.partitionState.isr)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = 0L,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
@@ -1155,9 +1161,11 @@ class PartitionTest extends AbstractPartitionTest {
         offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(Set(brokerId), partition.partitionState.isr)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = 0L,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(3),
@@ -1166,8 +1174,11 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEndOffset = 6L)
 
     assertEquals(Set(brokerId), partition.partitionState.isr)
-    assertEquals(3L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = 0L,
+      logStartOffset = 0L,
+      logEndOffset = 3L
+    )
 
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
@@ -1180,8 +1191,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
     assertEquals(Set(brokerId), partition.partitionState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
-    assertEquals(10L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = 10L
+    )
 
     // Complete the ISR expansion
     alterIsrManager.completeIsrUpdate(2)
@@ -1216,9 +1230,11 @@ class PartitionTest extends AbstractPartitionTest {
         offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(Set(brokerId), partition.partitionState.isr)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = 0L,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
@@ -1230,8 +1246,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
     assertEquals(alterIsrManager.isrUpdates.size, 1)
-    assertEquals(10L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = 10L
+    )
 
     // Simulate failure callback
     alterIsrManager.failIsrUpdate(Errors.INVALID_UPDATE_VERSION)
@@ -1321,10 +1340,11 @@ class PartitionTest extends AbstractPartitionTest {
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr()
@@ -1376,10 +1396,11 @@ class PartitionTest extends AbstractPartitionTest {
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     // Shrink the ISR
     time.sleep(partition.replicaLagTimeMaxMs + 1)
@@ -1433,10 +1454,11 @@ class PartitionTest extends AbstractPartitionTest {
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     // There is a short delay before the first fetch. The follower is not yet caught up to the log end.
     time.sleep(5000)
@@ -1446,10 +1468,12 @@ class PartitionTest extends AbstractPartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = firstFetchTimeMs,
       leaderEndOffset = 10L)
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = 0L,
+      logEndOffset = 5L
+    )
     assertEquals(5L, partition.localLogOrException.highWatermark)
-    assertEquals(5L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
 
     // Some new data is appended, but the follower catches up to the old end offset.
     // The total elapsed time from initialization is larger than the max allowed replica lag.
@@ -1460,10 +1484,12 @@ class PartitionTest extends AbstractPartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 15L)
-    assertEquals(firstFetchTimeMs, remoteReplica.lastCaughtUpTimeMs)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = firstFetchTimeMs,
+      logStartOffset = 0L,
+      logEndOffset = 10L
+    )
     assertEquals(10L, partition.localLogOrException.highWatermark)
-    assertEquals(10L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
 
     // The ISR should not be shrunk because the follower has caught up with the leader at the
     // time of the first fetch.
@@ -1495,10 +1521,11 @@ class PartitionTest extends AbstractPartitionTest {
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     // The follower catches up to the log end immediately.
     partition.updateFollowerFetchState(remoteBrokerId,
@@ -1506,10 +1533,12 @@ class PartitionTest extends AbstractPartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 10L)
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = 10L
+    )
     assertEquals(10L, partition.localLogOrException.highWatermark)
-    assertEquals(10L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
 
     // Sleep longer than the max allowed follower lag
     time.sleep(30001)
@@ -1543,10 +1572,11 @@ class PartitionTest extends AbstractPartitionTest {
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = initializeTimeMs,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     time.sleep(30001)
 
@@ -1618,11 +1648,14 @@ class PartitionTest extends AbstractPartitionTest {
     ))
     assertEquals(10L, partition.localLogOrException.highWatermark)
 
-    val remoteReplica = partition.getReplica(remoteBrokerId).get
-    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = 0L,
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset
+    )
 
     // This will attempt to expand the ISR
+    val firstFetchTimeMs = time.milliseconds()
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
@@ -1633,8 +1666,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
     assertEquals(alterIsrManager.isrUpdates.size, 1)
-    assertEquals(10L, remoteReplica.logEndOffset)
-    assertEquals(0L, remoteReplica.logStartOffset)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = firstFetchTimeMs,
+      logStartOffset = 0L,
+      logEndOffset = 10L
+    )
 
     // Failure
     alterIsrManager.failIsrUpdate(error)
@@ -2135,6 +2171,28 @@ class PartitionTest extends AbstractPartitionTest {
       appendSemaphore.acquire()
       val appendInfo = super.appendAsFollower(records)
       appendInfo
+    }
+  }
+
+  private def assertReplicaState(
+    partition: Partition,
+    replicaId: Int,
+    lastCaughtUpTimeMs: Long,
+    logEndOffset: Long,
+    logStartOffset: Long
+  ): Unit = {
+    partition.getReplica(replicaId) match {
+      case Some(replica) =>
+        val replicaState = replica.stateSnapshot
+        assertEquals(lastCaughtUpTimeMs, replicaState.lastCaughtUpTimeMs,
+          "Unexpected Last Caught Up Time")
+        assertEquals(logEndOffset, replicaState.logEndOffset,
+          "Unexpected Log End Offset")
+        assertEquals(logStartOffset, replicaState.logStartOffset,
+          "Unexpected Log Start Offset")
+
+      case None =>
+        fail(s"Replica $replicaId not found.")
     }
   }
 }
