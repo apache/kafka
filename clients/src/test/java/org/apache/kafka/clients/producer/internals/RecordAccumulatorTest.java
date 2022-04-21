@@ -99,7 +99,7 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testDrainBatchesStarve() throws Exception {
+    public void testDrainBatches() throws Exception {
         // test case: node1(tp1,tp2) , node2(tp3,tp4)
         // add tp-4
         int partition4 = 3;
