@@ -1599,13 +1599,9 @@ class ReplicaManager(val config: KafkaConfig,
       // Update the partition information to be the leader
       partitionStates.forKeyValue { (partition, partitionState) =>
         try {
-          if (partition.makeLeader(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName)))
+          if (partition.makeLeader(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName))) {
             partitionsToMakeLeaders += partition
-          else
-            stateChangeLogger.info(s"Skipped the become-leader state change after marking its " +
-              s"partition as leader with correlation id $correlationId from controller $controllerId epoch $controllerEpoch for " +
-              s"partition ${partition.topicPartition} (last update controller epoch ${partitionState.controllerEpoch}) " +
-              s"since it is already the leader for the partition.")
+          }
         } catch {
           case e: KafkaStorageException =>
             stateChangeLogger.error(s"Skipped the become-leader state change with " +
@@ -1681,14 +1677,9 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           if (metadataCache.hasAliveBroker(newLeaderBrokerId)) {
             // Only change partition state when the leader is available
-            if (partition.makeFollower(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName)))
+            if (partition.makeFollower(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName))) {
               partitionsToMakeFollower += partition
-            else
-              stateChangeLogger.info(s"Skipped the become-follower state change after marking its partition as " +
-                s"follower with correlation id $correlationId from controller $controllerId epoch $controllerEpoch " +
-                s"for partition ${partition.topicPartition} (last update " +
-                s"controller epoch ${partitionState.controllerEpoch}) " +
-                s"since the new leader $newLeaderBrokerId is the same as the old leader")
+            }
           } else {
             // The leader broker should always be present in the metadata cache.
             // If not, we should record the error message and abort the transition process for this partition
@@ -2180,11 +2171,7 @@ class ReplicaManager(val config: KafkaConfig,
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-          if (!partition.makeLeader(state, offsetCheckpoints, Some(info.topicId))) {
-            stateChangeLogger.info("Skipped the become-leader state change for " +
-              s"$tp with topic id ${info.topicId} because this partition is " +
-              "already a local leader.")
-          }
+          partition.makeLeader(state, offsetCheckpoints, Some(info.topicId))
           changedPartitions.add(partition)
         } catch {
           case e: KafkaStorageException =>
@@ -2234,9 +2221,6 @@ class ReplicaManager(val config: KafkaConfig,
               val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
               if (partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))) {
                 partitionsToMakeFollower.put(tp, partition)
-              } else {
-                stateChangeLogger.info("Skipped the become-follower state change after marking its " +
-                  s"partition as follower for partition $tp with id ${info.topicId} and partition state $state.")
               }
             }
           }

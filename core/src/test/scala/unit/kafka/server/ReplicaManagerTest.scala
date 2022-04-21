@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, Properties}
-
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
@@ -63,7 +62,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyInt}
-import org.mockito.Mockito.{mock, times, verify, when}
+import org.mockito.Mockito.{mock, reset, times, verify, when}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -3614,6 +3613,110 @@ class ReplicaManagerTest {
             initOffset = 1
           ))
         )
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumped(): Unit = {
+    val localId = 0
+    val topicPartition = new TopicPartition("foo", 0)
+
+    val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      brokerId = localId,
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+    )
+
+    try {
+      when(mockReplicaFetcherManager.removeFetcherForPartitions(
+        Set(topicPartition))
+      ).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
+
+      // Make the local replica the follower.
+      var followerTopicsDelta = new TopicsDelta(TopicsImage.EMPTY)
+      followerTopicsDelta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
+      followerTopicsDelta.replay(new PartitionRecord()
+        .setPartitionId(0)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1))
+        .setIsr(util.Arrays.asList(localId, localId + 1))
+        .setRemovingReplicas(Collections.emptyList())
+        .setAddingReplicas(Collections.emptyList())
+        .setLeader(localId + 1)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+      )
+      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      // Check the state of that partition.
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+      assertEquals(0, followerPartition.getPartitionEpoch)
+
+      // Verify that the partition was removed and added back.
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
+      verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
+        topicId = Some(FOO_UUID),
+        leader = BrokerEndPoint(localId + 1, "localhost", 9093),
+        currentLeaderEpoch = 0,
+        initOffset = 0
+      )))
+
+      reset(mockReplicaFetcherManager)
+
+      // Apply changes that bumps the partition epoch.
+      followerTopicsDelta = new TopicsDelta(followerMetadataImage.topics())
+      followerTopicsDelta.replay(new PartitionChangeRecord()
+        .setPartitionId(0)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1, localId + 2))
+        .setIsr(util.Arrays.asList(localId, localId + 1))
+      )
+      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+      assertEquals(1, followerPartition.getPartitionEpoch)
+
+      // Verify that partition's fetcher was not impacted.
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set())
+      verify(mockReplicaFetcherManager).addFetcherForPartitions(Map.empty)
+
+      reset(mockReplicaFetcherManager)
+
+      // Apply changes that bumps the leader epoch.
+      followerTopicsDelta = new TopicsDelta(followerMetadataImage.topics())
+      followerTopicsDelta.replay(new PartitionChangeRecord()
+        .setPartitionId(0)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1, localId + 2))
+        .setIsr(util.Arrays.asList(localId, localId + 1, localId + 2))
+        .setLeader(localId + 2)
+      )
+      println(followerTopicsDelta.changedTopic(FOO_UUID).partitionChanges())
+      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      assertFalse(followerPartition.isLeader)
+      assertEquals(1, followerPartition.getLeaderEpoch)
+      assertEquals(2, followerPartition.getPartitionEpoch)
+
+      // Verify that the partition was removed and added back.
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
+      verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
+        topicId = Some(FOO_UUID),
+        leader = BrokerEndPoint(localId + 2, "localhost", 9093),
+        currentLeaderEpoch = 1,
+        initOffset = 0
+      )))
     } finally {
       replicaManager.shutdown()
     }
