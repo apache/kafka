@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
@@ -29,7 +30,7 @@ import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFir
 
 public class RocksDBTimeOrderedWindowStore
     extends WrappedStateStore<RocksDBTimeOrderedSegmentedBytesStore, Object, Object>
-    implements WindowStore<Bytes, byte[]> {
+    implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 
     private final boolean retainDuplicates;
     private final long windowSize;
@@ -161,6 +162,10 @@ public class RocksDBTimeOrderedWindowStore
             windowSize,
             TimeFirstWindowKeySchema::extractStoreTimestamp,
             TimeFirstWindowKeySchema::fromStoreBytesKey).keyValueIterator();
+    }
+
+    public boolean hasIndex() {
+        return wrapped().hasIndex();
     }
 
     private void maybeUpdateSeqnumForDups() {
