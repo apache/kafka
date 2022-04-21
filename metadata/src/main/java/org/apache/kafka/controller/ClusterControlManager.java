@@ -302,7 +302,6 @@ public class ClusterControlManager {
                 if (!existing.incarnationId().equals(request.incarnationId())) {
                     // Remove any existing session for the old broker incarnation.
                     heartbeatManager.remove(brokerId);
-                    existing = null;
                 }
             }
         }
