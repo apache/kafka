@@ -16,21 +16,23 @@
  */
 package kafka.cluster
 
-import kafka.api.{ApiVersion, KAFKA_2_8_IV1}
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.record.{RecordVersion, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-
 import java.util.Optional
+
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV1
+
 import scala.annotation.nowarn
 
 class PartitionWithLegacyMessageFormatTest extends AbstractPartitionTest {
 
   // legacy message formats are only supported with IBP < 3.0
-  override protected def interBrokerProtocolVersion: ApiVersion = KAFKA_2_8_IV1
+  override protected def interBrokerProtocolVersion: MetadataVersion = IBP_2_8_IV1
 
   @nowarn("cat=deprecation")
   @Test

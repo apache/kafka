@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -262,7 +263,7 @@ class PartitionLockTest extends Logging {
     logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
       mockTime,
       isrChangeListener,
@@ -396,7 +397,7 @@ class PartitionLockTest extends Logging {
     keepPartitionMetadataFile = true) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                interBrokerProtocolVersion: ApiVersion, requestLocal: RequestLocal): LogAppendInfo = {
+                                interBrokerProtocolVersion: MetadataVersion, requestLocal: RequestLocal): LogAppendInfo = {
       val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal)
       appendSemaphore.acquire()
       appendInfo

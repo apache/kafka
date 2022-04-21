@@ -17,14 +17,13 @@
 
 package kafka.server.epoch
 
-import kafka.api.KAFKA_2_6_IV0
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 
 /**
  * With IBP 2.7 onwards, we truncate based on diverging epochs returned in fetch responses.
  * EpochDrivenReplicationProtocolAcceptanceTest tests epochs with latest version. This test
  * verifies that we handle older IBP versions with truncation on leader/follower change correctly.
  */
-// ahu todo: convert?
 class EpochDrivenReplicationProtocolAcceptanceWithIbp26Test extends EpochDrivenReplicationProtocolAcceptanceTest {
-  override val apiVersion = KAFKA_2_6_IV0
+  override val metadataVersion = IBP_2_6_IV0
 }

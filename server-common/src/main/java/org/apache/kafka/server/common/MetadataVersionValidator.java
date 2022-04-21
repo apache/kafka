@@ -23,18 +23,18 @@ import org.apache.kafka.common.config.ConfigException;
 
 public class MetadataVersionValidator implements Validator {
 
-  @Override
-  public void ensureValid(String name, Object value) {
-    try {
-      MetadataVersion.apply(value.toString());
-    } catch (IllegalArgumentException e) {
-      throw new ConfigException(name, value.toString(), e.getMessage());
+    @Override
+    public void ensureValid(String name, Object value) {
+        try {
+            MetadataVersion.apply(value.toString());
+        } catch (IllegalArgumentException e) {
+            throw new ConfigException(name, value.toString(), e.getMessage());
+        }
     }
-  }
 
-  @Override
-  public String toString() {
-    return "[" + Arrays.stream(MetadataVersion.values()).distinct().map(MetadataVersion::version).collect(
-        Collectors.joining(", ")) + "]";
-  }
+    @Override
+    public String toString() {
+        return "[" + Arrays.stream(MetadataVersion.values()).distinct().map(MetadataVersion::version).collect(
+             Collectors.joining(", ")) + "]";
+    }
 }

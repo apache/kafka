@@ -19,7 +19,8 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Collections, Properties}
-import kafka.api.{ApiVersion, LeaderAndIsr}
+
+import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.log.LogConfig
@@ -42,6 +43,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
@@ -51,6 +53,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -808,7 +811,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
         Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)),
         rack = rack,
         features = features),
-      ApiVersion.latestVersion, jmxPort = port + 10)
+      MetadataVersion.latest, jmxPort = port + 10)
 
   @Test
   def testRegisterBrokerInfo(): Unit = {
