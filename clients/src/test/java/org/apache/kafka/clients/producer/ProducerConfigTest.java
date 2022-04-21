@@ -67,7 +67,7 @@ public class ProducerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
-        configs.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "abc");
+        configs.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "ab");
         assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
     }
 }
