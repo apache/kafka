@@ -516,8 +516,8 @@ subprojects {
   // remove test output from all test types
   tasks.withType(Test).all { t ->
     cleanTest {
-      delete t.reports.junitXml.destination
-      delete t.reports.html.destination
+      delete t.reports.junitXml.outputLocation
+      delete t.reports.html.outputLocation
     }
   }
 
@@ -828,6 +828,10 @@ project(':core') {
     apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
     // even though the `core` module doesn't expose any public API
@@ -889,6 +893,8 @@ project(':core') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
+
+    generator project(':generator')
   }
 
   if (userEnableTestCoverage) {
@@ -926,14 +932,17 @@ project(':core') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
     args = [ "-p", "kafka.internals.generated",
              "-o", "src/generated/java/kafka/internals/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/kafka/internals/generated")
   }
 
@@ -941,77 +950,77 @@ project(':core') {
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.Errors'
+    mainClass = 'org.apache.kafka.common.protocol.Errors'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_errors.html").newOutputStream()
   }
 
   task genProtocolTypesDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.types.Type'
+    mainClass = 'org.apache.kafka.common.protocol.types.Type'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_types.html").newOutputStream()
   }
 
   task genProtocolApiKeyDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.ApiKeys'
+    mainClass = 'org.apache.kafka.common.protocol.ApiKeys'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_api_keys.html").newOutputStream()
   }
 
   task genProtocolMessageDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.common.protocol.Protocol'
+    mainClass = 'org.apache.kafka.common.protocol.Protocol'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
   }
 
   task genAdminClientConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.clients.admin.AdminClientConfig'
+    mainClass = 'org.apache.kafka.clients.admin.AdminClientConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
   }
 
   task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.clients.producer.ProducerConfig'
+    mainClass = 'org.apache.kafka.clients.producer.ProducerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_config.html").newOutputStream()
   }
 
   task genConsumerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.clients.consumer.ConsumerConfig'
+    mainClass = 'org.apache.kafka.clients.consumer.ConsumerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_config.html").newOutputStream()
   }
 
   task genKafkaConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'kafka.server.KafkaConfig'
+    mainClass = 'kafka.server.KafkaConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
   }
 
   task genTopicConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'kafka.log.LogConfig'
+    mainClass = 'kafka.log.LogConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
 
   task genConsumerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    main = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
 
   task genProducerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    main = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
+    mainClass = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
   }
@@ -1126,6 +1135,10 @@ project(':core') {
 project(':metadata') {
   archivesBaseName = "kafka-metadata"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
@@ -1141,11 +1154,12 @@ project(':metadata') {
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    generator project(':generator')
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.metadata",
              "-o", "src/generated/java/org/apache/kafka/common/metadata",
              "-i", "src/main/resources/common/metadata",
@@ -1153,6 +1167,9 @@ project(':metadata') {
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator"
            ]
     inputs.dir("src/main/resources/common/metadata")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/common/metadata")
   }
 
@@ -1210,6 +1227,10 @@ project(':generator') {
 project(':clients') {
   archivesBaseName = "kafka-clients"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     implementation libs.zstd
     implementation libs.lz4
@@ -1229,12 +1250,16 @@ project(':clients') {
     testRuntimeOnly libs.jacksonJDK8Datatypes
     testImplementation libs.jose4j
     testImplementation libs.jacksonJaxrsJsonProvider
+
+    generator project(':generator')
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
         commitId: commitId,
@@ -1259,8 +1284,8 @@ project(':clients') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.message",
              "-o", "src/generated/java/org/apache/kafka/common/message",
              "-i", "src/main/resources/common/message",
@@ -1268,18 +1293,24 @@ project(':clients') {
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
            ]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
 
   task processTestMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.message",
              "-o", "src/generated-test/java/org/apache/kafka/common/message",
              "-i", "src/test/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
            ]
     inputs.dir("src/test/resources/common/message")
+        .withPropertyName("testMessages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
 
@@ -1331,6 +1362,10 @@ project(':clients') {
 project(':raft') {
   archivesBaseName = "kafka-raft"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
@@ -1345,12 +1380,16 @@ project(':raft') {
     testImplementation libs.jqwik
 
     testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
         commitId: commitId,
@@ -1364,13 +1403,16 @@ project(':raft') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.raft.generated",
              "-o", "src/generated/java/org/apache/kafka/raft/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
   }
 
@@ -1428,9 +1470,11 @@ project(':server-common') {
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
@@ -1484,9 +1528,11 @@ project(':storage:api') {
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
@@ -1531,6 +1577,10 @@ project(':storage:api') {
 project(':storage') {
   archivesBaseName = "kafka-storage"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     implementation project(':storage:api')
     implementation project(':server-common')
@@ -1547,12 +1597,16 @@ project(':storage') {
     testImplementation libs.bcpkix
 
     testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
   }
 
   task createVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
@@ -1566,14 +1620,17 @@ project(':storage') {
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
     args = [ "-p", " org.apache.kafka.server.log.remote.metadata.storage.generated",
              "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
              "-i", "src/main/resources/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
     inputs.dir("src/main/resources/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
   }
 
@@ -1757,6 +1814,10 @@ project(':streams') {
   archivesBaseName = "kafka-streams"
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     api project(':clients')
     // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
@@ -1783,17 +1844,22 @@ project(':streams') {
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
   }
 
   task processMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.streams.internals.generated",
              "-o", "src/generated/java/org/apache/kafka/streams/internals/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator"
            ]
     inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
     outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
   }
 
@@ -1826,9 +1892,11 @@ project(':streams') {
   }
 
   task createStreamsVersionFile() {
-    ext.receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
+
     doLast {
       def data = [
               commitId: commitId,
@@ -1855,7 +1923,7 @@ project(':streams') {
 
   task genStreamsConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.streams.StreamsConfig'
+    mainClass = 'org.apache.kafka.streams.StreamsConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
@@ -2268,7 +2336,7 @@ project(':jmh-benchmarks') {
 
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 
-    main="-jar"
+    mainClass = "-jar"
 
     doFirst {
       if (System.getProperty("jmhArgs")) {
@@ -2482,42 +2550,42 @@ project(':connect:runtime') {
 
   task genConnectConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
+    mainClass = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
   }
 
   task genSinkConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
+    mainClass = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "sink_connector_config.html").newOutputStream()
   }
 
   task genSourceConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
+    mainClass = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "source_connector_config.html").newOutputStream()
   }
 
   task genConnectTransformationDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.tools.TransformationDoc'
+    mainClass = 'org.apache.kafka.connect.tools.TransformationDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
   }
 
   task genConnectPredicateDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    main = 'org.apache.kafka.connect.tools.PredicateDoc'
+    mainClass = 'org.apache.kafka.connect.tools.PredicateDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_predicates.html").newOutputStream()
   }
 
   task genConnectMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    main = 'org.apache.kafka.connect.runtime.ConnectMetrics'
+    mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
   }
