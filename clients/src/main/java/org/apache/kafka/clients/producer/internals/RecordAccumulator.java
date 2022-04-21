@@ -29,7 +29,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -566,6 +565,8 @@ public class RecordAccumulator {
         do {
             PartitionInfo part = parts.get(drainIndex);
             TopicPartition tp = new TopicPartition(part.topic(), part.partition());
+            updateDrainIndex(node.idString(), drainIndex);
+            drainIndex = (drainIndex + 1) % parts.size();
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp))
                 continue;
@@ -634,9 +635,7 @@ public class RecordAccumulator {
             ready.add(batch);
 
             batch.drained(now);
-            drainIndex = (drainIndex + 1) % parts.size();
         } while (start != drainIndex);
-        updateDrainIndex(node.idString(), drainIndex);
         return ready;
     }
 
