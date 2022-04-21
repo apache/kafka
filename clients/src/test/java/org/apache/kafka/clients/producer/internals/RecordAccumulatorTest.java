@@ -135,7 +135,7 @@ public class RecordAccumulatorTest {
         verifyTopicPartitionInBatches(batches3, tp1, tp3);
 
         // test the contine case, mute the tp4 and drain batches from 2nodes: node1 => tp2, node2 => tp3 (because tp4 is muted)
-        // add record for tp2, tp3, tp4  mute the tp3
+        // add record for tp2, tp3, tp4  mute the tp4
         accum.append(tp2, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         accum.append(tp3, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         accum.append(tp4, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
@@ -154,7 +154,7 @@ public class RecordAccumulatorTest {
         }
 
         for (int i = 0 ; i < tp.length ; i++){
-            assertEquals(topicPartitionsInBatch.get(i), tp[i]);
+            assertEquals(tp[i], topicPartitionsInBatch.get(i));
         }
     }
 
