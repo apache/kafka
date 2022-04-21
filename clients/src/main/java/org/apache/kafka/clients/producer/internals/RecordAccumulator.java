@@ -82,6 +82,7 @@ public class RecordAccumulator {
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
     private int drainIndex;
+    private final Map<Integer, Integer> startIndexNodes; // Starting index of each node
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
 
@@ -116,6 +117,7 @@ public class RecordAccumulator {
                              BufferPool bufferPool) {
         this.log = logContext.logger(RecordAccumulator.class);
         this.drainIndex = 0;
+        this.startIndexNodes = new HashMap<>();
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
         this.appendsInProgress = new AtomicInteger(0);
@@ -560,11 +562,15 @@ public class RecordAccumulator {
         List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
         /* to make starvation less likely this loop doesn't start at 0 */
-        int start = drainIndex = drainIndex % parts.size();
+        if(startIndexNodes.isEmpty() || !startIndexNodes.containsKey(node.id()))
+            startIndexNodes.put(node.id(),0);
+
+        int start = drainIndex = startIndexNodes.get(node.id()) % parts.size();
         do {
             PartitionInfo part = parts.get(drainIndex);
             TopicPartition tp = new TopicPartition(part.topic(), part.partition());
-            this.drainIndex = (this.drainIndex + 1) % parts.size();
+            startIndexNodes.put(node.id(), startIndexNodes.get(node.id())+1);
+            this.drainIndex = (startIndexNodes.get(node.id()) + 1) % parts.size();
 
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp))
