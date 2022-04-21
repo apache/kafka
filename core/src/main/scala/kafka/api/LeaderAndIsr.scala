@@ -39,7 +39,10 @@ case class LeaderAndIsr(
   leaderEpoch: Int,
   isr: List[Int],
   leaderRecoveryState: LeaderRecoveryState,
-  partitionEpoch: Int // The current epoch for the partition for KRaft controllers. The current ZK version for the legacy controllers.
+  // The current epoch for the partition for KRaft controllers. The current ZK version for the
+  // legacy controllers. The epoch is a monotonically increasing value which is incremented
+  // after every partition change.
+  partitionEpoch: Int
 ) {
   def withPartitionEpoch(partitionEpoch: Int): LeaderAndIsr = copy(partitionEpoch = partitionEpoch)
 

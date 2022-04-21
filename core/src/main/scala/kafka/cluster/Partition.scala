@@ -252,7 +252,7 @@ class Partition(val topicPartition: TopicPartition,
   // lock to prevent the follower replica log update while checking if the log dir could be replaced with future log.
   private val futureLogLock = new Object()
   // The current epoch for the partition for KRaft controllers. The current ZK version for the legacy controllers.
-  private var partitionEpoch: Int = LeaderAndIsr.InitialPartitionEpoch
+  @volatile private var partitionEpoch: Int = LeaderAndIsr.InitialPartitionEpoch
   @volatile private var leaderEpoch: Int = LeaderAndIsr.InitialLeaderEpoch - 1
   // start offset for 'leaderEpoch' above (leader epoch of the current leader for this partition),
   // defined when this broker is leader for partition
