@@ -306,12 +306,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *   - Otherwise set _topicId to None
    */
   def initializeTopicId(): Unit =  {
-    val thePartitionMetadataFile = partitionMetadataFile.getOrElse(
+    val partMetadataFile = partitionMetadataFile.getOrElse(
       throw new KafkaException("The partitionMetadataFile should have been initialized"))
 
-    if (thePartitionMetadataFile.exists()) {
+    if (partMetadataFile.exists()) {
       if (keepPartitionMetadataFile) {
-        val fileTopicId = thePartitionMetadataFile.read().topicId
+        val fileTopicId = partMetadataFile.read().topicId
         if (_topicId.isDefined && !_topicId.contains(fileTopicId))
           throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
             s"but log already contained topic ID $fileTopicId")
@@ -319,14 +319,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         _topicId = Some(fileTopicId)
 
       } else {
-        try thePartitionMetadataFile.delete()
+        try partMetadataFile.delete()
         catch {
           case e: IOException =>
-            error(s"Error while trying to delete partition metadata file ${thePartitionMetadataFile}", e)
+            error(s"Error while trying to delete partition metadata file ${partMetadataFile}", e)
         }
       }
     } else if (keepPartitionMetadataFile) {
-      _topicId.foreach(thePartitionMetadataFile.record)
+      _topicId.foreach(partMetadataFile.record)
       scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
     } else {
       // We want to keep the file and the in-memory topic ID in sync.
@@ -577,9 +577,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (keepPartitionMetadataFile) {
           _topicId = Some(topicId)
           partitionMetadataFile match {
-            case Some(partitionMetadataFile) =>
-              if (!partitionMetadataFile.exists()) {
-                partitionMetadataFile.record(topicId)
+            case Some(partMetadataFile) =>
+              if (!partMetadataFile.exists()) {
+                partMetadataFile.record(topicId)
                 scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
               }
             case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
