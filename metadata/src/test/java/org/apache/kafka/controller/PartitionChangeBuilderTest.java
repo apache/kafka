@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.controller.PartitionChangeBuilder.ElectionResult;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -47,6 +48,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class PartitionChangeBuilderTest {
     @Test
     public void testChangeRecordIsNoOp() {
+        /* If the next few checks fail please update them based on the latest schema and make sure
+         * to update changeRecordIsNoOp to take into account the new schema or tagged fields.
+         */
+        // Check that the supported versions haven't changed
+        assertEquals(0, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION);
+        assertEquals(0, PartitionChangeRecord.LOWEST_SUPPORTED_VERSION);
+        // For the latest version check that the number of tagged fields hasn't changed
+        TaggedFields taggedFields = (TaggedFields) PartitionChangeRecord.SCHEMA_0.get(2).def.type;
+        assertEquals(6, taggedFields.numFields());
+
         assertTrue(changeRecordIsNoOp(new PartitionChangeRecord()));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().setLeader(1)));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
@@ -55,6 +66,12 @@ public class PartitionChangeBuilderTest {
             setRemovingReplicas(Arrays.asList(1))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
             setAddingReplicas(Arrays.asList(4))));
+        assertFalse(
+            changeRecordIsNoOp(
+                new PartitionChangeRecord()
+                  .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+            )
+        );
     }
 
     private final static PartitionRegistration FOO = new PartitionRegistration(
