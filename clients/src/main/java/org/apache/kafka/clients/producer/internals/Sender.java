@@ -671,11 +671,10 @@ public class Sender implements Runnable {
     }
 
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
-        if (transactionManager != null) {
-            transactionManager.handleCompletedBatch(batch, response);
-        }
-
         if (batch.complete(response.baseOffset, response.logAppendTime)) {
+            if (transactionManager != null) {
+                transactionManager.handleCompletedBatch(batch, response);
+            }
             maybeRemoveAndDeallocateBatch(batch);
         }
     }
