@@ -119,7 +119,6 @@ public class RecordAccumulatorTest {
 
         // drain batches from 2 nodes: node1 => tp1, node2 => tp3, because the max request size is full after the first batch drained
         Map<Integer, List<ProducerBatch>> batches1 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
-        assertEquals(2, batches1.size());
         verifyTopicPartitionInBatches(batches1, tp1, tp3);
 
         // add record for tp1, tp3
@@ -128,8 +127,12 @@ public class RecordAccumulatorTest {
 
         // drain batches from 2 nodes: node1 => tp2, node2 => tp4, because the max request size is full after the first batch drained
         // The drain index should start from next topic partition, that is, node1 => tp2, node2 => tp4
-        Map<Integer, List<ProducerBatch>> batchss2 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
-        verifyTopicPartitionInBatches(batchss2, tp2, tp4);
+        Map<Integer, List<ProducerBatch>> batches2 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        verifyTopicPartitionInBatches(batches2, tp2, tp4);
+
+        // make sure in next run, the drain index will start from the beginning
+        Map<Integer, List<ProducerBatch>> batches3 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        verifyTopicPartitionInBatches(batches3, tp1, tp3);
     }
 
     private void verifyTopicPartitionInBatches(Map<Integer, List<ProducerBatch>> batches, TopicPartition... tp) {
@@ -137,7 +140,7 @@ public class RecordAccumulatorTest {
         List<TopicPartition> topicPartitionsInBatch = new ArrayList<TopicPartition>();
         for (Map.Entry<Integer, List<ProducerBatch>> entry : batches.entrySet()) {
             List<ProducerBatch> batchList = entry.getValue();
-            assertEquals(batchList.size(), 1);
+            assertEquals(1, batchList.size());
             topicPartitionsInBatch.add(batchList.get(0).topicPartition);
         }
 
