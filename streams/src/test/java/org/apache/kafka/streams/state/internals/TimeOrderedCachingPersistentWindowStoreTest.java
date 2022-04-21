@@ -186,7 +186,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotReturnDuplicatesInRanges() {
         final StreamsBuilder builder = new StreamsBuilder();
