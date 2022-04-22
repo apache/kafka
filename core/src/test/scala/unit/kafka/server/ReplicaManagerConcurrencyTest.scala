@@ -407,7 +407,7 @@ class ReplicaManagerConcurrencyTest {
         .partitionChanges
         .get(partitionId)
 
-      leaderAndIsr.withZkVersion(registration.partitionEpoch)
+      leaderAndIsr.withPartitionEpoch(registration.partitionEpoch)
     }
 
     private def toList(ints: Array[Int]): util.List[Integer] = {
