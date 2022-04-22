@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Utils
 
 import java.util.Properties
 
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, assertThrows}
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class FeatureCommandTest extends BaseRequestTest {
@@ -75,167 +75,37 @@ class FeatureCommandTest extends BaseRequestTest {
   @Test
   def testDescribeFeaturesSuccess(): Unit = {
     updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
-    val featureApis = new FeatureApis(new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--describe")))
-    featureApis.setSupportedFeatures(defaultSupportedFeatures)
-    try {
-      val initialDescribeOutput = TestUtils.grabConsoleOutput(featureApis.describeFeatures())
-      val expectedInitialDescribeOutput =
-        "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedMinVersionLevel: -\tFinalizedMaxVersionLevel: -\tEpoch: 0\n" +
-        "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedMinVersionLevel: -\tFinalizedMaxVersionLevel: -\tEpoch: 0\n"
-      assertEquals(expectedInitialDescribeOutput, initialDescribeOutput)
-      featureApis.upgradeAllFeatures()
-      val finalDescribeOutput = TestUtils.grabConsoleOutput(featureApis.describeFeatures())
-      val expectedFinalDescribeOutput =
-        "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedMinVersionLevel: 1\tFinalizedMaxVersionLevel: 3\tEpoch: 1\n" +
-        "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedMinVersionLevel: 1\tFinalizedMaxVersionLevel: 5\tEpoch: 1\n"
-      assertEquals(expectedFinalDescribeOutput, finalDescribeOutput)
-    } finally {
-      featureApis.close()
+
+    val initialDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
+    val expectedInitialDescribeOutputs = Seq(
+      "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: -",
+      "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: -"
+    )
+
+    expectedInitialDescribeOutputs.foreach { expectedOutput =>
+      assertTrue(initialDescribeOutput.contains(expectedOutput))
     }
-  }
 
-  /**
-   * Tests if the FeatureApis#upgradeAllFeatures API works as expected during a success case.
-   */
-  @Test
-  def testUpgradeAllFeaturesSuccess(): Unit = {
-    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--upgrade-all"))
-    val featureApis = new FeatureApis(upgradeOpts)
-    try {
-      // Step (1):
-      // - Update the supported features across all brokers.
-      // - Upgrade non-existing feature_1 to maxVersionLevel: 2.
-      // - Verify results.
-      val initialSupportedFeatures = Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 2))))
-      updateSupportedFeaturesInAllBrokers(initialSupportedFeatures)
-      featureApis.setSupportedFeatures(initialSupportedFeatures)
-      var output = TestUtils.grabConsoleOutput(featureApis.upgradeAllFeatures())
-      var expected =
-        "      [Add]\tFeature: feature_1\tExistingFinalizedMaxVersion: -\tNewFinalizedMaxVersion: 2\tResult: OK\n"
-      assertEquals(expected, output)
-
-      // Step (2):
-      // - Update the supported features across all brokers.
-      // - Upgrade existing feature_1 to maxVersionLevel: 3.
-      // - Upgrade non-existing feature_2 to maxVersionLevel: 5.
-      // - Verify results.
-      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
-      featureApis.setSupportedFeatures(defaultSupportedFeatures)
-      output = TestUtils.grabConsoleOutput(featureApis.upgradeAllFeatures())
-      expected =
-        "  [Upgrade]\tFeature: feature_1\tExistingFinalizedMaxVersion: 2\tNewFinalizedMaxVersion: 3\tResult: OK\n" +
-        "      [Add]\tFeature: feature_2\tExistingFinalizedMaxVersion: -\tNewFinalizedMaxVersion: 5\tResult: OK\n"
-      assertEquals(expected, output)
-
-      // Step (3):
-      // - Perform an upgrade of all features again.
-      // - Since supported features have not changed, expect that the above action does not yield
-      //   any results.
-      output = TestUtils.grabConsoleOutput(featureApis.upgradeAllFeatures())
-      assertTrue(output.isEmpty)
-      featureApis.setOptions(upgradeOpts)
-      output = TestUtils.grabConsoleOutput(featureApis.upgradeAllFeatures())
-      assertTrue(output.isEmpty)
-    } finally {
-      featureApis.close()
+    FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "upgrade",
+      "--feature", "feature_1", "--version", "3", "--feature", "feature_2", "--version", "5"))
+    val upgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
+    val expectedUpgradeDescribeOutput = Seq(
+      "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: 3",
+      "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: 5"
+    )
+    expectedUpgradeDescribeOutput.foreach { expectedOutput =>
+      assertTrue(upgradeDescribeOutput.contains(expectedOutput))
     }
-  }
 
-  /**
-   * Tests if the FeatureApis#downgradeAllFeatures API works as expected during a success case.
-   */
-  @Test
-  def testDowngradeFeaturesSuccess(): Unit = {
-    val downgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--downgrade-all"))
-    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--upgrade-all"))
-    val featureApis = new FeatureApis(upgradeOpts)
-    try {
-      // Step (1):
-      // - Update the supported features across all brokers.
-      // - Upgrade non-existing feature_1 to maxVersionLevel: 3.
-      // - Upgrade non-existing feature_2 to maxVersionLevel: 5.
-      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
-      featureApis.setSupportedFeatures(defaultSupportedFeatures)
-      featureApis.upgradeAllFeatures()
-
-      // Step (2):
-      // - Downgrade existing feature_1 to maxVersionLevel: 2.
-      // - Delete feature_2 since it is no longer supported by the FeatureApis object.
-      // - Verify results.
-      val downgradedFeatures = Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 2))))
-      featureApis.setSupportedFeatures(downgradedFeatures)
-      featureApis.setOptions(downgradeOpts)
-      var output = TestUtils.grabConsoleOutput(featureApis.downgradeAllFeatures())
-      var expected =
-        "[Downgrade]\tFeature: feature_1\tExistingFinalizedMaxVersion: 3\tNewFinalizedMaxVersion: 2\tResult: OK\n" +
-        "   [Delete]\tFeature: feature_2\tExistingFinalizedMaxVersion: 5\tNewFinalizedMaxVersion: -\tResult: OK\n"
-      assertEquals(expected, output)
-
-      // Step (3):
-      // - Perform a downgrade of all features again.
-      // - Since supported features have not changed, expect that the above action does not yield
-      //   any results.
-      updateSupportedFeaturesInAllBrokers(downgradedFeatures)
-      output = TestUtils.grabConsoleOutput(featureApis.downgradeAllFeatures())
-      assertTrue(output.isEmpty)
-
-      // Step (4):
-      // - Delete feature_1 since it is no longer supported by the FeatureApis object.
-      // - Verify results.
-      featureApis.setSupportedFeatures(Features.emptySupportedFeatures())
-      output = TestUtils.grabConsoleOutput(featureApis.downgradeAllFeatures())
-      expected =
-        "   [Delete]\tFeature: feature_1\tExistingFinalizedMaxVersion: 2\tNewFinalizedMaxVersion: -\tResult: OK\n"
-      assertEquals(expected, output)
-    } finally {
-      featureApis.close()
-    }
-  }
-
-  /**
-   * Tests if the FeatureApis#upgradeAllFeatures API works as expected during a partial failure case.
-   */
-  @Test
-  def testUpgradeFeaturesFailure(): Unit = {
-    val upgradeOpts = new FeatureCommandOptions(Array("--bootstrap-server", bootstrapServers(), "--upgrade-all"))
-    val featureApis = new FeatureApis(upgradeOpts)
-    try {
-      // Step (1): Update the supported features across all brokers.
-      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
-
-      // Step (2):
-      // - Intentionally setup the FeatureApis object such that it contains incompatible target
-      //   features (viz. feature_2 and feature_3).
-      // - Upgrade non-existing feature_1 to maxVersionLevel: 4. Expect the operation to fail with
-      //   an incompatibility failure.
-      // - Upgrade non-existing feature_2 to maxVersionLevel: 5. Expect the operation to succeed.
-      // - Upgrade non-existing feature_3 to maxVersionLevel: 3. Expect the operation to fail
-      //   since the feature is not supported.
-      val targetFeaturesWithIncompatibilities =
-        Features.supportedFeatures(
-          Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 4)),
-                      Utils.mkEntry("feature_2", new SupportedVersionRange(1, 5)),
-                      Utils.mkEntry("feature_3", new SupportedVersionRange(1, 3))))
-      featureApis.setSupportedFeatures(targetFeaturesWithIncompatibilities)
-      val output = TestUtils.grabConsoleOutput({
-        val exception = assertThrows(classOf[UpdateFeaturesException], () => featureApis.upgradeAllFeatures())
-        assertEquals("2 feature updates failed!", exception.getMessage)
-      })
-      val expected =
-        "      [Add]\tFeature: feature_1\tExistingFinalizedMaxVersion: -" +
-        "\tNewFinalizedMaxVersion: 4\tResult: FAILED due to" +
-        " org.apache.kafka.common.errors.InvalidRequestException: Could not apply finalized" +
-        " feature update because brokers were found to have incompatible versions for the" +
-        " feature.\n" +
-        "      [Add]\tFeature: feature_2\tExistingFinalizedMaxVersion: -" +
-        "\tNewFinalizedMaxVersion: 5\tResult: OK\n" +
-        "      [Add]\tFeature: feature_3\tExistingFinalizedMaxVersion: -" +
-        "\tNewFinalizedMaxVersion: 3\tResult: FAILED due to" +
-        " org.apache.kafka.common.errors.InvalidRequestException: Could not apply finalized" +
-        " feature update because the provided feature is not supported.\n"
-      assertEquals(expected, output)
-    } finally {
-      featureApis.close()
+    FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "downgrade",
+      "--feature", "feature_1", "--version", "2", "--feature", "feature_2", "--version", "2"))
+    val downgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
+    val expectedFinalDescribeOutput = Seq(
+      "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: 2",
+      "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: 2"
+    )
+    expectedFinalDescribeOutput.foreach { expectedOutput =>
+      assertTrue(downgradeDescribeOutput.contains(expectedOutput))
     }
   }
 }

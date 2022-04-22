@@ -36,17 +36,17 @@ import scala.collection.mutable
   */
 class LogCleanerManagerTest extends Logging {
 
-  val tmpDir = TestUtils.tempDir()
-  val tmpDir2 = TestUtils.tempDir()
-  val logDir = TestUtils.randomPartitionLogDir(tmpDir)
-  val logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
+  val tmpDir: File = TestUtils.tempDir()
+  val tmpDir2: File = TestUtils.tempDir()
+  val logDir: File = TestUtils.randomPartitionLogDir(tmpDir)
+  val logDir2: File = TestUtils.randomPartitionLogDir(tmpDir)
   val topicPartition = new TopicPartition("log", 0)
   val topicPartition2 = new TopicPartition("log2", 0)
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-  val logConfig = LogConfig(logProps)
+  val logConfig: LogConfig = LogConfig(logProps)
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val offset = 999
 
@@ -394,7 +394,7 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     // expect the checkpoint offset is not the expectedOffset before doing updateCheckpoints
-    assertNotEquals(offset, cleanerManager.allCleanerCheckpoints.get(topicPartition).getOrElse(0))
+    assertNotEquals(offset, cleanerManager.allCleanerCheckpoints.getOrElse(topicPartition, 0))
 
     cleanerManager.updateCheckpoints(logDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
     // expect the checkpoint offset is now updated to the expected offset after doing updateCheckpoints
@@ -413,7 +413,7 @@ class LogCleanerManagerTest extends Logging {
 
     // updateCheckpoints should remove the topicPartition data in the logDir
     cleanerManager.updateCheckpoints(logDir, partitionToRemove = Option(topicPartition))
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).isEmpty)
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -431,7 +431,7 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.handleLogDirFailure(logDir.getAbsolutePath)
     // verify the partition data in logDir is gone, and data in logDir2 is still there
     assertEquals(offset, cleanerManager.allCleanerCheckpoints(topicPartition2))
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).isEmpty)
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -471,7 +471,7 @@ class LogCleanerManagerTest extends Logging {
 
     // force delete the logDir2 from checkpoints, so that the partition data should also be deleted
     cleanerManager.handleLogDirFailure(logDir2.getAbsolutePath)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).isEmpty)
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   /**
@@ -710,14 +710,16 @@ class LogCleanerManagerTest extends Logging {
     assertThrows(classOf[IllegalStateException], () => cleanerManager.doneCleaning(topicPartition, log.dir, 1))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningInProgress)
-    cleanerManager.doneCleaning(topicPartition, log.dir, 1)
+    val endOffset = 1L
+    cleanerManager.doneCleaning(topicPartition, log.dir, endOffset)
     assertTrue(cleanerManager.cleaningState(topicPartition).isEmpty)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
+    assertEquals(Some(endOffset), cleanerManager.allCleanerCheckpoints.get(topicPartition))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningAborted)
-    cleanerManager.doneCleaning(topicPartition, log.dir, 1)
+    cleanerManager.doneCleaning(topicPartition, log.dir, endOffset)
     assertEquals(LogCleaningPaused(1), cleanerManager.cleaningState(topicPartition).get)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -755,7 +757,7 @@ class LogCleanerManagerTest extends Logging {
 
     val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
     assertEquals(None, filthiestLog, "Log should not be selected for cleaning")
-    assertEquals(20L, cleanerCheckpoints.get(tp).get, "Unselected log should have checkpoint offset updated")
+    assertEquals(20L, cleanerCheckpoints(tp), "Unselected log should have checkpoint offset updated")
   }
 
   /**
@@ -777,7 +779,7 @@ class LogCleanerManagerTest extends Logging {
 
     val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
     assertEquals(tp1, filthiestLog.topicPartition, "Dirtier log should be selected")
-    assertEquals(15L, cleanerCheckpoints.get(tp0).get, "Unselected log should have checkpoint offset updated")
+    assertEquals(15L, cleanerCheckpoints(tp0), "Unselected log should have checkpoint offset updated")
   }
 
   private def createCleanerManager(log: UnifiedLog): LogCleanerManager = {

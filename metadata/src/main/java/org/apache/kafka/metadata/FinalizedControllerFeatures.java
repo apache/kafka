@@ -17,23 +17,31 @@
 
 package org.apache.kafka.metadata;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 
 /**
  * A map of feature names to their supported versions.
  */
-public class FeatureMapAndEpoch {
-    private final FeatureMap map;
+public class FinalizedControllerFeatures {
+    private final Map<String, Short> featureMap;
     private final long epoch;
 
-    public FeatureMapAndEpoch(FeatureMap map, long epoch) {
-        this.map = map;
+    public FinalizedControllerFeatures(Map<String, Short> featureMap, long epoch) {
+        this.featureMap = Collections.unmodifiableMap(featureMap);
         this.epoch = epoch;
     }
 
-    public FeatureMap map() {
-        return map;
+    public Optional<Short> get(String name) {
+        return Optional.ofNullable(featureMap.get(name));
+    }
+
+    public Set<String> featureNames() {
+        return featureMap.keySet();
     }
 
     public long epoch() {
@@ -42,21 +50,21 @@ public class FeatureMapAndEpoch {
 
     @Override
     public int hashCode() {
-        return Objects.hash(map, epoch);
+        return Objects.hash(featureMap, epoch);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof FeatureMapAndEpoch)) return false;
-        FeatureMapAndEpoch other = (FeatureMapAndEpoch) o;
-        return map.equals(other.map) && epoch == other.epoch;
+        if (!(o instanceof FinalizedControllerFeatures)) return false;
+        FinalizedControllerFeatures other = (FinalizedControllerFeatures) o;
+        return featureMap.equals(other.featureMap) && epoch == other.epoch;
     }
 
     @Override
     public String toString() {
         StringBuilder bld = new StringBuilder();
         bld.append("{");
-        bld.append("map=").append(map.toString());
+        bld.append("featureMap=").append(featureMap.toString());
         bld.append(", epoch=").append(epoch);
         bld.append("}");
         return bld.toString();

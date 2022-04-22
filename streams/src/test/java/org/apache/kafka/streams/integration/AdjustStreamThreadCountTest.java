@@ -421,6 +421,7 @@ public class AdjustStreamThreadCountTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldResizeCacheAndInputBufferAfterThreadReplacement() throws InterruptedException {
         final long totalCacheBytes = 10L;
         final long maxBufferBytes = 100L;

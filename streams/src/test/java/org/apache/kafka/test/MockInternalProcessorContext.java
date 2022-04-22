@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -206,5 +207,18 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public ProcessorMetadata getProcessorMetadata() {
         return processorMetadata;
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
     }
 }

@@ -14,21 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor.api;
 
-package org.apache.kafka.controller;
+public final class InternalFixedKeyRecordFactory {
 
-import java.util.Random;
+    private InternalFixedKeyRecordFactory() {
+    }
 
-
-/**
- * A subclass of Random with a fixed seed and generation algorithm.
- */
-public class MockRandom extends Random {
-    private long state = 17;
-
-    @Override
-    protected int next(int bits) {
-        state = (state * 2862933555777941757L) + 3037000493L;
-        return (int) (state >>> (64 - bits));
+    /**
+     * Only allowed way to create {@link FixedKeyRecord}s.
+     * <p/>
+     * DO NOT USE THIS FACTORY OUTSIDE THE FRAMEWORK.
+     * This could produce undesired results by not partitioning record properly.
+     *
+     * @see FixedKeyProcessor
+     */
+    public static <KIn, VIn> FixedKeyRecord<KIn, VIn> create(final Record<KIn, VIn> record) {
+        return new FixedKeyRecord<>(
+            record.key(),
+            record.value(),
+            record.timestamp(),
+            record.headers()
+        );
     }
 }

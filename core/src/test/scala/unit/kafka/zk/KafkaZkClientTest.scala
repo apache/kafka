@@ -919,13 +919,13 @@ class KafkaZkClientTest extends QuorumTestHarness {
     stat
   }
 
-  private def leaderIsrAndControllerEpochs(state: Int, zkVersion: Int): Map[TopicPartition, LeaderIsrAndControllerEpoch] =
+  private def leaderIsrAndControllerEpochs(state: Int, partitionEpoch: Int): Map[TopicPartition, LeaderIsrAndControllerEpoch] =
     Map(
       topicPartition10 -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(leader = 1, leaderEpoch = state, isr = List(2 + state, 3 + state), LeaderRecoveryState.RECOVERED, zkVersion = zkVersion),
+        LeaderAndIsr(leader = 1, leaderEpoch = state, isr = List(2 + state, 3 + state), LeaderRecoveryState.RECOVERED, partitionEpoch = partitionEpoch),
         controllerEpoch = 4),
       topicPartition11 -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(leader = 0, leaderEpoch = state + 1, isr = List(1 + state, 2 + state), LeaderRecoveryState.RECOVERED, zkVersion = zkVersion),
+        LeaderAndIsr(leader = 0, leaderEpoch = state + 1, isr = List(1 + state, 2 + state), LeaderRecoveryState.RECOVERED, partitionEpoch = partitionEpoch),
         controllerEpoch = 4))
 
   val initialLeaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch] =
@@ -934,8 +934,8 @@ class KafkaZkClientTest extends QuorumTestHarness {
   val initialLeaderIsrs: Map[TopicPartition, LeaderAndIsr] =
     initialLeaderIsrAndControllerEpochs.map { case (k, v) => k -> v.leaderAndIsr }
 
-  private def leaderIsrs(state: Int, zkVersion: Int): Map[TopicPartition, LeaderAndIsr] =
-    leaderIsrAndControllerEpochs(state, zkVersion).map { case (k, v) => k -> v.leaderAndIsr }
+  private def leaderIsrs(state: Int, partitionEpoch: Int): Map[TopicPartition, LeaderAndIsr] =
+    leaderIsrAndControllerEpochs(state, partitionEpoch).map { case (k, v) => k -> v.leaderAndIsr }
 
   private def checkUpdateLeaderAndIsrResult(
                   expectedSuccessfulPartitions: Map[TopicPartition, LeaderAndIsr],
@@ -1000,26 +1000,26 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     // successful updates
     checkUpdateLeaderAndIsrResult(
-      leaderIsrs(state = 1, zkVersion = 1),
+      leaderIsrs(state = 1, partitionEpoch = 1),
       mutable.ArrayBuffer.empty,
       Map.empty,
-      zkClient.updateLeaderAndIsr(leaderIsrs(state = 1, zkVersion = 0),controllerEpoch = 4, controllerEpochZkVersion))
+      zkClient.updateLeaderAndIsr(leaderIsrs(state = 1, partitionEpoch = 0),controllerEpoch = 4, controllerEpochZkVersion))
 
     // Try to update with wrong ZK version
     checkUpdateLeaderAndIsrResult(
       Map.empty,
       ArrayBuffer(topicPartition10, topicPartition11),
       Map.empty,
-      zkClient.updateLeaderAndIsr(leaderIsrs(state = 1, zkVersion = 0),controllerEpoch = 4, controllerEpochZkVersion))
+      zkClient.updateLeaderAndIsr(leaderIsrs(state = 1, partitionEpoch = 0),controllerEpoch = 4, controllerEpochZkVersion))
 
     // Trigger successful, to be retried and failed partitions in same call
     val mixedState = Map(
-      topicPartition10 -> LeaderAndIsr(leader = 1, leaderEpoch = 2, isr = List(4, 5), LeaderRecoveryState.RECOVERED, zkVersion = 1),
-      topicPartition11 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, zkVersion = 0),
-      topicPartition20 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, zkVersion = 0))
+      topicPartition10 -> LeaderAndIsr(leader = 1, leaderEpoch = 2, isr = List(4, 5), LeaderRecoveryState.RECOVERED, partitionEpoch = 1),
+      topicPartition11 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, partitionEpoch = 0),
+      topicPartition20 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, partitionEpoch = 0))
 
     checkUpdateLeaderAndIsrResult(
-      leaderIsrs(state = 2, zkVersion = 2).filter { case (tp, _) => tp == topicPartition10 },
+      leaderIsrs(state = 2, partitionEpoch = 2).filter { case (tp, _) => tp == topicPartition10 },
       ArrayBuffer(topicPartition11),
       Map(
         topicPartition20 -> (classOf[NoNodeException], "KeeperErrorCode = NoNode for /brokers/topics/topic2/partitions/0/state")),
@@ -1030,7 +1030,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       leaderIsrAndControllerEpochs: Map[TopicPartition,LeaderIsrAndControllerEpoch],
       topicPartition: TopicPartition,
       response: GetDataResponse): Unit = {
-    val zkVersion = leaderIsrAndControllerEpochs(topicPartition).leaderAndIsr.zkVersion
+    val zkVersion = leaderIsrAndControllerEpochs(topicPartition).leaderAndIsr.partitionEpoch
     assertEquals(Code.OK, response.resultCode)
     assertEquals(TopicPartitionStateZNode.path(topicPartition), response.path)
     assertEquals(Some(topicPartition), response.ctx)
@@ -1106,20 +1106,20 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     assertEquals(
       expectedSetDataResponses(topicPartition10, topicPartition11)(Code.OK, statWithVersion(1)),
-      zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion).map {
+      zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, partitionEpoch = 0), controllerEpochZkVersion).map {
         eraseMetadataAndStat}.toList)
 
     // Mismatch controller epoch zkVersion
-    assertThrows(classOf[ControllerMovedException], () => zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, partitionEpoch = 0), controllerEpochZkVersion + 1))
 
     val getResponses = zkClient.getTopicPartitionStatesRaw(topicPartitions10_11)
     assertEquals(2, getResponses.size)
-    topicPartitions10_11.zip(getResponses) foreach {case (tp, r) => checkGetDataResponse(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), tp, r)}
+    topicPartitions10_11.zip(getResponses) foreach {case (tp, r) => checkGetDataResponse(leaderIsrAndControllerEpochs(state = 1, partitionEpoch = 0), tp, r)}
 
     // Other ZK client can also write the state of a partition
     assertEquals(
       expectedSetDataResponses(topicPartition10, topicPartition11)(Code.OK, statWithVersion(2)),
-      otherZkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 2, zkVersion = 1), controllerEpochZkVersion).map {
+      otherZkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 2, partitionEpoch = 1), controllerEpochZkVersion).map {
         eraseMetadataAndStat}.toList)
   }
 

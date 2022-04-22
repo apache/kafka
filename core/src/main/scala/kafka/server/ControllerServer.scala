@@ -37,8 +37,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
-import org.apache.kafka.metadata.{KafkaConfigSchema, VersionRange}
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
+import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
@@ -79,7 +79,6 @@ class ControllerServer(
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = null
-  val supportedFeatures: Map[String, VersionRange] = Map()
   var quotaManagers: QuotaManagers = null
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
@@ -151,7 +150,7 @@ class ControllerServer(
         socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
           config.controllerListeners.head.listenerName))
       } else {
-        throw new ConfigException("No controller.listener.names defined for controller");
+        throw new ConfigException("No controller.listener.names defined for controller")
       }
 
       val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
@@ -160,6 +159,8 @@ class ControllerServer(
         getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+
+      val quorumFeatures = QuorumFeatures.create(config.nodeId, QuorumFeatures.defaultFeatureMap())
 
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
@@ -173,6 +174,7 @@ class ControllerServer(
           setThreadNamePrefix(threadNamePrefixAsString).
           setConfigSchema(configSchema).
           setRaftClient(raftManager.client).
+          setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
           setIsLeaderRecoverySupported(config.interBrokerProtocolVersion >= KAFKA_3_2_IV0).
@@ -198,7 +200,6 @@ class ControllerServer(
         authorizer,
         quotaManagers,
         time,
-        supportedFeatures,
         controller,
         raftManager,
         config,

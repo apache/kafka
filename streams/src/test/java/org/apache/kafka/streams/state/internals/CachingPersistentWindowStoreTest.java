@@ -145,6 +145,7 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotReturnDuplicatesInRanges() {
         final StreamsBuilder builder = new StreamsBuilder();
 

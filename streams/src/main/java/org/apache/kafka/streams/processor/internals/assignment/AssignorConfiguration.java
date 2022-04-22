@@ -114,6 +114,17 @@ public final class AssignorConfiguration {
                     log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
                         " Please be prepared to remove the 'upgrade.from' config soon.");
                     return RebalanceProtocol.EAGER;
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    // This config is for explicitly sending FK response to a requested partition
+                    // and should not affect the rebalance protocol
+                    break;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
@@ -156,6 +167,17 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
                     // These configs are for cooperative rebalancing and should not affect the metadata version
+                    break;
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    // This config is for explicitly sending FK response to a requested partition
+                    // and should not affect the metadata version
                     break;
                 default:
                     throw new IllegalArgumentException(

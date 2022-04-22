@@ -1758,7 +1758,7 @@ class KafkaApisTest {
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.initialLeaderEpoch + 2, deletePartition = true)
+      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = true)
   }
 
   @Test
@@ -1776,7 +1776,7 @@ class KafkaApisTest {
   @Test
   def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.initialLeaderEpoch + 2, deletePartition = false)
+      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = false)
   }
 
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,
@@ -3094,7 +3094,7 @@ class KafkaApisTest {
         .setLeader(0)
         .setLeaderEpoch(1)
         .setIsr(asList(0, 1))
-        .setZkVersion(2)
+        .setPartitionEpoch(2)
         .setReplicas(asList(0, 1, 2))
         .setIsNew(false)
     ).asJava
@@ -3192,6 +3192,14 @@ class KafkaApisTest {
     )
     val stopReplicaResponse = capturedResponse.getValue
     assertEquals(expectedError, stopReplicaResponse.error())
+    if (expectedError != Errors.STALE_BROKER_EPOCH) {
+      verify(replicaManager).stopReplicas(
+        ArgumentMatchers.eq(request.context.correlationId),
+        ArgumentMatchers.eq(controllerId),
+        ArgumentMatchers.eq(controllerEpoch),
+        ArgumentMatchers.eq(stopReplicaRequest.partitionStates().asScala)
+      )
+    }
   }
 
   @Test
