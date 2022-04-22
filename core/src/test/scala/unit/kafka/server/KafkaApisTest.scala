@@ -70,7 +70,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -2356,11 +2355,12 @@ class KafkaApisTest {
 
     when(replicaManager.getLogConfig(ArgumentMatchers.eq(tp))).thenReturn(None)
 
-    when(replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]], any[ReplicaQuota],
-      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit](), any[IsolationLevel],
-      any[Option[ClientMetadata]])
-    ).thenAnswer(invocation => {
+    when(replicaManager.fetchMessages(
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
+      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
+    )).thenAnswer(invocation => {
       val callback = invocation.getArgument(7).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
       val records = MemoryRecords.withRecords(CompressionType.NONE,
         new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
@@ -2944,11 +2944,12 @@ class KafkaApisTest {
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-    when(replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]], any[ReplicaQuota],
-      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit](), any[IsolationLevel],
-      any[Option[ClientMetadata]])
-    ).thenAnswer(invocation => {
+    when(replicaManager.fetchMessages(
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
+      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
+    )).thenAnswer(invocation => {
       val callback = invocation.getArgument(7).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
       callback(Seq(tidp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
         None, None, None, Option.empty, isReassignmentFetch = isReassigning)))

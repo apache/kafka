@@ -18,11 +18,13 @@ package kafka.server
 
 import java.io.File
 import java.util.{Collections, Optional, Properties}
+
 import kafka.cluster.Partition
 import kafka.log.{LogManager, LogOffsetSnapshot, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -205,17 +207,23 @@ class ReplicaManagerQuotasTest {
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
       val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
          relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
-      val fetchMetadata = FetchMetadata(fetchMinBytes = 1,
-        fetchMaxBytes = 1000,
-        hardMaxBytesLimit = true,
-        fetchOnlyLeader = true,
-        fetchIsolation = FetchLogEnd,
-        isFromFollower = true,
+      val fetchParams = FetchParams(
+        requestVersion = ApiKeys.FETCH.latestVersion,
         replicaId = 1,
-        fetchPartitionStatus = List((tp, fetchPartitionStatus))
+        maxWaitMs = 600,
+        minBytes = 1,
+        maxBytes = 1000,
+        isolation = FetchLogEnd,
+        clientMetadata = None
       )
-      new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
-        quota = null, clientMetadata = None, responseCallback = null) {
+
+      new DelayedFetch(
+        params = fetchParams,
+        fetchPartitionStatus = Seq(tp -> fetchPartitionStatus),
+        replicaManager = replicaManager,
+        quota = null,
+        responseCallback = null
+      ) {
         override def forceComplete(): Boolean = true
       }
     }
@@ -249,17 +257,23 @@ class ReplicaManagerQuotasTest {
       val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
       val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
         relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
-      val fetchMetadata = FetchMetadata(fetchMinBytes = 1,
-        fetchMaxBytes = 1000,
-        hardMaxBytesLimit = true,
-        fetchOnlyLeader = true,
-        fetchIsolation = FetchLogEnd,
-        isFromFollower = false,
+      val fetchParams = FetchParams(
+        requestVersion = ApiKeys.FETCH.latestVersion,
         replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-        fetchPartitionStatus = List((tidp, fetchPartitionStatus))
+        maxWaitMs = 600,
+        minBytes = 1,
+        maxBytes = 1000,
+        isolation = FetchHighWatermark,
+        clientMetadata = None
       )
-      new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
-        quota = null, clientMetadata = None, responseCallback = null) {
+
+      new DelayedFetch(
+        params = fetchParams,
+        fetchPartitionStatus = Seq(tidp -> fetchPartitionStatus),
+        replicaManager = replicaManager,
+        quota = null,
+        responseCallback = null
+      ) {
         override def forceComplete(): Boolean = true
       }
     }
