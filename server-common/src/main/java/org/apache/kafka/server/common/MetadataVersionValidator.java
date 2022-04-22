@@ -26,7 +26,7 @@ public class MetadataVersionValidator implements Validator {
     @Override
     public void ensureValid(String name, Object value) {
         try {
-            MetadataVersion.apply(value.toString());
+            MetadataVersion.fromVersionString(value.toString());
         } catch (IllegalArgumentException e) {
             throw new ConfigException(name, value.toString(), e.getMessage());
         }

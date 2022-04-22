@@ -184,6 +184,37 @@ class ApiVersionTest {
     assertEquals("3.2", KAFKA_3_2_IV0.shortVersion)
   }
 
+  @Test def testVersion(): Unit = {
+    assertEquals("0.8.0", KAFKA_0_8_0.version)
+    assertEquals("0.8.2", KAFKA_0_8_2.version)
+    assertEquals("0.10.0-IV0", KAFKA_0_10_0_IV0.version)
+    assertEquals("0.10.0-IV1", KAFKA_0_10_0_IV1.version)
+    assertEquals("0.11.0-IV0", KAFKA_0_11_0_IV0.version)
+    assertEquals("0.11.0-IV1", KAFKA_0_11_0_IV1.version)
+    assertEquals("0.11.0-IV2", KAFKA_0_11_0_IV2.version)
+    assertEquals("1.0-IV0", KAFKA_1_0_IV0.version)
+    assertEquals("1.1-IV0", KAFKA_1_1_IV0.version)
+    assertEquals("2.0-IV0", KAFKA_2_0_IV0.version)
+    assertEquals("2.0-IV1", KAFKA_2_0_IV1.version)
+    assertEquals("2.1-IV0", KAFKA_2_1_IV0.version)
+    assertEquals("2.1-IV1", KAFKA_2_1_IV1.version)
+    assertEquals("2.1-IV2", KAFKA_2_1_IV2.version)
+    assertEquals("2.2-IV0", KAFKA_2_2_IV0.version)
+    assertEquals("2.2-IV1", KAFKA_2_2_IV1.version)
+    assertEquals("2.3-IV0", KAFKA_2_3_IV0.version)
+    assertEquals("2.3-IV1", KAFKA_2_3_IV1.version)
+    assertEquals("2.4-IV0", KAFKA_2_4_IV0.version)
+    assertEquals("2.5-IV0", KAFKA_2_5_IV0.version)
+    assertEquals("2.6-IV0", KAFKA_2_6_IV0.version)
+    assertEquals("2.7-IV2", KAFKA_2_7_IV2.version)
+    assertEquals("2.8-IV0", KAFKA_2_8_IV0.version)
+    assertEquals("2.8-IV1", KAFKA_2_8_IV1.version)
+    assertEquals("3.0-IV0", KAFKA_3_0_IV0.version)
+    assertEquals("3.0-IV1", KAFKA_3_0_IV1.version)
+    assertEquals("3.1-IV0", KAFKA_3_1_IV0.version)
+    assertEquals("3.2-IV0", KAFKA_3_2_IV0.version)
+  }
+
   @Test
   def testApiVersionValidator(): Unit = {
     val str = ApiVersionValidator.toString

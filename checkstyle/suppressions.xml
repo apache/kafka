@@ -302,7 +302,7 @@
     <suppress checks="BooleanExpressionComplexity"
               files="(MetadataImage).java"/>
     <suppress checks="ImportControl"
-              files="MetadataVersion.java"/>
+              files="ApiVersionsResponse.java"/>
 
     <!-- Storage -->
     <suppress checks="(CyclomaticComplexity|ParameterNumber)"

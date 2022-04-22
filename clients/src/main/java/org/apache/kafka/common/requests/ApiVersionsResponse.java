@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiMessageType.ListenerType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
@@ -270,5 +272,49 @@ public class ApiVersionsResponse extends AbstractResponse {
             .setApiKey(apiKey.id)
             .setMinVersion(apiKey.oldestVersion())
             .setMaxVersion(apiKey.latestVersion());
+    }
+
+    public static ApiVersionsResponse apiVersionsResponse(
+        Integer throttleTimeMs,
+        RecordVersion minRecordVersion,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        NodeApiVersions controllerApiVersions,
+        ListenerType listenerType
+    ) {
+        return apiVersionsResponse(
+            throttleTimeMs,
+            minRecordVersion,
+            latestSupportedFeatures,
+            Features.emptyFinalizedFeatures(),
+            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+            controllerApiVersions,
+            listenerType
+        );
+    }
+
+    public static ApiVersionsResponse apiVersionsResponse(
+        Integer throttleTimeMs,
+        RecordVersion minRecordVersion,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Features<FinalizedVersionRange> finalizedFeatures,
+        Long finalizedFeaturesEpoch,
+        NodeApiVersions controllerApiVersions,
+        ListenerType listenerType
+    ) {
+        ApiVersionCollection apiKeys;
+        if (controllerApiVersions != null) {
+            apiKeys = ApiVersionsResponse.intersectForwardableApis(
+                listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
+        } else {
+            apiKeys = ApiVersionsResponse.filterApis(minRecordVersion, listenerType);
+        }
+
+        return ApiVersionsResponse.createApiVersionsResponse(
+            throttleTimeMs,
+            apiKeys,
+            latestSupportedFeatures,
+            finalizedFeatures,
+            finalizedFeaturesEpoch
+        );
     }
 }

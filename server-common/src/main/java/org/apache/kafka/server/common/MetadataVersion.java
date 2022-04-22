@@ -22,14 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.common.feature.Features;
-import org.apache.kafka.common.feature.FinalizedVersionRange;
-import org.apache.kafka.common.feature.SupportedVersionRange;
-import org.apache.kafka.common.message.ApiMessageType.ListenerType;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 
 public enum MetadataVersion {
     IBP_0_8_0(-1),
@@ -74,12 +67,34 @@ public enum MetadataVersion {
     IBP_3_3_IV0(5);
 
     private final Optional<Short> metadataVersion;
+    private final String shortVersion;
+    private final String version;
 
     MetadataVersion(int metadataVersion) {
         if (metadataVersion > 0) {
             this.metadataVersion = Optional.of((short) metadataVersion);
         } else {
             this.metadataVersion = Optional.empty();
+        }
+
+        Pattern versionPattern = Pattern.compile("^IBP_([\\d_]+)(?:IV(\\d))?");
+        Matcher matcher = versionPattern.matcher(this.name());
+        if (matcher.find()) {
+            String withoutIV = matcher.group(1);
+            // remove any trailing underscores
+            if (withoutIV.endsWith("_")) {
+                withoutIV = withoutIV.substring(0, withoutIV.length() - 1);
+            }
+            shortVersion = withoutIV.replace("_", ".");
+
+            if (matcher.group(2) != null) { // versions less than IBP_0_10_0_IV0 do not have IVs
+                version = String.format("%s-IV%s", shortVersion, matcher.group(2));
+            } else {
+                version = shortVersion;
+            }
+        } else {
+            throw new IllegalArgumentException("Metadata version: " + this.name() + " does not fit "
+                + "the accepted pattern.");
         }
     }
 
@@ -161,19 +176,7 @@ public enum MetadataVersion {
     }
 
     public String shortVersion() {
-        Pattern versionPattern = Pattern.compile("^IBP_([\\d_]+)");
-        Matcher matcher = versionPattern.matcher(this.name());
-        if (matcher.find()) {
-            String withoutIV = matcher.group(1);
-            // remove any trailing underscores
-            if (withoutIV.endsWith("_")) {
-                withoutIV = withoutIV.substring(0, withoutIV.length() - 1);
-            }
-            return withoutIV.replace("_", ".");
-        } else {
-            throw new IllegalArgumentException("Metadata version: " + this.name() + " does not fit "
-                    + "the accepted pattern.");
-        }
+        return shortVersion;
     }
 
     public String version() {
@@ -183,7 +186,7 @@ public enum MetadataVersion {
             Pattern ivPattern = Pattern.compile("^IBP_[\\d_]+IV(\\d)");
             Matcher matcher = ivPattern.matcher(this.name());
             if (matcher.find()) {
-                return String.format("%s-%s", shortVersion(), matcher.group(1));
+                return String.format("%s-IV%s", shortVersion(), matcher.group(1));
             } else {
                 throw new IllegalArgumentException("Metadata version: " + this.name() + " does not fit "
                         + "the accepted pattern.");
@@ -195,7 +198,7 @@ public enum MetadataVersion {
      * Return an `ApiVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
      * "0.10.0", "0.10.0-IV1"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `ApiVersion`.
      */
-    public static MetadataVersion apply(String versionString) {
+    public static MetadataVersion fromVersionString(String versionString) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
         int numSegments = (versionString.startsWith("0.")) ? 3 : 2;
         String key;
@@ -205,7 +208,7 @@ public enum MetadataVersion {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
         return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
-                new IllegalArgumentException("Version " + versionString + "is not a valid version")
+                new IllegalArgumentException("Version " + versionString + " is not a valid version")
         );
     }
 
@@ -223,50 +226,6 @@ public enum MetadataVersion {
             default:
                 throw new IllegalArgumentException("Invalid message format version " + recordVersion);
         }
-    }
-
-    public static ApiVersionsResponse apiVersionsResponse(
-        Integer throttleTimeMs,
-        RecordVersion minRecordVersion,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        NodeApiVersions controllerApiVersions,
-        ListenerType listenerType
-    ) {
-        return apiVersionsResponse(
-            throttleTimeMs,
-            minRecordVersion,
-            latestSupportedFeatures,
-            Features.emptyFinalizedFeatures(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            controllerApiVersions,
-            listenerType
-        );
-    }
-
-    public static ApiVersionsResponse apiVersionsResponse(
-        Integer throttleTimeMs,
-        RecordVersion minRecordVersion,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
-        Long finalizedFeaturesEpoch,
-        NodeApiVersions controllerApiVersions,
-        ListenerType listenerType
-    ) {
-        ApiVersionCollection apiKeys;
-        if (controllerApiVersions != null) {
-            apiKeys = ApiVersionsResponse.intersectForwardableApis(
-                    listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
-        } else {
-            apiKeys = ApiVersionsResponse.filterApis(minRecordVersion, listenerType);
-        }
-
-        return ApiVersionsResponse.createApiVersionsResponse(
-                throttleTimeMs,
-                apiKeys,
-                latestSupportedFeatures,
-                finalizedFeatures,
-                finalizedFeaturesEpoch
-        );
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {

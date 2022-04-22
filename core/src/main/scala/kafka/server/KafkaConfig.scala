@@ -174,7 +174,7 @@ object Defaults {
   val LeaderImbalanceCheckIntervalSeconds = 300
   val UncleanLeaderElectionEnable = false
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
-  val InterBrokerProtocolVersion = MetadataVersion.latest.toString
+  val InterBrokerProtocolVersion = MetadataVersion.latest.version
 
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetries = 3
@@ -1723,8 +1723,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   @deprecated("3.0")
   lazy val logMessageFormatVersion =
     if (LogConfig.shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion))
-      MetadataVersion.apply(Defaults.LogMessageFormatVersion)
-    else MetadataVersion.apply(logMessageFormatVersionString)
+      MetadataVersion.fromVersionString(Defaults.LogMessageFormatVersion)
+    else MetadataVersion.fromVersionString(logMessageFormatVersionString)
 
   def logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
   def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
@@ -1754,7 +1754,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // We keep the user-provided String as `MetadataVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
-  val interBrokerProtocolVersion = MetadataVersion.apply(interBrokerProtocolVersionString)
+  val interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)

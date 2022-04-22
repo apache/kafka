@@ -105,7 +105,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
   @deprecated("3.0")
-  val messageFormatVersion = MetadataVersion.apply(getString(LogConfig.MessageFormatVersionProp))
+  val messageFormatVersion = MetadataVersion.fromVersionString(getString(LogConfig.MessageFormatVersionProp))
 
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
@@ -566,8 +566,8 @@ object LogConfig {
     interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)
 
   class MessageFormatVersion(messageFormatVersionString: String, interBrokerProtocolVersionString: String) {
-    val messageFormatVersion = MetadataVersion.apply(messageFormatVersionString)
-    private val interBrokerProtocolVersion = MetadataVersion.apply(interBrokerProtocolVersionString)
+    val messageFormatVersion = MetadataVersion.fromVersionString(messageFormatVersionString)
+    private val interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
 
     def shouldIgnore: Boolean = shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion)
 
