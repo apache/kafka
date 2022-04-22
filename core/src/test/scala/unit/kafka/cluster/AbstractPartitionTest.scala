@@ -21,7 +21,7 @@ import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
-import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
+import kafka.utils.TestUtils.{MockAlterPartitionManager, MockIsrChangeListener}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -49,7 +49,7 @@ class AbstractPartitionTest {
   var logDir1: File = _
   var logDir2: File = _
   var logManager: LogManager = _
-  var alterIsrManager: MockAlterIsrManager = _
+  var alterIsrManager: MockAlterPartitionManager = _
   var isrChangeListener: MockIsrChangeListener = _
   var logConfig: LogConfig = _
   var configRepository: MockConfigRepository = _

@@ -45,7 +45,7 @@ import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import scala.jdk.CollectionConverters._
 
-class AlterIsrManagerTest {
+class AlterPartitionManagerTest {
 
   val topic = "test-topic"
   val time = new MockTime
@@ -67,7 +67,7 @@ class AlterIsrManagerTest {
   @MethodSource(Array("provideApiVersions"))
   def testBasic(apiVersion: ApiVersion): Unit = {
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
     alterIsrManager.start()
     alterIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
     verify(brokerToController).start()
@@ -83,7 +83,7 @@ class AlterIsrManagerTest {
     val requestCapture = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
     alterIsrManager.start()
     alterIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1), leaderRecoveryState, 10), 0)
     verify(brokerToController).start()
@@ -101,7 +101,7 @@ class AlterIsrManagerTest {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
     alterIsrManager.start()
 
     // Only send one ISR update for a given topic+partition
@@ -139,7 +139,7 @@ class AlterIsrManagerTest {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
     alterIsrManager.start()
 
     // First request will send batch of one
@@ -209,7 +209,7 @@ class AlterIsrManagerTest {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, KAFKA_3_2_IV0)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, KAFKA_3_2_IV0)
     alterIsrManager.start()
     alterIsrManager.submit(tp0, leaderAndIsr, 0)
 
@@ -264,12 +264,12 @@ class AlterIsrManagerTest {
     assertFalse(future.isDone)
   }
 
-  private def testPartitionError(tp: TopicPartition, error: Errors): AlterIsrManager = {
+  private def testPartitionError(tp: TopicPartition, error: Errors): AlterPartitionManager = {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     reset(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, KAFKA_3_2_IV0)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, KAFKA_3_2_IV0)
     alterIsrManager.start()
 
     val future = alterIsrManager.submit(tp, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
@@ -293,7 +293,7 @@ class AlterIsrManagerTest {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
     alterIsrManager.start()
 
     // First submit will send the request
@@ -322,7 +322,7 @@ class AlterIsrManagerTest {
 
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => brokerEpoch, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => brokerEpoch, apiVersion)
     alterIsrManager.start()
 
     def matchesAlterIsr(topicPartitions: Set[TopicPartition]): AbstractRequest.Builder[_ <: AbstractRequest] = {
@@ -395,7 +395,7 @@ class AlterIsrManagerTest {
       .when(kafkaZkClient)
       .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(3), any())
 
-    val zkIsrManager = new ZkIsrManager(scheduler, time, kafkaZkClient)
+    val zkIsrManager = new ZkAlterPartitionManager(scheduler, time, kafkaZkClient)
     zkIsrManager.start()
 
     // Correct ZK version
@@ -421,7 +421,7 @@ class AlterIsrManagerTest {
   }
 }
 
-object AlterIsrManagerTest {
+object AlterPartitionManagerTest {
   def provideApiVersions(): JStream[ApiVersion] = {
     JStream.of(
       // Supports KIP-704: unclean leader recovery

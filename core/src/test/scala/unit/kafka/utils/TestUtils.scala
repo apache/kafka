@@ -1254,8 +1254,8 @@ object TestUtils extends Logging {
                    interBrokerProtocolVersion = interBrokerProtocolVersion)
   }
 
-  class MockAlterIsrManager extends AlterIsrManager {
-    val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
+  class MockAlterPartitionManager extends AlterPartitionManager {
+    val isrUpdates: mutable.Queue[AlterPartitionItem] = new mutable.Queue[AlterPartitionItem]()
     val inFlight: AtomicBoolean = new AtomicBoolean(false)
 
 
@@ -1266,7 +1266,7 @@ object TestUtils extends Logging {
     ): CompletableFuture[LeaderAndIsr]= {
       val future = new CompletableFuture[LeaderAndIsr]()
       if (inFlight.compareAndSet(false, true)) {
-        isrUpdates += AlterIsrItem(topicPartition, leaderAndIsr, future, controllerEpoch)
+        isrUpdates += AlterPartitionItem(topicPartition, leaderAndIsr, future, controllerEpoch)
       } else {
         future.completeExceptionally(new OperationNotAttemptedException(
           s"Failed to enqueue AlterIsr request for $topicPartition since there is already an inflight request"))
@@ -1293,8 +1293,8 @@ object TestUtils extends Logging {
     }
   }
 
-  def createAlterIsrManager(): MockAlterIsrManager = {
-    new MockAlterIsrManager()
+  def createAlterIsrManager(): MockAlterPartitionManager = {
+    new MockAlterPartitionManager()
   }
 
   class MockIsrChangeListener extends IsrChangeListener {

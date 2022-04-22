@@ -99,7 +99,7 @@ object Partition extends KafkaMetricsGroup {
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
-      alterIsrManager = replicaManager.alterIsrManager)
+      alterIsrManager = replicaManager.alterPartitionManager)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -239,7 +239,7 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                alterIsrManager: AlterPartitionManager) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -1414,7 +1414,7 @@ class Partition(val topicPartition: TopicPartition,
    * to the KRaft metadata log).
    *
    * @param proposedIsrState The ISR state change that was requested
-   * @param error The error returned from [[AlterIsrManager]]
+   * @param error The error returned from [[AlterPartitionManager]]
    * @return true if the `AlterPartition` request should be retried, false otherwise
    */
   private def handleAlterPartitionError(

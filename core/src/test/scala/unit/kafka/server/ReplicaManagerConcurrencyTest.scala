@@ -170,7 +170,7 @@ class ReplicaManagerConcurrencyTest {
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
       metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = new MockAlterIsrManager(channel)
+      alterPartitionManager = new MockAlterPartitionManager(channel)
     ) {
       override def createReplicaFetcherManager(
         metrics: Metrics,
@@ -427,7 +427,7 @@ class ReplicaManagerConcurrencyTest {
     }
   }
 
-  private class MockAlterIsrManager(channel: ControllerChannel) extends AlterIsrManager {
+  private class MockAlterPartitionManager(channel: ControllerChannel) extends AlterPartitionManager {
     override def submit(
       topicPartition: TopicPartition,
       leaderAndIsr: LeaderAndIsr,
