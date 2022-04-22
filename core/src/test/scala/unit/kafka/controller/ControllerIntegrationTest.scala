@@ -894,7 +894,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val leaderId = partitionState.leaderAndIsr.leader
     val leaderBrokerEpoch = servers(leaderId).kafkaController.brokerEpoch
     val leaderEpoch = partitionState.leaderAndIsr.leaderEpoch
-    val zkVersion = partitionState.leaderAndIsr.zkVersion
+    val partitionEpoch = partitionState.leaderAndIsr.partitionEpoch
 
     def assertAlterPartition(
       topLevelError: Errors = Errors.NONE,
@@ -903,7 +903,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       leaderId: Int = leaderId,
       brokerEpoch: Long = leaderBrokerEpoch,
       leaderEpoch: Int = leaderEpoch,
-      zkVersion: Int = zkVersion,
+      partitionEpoch: Int = partitionEpoch,
       isr: Set[Int] = replicas.toSet,
       leaderRecoveryState: LeaderRecoveryState = LeaderRecoveryState.RECOVERED
     ): Unit = {
@@ -912,7 +912,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         leaderId = leaderId,
         brokerEpoch = brokerEpoch,
         leaderEpoch = leaderEpoch,
-        zkVersion = zkVersion,
+        partitionEpoch = partitionEpoch,
         isr = isr,
         leaderRecoveryState = leaderRecoveryState,
         topLevelError = topLevelError,
@@ -942,7 +942,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     assertAlterPartition(
       partitionError = Errors.INVALID_UPDATE_VERSION,
-      zkVersion = zkVersion - 1
+      partitionEpoch = partitionEpoch - 1
     )
 
     assertAlterPartition(
@@ -951,7 +951,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
-      partitionError = Errors.UNKNOWN_LEADER_EPOCH,
+      partitionError = Errors.FENCED_LEADER_EPOCH,
       leaderEpoch = leaderEpoch + 1
     )
 
@@ -972,7 +972,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertAlterPartition(
       partitionError = Errors.INVALID_UPDATE_VERSION,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING,
-      zkVersion = zkVersion - 1
+      partitionEpoch = partitionEpoch - 1
     )
 
     assertAlterPartition(
@@ -982,7 +982,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
-      partitionError = Errors.UNKNOWN_LEADER_EPOCH,
+      partitionError = Errors.FENCED_LEADER_EPOCH,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING,
       leaderEpoch = leaderEpoch + 1
     )
@@ -1034,7 +1034,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val leaderId = replica1
     val leaderBrokerEpoch = servers(replica1).kafkaController.brokerEpoch
     val leaderEpoch = partitionStateAfterRestart.leaderAndIsr.leaderEpoch
-    val zkVersion = partitionStateAfterRestart.leaderAndIsr.zkVersion
+    val partitionEpoch = partitionStateAfterRestart.leaderAndIsr.partitionEpoch
 
     def assertAlterPartition(
       topLevelError: Errors = Errors.NONE,
@@ -1042,7 +1042,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       leaderId: Int = leaderId,
       brokerEpoch: Long = leaderBrokerEpoch,
       leaderEpoch: Int = leaderEpoch,
-      zkVersion: Int = zkVersion,
+      partitionEpoch: Int = partitionEpoch,
       leaderRecoveryState: LeaderRecoveryState = LeaderRecoveryState.RECOVERED
     ): Unit = {
       assertAlterPartitionError(
@@ -1050,7 +1050,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         leaderId = leaderId,
         brokerEpoch = brokerEpoch,
         leaderEpoch = leaderEpoch,
-        zkVersion = zkVersion,
+        partitionEpoch = partitionEpoch,
         isr = replicas.toSet,
         leaderRecoveryState = leaderRecoveryState,
         topLevelError = topLevelError,
@@ -1070,7 +1070,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     assertAlterPartition(
       partitionError = Errors.INVALID_UPDATE_VERSION,
-      zkVersion = zkVersion - 1
+      partitionEpoch = partitionEpoch - 1
     )
 
     assertAlterPartition(
@@ -1079,7 +1079,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
-      partitionError = Errors.UNKNOWN_LEADER_EPOCH,
+      partitionError = Errors.FENCED_LEADER_EPOCH,
       leaderEpoch = leaderEpoch + 1
     )
 
@@ -1093,7 +1093,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     assertAlterPartition(
       partitionError = Errors.INVALID_UPDATE_VERSION,
-      zkVersion = zkVersion - 1,
+      partitionEpoch = partitionEpoch - 1,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING
     )
 
@@ -1104,7 +1104,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
-      partitionError = Errors.UNKNOWN_LEADER_EPOCH,
+      partitionError = Errors.FENCED_LEADER_EPOCH,
       leaderEpoch = leaderEpoch + 1,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING
     )
@@ -1115,7 +1115,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     leaderId: Int,
     brokerEpoch: Long,
     leaderEpoch: Int,
-    zkVersion: Int,
+    partitionEpoch: Int,
     isr: Set[Int],
     leaderRecoveryState: LeaderRecoveryState,
     topLevelError: Errors,
@@ -1125,7 +1125,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       leader = leaderId,
       leaderEpoch = leaderEpoch,
       isr = isr.toList,
-      zkVersion = zkVersion,
+      partitionEpoch = partitionEpoch,
       leaderRecoveryState = leaderRecoveryState
     )
 
