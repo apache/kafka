@@ -139,7 +139,7 @@ public class TopicConfig {
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";
     public static final String CLEANUP_POLICY_DELETE = "delete";
-    public static final String CLEANUP_POLICY_DOC = "A string that is either \"" + CLEANUP_POLICY_DELETE +
+    public static final String CLEANUP_POLICY_DOC = "A comma separated list of String(s) that is either \"" + CLEANUP_POLICY_DELETE +
         "\" or \"" + CLEANUP_POLICY_COMPACT + "\" or both. This string designates the retention policy to use on " +
         "old log segments. The default policy (\"delete\") will discard old segments when their retention " +
         "time or size limit has been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
