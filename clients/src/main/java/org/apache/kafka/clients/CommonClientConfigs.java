@@ -210,9 +210,9 @@ public class CommonClientConfigs {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
-            if (clientSaslMechanism == null || clientSaslMechanism.trim().isEmpty()) {
+            if (clientSaslMechanism == null || clientSaslMechanism.isEmpty()) {
                 throw new ConfigException(SaslConfigs.SASL_MECHANISM, null, "When the " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG +
-                        " configuration enables the SASL mechanism, mechanism must be non-null or non-empty string.");
+                        " configuration enables SASL, mechanism must be non-null and non-empty string.");
             }
         }
     }
