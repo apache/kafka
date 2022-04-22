@@ -2361,7 +2361,7 @@ class KafkaApisTest {
       any[ReplicaQuota],
       any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
     )).thenAnswer(invocation => {
-      val callback = invocation.getArgument(7).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
+      val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
       val records = MemoryRecords.withRecords(CompressionType.NONE,
         new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
       callback(Seq(tidp -> FetchPartitionData(Errors.NONE, hw, 0, records,
@@ -2950,7 +2950,7 @@ class KafkaApisTest {
       any[ReplicaQuota],
       any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
     )).thenAnswer(invocation => {
-      val callback = invocation.getArgument(7).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
+      val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
       callback(Seq(tidp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
         None, None, None, Option.empty, isReassignmentFetch = isReassigning)))
     })
@@ -2977,7 +2977,6 @@ class KafkaApisTest {
     else
       assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
     assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
-
   }
 
   @Test
