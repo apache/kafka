@@ -317,6 +317,8 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG = CommonClientConfigs.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG;
 
+    public static final String LI_UPDATE_METADATA_LAST_REFRESH_TIME_UPON_NODE_DISCONNECT_CONFIG = CommonClientConfigs.LI_UPDATE_METADATA_LAST_REFRESH_TIME_UPON_NODE_DISCONNECT_CONFIG;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -366,6 +368,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_DOC)
+                                .define(LI_UPDATE_METADATA_LAST_REFRESH_TIME_UPON_NODE_DISCONNECT_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.LI_UPDATE_METADATA_LAST_REFRESH_TIME_UPON_NODE_DISCONNECT_DOC)
                                 .define(ENABLE_AUTO_COMMIT_CONFIG,
                                         Type.BOOLEAN,
                                         true,

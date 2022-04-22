@@ -490,7 +490,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 logContext,
                 producerConfig.getString(ProducerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG),
                 leastLoadedNodeAlgorithm,
-                producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+                producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                producerConfig.getBoolean(ProducerConfig.LI_UPDATE_METADATA_LAST_REFRESH_TIME_UPON_NODE_DISCONNECT_CONFIG));
         int retries = configureRetries(producerConfig, transactionManager != null, log);
         short acks = configureAcks(producerConfig, transactionManager != null, log);
         return new Sender(logContext,

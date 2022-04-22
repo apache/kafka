@@ -164,6 +164,10 @@ public class CommonClientConfigs {
         + "which will try to refresh metadata by choosing from existing resolved node set, this config will force resolving "
         + "the bootstrap url again to get new node set and use the new node set to send update metadata request";
 
+    /** <code> li.update.metadata.last.refresh.time.upon.node.disconnect </code> */
+    public static final String LI_UPDATE_METADATA_LAST_REFRESH_TIME_UPON_NODE_DISCONNECT_CONFIG = "li.update.metadata.last.refresh.time.upon.node.disconnect";
+    public static final String LI_UPDATE_METADATA_LAST_REFRESH_TIME_UPON_NODE_DISCONNECT_DOC = "whether the lastRefreshMs in NetworkClient should be updated when a node disconnection happens";
+
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.

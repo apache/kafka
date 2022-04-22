@@ -46,6 +46,7 @@ import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -100,6 +101,13 @@ public class NetworkClientTest {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
+    }
+
+    private NetworkClient createNetworkClientWithoutUpdatingMdRefreshTime(Metadata metadata) {
+        return new NetworkClient(selector, metadata, "mock",  Integer.MAX_VALUE,
+            reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+            defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), null,
+            new LogContext(), null, LeastLoadedNodeAlgorithm.VANILLA, Collections.emptyList(), false);
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
@@ -858,6 +866,36 @@ public class NetworkClientTest {
         List<ClientResponse> responses = client.poll(defaultRequestTimeoutMs, time.milliseconds());
         assertEquals(1, responses.size());
         assertTrue(responses.iterator().next().wasDisconnected());
+    }
+
+    @Test
+    public void testDisconnectNotUpdateMetadataLastRefreshTime() {
+        int refreshBackoffMs = 300;
+
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        Metadata metadata = new Metadata(refreshBackoffMs, 1500, new LogContext(), new ClusterResourceListeners());
+        metadata.update(metadataResponse, time.milliseconds());
+
+        //after 1st update, the next timeToAllowUpdate should be refreshBackoffMs later
+        Assert.assertEquals(refreshBackoffMs, metadata.timeToAllowUpdate(time.milliseconds()));
+
+        Cluster cluster = metadata.fetch();
+        Node node1 = cluster.nodes().get(0);
+
+        NetworkClient client = createNetworkClientWithoutUpdatingMdRefreshTime(metadata);
+
+        //wait for connection to be established
+        awaitReady(client, node1);
+
+        //simulate an metadata update request and sleep for refreshBackoffMs
+        metadata.requestUpdate();
+        time.sleep(refreshBackoffMs);
+
+        //disconnect node1 and let NetworkClient handle the disconnection, it should not update the lastRefreshMs upon disconnection
+        selector.serverDisconnect(node1.idString());
+        client.poll(0, time.milliseconds());
+
+        Assert.assertEquals(0, metadata.timeToAllowUpdate(time.milliseconds()));
     }
 
     @Test

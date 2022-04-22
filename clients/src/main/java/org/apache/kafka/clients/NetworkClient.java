@@ -130,6 +130,9 @@ public class NetworkClient implements KafkaClient {
      */
     private final boolean discoverBrokerVersions;
 
+    /* whether metadata lastRefreshMs should be updated on node disconnection to honor backoff */
+    private final boolean updateMetadataLastRefreshTimeOnDisconnection;
+
     private final ApiVersions apiVersions;
 
     private final Map<String, ApiVersionsRequest.Builder> nodesNeedingApiVersionsFetch = new HashMap<>();
@@ -307,7 +310,8 @@ public class NetworkClient implements KafkaClient {
             LogContext logContext,
             String clientSoftwareNameAndCommit,
             LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm,
-            List<String> bootstrapServerUrls) {
+            List<String> bootstrapServerUrls,
+            boolean updateMetadataLastRefreshTimeOnDisconnection) {
         this(null,
              metadata,
              selector,
@@ -326,7 +330,8 @@ public class NetworkClient implements KafkaClient {
              logContext,
              clientSoftwareNameAndCommit,
              leastLoadedNodeAlgorithm,
-             bootstrapServerUrls);
+             bootstrapServerUrls,
+             updateMetadataLastRefreshTimeOnDisconnection);
     }
 
     public NetworkClient(Selectable selector,
@@ -402,6 +407,31 @@ public class NetworkClient implements KafkaClient {
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
+        Metadata metadata,
+        Selectable selector,
+        String clientId,
+        int maxInFlightRequestsPerConnection,
+        long reconnectBackoffMs,
+        long reconnectBackoffMax,
+        int socketSendBuffer,
+        int socketReceiveBuffer,
+        int defaultRequestTimeoutMs,
+        ClientDnsLookup clientDnsLookup,
+        Time time,
+        boolean discoverBrokerVersions,
+        ApiVersions apiVersions,
+        Sensor throttleTimeSensor,
+        LogContext logContext,
+        String clientSoftwareNameAndCommit,
+        LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm,
+        List<String> bootstrapServersConfig) {
+        this(metadataUpdater, metadata, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
+            reconnectBackoffMax, socketSendBuffer, socketReceiveBuffer, defaultRequestTimeoutMs, clientDnsLookup, time,
+            discoverBrokerVersions, apiVersions, throttleTimeSensor, logContext, clientSoftwareNameAndCommit,
+            leastLoadedNodeAlgorithm, bootstrapServersConfig, true);
+    }
+
+    private NetworkClient(MetadataUpdater metadataUpdater,
                           Metadata metadata,
                           Selectable selector,
                           String clientId,
@@ -419,7 +449,8 @@ public class NetworkClient implements KafkaClient {
                           LogContext logContext,
                           String clientSoftwareNameAndCommit,
                           LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm,
-                          List<String> bootstrapServersConfig) {
+                          List<String> bootstrapServersConfig,
+                          boolean updateMetadataLastRefreshTimeOnDisconnection) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -455,6 +486,7 @@ public class NetworkClient implements KafkaClient {
         }
         this.leastLoadedNodeAlgorithm = leastLoadedNodeAlgorithm;
         this.bootstrapServers.addAll(bootstrapServersConfig);
+        this.updateMetadataLastRefreshTimeOnDisconnection = updateMetadataLastRefreshTimeOnDisconnection;
     }
 
     public void setEnableClientResponseWithFinalize(boolean enableClientResponseWithFinalize) {
@@ -1446,7 +1478,7 @@ public class NetworkClient implements KafkaClient {
             // If we have a disconnect while an update is due, we treat it as a failed update
             // so that we can backoff properly
             if (isUpdateDue(now))
-                handleFailedRequest(now, Optional.empty());
+                handleFailedRequest(now, Optional.empty(), updateMetadataLastRefreshTimeOnDisconnection);
 
             maybeFatalException.ifPresent(metadata::fatalError);
 
@@ -1456,8 +1488,20 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
+            // this handleFailedRequest can be called in two scenarios:
+            // 1. cancelInFlightRequests due to node disconnected
+            // 2. doSend when api version mismatch.
+            // In case 1, the param maybeFatalException will be empty and in case 2, it will be an unsupportedVersionException,
+            // so we'll use the existence of exception to keep the other behavior unchanged, only do not set lastRefreshMd
+            // upon node disconnection.
+            handleFailedRequest(now, maybeFatalException, updateMetadataLastRefreshTimeOnDisconnection || maybeFatalException.isPresent());
+        }
+
+        private void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException, boolean updateLastRefreshTime) {
             maybeFatalException.ifPresent(metadata::fatalError);
-            metadata.failedUpdate(now);
+            if (updateLastRefreshTime) {
+                metadata.failedUpdate(now);
+            }
             inProgressRequestVersion = null;
         }
 
