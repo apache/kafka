@@ -53,6 +53,7 @@ public interface Partitioner extends Configurable, Closeable {
      * @param cluster The current cluster metadata
      * @param prevPartition The partition previously selected for the record that triggered a new batch
      */
+    @Deprecated
     default void onNewBatch(String topic, Cluster cluster, int prevPartition) {
     }
 }

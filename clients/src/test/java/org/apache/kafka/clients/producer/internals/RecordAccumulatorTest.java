@@ -1023,6 +1023,7 @@ public class RecordAccumulatorTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testStickyBatches() throws Exception {
         long now = time.milliseconds();
@@ -1209,10 +1210,10 @@ public class RecordAccumulatorTest {
 
             // Issue a certain number of partition calls to validate that the partitions would be
             // distributed with frequencies that are reciprocal to the queue sizes.  The number of
-            // iterations is defined by the last element of the probability weights which is the
-            // sum of all frequencies.  We do 2 cycles, just so it's more than 1.
+            // iterations is defined by the last element of the cumulative frequency table which is
+            // the sum of all frequencies.  We do 2 cycles, just so it's more than 1.
             final int numberOfCycles = 2;
-            int numberOfIterations = accum.getBuiltInPartitioner(topic).getLoadStatsRangeEnd() * numberOfCycles;
+            int numberOfIterations = accum.getBuiltInPartitioner(topic).loadStatsRangeEnd() * numberOfCycles;
             int[] frequencies = new int[queueSizes.length];
 
             for (int i = 0; i < numberOfIterations; i++) {

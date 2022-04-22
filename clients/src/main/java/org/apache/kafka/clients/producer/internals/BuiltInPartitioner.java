@@ -51,6 +51,7 @@ public class BuiltInPartitioner {
     private volatile PartitionLoadStats partitionLoadStats = null;
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
 
+    // Visible and used for testing only.
     static volatile public Supplier<Integer> mockRandom = null;
 
     /**
@@ -94,12 +95,12 @@ public class BuiltInPartitioner {
             // Calculate next partition based on load distribution.
             assert partitionLoadStats.length > 0;
 
-            int[] probabilityWeights = partitionLoadStats.probabilityWeights;
-            int weightedRandom = random % probabilityWeights[partitionLoadStats.length - 1];
+            int[] cumulativeFrequencyTable = partitionLoadStats.cumulativeFrequencyTable;
+            int weightedRandom = random % cumulativeFrequencyTable[partitionLoadStats.length - 1];
 
-            // By construction, the CDF separators are sorted, so we can use binary
+            // By construction, the cumulative frequency table is sorted, so we can use binary
             // search to find the desired index.
-            int searchResult = Arrays.binarySearch(probabilityWeights, 0, partitionLoadStats.length, weightedRandom);
+            int searchResult = Arrays.binarySearch(cumulativeFrequencyTable, 0, partitionLoadStats.length, weightedRandom);
 
             // binarySearch results the index of the found element, or -(insertion_point) - 1
             // (where insertion_point is the index of the first element greater than the key).
@@ -120,10 +121,10 @@ public class BuiltInPartitioner {
      * Test-only function.  When partition load stats are defined, return the end of range for the
      * random number.
      */
-    public int getLoadStatsRangeEnd() {
+    public int loadStatsRangeEnd() {
         assert partitionLoadStats != null;
         assert partitionLoadStats.length > 0;
-        return partitionLoadStats.probabilityWeights[partitionLoadStats.length - 1];
+        return partitionLoadStats.cumulativeFrequencyTable[partitionLoadStats.length - 1];
     }
 
     /**
@@ -177,7 +178,9 @@ public class BuiltInPartitioner {
      *
      * @param queueSizes The queue sizes
      * @param partitionIds The partition ids for the queues
-     * @param length The logical length of the arrays (could be less)
+     * @param length The logical length of the arrays (could be less): we may eliminate some partitions
+     *               based on latency, but to avoid reallocation of the arrays, we just decrement
+     *               logical length
      * Visible for testing
      */
     public void updatePartitionLoadStats(int[] queueSizes, int[] partitionIds, int length) {
@@ -188,8 +191,8 @@ public class BuiltInPartitioner {
         assert queueSizes.length == partitionIds.length;
         assert length <= queueSizes.length;
 
-        // The queueSizes.length represents the number of all available partitions in the topic
-        // and if we have less than 2 available partitions, there is no need to do adaptive logic.
+        // The queueSizes.length represents the number of all partitions in the topic and if we have
+        // less than 2 partitions, there is no need to do adaptive logic.
         // If partitioner.availability.timeout.ms != 0, then partitions that experience high latencies
         // (greater than partitioner.availability.timeout.ms) may be excluded, the length represents
         // partitions that are not excluded.  If some partitions were excluded, we'd still want to
@@ -200,10 +203,10 @@ public class BuiltInPartitioner {
             return;
         }
 
-        // We build probability weights from the queue sizes in place.  At the beginning each entry
-        // contains queue size, then we invert it (so it represents a probability mass function)
-        // and convert to a running sum (effectively CDF).  Then a uniformly distributed random
-        // variable in the range [0..last) would map to a partition with weighted probability.
+        // We build cumulative frequency table from the queue sizes in place.  At the beginning
+        // each entry contains queue size, then we invert it (so it represents the frequency)
+        // and convert to a running sum.  Then a uniformly distributed random variable
+        // in the range [0..last) would map to a partition with weighted probability.
         // Example: suppose we have 3 partitions with the corresponding queue sizes:
         //  0 3 1
         // Then we can invert them by subtracting the queue size from the max queue size + 1 = 4:
@@ -228,14 +231,14 @@ public class BuiltInPartitioner {
         ++maxSizePlus1;
 
         if (allEqual && length == queueSizes.length) {
-            // No need to have complex probability weighting when all queue sizes are the same,
+            // No need to have complex probability logic when all queue sizes are the same,
             // and we didn't exclude partitions that experience high latencies (greater than
             // partitioner.availability.timeout.ms).
             partitionLoadStats = null;
             return;
         }
 
-        // Invert and fold the queue size, so that they become separator values in the CDF.
+        // Invert and fold the queue size, so that they become separator values in the CFT.
         queueSizes[0] = maxSizePlus1 - queueSizes[0];
         for (int i = 1; i < length; i++) {
             queueSizes[i] = maxSizePlus1 - queueSizes[i] + queueSizes[i - 1];
@@ -290,13 +293,13 @@ public class BuiltInPartitioner {
      * The partition load stats for each topic that are used for adaptive partition distribution.
      */
     private final static class PartitionLoadStats {
-        public final int[] probabilityWeights;
+        public final int[] cumulativeFrequencyTable;
         public final int[] partitionIds;
         public final int length;
-        public PartitionLoadStats(int[] probabilityWeights, int[] partitionIds, int length) {
-            assert probabilityWeights.length == partitionIds.length;
-            assert length <= probabilityWeights.length;
-            this.probabilityWeights = probabilityWeights;
+        public PartitionLoadStats(int[] cumulativeFrequencyTable, int[] partitionIds, int length) {
+            assert cumulativeFrequencyTable.length == partitionIds.length;
+            assert length <= cumulativeFrequencyTable.length;
+            this.cumulativeFrequencyTable = cumulativeFrequencyTable;
             this.partitionIds = partitionIds;
             this.length = length;
         }

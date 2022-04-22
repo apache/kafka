@@ -1991,6 +1991,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testPartitionAddedToTransactionAfterFullBatchRetry() throws Exception {
         StringSerializer serializer = new StringSerializer();

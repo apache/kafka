@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -318,6 +317,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
+    /**
+     * Check if partitioner is deprecated and log a warning if it is.
+     */
+    @SuppressWarnings("deprecation")
+    private void warnIfPartitionerDeprecated() {
+        // Using DefaultPartitioner and UniformStickyPartitioner is deprecated, see KIP-794.
+        if (partitioner instanceof org.apache.kafka.clients.producer.internals.DefaultPartitioner) {
+            log.warn("DefaultPartitioner is deprecated.  Please clear " + ProducerConfig.PARTITIONER_CLASS_CONFIG
+                    + " configuration setting to get the default partitioning behavior");
+        }
+        if (partitioner instanceof org.apache.kafka.clients.producer.UniformStickyPartitioner) {
+            log.warn("UniformStickyPartitioner is deprecated.  Please clear " + ProducerConfig.PARTITIONER_CLASS_CONFIG
+                    + " configuration setting and set " + ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG
+                    + " to 'true' to get the uniform sticky partitioning behavior");
+        }
+    }
+
     // visible for testing
     @SuppressWarnings("unchecked")
     KafkaProducer(ProducerConfig config,
@@ -362,16 +378,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     ProducerConfig.PARTITIONER_CLASS_CONFIG,
                     Partitioner.class,
                     Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
-            // Using DefaultPartitioner and UniformStickyPartitioner is deprecated, see KIP-794.
-            if (partitioner instanceof DefaultPartitioner) {
-                log.warn("DefaultPartitioner is deprecated.  Please clear " + ProducerConfig.PARTITIONER_CLASS_CONFIG
-                    + " configuration setting to get the default partitioning behavior");
-            }
-            if (partitioner instanceof UniformStickyPartitioner) {
-                log.warn("UniformStickyPartitioner is deprecated.  Please clear " + ProducerConfig.PARTITIONER_CLASS_CONFIG
-                    + " configuration setting and set " + ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG
-                    + " to 'true' to get the uniform sticky partitioning behavior");
-            }
+            warnIfPartitionerDeprecated();
             this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             if (keySerializer == null) {
@@ -945,6 +952,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Call deprecated {@link Partitioner#onNewBatch}
+     */
+    @SuppressWarnings("deprecation")
+    private void onNewBatch(String topic, Cluster cluster, int prevPartition) {
+        assert partitioner != null;
+        partitioner.onNewBatch(topic, cluster, prevPartition);
+    }
+
+    /**
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
@@ -1004,11 +1020,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // calculated there and can be accessed via appendCallbacks.topicPartition.
             RecordAccumulator.RecordAppendResult result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
                     serializedValue, headers, appendCallbacks, remainingWaitMs, abortOnNewBatch, nowMs, cluster);
-            assert appendCallbacks.topicPartition() != null;
+            assert appendCallbacks.getPartition() != RecordMetadata.UNKNOWN_PARTITION;
 
             if (result.abortForNewBatch) {
                 int prevPartition = partition;
-                partitioner.onNewBatch(record.topic(), cluster, prevPartition);
+                onNewBatch(record.topic(), cluster, prevPartition);
                 partition = partition(record, serializedKey, serializedValue, cluster);
                 if (log.isTraceEnabled()) {
                     log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
@@ -1344,8 +1360,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * computes partition for given record.
      * if the record has partition returns the value otherwise
      * if custom partitioner is specified, call it to compute partition
-     * otherwise run default partitioning logic
-     * It can also return RecordMetadata.UNKNOWN_PARTITION to indicate any partition can be used.
+     * otherwise try to calculate partition based on key.
+     * If there is no key or key should be ignored return
+     * RecordMetadata.UNKNOWN_PARTITION to indicate any partition
+     * can be used (the partition is then calculated by built-in
+     * partitioning logic).
      */
     private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
         if (record.partition() != null)
@@ -1454,10 +1473,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (metadata == null) {
-                TopicPartition tp = topicPartition();
-                if (tp == null)
-                    tp = ProducerInterceptors.extractTopicPartition(record);
-                metadata = new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
+                metadata = new RecordMetadata(topicPartition(), -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
             }
             this.interceptors.onAcknowledgement(metadata, exception);
             if (this.userCallback != null)
@@ -1480,7 +1496,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public TopicPartition topicPartition() {
-            return partition != RecordMetadata.UNKNOWN_PARTITION ? new TopicPartition(record.topic(), partition) : null;
+            return partition == RecordMetadata.UNKNOWN_PARTITION
+                    ? ProducerInterceptors.extractTopicPartition(record)
+                    : new TopicPartition(record.topic(), partition);
         }
     }
 }
