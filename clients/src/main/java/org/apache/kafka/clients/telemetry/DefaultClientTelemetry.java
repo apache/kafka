@@ -366,13 +366,13 @@ public class DefaultClientTelemetry implements ClientTelemetry {
 
     @Override
     public void telemetrySubscriptionReceived(GetTelemetrySubscriptionsResponseData data) {
-        if(data == null) { // TODO: If a buggy/broken broker sending null response and error, we will be in an infinite looping state.  We should introduce a mechanism to protect against it.
+        if (data == null) { // TODO: If a buggy/broken broker sending null response and error, we will be in an infinite looping state.  We should introduce a mechanism to protect against it.
             log.warn("null GetTelemetrySubscriptionsResponseData, re-fetching subscription from the broker");
             setState(TelemetryState.subscription_needed);
             return;
         }
 
-        if(data.errorCode() != Errors.NONE.code()) {
+        if (data.errorCode() != Errors.NONE.code()) {
             handleResponseErrorCode(data.errorCode());
         } else {
             log.debug("Successfully get telemetry subscription; response: {}", data);
@@ -425,7 +425,7 @@ public class DefaultClientTelemetry implements ClientTelemetry {
     @Override
     public void pushTelemetryReceived(PushTelemetryResponseData data) {
         // TODO: validate the state as push in prog or teminating pushn prog
-        if( data == null) {
+        if (data == null) {
             log.warn("null PushTelemetryResponseData, re-fetching subscription from the broker");
             setState(TelemetryState.subscription_needed);
             return;
@@ -458,6 +458,11 @@ public class DefaultClientTelemetry implements ClientTelemetry {
      * @throws IllegalTelemetryStateException when subscription is null.
      */
     void handleResponseErrorCode(short errorCode) {
+        if (errorCode == Errors.CLIENT_METRICS_PLUGIN_NOT_FOUND.code()) {
+            log.warn("Error code: {}. Reason: Broker does not have any client metrics plugin configured.", errorCode);
+            return;
+        }
+
         TelemetrySubscription currentSubscription = subscription().orElseThrow(
         () -> new IllegalTelemetryStateException(String.format("Subscription cannot be null.  Aborting.")));
 

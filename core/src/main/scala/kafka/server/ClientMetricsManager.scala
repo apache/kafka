@@ -24,7 +24,6 @@ import kafka.network.RequestChannel
 import kafka.server.ClientMetricsManager.{getCurrentTime, getSupportedCompressionTypes}
 import org.apache.kafka.common.errors.ClientMetricsReceiverPluginNotFoundException
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.annotation.InterfaceStability.Evolving
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.CompressionType
@@ -45,29 +44,25 @@ object ClientMetricsManager {
     compressionTypes.toList
   }
 
-  // TODO: Needs to integrate with external plugin changes..
-  // if plugin is not configured, getMetricsSubscriptions and pushMetricSubscription needs to return errors
-  // to the client.
-  @Evolving
-  def checkCmReceiverPluginConfigured()  = {
-    if (ClientMetricsReceiverPlugin.getCmReceiver().isEmpty) {
-      throw new ClientMetricsReceiverPluginNotFoundException("Broker does not have any configured client metrics receiver plugin")
+  def processGetTelemetrySubscriptionRequest(request: RequestChannel.Request,
+                                             throttleMs: Int): GetTelemetrySubscriptionResponse = {
+    val subscriptionRequest = request.body[GetTelemetrySubscriptionRequest]
+    if (ClientMetricsReceiverPlugin.isEmpty) {
+      subscriptionRequest.getErrorResponse(throttleMs, new ClientMetricsReceiverPluginNotFoundException("Broker does not have any configured client metrics receiver plugin"))
+    } else {
+      val clientInfo = CmClientInformation(request, subscriptionRequest.getClientInstanceId.toString)
+      _instance.processGetSubscriptionRequest(subscriptionRequest, clientInfo, throttleMs)
     }
   }
 
-  def processGetTelemetrySubscriptionRequest(request: RequestChannel.Request,
-                                             throttleMs: Int): GetTelemetrySubscriptionResponse = {
-    checkCmReceiverPluginConfigured()
-    val subscriptionRequest = request.body[GetTelemetrySubscriptionRequest]
-    val clientInfo = CmClientInformation(request, subscriptionRequest.getClientInstanceId.toString)
-    _instance.processGetSubscriptionRequest(subscriptionRequest, clientInfo, throttleMs)
-  }
-
   def processPushTelemetryRequest(request: RequestChannel.Request, throttleMs: Int): PushTelemetryResponse = {
-    checkCmReceiverPluginConfigured()
     val pushTelemetryRequest = request.body[PushTelemetryRequest]
-    val clientInfo = CmClientInformation(request, pushTelemetryRequest.getClientInstanceId.toString)
-    _instance.processPushTelemetryRequest(pushTelemetryRequest, request.context, clientInfo, throttleMs)
+    if (ClientMetricsReceiverPlugin.isEmpty) {
+      pushTelemetryRequest.getErrorResponse(throttleMs, new ClientMetricsReceiverPluginNotFoundException("Broker does not have any configured client metrics receiver plugin"))
+    } else {
+      val clientInfo = CmClientInformation(request, pushTelemetryRequest.getClientInstanceId.toString)
+      _instance.processPushTelemetryRequest(pushTelemetryRequest, request.context, clientInfo, throttleMs)
+    }
   }
 }
 
@@ -205,9 +200,8 @@ class ClientMetricsManager {
 
       // Push the metrics to the external client receiver plugin.
       val metrics = Option(pushTelemetryRequest.data().metrics())
-      if (!metrics.isEmpty && !metrics.get.isEmpty) {
-        val payload = ClientMetricsReceiverPlugin.createPayload(pushTelemetryRequest)
-        ClientMetricsReceiverPlugin.getCmReceiver().get.exportMetrics(requestContext, payload)
+      if (!metrics.get.isEmpty) {
+        ClientMetricsReceiverPlugin.exportMetrics(requestContext, pushTelemetryRequest)
       }
     } catch {
       case e: ClientMetricsException => {

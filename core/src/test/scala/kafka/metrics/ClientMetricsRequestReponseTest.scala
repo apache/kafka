@@ -27,9 +27,10 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.requests.{GetTelemetrySubscriptionRequest, GetTelemetrySubscriptionResponse, PushTelemetryRequest, PushTelemetryResponse}
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.nio.ReadOnlyBufferException
 import java.util.Properties
 
 class ClientMetricsRequestResponseTest {
@@ -312,6 +313,7 @@ class ClientMetricsRequestResponseTest {
     var pushResponse = sendPushTelemetryRequest(data, clientInfo, pushInterval)
     assertEquals(pushResponse.error().code(), Errors.NONE.code())
     assertEquals(plugin.exportMetricsInvoked, 0)
+    assertNull(plugin.metricsData)
 
     // Test-2: Add the metrics data and send the request again, this time exportMetrics
     // call out should have been invoked.
@@ -320,6 +322,13 @@ class ClientMetricsRequestResponseTest {
     pushResponse = sendPushTelemetryRequest(data, clientInfo, pushInterval)
     assertEquals(pushResponse.error().code(), Errors.NONE.code())
     assertEquals(plugin.exportMetricsInvoked, 1)
+    assertNotNull(plugin.metricsData)
+
+    // Test-3 : Make sure that metrics data passed to the export metrics is read only buffer.
+    //  - Accessing the raw bytebuffer's array should throw ReadOnlyBufferException
+    //  - No assert when accessing the bytebuffer after the deep copy.
+    assertThrows(classOf[ReadOnlyBufferException], () => plugin.metricsData.array())
+    assertNotNull(plugin.getMetricsDataAsCopy().array())
   }
 
   @Test
@@ -348,7 +357,7 @@ class ClientMetricsRequestResponseTest {
       val pushResponse = sendPushTelemetryRequest(data, clientInfo, pushInterval)
       assertEquals(pushResponse.error().code(), Errors.NONE.code())
       assertEquals(plugin.exportMetricsInvoked, count)
-      val s1 = new String(Utils.readBytes(plugin.metricsData)).trim
+      val s1 = new String(Utils.readBytes(plugin.getMetricsDataAsCopy())).trim
       assertEquals(s1, metricStr)
       count += 1
     })
