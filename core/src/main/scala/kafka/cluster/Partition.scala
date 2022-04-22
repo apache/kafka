@@ -251,8 +251,9 @@ class Partition(val topicPartition: TopicPartition,
 
   // lock to prevent the follower replica log update while checking if the log dir could be replaced with future log.
   private val futureLogLock = new Object()
-  private var zkVersion: Int = LeaderAndIsr.initialZKVersion
-  @volatile private var leaderEpoch: Int = LeaderAndIsr.initialLeaderEpoch - 1
+  // The current epoch for the partition for KRaft controllers. The current ZK version for the legacy controllers.
+  @volatile private var partitionEpoch: Int = LeaderAndIsr.InitialPartitionEpoch
+  @volatile private var leaderEpoch: Int = LeaderAndIsr.InitialLeaderEpoch - 1
   // start offset for 'leaderEpoch' above (leader epoch of the current leader for this partition),
   // defined when this broker is leader for partition
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
@@ -535,7 +536,7 @@ class Partition(val topicPartition: TopicPartition,
 
   def getLeaderEpoch: Int = this.leaderEpoch
 
-  def getZkVersion: Int = this.zkVersion
+  def getPartitionEpoch: Int = this.partitionEpoch
 
   /**
    * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset
@@ -587,7 +588,7 @@ class Partition(val topicPartition: TopicPartition,
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
-      zkVersion = partitionState.zkVersion
+      partitionEpoch = partitionState.partitionEpoch
 
       // In the case of successive leader elections in a short time period, a follower may have
       // entries in its log from a later epoch than any entry in the new leader's log. In order
@@ -666,7 +667,7 @@ class Partition(val topicPartition: TopicPartition,
 
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
-      zkVersion = partitionState.zkVersion
+      partitionEpoch = partitionState.partitionEpoch
 
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
@@ -1356,7 +1357,7 @@ class Partition(val topicPartition: TopicPartition,
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
     val isrToSend = partitionState.isr + newInSyncReplicaId
-    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, zkVersion)
+    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, partitionEpoch)
     val updatedState = PendingExpandIsr(partitionState.isr, newInSyncReplicaId, newLeaderAndIsr)
     partitionState = updatedState
     updatedState
@@ -1367,7 +1368,7 @@ class Partition(val topicPartition: TopicPartition,
     // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
     // for `PendingShrinkIsr` is the the current ISR.
     val isrToSend = partitionState.isr -- outOfSyncReplicaIds
-    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, zkVersion)
+    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, partitionEpoch)
     val updatedState = PendingShrinkIsr(partitionState.isr, outOfSyncReplicaIds, newLeaderAndIsr)
     partitionState = updatedState
     updatedState
@@ -1463,19 +1464,19 @@ class Partition(val topicPartition: TopicPartition,
       debug(s"Ignoring new ISR $leaderAndIsr since we have a stale leader epoch $leaderEpoch.")
       isrChangeListener.markFailed()
       false
-    } else if (leaderAndIsr.zkVersion < zkVersion) {
-      debug(s"Ignoring new ISR $leaderAndIsr since we have a newer version $zkVersion.")
+    } else if (leaderAndIsr.partitionEpoch < partitionEpoch) {
+      debug(s"Ignoring new ISR $leaderAndIsr since we have a newer version $partitionEpoch.")
       isrChangeListener.markFailed()
       false
     } else {
       // This is one of two states:
-      //   1) leaderAndIsr.zkVersion > zkVersion: Controller updated to new version with proposedIsrState.
-      //   2) leaderAndIsr.zkVersion == zkVersion: No update was performed since proposed and actual state are the same.
+      //   1) leaderAndIsr.partitionEpoch > partitionEpoch: Controller updated to new version with proposedIsrState.
+      //   2) leaderAndIsr.partitionEpoch == partitionEpoch: No update was performed since proposed and actual state are the same.
       // In both cases, we want to move from Pending to Committed state to ensure new updates are processed.
 
       partitionState = CommittedPartitionState(leaderAndIsr.isr.toSet, leaderAndIsr.leaderRecoveryState)
-      zkVersion = leaderAndIsr.zkVersion
-      info(s"ISR updated to ${partitionState.isr.mkString(",")} and version updated to $zkVersion")
+      partitionEpoch = leaderAndIsr.partitionEpoch
+      info(s"ISR updated to ${partitionState.isr.mkString(",")} and version updated to $partitionEpoch")
 
       proposedIsrState match {
         case PendingExpandIsr(_, _, _) => isrChangeListener.markExpand()
