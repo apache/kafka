@@ -459,6 +459,7 @@ public class ProducerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        CommonClientConfigs.postValidateSaslMechanismConfig(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         postProcessAndValidateIdempotenceConfigs(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);
@@ -541,19 +542,16 @@ public class ProducerConfig extends AbstractConfig {
     static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
             Serializer<?> keySerializer,
             Serializer<?> valueSerializer) {
+        // validate serializer configuration, if the passed serializer instance is null, the user must explicitly set a valid serializer configuration value
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keySerializer != null)
             newConfigs.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
-        else {
-            if (newConfigs.get(KEY_SERIALIZER_CLASS_CONFIG) == null)
-                throw new ConfigException(KEY_SERIALIZER_CLASS_CONFIG + " configuration for KafkaProducer must be non-null.");
-        }
+        else if (newConfigs.get(KEY_SERIALIZER_CLASS_CONFIG) == null)
+            throw new ConfigException(KEY_SERIALIZER_CLASS_CONFIG, null, "must be non-null.");
         if (valueSerializer != null)
             newConfigs.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass());
-        else {
-            if (newConfigs.get(VALUE_SERIALIZER_CLASS_CONFIG) == null)
-                throw new ConfigException(VALUE_SERIALIZER_CLASS_CONFIG + " configuration for KafkaProducer must be non-null.");
-        }
+        else if (newConfigs.get(VALUE_SERIALIZER_CLASS_CONFIG) == null)
+            throw new ConfigException(VALUE_SERIALIZER_CLASS_CONFIG, null, "must be non-null.");
         return newConfigs;
     }
 

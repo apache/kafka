@@ -18,7 +18,9 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -144,5 +146,24 @@ public class ConsumerConfigTest {
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testInvalidSaslMechanism() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(SaslConfigs.SASL_MECHANISM, null);
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
+
+        configs.put(SaslConfigs.SASL_MECHANISM, "");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
+
+        configs.put(SaslConfigs.SASL_MECHANISM, " ");
+        ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
     }
 }
