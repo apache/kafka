@@ -562,7 +562,6 @@ object LogConfig {
     logProps
   }
 
-  // ahu todo: should we move this into `MetadataVersion.java`?
   def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: MetadataVersion): Boolean =
     interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)
 
@@ -572,7 +571,6 @@ object LogConfig {
 
     def shouldIgnore: Boolean = shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion)
 
-    // ahu todo: should we move this into `MetadataVersion.java`?
     def shouldWarn: Boolean =
       interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1) && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
 

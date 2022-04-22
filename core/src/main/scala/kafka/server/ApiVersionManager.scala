@@ -25,7 +25,6 @@ import org.apache.kafka.server.common.MetadataVersion
 
 import scala.jdk.CollectionConverters._
 
-// ahu todo: check if this is all converted
 trait ApiVersionManager {
   def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
@@ -88,13 +87,13 @@ class DefaultApiVersionManager(
         supportedFeatures,
         finalizedFeatures.features,
         finalizedFeatures.epoch,
-        controllerApiVersions.getOrElse(null),
+        controllerApiVersions.orNull,
         listenerType)
       case None => MetadataVersion.apiVersionsResponse(
         throttleTimeMs,
         interBrokerProtocolVersion.recordVersion,
         supportedFeatures,
-        controllerApiVersions.getOrElse(null),
+        controllerApiVersions.orNull,
         listenerType)
     }
   }

@@ -625,7 +625,7 @@ class KafkaServer(
               if (!NetworkClientUtils.awaitReady(networkClient, prevController, time, socketTimeoutMs))
                 throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
-              // send the controlled shutdown request // ahu todo: move this into MetadataVersion?
+              // send the controlled shutdown request
               val controlledShutdownApiVersion: Short =
                 if (config.interBrokerProtocolVersion.compareTo(IBP_0_9_0) < 0) 0
                 else if (config.interBrokerProtocolVersion.compareTo(IBP_2_2_IV0) < 0) 1

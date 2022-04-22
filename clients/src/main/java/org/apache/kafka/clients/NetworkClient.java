@@ -906,7 +906,7 @@ public class NetworkClient implements KafkaClient {
                 // If not provided, the client falls back to version 0.
                 short maxApiVersion = 0;
                 if (apiVersionsResponse.data().apiKeys().size() > 0) {
-                    ApiVersion apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id); // ahu todo: convert
+                    ApiVersion apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
                     if (apiVersion != null) {
                         maxApiVersion = apiVersion.maxVersion();
                     }

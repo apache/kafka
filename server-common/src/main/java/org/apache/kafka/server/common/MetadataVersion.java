@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import static java.lang.Integer.min;
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -71,10 +69,9 @@ public enum MetadataVersion {
     IBP_3_0_IV0(1),
     IBP_3_0_IV1(2),
     IBP_3_1_IV0(3),
-    IBP_3_1_IV1(4),
-    IBP_3_2_IV0(5),
+    IBP_3_2_IV0(4),
     // KRaft GA
-    IBP_3_3_IV0(6);
+    IBP_3_3_IV0(5);
 
     private final Optional<Short> metadataVersion;
 
@@ -200,8 +197,7 @@ public enum MetadataVersion {
      */
     public static MetadataVersion apply(String versionString) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
-        int desiredSegments = (versionString.startsWith("0.")) ? 3 : 2;
-        int numSegments = min(desiredSegments, versionSegments.length);
+        int numSegments = (versionString.startsWith("0.")) ? 3 : 2;
         String key;
         if (numSegments >= versionSegments.length) {
             key = versionString;
