@@ -17,22 +17,27 @@
 
 package kafka.metrics.clientmetrics
 
-import org.apache.kafka.common.metrics.{ClientTelemetryPayload, ClientTelemetryReceiver}
-import org.apache.kafka.common.requests.PushTelemetryRequest
+import org.apache.kafka.common.metrics.ClientTelemetryReceiver
+import org.apache.kafka.common.requests.{PushTelemetryRequest, RequestContext}
+
+import scala.collection.mutable.ListBuffer
 
 object ClientMetricsReceiverPlugin {
-  var cmReceiver :Option[ClientTelemetryReceiver] = None
-  def getCmReceiver() = cmReceiver
+  val cmReceivers  = new ListBuffer[ClientTelemetryReceiver]()
+  def isEmpty = cmReceivers.isEmpty
 
-  def init(receiver: ClientTelemetryReceiver) = {
-    cmReceiver = Option(receiver)
+  def add(receiver: ClientTelemetryReceiver) = {
+    cmReceivers.append(receiver)
   }
 
-  def createPayload(request: PushTelemetryRequest): ClientTelemetryPayload = {
-    new ClientMetricsPayload(request.getClientInstanceId,
-                             request.isClientTerminating,
-                             request.getMetricsContentType,
-                             request.getMetricsData)
+  def getPayLoad(request: PushTelemetryRequest) : ClientMetricsPayload = {
+     new ClientMetricsPayload(request.getClientInstanceId, request.isClientTerminating,
+       request.getMetricsContentType, request.getMetricsData)
+  }
+
+  def exportMetrics(context: RequestContext, request: PushTelemetryRequest): Unit = {
+    val payload = getPayLoad(request)
+    cmReceivers.foreach(x => x.exportMetrics(context, payload))
   }
 
 }
