@@ -1289,7 +1289,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // The shrink succeeds after retrying
-    alterIsrManager.completeIsrUpdate(newZkVersion = 2)
+    alterIsrManager.completeIsrUpdate(newPartitionEpoch = 2)
     assertEquals(1, isrChangeListener.shrinks.get)
     assertEquals(2, partition.getPartitionEpoch)
     assertEquals(alterIsrManager.isrUpdates.size, 0)
@@ -1344,7 +1344,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // After the ISR shrink completes, the ISR state should be updated and the
     // high watermark should be advanced
-    alterIsrManager.completeIsrUpdate(newZkVersion = 2)
+    alterIsrManager.completeIsrUpdate(newPartitionEpoch = 2)
     assertEquals(1, isrChangeListener.shrinks.get)
     assertEquals(2, partition.getPartitionEpoch)
     assertEquals(alterIsrManager.isrUpdates.size, 0)
