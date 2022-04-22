@@ -43,19 +43,8 @@ object ClientMetricsManager {
     compressionTypes.toList
   }
 
-  // TODO: Needs to integrate with external plugin changes..
-  // if plugin is not configured, getMetricsSubscriptions and pushMetricSubscription needs to return errors
-  // to the client.
-  @Evolving
-  def checkCmReceiverPluginConfigured()  = {
-    if (ClientMetricsReceiverPlugin.getCmReceiver().isEmpty) {
-      throw new ClientMetricsReceiverPluginNotFoundException("Broker does not have any configured client metrics receiver plugin")
-    }
-  }
-
   def processGetTelemetrySubscriptionRequest(request: RequestChannel.Request,
                                              throttleMs: Int): GetTelemetrySubscriptionResponse = {
-    checkCmReceiverPluginConfigured()
     val subscriptionRequest = request.body[GetTelemetrySubscriptionRequest]
     if (ClientMetricsReceiverPlugin.isEmpty) {
       subscriptionRequest.getErrorResponse(throttleMs, new ClientMetricsReceiverPluginNotFoundException("Broker does not have any configured client metrics receiver plugin"))
