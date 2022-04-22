@@ -65,8 +65,8 @@ case class AlterPartitionItem(
   topicPartition: TopicPartition,
   leaderAndIsr: LeaderAndIsr,
   future: CompletableFuture[LeaderAndIsr],
-  controllerEpoch: Int
-) // controllerEpoch needed for Zk impl
+  controllerEpoch: Int // controllerEpoch needed for Zk impl
+)
 
 object AlterPartitionManager {
 
