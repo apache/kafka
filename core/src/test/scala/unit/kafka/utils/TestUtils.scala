@@ -28,8 +28,8 @@ import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
+import com.yammer.metrics.core.{Gauge, Meter, Metric, MetricName}
 
-import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -1936,6 +1936,10 @@ object TestUtils extends Logging {
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
+  }
+
+  def metric(metricName: MetricName): Option[Metric] = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.find { case (k, _) => k.equals(metricName) }.map(_._2)
   }
 
   def yammerGaugeValue[T](metricName: String): Option[T] = {

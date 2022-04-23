@@ -43,7 +43,7 @@ trait KafkaMetricsGroup extends Logging {
 
 
   def explicitMetricName(group: String, typeName: String, name: String,
-                                   tags: scala.collection.Map[String, String]): MetricName = {
+                         tags: scala.collection.Map[String, String]): MetricName = {
 
     val nameBuilder: StringBuilder = new StringBuilder
 

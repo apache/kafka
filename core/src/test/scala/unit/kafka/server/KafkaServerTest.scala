@@ -18,9 +18,12 @@
 package kafka.server
 
 import kafka.api.ApiVersion
+import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.JaasUtils
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
+import org.apache.kafka.metadata.BrokerState
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
@@ -134,6 +137,31 @@ class KafkaServerTest extends QuorumTestHarness {
       case _ => fail("Should use AlterIsr for ISR manager in versions after 2.7-IV2")
     }
     server.shutdown()
+  }
+
+  @Test
+  def testSocketServerMetricNames(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    val server = TestUtils.createServer(KafkaConfig.fromProps(props))
+    TestUtils.waitUntilTrue(() => BrokerState.RUNNING == server.brokerState, "Timeout waiting for KafkaServer starting")
+    checkMetricNames(server.metrics, server.socketServer)
+    server.shutdown()
+  }
+
+  private def checkMetricNames(metrics: Metrics, server: SocketServer): Unit = {
+    assertNull(metrics.metric(metrics.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}NotExists", SocketServer.MetricsGroup)))
+
+    // SocketServer metric
+    assertNotNull(metrics.sensor(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}MemoryPoolUtilization"))
+    assertNotNull(metrics.metric(metrics.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}MemoryPoolAvgDepletedPercent", SocketServer.MetricsGroup)))
+    assertNotNull(metrics.metric(metrics.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}MemoryPoolDepletedTimeTotal", SocketServer.MetricsGroup)))
+    assertNotNull(TestUtils.metric(server.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", Map.empty)))
+    assertNotNull(TestUtils.metric(server.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}MemoryPoolAvailable", Map.empty)))
+    assertNotNull(TestUtils.metric(server.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}MemoryPoolUsed", Map.empty)))
+    assertNotNull(TestUtils.metric(server.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", Map.empty)))
+
+    // KafkaRequestHandlerPool metric
+    assertNotNull(TestUtils.metric(server.metricName(s"${DataPlaneAcceptor.KafkaServerMetricPrefix}RequestHandlerAvgIdlePercent", Map.empty)))
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {

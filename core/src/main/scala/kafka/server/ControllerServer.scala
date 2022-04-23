@@ -143,7 +143,9 @@ class ControllerServer(
         metrics,
         time,
         credentialProvider,
-        apiVersionManager)
+        apiVersionManager,
+        DataPlaneAcceptor.ControllerServerMetricPrefix,
+        DataPlaneAcceptor.ControllerServerThreadPrefix)
       socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
 
       if (config.controllerListeners.nonEmpty) {
@@ -211,8 +213,8 @@ class ControllerServer(
         controllerApis,
         time,
         config.numIoThreads,
-        s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
-        DataPlaneAcceptor.ThreadPrefix)
+        s"${DataPlaneAcceptor.ControllerServerMetricPrefix}RequestHandlerAvgIdlePercent",
+        DataPlaneAcceptor.ControllerServerThreadPrefix)
       socketServer.startProcessingRequests(authorizerFutures)
     } catch {
       case e: Throwable =>
