@@ -1130,8 +1130,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L)) {
             assertFalse(iterator.hasNext());
 
@@ -1151,8 +1150,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(0L), Instant.ofEpochMilli(10L))) {
             assertFalse(iterator.hasNext());
