@@ -20,7 +20,7 @@ package org.apache.kafka.jmh.partition;
 import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.IsrChangeListener;
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
@@ -121,11 +121,11 @@ public class UpdateFollowerFetchStateBenchmark {
             .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
-        IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
+        AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(topicPartition, 100,
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-                isrChangeListener, delayedOperations,
+                alterPartitionListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
         partition.makeLeader(partitionState, offsetCheckpoints, topicId);
     }

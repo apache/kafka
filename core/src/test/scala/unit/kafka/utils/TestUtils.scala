@@ -32,7 +32,7 @@ import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
+import kafka.cluster.{Broker, EndPoint, AlterPartitionListener}
 import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
 import kafka.log._
 import kafka.network.RequestChannel
@@ -1297,14 +1297,14 @@ object TestUtils extends Logging {
     new MockAlterPartitionManager()
   }
 
-  class MockIsrChangeListener extends IsrChangeListener {
+  class MockAlterPartitionListener extends AlterPartitionListener {
     val expands: AtomicInteger = new AtomicInteger(0)
     val shrinks: AtomicInteger = new AtomicInteger(0)
     val failures: AtomicInteger = new AtomicInteger(0)
 
-    override def markExpand(): Unit = expands.incrementAndGet()
+    override def markIsrExpand(): Unit = expands.incrementAndGet()
 
-    override def markShrink(): Unit = shrinks.incrementAndGet()
+    override def markIsrShrink(): Unit = shrinks.incrementAndGet()
 
     override def markFailed(): Unit = failures.incrementAndGet()
 
@@ -1315,8 +1315,8 @@ object TestUtils extends Logging {
     }
   }
 
-  def createIsrChangeListener(): MockIsrChangeListener = {
-    new MockIsrChangeListener()
+  def createIsrChangeListener(): MockAlterPartitionListener = {
+    new MockAlterPartitionListener()
   }
 
   def produceMessages[B <: KafkaBroker](

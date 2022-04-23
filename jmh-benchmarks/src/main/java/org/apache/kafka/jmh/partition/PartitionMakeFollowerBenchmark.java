@@ -20,7 +20,7 @@ package org.apache.kafka.jmh.partition;
 import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.IsrChangeListener;
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
@@ -122,11 +122,11 @@ public class PartitionMakeFollowerBenchmark {
         topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
 
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
-        IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
+        AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100,
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-            isrChangeListener, delayedOperations,
+            alterPartitionListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
         executorService.submit((Runnable) () -> {
