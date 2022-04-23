@@ -3410,6 +3410,32 @@ class UnifiedLogTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion))
   }
 
+  /**
+   * test renaming a log's dir without reinitialization, which is the case during topic deletion
+   */
+  @Test
+  def testRenamingDirWithoutReinitialization(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments, "The number of segments should be 1")
+
+    val newDir = TestUtils.randomPartitionLogDir(tmpDir)
+    assertTrue(newDir.exists())
+
+    log.renameDir(newDir.getName, false)
+    assertEquals(0, log.logEndOffset)
+    // verify that records appending can still succeed
+    // even with the uninitialized leaderEpochCache and partitionMetadataFile
+    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)))
+    log.appendAsLeader(records, leaderEpoch = 0)
+    assertEquals(1, log.logEndOffset)
+
+    // verify that the background deletion can succeed
+    log.delete()
+    assertEquals(0, log.numberOfSegments, "The number of segments should be 0")
+    assertFalse(newDir.exists())
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,
