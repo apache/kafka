@@ -1005,8 +1005,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val replicas = servers.map(_.config.nodeId).filter(_ != controllerId).take(2).toList
     val assignment = Map(tp.partition -> replicas)
 
-    val replica1 = replicas.head
-    val replica2 = replicas.last
+    val replica1 :: replica2 :: Nil = replicas
 
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(replica1).shutdown()
