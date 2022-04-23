@@ -131,7 +131,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   ): Unit = {
     replicaState.updateAndGet { currentReplicaState =>
       // When the leader is elected or re-elected, the follower's last caught up time
-      // is set to the current time if the follower is in the ISR, else to 0. The later
+      // is set to the current time if the follower is in the ISR, else to 0. The latter
       // is done to ensure that the high watermark is not hold back unnecessarily for
       // a follower which is not in the ISR anymore.
       val lastCaughtUpTimeMs = if (isFollowerInSync) currentTimeMs else 0L
@@ -151,7 +151,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
           lastFetchLeaderLogEndOffset = leaderEndOffset,
           // When the leader is re-elected, the follower's last fetch time is
           // set to the current time if the follower is in the ISR, else to 0.
-          // The later is done to ensure that the follower is not brought back
+          // The latter is done to ensure that the follower is not brought back
           // into the ISR before a fetch is received.
           lastFetchTimeMs = if (isFollowerInSync) currentTimeMs else 0L,
           lastCaughtUpTimeMs = lastCaughtUpTimeMs

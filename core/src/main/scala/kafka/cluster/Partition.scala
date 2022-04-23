@@ -615,7 +615,7 @@ class Partition(val topicPartition: TopicPartition,
       leaderReplicaIdOpt = Some(localBrokerId)
 
       // we may need to increment high watermark since ISR could be down to 1
-      (maybeIncrementLeaderHW(leaderLog), isNewLeader)
+      (maybeIncrementLeaderHW(leaderLog, currentTimeMs = currentTimeMs), isNewLeader)
     }
 
     // some delayed operations may be unblocked after HW changed
