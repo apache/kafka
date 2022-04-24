@@ -230,7 +230,7 @@ class DefaultAlterIsrManager(
           .setPartitionIndex(item.topicPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
           .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-          .setPartitionEpoch(item.leaderAndIsr.zkVersion)
+          .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
         if (ibpVersion >= KAFKA_3_2_IV0) {
           partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)

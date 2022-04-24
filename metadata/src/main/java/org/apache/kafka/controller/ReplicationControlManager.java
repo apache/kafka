@@ -355,7 +355,7 @@ public class ReplicationControlManager {
     /**
      * A ClusterDescriber which supplies cluster information to our ReplicaPlacer.
      */
-    private final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
+    final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,

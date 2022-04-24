@@ -125,6 +125,7 @@ public class SuppressionDurabilityIntegrationTest {
     public String processingGuaranteee;
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRecoverBufferAfterShutdown() {
         final String testId = safeUniqueTestName(getClass(), testName);
         final String appId = "appId_" + testId;

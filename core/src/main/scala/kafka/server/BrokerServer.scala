@@ -64,8 +64,8 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
     raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
         asScala.getOrElse(
       throw new RuntimeException("A snapshot already exists with " +
-        s"committedOffset=${committedOffset}, committedEpoch=${committedEpoch}, " +
-        s"lastContainedLogTime=${lastContainedLogTime}")
+        s"committedOffset=$committedOffset, committedEpoch=$committedEpoch, " +
+        s"lastContainedLogTime=$lastContainedLogTime")
     )
   }
 }
@@ -126,6 +126,8 @@ class BrokerServer(
   var clientToControllerChannelManager: BrokerToControllerChannelManager = null
 
   var forwardingManager: ForwardingManager = null
+
+  @volatile var featureCache: FinalizedFeatureCache = null
 
   var alterIsrManager: AlterIsrManager = null
 
@@ -221,7 +223,7 @@ class BrokerServer(
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
-      val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
+      featureCache = new FinalizedFeatureCache(brokerFeatures)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,

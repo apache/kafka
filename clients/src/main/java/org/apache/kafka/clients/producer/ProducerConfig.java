@@ -490,11 +490,11 @@ public class ProducerConfig extends AbstractConfig {
                 if (userConfiguredIdempotence) {
                     throw new ConfigException("Must set " + RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
                 }
-                log.info("Idempotence will be disabled because {} is set to 0.", RETRIES_CONFIG, retries);
+                log.info("Idempotence will be disabled because {} is set to 0.", RETRIES_CONFIG);
                 shouldDisableIdempotence = true;
             }
 
-            final short acks = Short.valueOf(acksStr);
+            final short acks = Short.parseShort(acksStr);
             if (acks != (short) -1) {
                 if (userConfiguredIdempotence) {
                     throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +

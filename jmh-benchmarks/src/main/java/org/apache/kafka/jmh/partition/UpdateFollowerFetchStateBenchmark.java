@@ -118,7 +118,7 @@ public class UpdateFollowerFetchStateBenchmark {
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(replicas)
-            .setZkVersion(1)
+            .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
         IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);

@@ -1274,10 +1274,10 @@ object TestUtils extends Logging {
       future
     }
 
-    def completeIsrUpdate(newZkVersion: Int): Unit = {
+    def completeIsrUpdate(newPartitionEpoch: Int): Unit = {
       if (inFlight.compareAndSet(true, false)) {
         val item = isrUpdates.dequeue()
-        item.future.complete(item.leaderAndIsr.withZkVersion(newZkVersion))
+        item.future.complete(item.leaderAndIsr.withPartitionEpoch(newPartitionEpoch))
       } else {
         fail("Expected an in-flight ISR update, but there was none")
       }

@@ -549,7 +549,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setLeader(brokerId)
         .setLeaderEpoch(Int.MaxValue)
         .setIsr(List(brokerId).asJava)
-        .setZkVersion(2)
+        .setPartitionEpoch(2)
         .setReplicas(Seq(brokerId).asJava)
         .setIsNew(false)).asJava,
       getTopicIds().asJava,
@@ -562,7 +562,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setTopicName(tp.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp.partition)
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
           .setDeletePartition(true)).asJava)
     ).asJava
     new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue,
