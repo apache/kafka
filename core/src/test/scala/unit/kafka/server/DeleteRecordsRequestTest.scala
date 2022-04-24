@@ -17,8 +17,8 @@
 
 package kafka.server
 
-import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
+import kafka.utils.TestInfoUtils
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteRecordsRequestData
 import org.apache.kafka.common.message.DeleteRecordsRequestData.{DeleteRecordsPartition, DeleteRecordsTopic}
@@ -26,31 +26,16 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, DeleteRecordsResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Collections
+import java.util.concurrent.{Future, TimeUnit}
 import scala.collection.Seq
 
 class DeleteRecordsRequestTest extends BaseRequestTest {
   private val TIMEOUT_MS = 1000
   private val MESSAGES_PRODUCED_PER_PARTITION = 10
-  private var producer: KafkaProducer[String, String] = null
-
-  @BeforeEach
-  override def setUp(testInfo: TestInfo): Unit = {
-    super.setUp(testInfo)
-    producer = TestUtils.createProducer(bootstrapServers(),
-      keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
-  }
-
-  @AfterEach
-  override def tearDown(): Unit = {
-    if (producer != null)
-      producer.close()
-    super.tearDown()
-  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -74,7 +59,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
       s"Unexpected lowWatermark received: ${partitionResult.lowWatermark}")
 
     // Validate that the records have actually deleted
-    validateRecordsAreDeleted(topicPartition, offsetToDelete)
+    validateLogStartOffsetForTopic(topicPartition, offsetToDelete)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -93,25 +78,33 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     // Validate the expected error code in the response
     assertEquals(Errors.OFFSET_OUT_OF_RANGE.code(), partitionResult.errorCode(),
       s"Unexpected error code received: ${Errors.forCode(partitionResult.errorCode()).name()}")
+
+    // Validate the expected value for low watermark
+    assertEquals(DeleteRecordsResponse.INVALID_LOW_WATERMARK, partitionResult.lowWatermark())
+
+    // After error, the offset of the topic should have been the original i.e. delete record should not have deleted
+    // records.
+    validateLogStartOffsetForTopic(topicPartition, 0)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorWhenDeletingRecordsWithInvalidTopic(quorum: String): Unit = {
-    val (_, leaderId: Int) = createTopicAndSendRecords
-
     val invalidTopicPartition = new TopicPartition("invalid-topic", 0)
     // Create the DeleteRecord request requesting deletion of offset which is not present
     val offsetToDelete = 1
     val request: DeleteRecordsRequest = createDeleteRecordsRequestForTopicPartition(invalidTopicPartition, offsetToDelete)
 
     // call the API
-    val response = sendDeleteRecordsRequest(request, leaderId)
+    val response = sendDeleteRecordsRequest(request)
     val partitionResult = response.data.topics.find(invalidTopicPartition.topic).partitions.find(invalidTopicPartition.partition)
 
     // Validate the expected error code in the response
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), partitionResult.errorCode(),
       s"Unexpected error code received: ${Errors.forCode(partitionResult.errorCode()).name()}")
+
+    // Validate the expected value for low watermark
+    assertEquals(DeleteRecordsResponse.INVALID_LOW_WATERMARK, partitionResult.lowWatermark())
   }
 
   private def createTopicAndSendRecords = {
@@ -137,11 +130,16 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     request
   }
 
+  private def sendDeleteRecordsRequest(request: DeleteRecordsRequest): DeleteRecordsResponse = {
+    connectAndReceive[DeleteRecordsResponse](request, destination = anySocketServer)
+  }
+
   private def sendDeleteRecordsRequest(request: DeleteRecordsRequest, leaderId: Int): DeleteRecordsResponse = {
     connectAndReceive[DeleteRecordsResponse](request, destination = brokerSocketServer(leaderId))
   }
 
   private def produceData(topicPartitions: Iterable[TopicPartition], numMessagesPerPartition: Int): Seq[RecordMetadata] = {
+    val producer = createProducer(keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
     val records = for {
       tp <- topicPartitions.toSeq
       messageIndex <- 0 until numMessagesPerPartition
@@ -149,16 +147,31 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
       val suffix = s"$tp-$messageIndex"
       new ProducerRecord(tp.topic, tp.partition, s"key $suffix", s"value $suffix")
     }
-    records.map(producer.send(_).get)
+
+    val sendfutureList = records.map(producer.send)
+
+    // ensure that records are flushed to server
+    producer.flush()
+
+    val recordMetadataList = sendfutureList.map(_.get(10, TimeUnit.SECONDS))
+    recordMetadataList
+      .foreach(recordMetadata => assertTrue(recordMetadata.offset >= 0, s"Invalid offset $recordMetadata"))
+
+    recordMetadataList
   }
 
-  private def validateRecordsAreDeleted(topicPartition: TopicPartition, expectedOffset: Long): Unit = {
+  private def validateLogStartOffsetForTopic(topicPartition: TopicPartition, expectedStartOffset: Long): Unit = {
     val logForTopicPartition = brokers.flatMap(_.replicaManager.logManager.getLog(topicPartition)).headOption
     // logManager should exist for the provided partition
     assertTrue(logForTopicPartition.isDefined)
     // assert that log start offset has been reset i.e. deleteRecords has correctly deleted the records until the
     // provided offset.
-    assertEquals(expectedOffset, logForTopicPartition.get.logStartOffset)
+    assertEquals(expectedStartOffset, logForTopicPartition.get.logStartOffset)
+  }
+
+  def verifySendSuccess(future: Future[RecordMetadata]): Unit = {
+    val recordMetadata = future.get(30, TimeUnit.SECONDS)
+    assertTrue(recordMetadata.offset >= 0, s"Invalid offset $recordMetadata")
   }
 
 }
