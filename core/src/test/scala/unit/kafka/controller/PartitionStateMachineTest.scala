@@ -16,8 +16,6 @@
  */
 package kafka.controller
 
-import kafka.api.KAFKA_3_1_IV0
-import kafka.api.KAFKA_3_2_IV0
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -26,6 +24,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.MetadataVersion.{IBP_3_1_IV0, IBP_3_2_IV0}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
@@ -294,7 +293,7 @@ class PartitionStateMachineTest {
 
 
     val partitionStateMachine = {
-      val apiVersion = if (isLeaderRecoverySupported) KAFKA_3_2_IV0 else KAFKA_3_1_IV0
+      val apiVersion = if (isLeaderRecoverySupported) IBP_3_2_IV0 else IBP_3_1_IV0
       val properties = TestUtils.createBrokerConfig(brokerId, "zkConnect")
 
       properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.toString)

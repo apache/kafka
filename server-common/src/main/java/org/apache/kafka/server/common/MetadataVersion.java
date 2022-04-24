@@ -98,6 +98,10 @@ public enum MetadataVersion {
         }
     }
 
+    public Optional<Short> metadataVersion() {
+        return metadataVersion;
+    }
+
     public boolean isAlterIsrSupported() {
         return this.isAtLeast(IBP_2_7_IV2);
     }
@@ -180,18 +184,7 @@ public enum MetadataVersion {
     }
 
     public String version() {
-        if (this.compareTo(IBP_0_10_0_IV0) < 0) { // versions less than this do not have IV versions
-            return shortVersion();
-        } else {
-            Pattern ivPattern = Pattern.compile("^IBP_[\\d_]+IV(\\d)");
-            Matcher matcher = ivPattern.matcher(this.name());
-            if (matcher.find()) {
-                return String.format("%s-IV%s", shortVersion(), matcher.group(1));
-            } else {
-                throw new IllegalArgumentException("Metadata version: " + this.name() + " does not fit "
-                        + "the accepted pattern.");
-            }
-        }
+        return version;
     }
 
     /**
@@ -228,14 +221,6 @@ public enum MetadataVersion {
         }
     }
 
-    public boolean isAtLeast(MetadataVersion otherVersion) {
-        return this.compareTo(otherVersion) >= 0;
-    }
-
-    public boolean isLessThan(MetadataVersion otherVersion) {
-        return this.compareTo(otherVersion) < 0;
-    }
-
     public static MetadataVersion latest() {
         MetadataVersion[] values = MetadataVersion.values();
         return values[values.length - 1];
@@ -245,7 +230,16 @@ public enum MetadataVersion {
         return MetadataVersion.IBP_3_3_IV0;
     }
 
-    public Optional<Short> metadataVersion() {
-        return metadataVersion;
+    public boolean isAtLeast(MetadataVersion otherVersion) {
+        return this.compareTo(otherVersion) >= 0;
+    }
+
+    public boolean isLessThan(MetadataVersion otherVersion) {
+        return this.compareTo(otherVersion) < 0;
+    }
+
+    @Override
+    public String toString() {
+        return version;
     }
 }

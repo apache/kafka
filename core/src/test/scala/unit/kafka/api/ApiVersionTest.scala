@@ -184,7 +184,8 @@ class ApiVersionTest {
     assertEquals("3.2", KAFKA_3_2_IV0.shortVersion)
   }
 
-  @Test def testVersion(): Unit = {
+  @Test
+  def testVersion(): Unit = {
     assertEquals("0.8.0", KAFKA_0_8_0.version)
     assertEquals("0.8.2", KAFKA_0_8_2.version)
     assertEquals("0.10.0-IV0", KAFKA_0_10_0_IV0.version)

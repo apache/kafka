@@ -39,7 +39,7 @@ class PartitionWithLegacyMessageFormatTest extends AbstractPartitionTest {
   def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
     val leaderEpoch = 8
     configRepository.setTopicConfig(topicPartition.topic(),
-      LogConfig.MessageFormatVersionProp, kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+      LogConfig.MessageFormatVersionProp, MetadataVersion.IBP_0_10_2_IV0.shortVersion)
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     log.appendAsLeader(TestUtils.records(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
