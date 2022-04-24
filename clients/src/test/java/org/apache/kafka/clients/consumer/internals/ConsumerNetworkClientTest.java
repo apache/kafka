@@ -57,7 +57,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.times;
 
 public class ConsumerNetworkClientTest {
 
@@ -117,6 +116,8 @@ public class ConsumerNetworkClientTest {
 
         consumerClient.awaitPendingRequests(node, time.timer(Long.MAX_VALUE));
         assertTrue(future1.succeeded());
+        assertFalse(future2.succeeded());
+        consumerClient.poll(future2);
         assertTrue(future2.succeeded());
     }
 
@@ -171,7 +172,7 @@ public class ConsumerNetworkClientTest {
 
         // expect poll, but with no timeout
         consumerClient.poll(time.timer(Long.MAX_VALUE), () -> false);
-        verify(mockNetworkClient, times(2)).poll(eq(0L), anyLong());
+        verify(mockNetworkClient).poll(eq(0L), anyLong());
     }
 
     @Test

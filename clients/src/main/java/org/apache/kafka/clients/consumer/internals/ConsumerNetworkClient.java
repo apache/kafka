@@ -283,7 +283,6 @@ public class ConsumerNetworkClient implements Closeable {
             // try again to send requests since buffer space may have been
             // cleared or a connect finished in the poll
             trySend(timer.currentTimeMs());
-            client.poll(0, timer.currentTimeMs());
 
             // fail requests that couldn't be sent if they have expired
             failExpiredRequests(timer.currentTimeMs());
@@ -491,6 +490,8 @@ public class ConsumerNetworkClient implements Closeable {
         // send any requests that can be sent now
         for (Node node : unsent.nodes()) {
             Iterator<ClientRequest> iterator = unsent.requestIterator(node);
+            // Only try to send the first request here.
+            // The previous send is completed before the next request can be sent
             if (iterator.hasNext()) {
                 pollDelayMs = Math.min(pollDelayMs, client.pollDelayMs(node, now));
                 if (client.ready(node, now)) {
