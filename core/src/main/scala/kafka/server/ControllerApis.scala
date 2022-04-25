@@ -112,7 +112,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     } catch {
       case e: FatalExitError => throw e
       case e: Throwable => {
-        val t = if (e.isInstanceOf[ExecutionException]) e.getCause() else e
+        val t = if (e.isInstanceOf[ExecutionException]) e.getCause else e
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", t)
         requestHelper.handleError(request, t)

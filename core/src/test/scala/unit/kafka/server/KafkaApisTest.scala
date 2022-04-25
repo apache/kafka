@@ -1760,7 +1760,7 @@ class KafkaApisTest {
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.initialLeaderEpoch + 2, deletePartition = true)
+      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = true)
   }
 
   @Test
@@ -1778,7 +1778,7 @@ class KafkaApisTest {
   @Test
   def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.initialLeaderEpoch + 2, deletePartition = false)
+      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = false)
   }
 
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,
@@ -3096,7 +3096,7 @@ class KafkaApisTest {
         .setLeader(0)
         .setLeaderEpoch(1)
         .setIsr(asList(0, 1))
-        .setZkVersion(2)
+        .setPartitionEpoch(2)
         .setReplicas(asList(0, 1, 2))
         .setIsNew(false)
     ).asJava

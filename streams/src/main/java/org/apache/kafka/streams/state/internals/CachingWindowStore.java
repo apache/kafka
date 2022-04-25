@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -27,8 +26,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -75,27 +74,22 @@ class CachingWindowStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        initInternal(asInternalProcessorContext(context), changelogTopic);
         super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        initInternal(asInternalProcessorContext(context), changelogTopic);
         super.init(context, root);
     }
 
-    private void initInternal(final InternalProcessorContext<?, ?> context) {
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
+    private void initInternal(final InternalProcessorContext<?, ?> context, final String changelogTopic) {
         this.context = context;
-        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  context.taskId().topologyName());
-
         bytesSerdes = new StateSerdes<>(
-            topic,
+            changelogTopic,
             Serdes.Bytes(),
             Serdes.ByteArray());
         cacheName = context.taskId() + "-" + name();

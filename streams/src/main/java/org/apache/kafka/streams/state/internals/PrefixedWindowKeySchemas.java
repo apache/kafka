@@ -41,6 +41,10 @@ public class PrefixedWindowKeySchemas {
         return binaryBytes[0];
     }
 
+    public static boolean isTimeFirstSchemaKey(final byte[] binaryBytes) {
+        return binaryBytes.length > 0 && binaryBytes[0] == TIME_FIRST_PREFIX;
+    }
+
     public static class TimeFirstWindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
         @Override
@@ -176,6 +180,14 @@ public class PrefixedWindowKeySchemas {
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
+        public static <K> Bytes toStoreKeyBinary(final K key,
+                                                 final long timestamp,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(key);
+            return toStoreKeyBinary(serializedKey, timestamp, seqnum);
+        }
+
         // for store serdes
         public static Bytes toStoreKeyBinary(final Bytes key,
                                              final long timestamp,
@@ -293,6 +305,14 @@ public class PrefixedWindowKeySchemas {
                                                             final long to,
                                                             final boolean forward) {
             return segments.segments(from, to, forward);
+        }
+
+        public static <K> Bytes toStoreKeyBinary(final K key,
+                                                 final long timestamp,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(key);
+            return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
         public static Bytes toStoreKeyBinary(final Windowed<Bytes> timeKey,

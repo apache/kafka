@@ -64,7 +64,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     }
     logManager.updateTopicConfig(topic, props)
 
-    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
+    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
         quotaManager.markThrottled(topic, partitions)
@@ -177,7 +177,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     val sanitizedUser = entities(0)
     val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (!sanitizedClientId.isDefined && sanitizedUser != ConfigEntityName.Default)
+    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.Default)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }

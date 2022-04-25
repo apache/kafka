@@ -222,7 +222,7 @@ public class PartitionCreationBench {
                     .setLeader(0)
                     .setLeaderEpoch(0)
                     .setIsr(inSync)
-                    .setZkVersion(1)
+                    .setPartitionEpoch(1)
                     .setReplicas(replicas)
                     .setIsNew(true);
 

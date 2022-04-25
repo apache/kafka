@@ -486,7 +486,7 @@ private[log] class Cleaner(val id: Int,
   /* buffer used for write i/o */
   private var writeBuffer = ByteBuffer.allocate(ioBufferSize)
 
-  private val decompressionBufferSupplier = BufferSupplier.create();
+  private val decompressionBufferSupplier = BufferSupplier.create()
 
   require(offsetMap.slots * dupBufferLoadFactor > 1, "offset map is too small to fit in even a single message, so log cleaning will never make progress. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads")
 

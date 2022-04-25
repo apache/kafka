@@ -302,7 +302,6 @@ public class ClusterControlManager {
                 if (!existing.incarnationId().equals(request.incarnationId())) {
                     // Remove any existing session for the old broker incarnation.
                     heartbeatManager.remove(brokerId);
-                    existing = null;
                 }
             }
         }
@@ -334,11 +333,7 @@ public class ClusterControlManager {
                 setMaxSupportedVersion(feature.maxSupportedVersion()));
         }
 
-        if (existing == null) {
-            heartbeatManager.touch(brokerId, true, -1);
-        } else {
-            heartbeatManager.touch(brokerId, existing.fenced(), -1);
-        }
+        heartbeatManager.register(brokerId, record.fenced());
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(record,
@@ -366,6 +361,10 @@ public class ClusterControlManager {
                     record.incarnationId(), listeners, features,
                     Optional.ofNullable(record.rack()), record.fenced()));
         updateMetrics(prevRegistration, brokerRegistrations.get(brokerId));
+        if (heartbeatManager != null) {
+            if (prevRegistration != null) heartbeatManager.remove(brokerId);
+            heartbeatManager.register(brokerId, record.fenced());
+        }
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
@@ -385,6 +384,7 @@ public class ClusterControlManager {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration with that epoch found", record.toString()));
         } else {
+            if (heartbeatManager != null) heartbeatManager.remove(brokerId);
             brokerRegistrations.remove(brokerId);
             updateMetrics(registration, brokerRegistrations.get(brokerId));
             log.info("Unregistered broker: {}", record);
@@ -401,6 +401,7 @@ public class ClusterControlManager {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration with that epoch found", record.toString()));
         } else {
+            if (heartbeatManager != null) heartbeatManager.register(brokerId, true);
             brokerRegistrations.put(brokerId, registration.cloneWithFencing(true));
             updateMetrics(registration, brokerRegistrations.get(brokerId));
             log.info("Fenced broker: {}", record);
@@ -417,6 +418,7 @@ public class ClusterControlManager {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration with that epoch found", record.toString()));
         } else {
+            if (heartbeatManager != null) heartbeatManager.register(brokerId, false);
             brokerRegistrations.put(brokerId, registration.cloneWithFencing(false));
             updateMetrics(registration, brokerRegistrations.get(brokerId));
             log.info("Unfenced broker: {}", record);

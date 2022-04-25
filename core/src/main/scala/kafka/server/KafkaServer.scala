@@ -212,7 +212,7 @@ class KafkaServer(
 
         /* Get or create cluster_id */
         _clusterId = getOrGenerateClusterId(zkClient)
-        info(s"Cluster ID = ${clusterId}")
+        info(s"Cluster ID = $clusterId")
 
         /* load metadata */
         val (preloadedBrokerMetadataCheckpoint, initialOfflineDirs) =
@@ -227,7 +227,7 @@ class KafkaServer(
         /* check cluster id */
         if (preloadedBrokerMetadataCheckpoint.clusterId.isDefined && preloadedBrokerMetadataCheckpoint.clusterId.get != clusterId)
           throw new InconsistentClusterIdException(
-            s"The Cluster ID ${clusterId} doesn't match stored clusterId ${preloadedBrokerMetadataCheckpoint.clusterId} in meta.properties. " +
+            s"The Cluster ID $clusterId doesn't match stored clusterId ${preloadedBrokerMetadataCheckpoint.clusterId} in meta.properties. " +
             s"The broker is trying to join the wrong cluster. Configured zookeeper.connect may be wrong.")
 
         /* generate brokerId */

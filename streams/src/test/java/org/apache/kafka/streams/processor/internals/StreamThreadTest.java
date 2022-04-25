@@ -1396,9 +1396,10 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         final AtomicBoolean shouldThrow = new AtomicBoolean(false);
         final AtomicBoolean processed = new AtomicBoolean(false);
+        // TODO check if needs to be extended
         internalTopologyBuilder.addProcessor(
             "proc",
-            () -> record -> {
+            (ProcessorSupplier<Object, Object, Object, Object>) () -> record -> {
                 if (shouldThrow.get()) {
                     throw new TaskCorruptedException(singleton(task1));
                 } else {
@@ -1787,6 +1788,7 @@ public class StreamThreadTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
@@ -1857,6 +1859,7 @@ public class StreamThreadTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPunctuateWithTimestampPreservedInProcessorContext() {
         final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
             () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {

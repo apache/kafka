@@ -238,7 +238,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
         topicIds,
@@ -261,7 +261,7 @@ class ReplicaManagerTest {
           .setLeader(1)
           .setLeaderEpoch(1)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
         topicIds,
@@ -298,7 +298,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(epoch)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -358,7 +358,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         Collections.singletonMap(topic, Uuid.randomUuid()),
@@ -424,7 +424,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -484,7 +484,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -591,7 +591,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -668,7 +668,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
         topicIds.asJava,
@@ -725,7 +725,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(replicas)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(replicas)
         .setIsNew(true)
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -847,7 +847,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(replicas)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(replicas)
         .setIsNew(true)
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -918,7 +918,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(replicas)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(replicas)
         .setIsNew(true)
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -1000,7 +1000,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(partition0Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition0Replicas)
             .setIsNew(true),
           new LeaderAndIsrPartitionState()
@@ -1010,7 +1010,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(partition1Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
@@ -1217,7 +1217,7 @@ class ReplicaManagerTest {
           .setLeader(1)
           .setLeaderEpoch(1)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
         Collections.singletonMap(topic, topicId),
@@ -1275,7 +1275,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(1)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
         Collections.singletonMap(topic, topicId),
@@ -1323,7 +1323,7 @@ class ReplicaManagerTest {
           .setLeader(1)
           .setLeaderEpoch(1)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
         Collections.singletonMap(topic, topicId),
@@ -1381,7 +1381,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(1)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
         Collections.singletonMap(topic, topicId),
@@ -1440,7 +1440,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(1)
         .setIsr(brokerList)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(brokerList)
         .setIsNew(false)).asJava,
       Collections.singletonMap(topic, topicId),
@@ -1533,7 +1533,7 @@ class ReplicaManagerTest {
           .setLeader(1)
           .setLeaderEpoch(0)
           .setIsr(partition0Replicas)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(partition0Replicas)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -1580,7 +1580,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(1)
         .setIsr(partition0Replicas)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
       topicIds.asJava,
@@ -1628,7 +1628,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(1)
           .setIsr(partition0Replicas)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(partition0Replicas)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -1649,7 +1649,7 @@ class ReplicaManagerTest {
           .setLeader(1)
           .setLeaderEpoch(2)
           .setIsr(partition0Replicas)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(partition0Replicas)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -1685,7 +1685,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(1)
           .setIsr(partition0Replicas)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(partition0Replicas)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -1707,7 +1707,7 @@ class ReplicaManagerTest {
           .setLeader(1)
           .setLeaderEpoch(2)
           .setIsr(partition0Replicas)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(partition0Replicas)
           .setIsNew(true)).asJava,
         topicIds.asJava,
@@ -1741,7 +1741,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(1)
         .setIsr(partition0Replicas)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
       topicIds.asJava,
@@ -1785,7 +1785,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(1)
         .setIsr(partition0Replicas)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
       topicIds.asJava,
@@ -1828,7 +1828,7 @@ class ReplicaManagerTest {
         .setLeader(0)
         .setLeaderEpoch(1)
         .setIsr(partition0Replicas)
-        .setZkVersion(0)
+        .setPartitionEpoch(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
       topicIds.asJava,
@@ -2074,7 +2074,7 @@ class ReplicaManagerTest {
       .setLeader(leaderBrokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(aliveBrokerIds.asJava)
-      .setZkVersion(zkVersion)
+      .setPartitionEpoch(zkVersion)
       .setReplicas(aliveBrokerIds.asJava)
       .setIsNew(isNew)
   }
@@ -2283,7 +2283,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(leaderEpoch)
             .setIsr(partition0Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition0Replicas)
             .setIsNew(true),
           new LeaderAndIsrPartitionState()
@@ -2293,7 +2293,7 @@ class ReplicaManagerTest {
             .setLeader(1)
             .setLeaderEpoch(leaderEpoch)
             .setIsr(partition1Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
@@ -2314,7 +2314,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
             .setIsr(partition0Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition0Replicas)
             .setIsNew(true),
           new LeaderAndIsrPartitionState()
@@ -2324,7 +2324,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
             .setIsr(partition1Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
@@ -2371,7 +2371,7 @@ class ReplicaManagerTest {
             .setLeader(1)
             .setLeaderEpoch(leaderEpoch)
             .setIsr(partition0Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition0Replicas)
             .setIsNew(true),
           new LeaderAndIsrPartitionState()
@@ -2381,7 +2381,7 @@ class ReplicaManagerTest {
             .setLeader(1)
             .setLeaderEpoch(leaderEpoch)
             .setIsr(partition1Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
@@ -2402,7 +2402,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
             .setIsr(partition0Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition0Replicas)
             .setIsNew(true),
           new LeaderAndIsrPartitionState()
@@ -2412,7 +2412,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
             .setIsr(partition1Replicas)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
@@ -2759,7 +2759,7 @@ class ReplicaManagerTest {
             .setLeader(0)
             .setLeaderEpoch(epoch)
             .setIsr(brokerList)
-            .setZkVersion(0)
+            .setPartitionEpoch(0)
             .setReplicas(brokerList)
             .setIsNew(true)).asJava,
           topicIds,
@@ -2804,7 +2804,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(epoch)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds,
@@ -2841,7 +2841,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(leaderEpoch)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds,
@@ -2904,7 +2904,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(epoch)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds,
@@ -2945,7 +2945,7 @@ class ReplicaManagerTest {
           .setLeader(0)
           .setLeaderEpoch(epoch)
           .setIsr(brokerList)
-          .setZkVersion(0)
+          .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds,
@@ -3028,7 +3028,7 @@ class ReplicaManagerTest {
       .setLeader(leaderAndIsr.leader)
       .setLeaderEpoch(leaderAndIsr.leaderEpoch)
       .setIsr(leaderAndIsr.isr.map(Int.box).asJava)
-      .setZkVersion(leaderAndIsr.zkVersion)
+      .setPartitionEpoch(leaderAndIsr.partitionEpoch)
       .setReplicas(replicas.map(Int.box).asJava)
       .setIsNew(isNew)
 

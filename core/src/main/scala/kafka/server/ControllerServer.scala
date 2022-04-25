@@ -150,7 +150,7 @@ class ControllerServer(
         socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
           config.controllerListeners.head.listenerName))
       } else {
-        throw new ConfigException("No controller.listener.names defined for controller");
+        throw new ConfigException("No controller.listener.names defined for controller")
       }
 
       val threadNamePrefixAsString = threadNamePrefix.getOrElse("")

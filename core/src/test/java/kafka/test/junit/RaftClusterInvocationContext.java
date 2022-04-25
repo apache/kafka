@@ -185,7 +185,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterReference.get().clientProperties());
+            Admin admin = Admin.create(clusterReference.get().clientProperties(configOverrides));
             admins.add(admin);
             return admin;
         }

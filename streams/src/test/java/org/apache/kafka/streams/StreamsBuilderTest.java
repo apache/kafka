@@ -622,6 +622,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForTransform() {
         builder.stream(STREAM_TOPIC).transform(() -> null, Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -630,6 +631,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForTransformValues() {
         builder.stream(STREAM_TOPIC).transformValues(() -> new NoopValueTransformer<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -638,6 +640,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForTransformValuesWithKey() {
         builder.stream(STREAM_TOPIC).transformValues(() -> new NoopValueTransformerWithKey<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -944,6 +947,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForFlatTransformValueOperation() {
         builder.stream(STREAM_TOPIC).flatTransformValues(() -> new NoopValueTransformer<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -952,7 +956,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
     public void shouldUseSpecifiedNameForFlatTransformValueWithKeyOperation() {
         builder.stream(STREAM_TOPIC).flatTransformValues(() -> new NoopValueTransformerWithKey(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
