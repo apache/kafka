@@ -195,6 +195,8 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             ),
             segmentDirs(baseDir)
         );
+        // For all tests, actualFrom is computed using observedStreamTime - retention + 1.
+        // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
         // expired record
         assertEquals(
             new HashSet<>(Collections.emptyList()),
@@ -575,6 +577,9 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                                        Serdes.Integer(),
                                        Serdes.String());
         windowStore.init((StateStoreContext) context, windowStore);
+
+        // For all tests, actualFrom is computed using observedStreamTime - retention + 1.
+        // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
 
         assertEquals(
             new HashSet<>(Collections.emptyList()),

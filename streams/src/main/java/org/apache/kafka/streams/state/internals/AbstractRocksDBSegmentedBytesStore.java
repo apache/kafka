@@ -90,15 +90,14 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return fetch(key, from, to, false);
     }
 
-
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                           final long from,
                                           final long to,
                                           final boolean forward) {
-
         final long actualFrom = getActualFrom(from);
 
         if (keySchema instanceof WindowKeySchema && to < actualFrom) {
+            LOG.debug("Returning no records for key {} as to ({}) < actualFrom ({}) ", key.toString(), to, actualFrom);
             return KeyValueIterators.emptyIterator();
         }
 
@@ -151,6 +150,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final long actualFrom = getActualFrom(from);
 
         if (keySchema instanceof WindowKeySchema && to < actualFrom) {
+            LOG.debug("Returning no records for keys {}/{} as to ({}) < actualFrom ({}) ", keyFrom, keyTo, to, actualFrom);
             return KeyValueIterators.emptyIterator();
         }
 
@@ -169,9 +169,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-
         final long actualFrom = getActualFrom(0);
-
         final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, Long.MAX_VALUE, true);
 
         return new SegmentIterator<>(
@@ -184,7 +182,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
-
         final long actualFrom = getActualFrom(0);
 
         final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, Long.MAX_VALUE, false);
@@ -200,10 +197,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
-
         final long actualFrom = getActualFrom(timeFrom);
 
         if (keySchema instanceof WindowKeySchema && timeTo < actualFrom) {
+            LOG.debug("Returning no records for as timeTo ({}) < actualFrom ({}) ", timeTo, actualFrom);
             return KeyValueIterators.emptyIterator();
         }
 
@@ -220,10 +217,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
                                                             final long timeTo) {
-
         final long actualFrom = getActualFrom(timeFrom);
 
         if (keySchema instanceof WindowKeySchema && timeTo < actualFrom) {
+            LOG.debug("Returning no records for as timeTo ({}) < actualFrom ({}) ", timeTo, actualFrom);
             return KeyValueIterators.emptyIterator();
         }
 
@@ -277,8 +274,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public byte[] get(final Bytes key) {
         final long timestampFromKey = keySchema.segmentTimestamp(key);
         // check if timestamp is expired
-        if (timestampFromKey < observedStreamTime - retentionPeriod + 1)
+        if (timestampFromKey < observedStreamTime - retentionPeriod + 1) {
+            LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
+                    key.toString(), timestampFromKey, observedStreamTime - retentionPeriod + 1);
             return null;
+        }
         final S segment = segments.getSegmentForTimestamp(timestampFromKey);
         if (segment == null) {
             return null;

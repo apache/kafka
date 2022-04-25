@@ -206,8 +206,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public byte[] get(final Bytes rawKey) {
         final long timestampFromRawKey = baseKeySchema.segmentTimestamp(rawKey);
         // check if timestamp is expired
-        if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1)
+        if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1) {
+            LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
+                    rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
             return null;
+        }
         final S segment = segments.getSegmentForTimestamp(timestampFromRawKey);
         if (segment == null) {
             return null;
