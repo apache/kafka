@@ -179,7 +179,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
-
+            // For all tests, actualFrom is computed using observedStreamTime - retention + 1.
+            // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
             // all records expired as actual from is 59001 and to is 1000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
 
@@ -240,6 +241,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
 
+            // For all tests, actualFrom is computed using observedStreamTime - retention + 1.
+            // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
             // all records expired as actual from is 59001 and to = 1000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.emptyList();
 
@@ -1032,6 +1035,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
 
+        // For all tests, actualFrom is computed using observedStreamTime - retention + 1.
+        // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
         // don't return expired records.
         assertEquals(
             Collections.emptyList(),
@@ -1071,6 +1076,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         );
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
+        // actualFrom is computed using observedStreamTime - retention + 1.
+        // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
         // only one record returned as actual from is 59001
         assertEquals(
             Collections.singletonList(
@@ -1100,7 +1107,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
             ),
             segmentDirs()
         );
-
+        // For all tests, actualFrom is computed using observedStreamTime - retention + 1.
+        // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
         // key A expired as actual from is 59,001
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.backwardAll());
         assertEquals(
@@ -1132,6 +1140,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         );
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetchAll(0L, 60_000L));
+        // For all tests, actualFrom is computed using observedStreamTime - retention + 1.
+        // so actualFrom = 60000(observedStreamTime) - 1000(retention) + 1 = 59001
         // only 1 record fetched as actual from is 59001
         assertEquals(
             Collections.singletonList(

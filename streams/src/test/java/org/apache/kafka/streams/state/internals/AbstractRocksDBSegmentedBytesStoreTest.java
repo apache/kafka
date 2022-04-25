@@ -171,28 +171,28 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
-            // All Records expired as observed stream time = 60000 implying actual-from = 59001
+            // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toList(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
-            // All Records expired as observed stream time = 60000 implying actual-from = 59001
+            // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toList(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
-            // All Records expired as observed stream time = 60000 implying actual-from = 59001
+            // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toList(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
-            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001
+            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
                 KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
@@ -203,7 +203,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             null, null, 0, windows[3].start())) {
-            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001
+            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
                 KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
@@ -226,7 +226,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
 
-            // All Records expired as observed stream time = 60000 implying actual-from = 59001
+            // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toList(values));
         }
@@ -234,7 +234,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
-            // All Records expired as observed stream time = 60000 implying actual-from = 59001
+            // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toList(values));
         }
@@ -242,14 +242,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
-            // All Records expired as observed stream time = 60000 implying actual-from = 59001
+            // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toList(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
-            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001
+            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
                 KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
@@ -260,7 +260,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             null, null, 0, windows[3].start())) {
-            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001
+            // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
                 KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
@@ -321,7 +321,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
         /*
-        * All records expired as observed stream time = 60,000 which sets actual-from to 59001. to = 1500.
+        * All records expired as observed stream time = 60,000 which sets actual-from to 59001(60,000 - 1000 + 1). to = 1500.
          */
         assertEquals(
             Collections.emptyList(),
@@ -348,7 +348,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             segmentDirs()
         );
         /*
-        * Only 1 record returned. observed stream time = 60000, actual from = 59001 and to = Long.MAX.
+        * Only 1 record returned. observed stream time = 60000, actual from = 59001 (60000 - 1000 + 1) and to = Long.MAX.
          */
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(
@@ -379,7 +379,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             segmentDirs()
         );
         /*
-         * Only 1 record returned. observed stream time = 60000, actual from = 59001 and to = 60,000.
+         * Only 1 record returned. observed stream time = 60000, actual from = 59001 (60000 - 1000 + 1) and to = 60,000.
          */
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetchAll(0L, 60_000L));
         assertEquals(
@@ -508,7 +508,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertEquals(2, bytesStore.getSegments().size());
 
         /*
-         * Only 1 record returned. observed stream time = 60000, actual from = 59001 and to = Long.MAX.
+         * Only 1 record returned. observed stream time = 60000, actual from = 59001 (60000 - 1000 + 1) and to = Long.MAX.
          */
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 100L));
@@ -565,7 +565,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         final String key = "a";
         /*
-         * Only 1 record returned. observed stream time = 60000, actual from = 59001 and to = Long.MAX.
+         * Only 1 record returned. observed stream time = 60000, actual from = 59001 (60000 - 1000 + 1) and to = Long.MAX.
          */
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 200L));
@@ -603,7 +603,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         final String key = "a";
         /*
-         * Only 1 record returned. observed stream time = 60000, actual from = 59001 and to = Long.MAX.
+         * Only 1 record returned. observed stream time = 60000, actual from = 59001 (60000 - 1000 + 1) and to = Long.MAX.
          */
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 200L));
