@@ -371,7 +371,7 @@ private[log] object LogValidator extends Logging {
                                                  brokerTopicStats: BrokerTopicStats,
                                                  requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
 
-    if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion.compareTo(IBP_2_1_IV0) < 0)
+    if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
         "are not allowed to use ZStandard compression")
 

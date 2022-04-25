@@ -1714,7 +1714,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
   def logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
 
-  // We keep the user-provided String as `MetadataVersion.apply` can choose a slightly different version (eg if `0.10.0`
+  // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   @nowarn("cat=deprecation")
   private val logMessageFormatVersionString = getString(KafkaConfig.LogMessageFormatVersionProp)
@@ -1751,7 +1751,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val leaderImbalanceCheckIntervalSeconds: Long = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)
 
-  // We keep the user-provided String as `MetadataVersion.apply` can choose a slightly different version (eg if `0.10.0`
+  // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
   val interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)

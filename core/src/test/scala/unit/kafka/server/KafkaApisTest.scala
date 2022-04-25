@@ -1651,7 +1651,7 @@ class KafkaApisTest {
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleAddOffsetToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
     assertThrows(classOf[UnsupportedVersionException],
-      () => createKafkaApis(MetadataVersion.IBP_0_10_2_IV0).handleAddOffsetsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
+      () => createKafkaApis(IBP_0_10_2_IV0).handleAddOffsetsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test

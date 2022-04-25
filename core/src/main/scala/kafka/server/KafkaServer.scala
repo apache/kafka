@@ -627,9 +627,9 @@ class KafkaServer(
 
               // send the controlled shutdown request
               val controlledShutdownApiVersion: Short =
-                if (config.interBrokerProtocolVersion.compareTo(IBP_0_9_0) < 0) 0
-                else if (config.interBrokerProtocolVersion.compareTo(IBP_2_2_IV0) < 0) 1
-                else if (config.interBrokerProtocolVersion.compareTo(IBP_2_4_IV1) < 0) 2
+                if (config.interBrokerProtocolVersion.isLessThan(IBP_0_9_0)) 0
+                else if (config.interBrokerProtocolVersion.isLessThan(IBP_2_2_IV0)) 1
+                else if (config.interBrokerProtocolVersion.isLessThan(IBP_2_4_IV1)) 2
                 else 3
 
               val controlledShutdownRequest = new ControlledShutdownRequest.Builder(

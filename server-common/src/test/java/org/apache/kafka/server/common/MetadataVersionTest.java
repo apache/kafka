@@ -32,58 +32,23 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.Utils;
 
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_2_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV2;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_8_0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_8_1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_8_2;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_9_0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_1_0_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_1_1_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV2;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_2_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_2_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_3_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_3_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_4_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_4_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_5_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV2;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_1_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0;
-
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 class MetadataVersionTest {
 
     @Test
-    public void testApply() {
+    public void testFromVersionString() {
         assertEquals(IBP_0_8_0, MetadataVersion.fromVersionString("0.8.0"));
         assertEquals(IBP_0_8_0, MetadataVersion.fromVersionString("0.8.0.0"));
         assertEquals(IBP_0_8_0, MetadataVersion.fromVersionString("0.8.0.1"));
+        // should throw an exception as long as IBP_8_0_IV0 is not defined
+        assertThrows(IllegalArgumentException.class, () -> MetadataVersion.fromVersionString("8.0"));
 
         assertEquals(IBP_0_8_1, MetadataVersion.fromVersionString("0.8.1"));
         assertEquals(IBP_0_8_1, MetadataVersion.fromVersionString("0.8.1.0"));
@@ -129,6 +94,10 @@ class MetadataVersionTest {
         assertEquals(IBP_1_0_IV0, MetadataVersion.fromVersionString("1.0.0"));
         assertEquals(IBP_1_0_IV0, MetadataVersion.fromVersionString("1.0.0-IV0"));
         assertEquals(IBP_1_0_IV0, MetadataVersion.fromVersionString("1.0.1"));
+        assertThrows(IllegalArgumentException.class, () -> MetadataVersion.fromVersionString("0.1.0"));
+        assertThrows(IllegalArgumentException.class, () -> MetadataVersion.fromVersionString("0.1.0.0"));
+        assertThrows(IllegalArgumentException.class, () -> MetadataVersion.fromVersionString("0.1.0-IV0"));
+        assertThrows(IllegalArgumentException.class, () -> MetadataVersion.fromVersionString("0.1.0.0-IV0"));
 
         assertEquals(IBP_1_1_IV0, MetadataVersion.fromVersionString("1.1-IV0"));
 
@@ -179,6 +148,9 @@ class MetadataVersionTest {
 
         assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3"));
         assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
+
+
+
     }
 
     @Test

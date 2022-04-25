@@ -137,40 +137,46 @@ public enum MetadataVersion {
         return metadataVersion;
     }
 
-    public boolean isAlterIsrSupported() {
-        return this.isAtLeast(IBP_2_7_IV2);
-    }
-
-    public boolean isAllocateProducerIdsSupported() {
-        return this.isAtLeast(IBP_3_0_IV0);
-    }
-
-    public boolean isTruncationOnFetchSupported() {
-        return this.isAtLeast(IBP_2_7_IV1);
+    public boolean isSaslInterBrokerHandshakeRequestEnabled() {
+        return this.isAtLeast(IBP_0_10_0_IV1);
     }
 
     public boolean isOffsetForLeaderEpochSupported() {
         return this.isAtLeast(IBP_0_11_0_IV2);
     }
 
+    public boolean isFeatureVersioningSupported() {
+        return this.isAtLeast(IBP_2_7_IV0);
+    }
+
+    public boolean isTruncationOnFetchSupported() {
+        return this.isAtLeast(IBP_2_7_IV1);
+    }
+
+    public boolean isAlterIsrSupported() {
+        return this.isAtLeast(IBP_2_7_IV2);
+    }
+
     public boolean isTopicIdsSupported() {
         return this.isAtLeast(IBP_2_8_IV0);
     }
 
-    public boolean isFeatureVersioningSupported() {
-        return this.isAtLeast(IBP_2_7_IV1);
+    public boolean isAllocateProducerIdsSupported() {
+        return this.isAtLeast(IBP_3_0_IV0);
     }
 
-    public boolean isSaslInterBrokerHandshakeRequestEnabled() {
-        return this.isAtLeast(IBP_0_10_0_IV1);
-    }
 
     public RecordVersion recordVersion() {
-        if (this.compareTo(IBP_0_9_0) <= 0) { // IBPs up to IBP_0_9_0 use Record Version V0
+        if (this.isLessThan(IBP_0_10_0_IV0)) {
+            // IBPs less than IBP_0_10_0_IV0 use Record Version V0
             return RecordVersion.V0;
-        } else if (this.compareTo(IBP_0_10_2_IV0) <= 0) { // IBPs up to IBP_0_10_2_IV0 use V1
+        } else if (this.isLessThan(IBP_0_11_0_IV0)) {
+            // IBPs >= IBP_0_10_0_IV0 and less than IBP_0_11_0_IV0 use V1
             return RecordVersion.V1;
-        } else return RecordVersion.V2; // all greater IBPs use V2
+        } else {
+            // all greater IBPs use V2
+            return RecordVersion.V2;
+        }
     }
 
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
@@ -223,8 +229,8 @@ public enum MetadataVersion {
     }
 
     /**
-     * Return an `ApiVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
-     * "0.10.0", "0.10.0-IV1"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `ApiVersion`.
+     * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
+     * "0.10.0", "0.10.0-IV1"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
      */
     public static MetadataVersion fromVersionString(String versionString) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
@@ -236,7 +242,7 @@ public enum MetadataVersion {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
         return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
-                new IllegalArgumentException("Version " + versionString + " is not a valid version")
+            new IllegalArgumentException("Version " + versionString + " is not a valid version")
         );
     }
 
@@ -259,10 +265,6 @@ public enum MetadataVersion {
     public static MetadataVersion latest() {
         MetadataVersion[] values = MetadataVersion.values();
         return values[values.length - 1];
-    }
-
-    public static MetadataVersion stable() {
-        return MetadataVersion.IBP_3_3_IV0;
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {
