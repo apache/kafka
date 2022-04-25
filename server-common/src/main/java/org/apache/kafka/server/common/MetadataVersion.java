@@ -29,39 +29,74 @@ public enum MetadataVersion {
     IBP_0_8_1(-1),
     IBP_0_8_2(-1),
     IBP_0_9_0(-1),
+    // 0.10.0-IV0 is introduced for KIP-31/32 which changes the message format.
     IBP_0_10_0_IV0(-1),
+    // 0.10.0-IV1 is introduced for KIP-36(rack awareness) and KIP-43(SASL handshake).
     IBP_0_10_0_IV1(-1),
+    // introduced for JoinGroup protocol change in KIP-62
     IBP_0_10_1_IV0(-1),
+    // 0.10.1-IV1 is introduced for KIP-74(fetch response size limit).
     IBP_0_10_1_IV1(-1),
+    // introduced ListOffsetRequest v1 in KIP-79
     IBP_0_10_1_IV2(-1),
+    // introduced UpdateMetadataRequest v3 in KIP-103
     IBP_0_10_2_IV0(-1),
+    // KIP-98 (idempotent and transactional producer support)
     IBP_0_11_0_IV0(-1),
+    // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
     IBP_0_11_0_IV1(-1),
+    // Introduced leader epoch fetches to the replica fetcher via KIP-101
     IBP_0_11_0_IV2(-1),
+    // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
     IBP_1_0_IV0(-1),
+    // Introduced DeleteGroupsRequest V0 via KIP-229, plus KIP-227 incremental fetch requests,
+    // and KafkaStorageException for fetch requests.
     IBP_1_1_IV0(-1),
+    // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279 (Fix log divergence between leader and follower after fast leader fail over)
     IBP_2_0_IV0(-1),
+    // Several request versions were bumped due to KIP-219 (Improve quota communication)
     IBP_2_0_IV1(-1),
+    // Introduced new schemas for group offset (v2) and group metadata (v2) (KIP-211)
     IBP_2_1_IV0(-1),
+    // New Fetch, OffsetsForLeaderEpoch, and ListOffsets schemas (KIP-320)
     IBP_2_1_IV1(-1),
+    // Support ZStandard Compression Codec (KIP-110)
     IBP_2_1_IV2(-1),
+    // Introduced broker generation (KIP-380), and
+    // LeaderAdnIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
     IBP_2_2_IV0(-1),
+    // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)
     IBP_2_2_IV1(-1),
+    // Introduced static membership.
     IBP_2_3_IV0(-1),
+    // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
     IBP_2_3_IV1(-1),
+    // Add adding_replicas and removing_replicas fields to LeaderAndIsrRequest
     IBP_2_4_IV0(-1),
+    // Flexible version support in inter-broker APIs
     IBP_2_4_IV1(-1),
+    // No new APIs, equivalent to 2.4-IV1
     IBP_2_5_IV0(-1),
+    // Introduced StopReplicaRequest V3 containing the leader epoch for each partition (KIP-570)
     IBP_2_6_IV0(-1),
+    // Introduced feature versioning support (KIP-584)
     IBP_2_7_IV0(-1),
+    // Bup Fetch protocol for Raft protocol (KIP-595)
     IBP_2_7_IV1(-1),
+    // Introduced AlterPartition (KIP-497)
     IBP_2_7_IV2(-1),
+    // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
     IBP_2_8_IV0(-1),
+    // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
     IBP_2_8_IV1(-1),
-    // KRaft preview
+    // Introduce AllocateProducerIds (KIP-730)
     IBP_3_0_IV0(1),
+    // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
+    // Assume message format version is 3.0 (KIP-724)
     IBP_3_0_IV1(2),
+    // Adds topic IDs to Fetch requests/responses (KIP-516)
     IBP_3_1_IV0(3),
+    // Support for leader recovery for unclean leader election (KIP-704)
     IBP_3_2_IV0(4),
     // KRaft GA
     IBP_3_3_IV0(5);
