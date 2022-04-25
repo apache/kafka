@@ -740,8 +740,8 @@ class ReplicaManagerTest {
 
       assertTrue(partition.getReplica(1).isDefined)
       val followerReplica = partition.getReplica(1).get
-      assertEquals(-1L, followerReplica.logStartOffset)
-      assertEquals(-1L, followerReplica.logEndOffset)
+      assertEquals(-1L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(-1L, followerReplica.stateSnapshot.logEndOffset)
 
       // Leader appends some data
       for (i <- 1 to 5) {
@@ -773,8 +773,8 @@ class ReplicaManagerTest {
       )
 
       assertTrue(successfulFetch.isDefined)
-      assertEquals(0L, followerReplica.logStartOffset)
-      assertEquals(0L, followerReplica.logEndOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logEndOffset)
 
 
       // Next we receive an invalid request with a higher fetch offset, but an old epoch.
@@ -796,8 +796,8 @@ class ReplicaManagerTest {
       )
 
       assertTrue(successfulFetch.isDefined)
-      assertEquals(0L, followerReplica.logStartOffset)
-      assertEquals(0L, followerReplica.logEndOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logEndOffset)
 
       // Next we receive an invalid request with a higher fetch offset, but a diverging epoch.
       // We expect that the replica state does not get updated.
@@ -818,8 +818,8 @@ class ReplicaManagerTest {
       )
 
       assertTrue(successfulFetch.isDefined)
-      assertEquals(0L, followerReplica.logStartOffset)
-      assertEquals(0L, followerReplica.logEndOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logEndOffset)
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
