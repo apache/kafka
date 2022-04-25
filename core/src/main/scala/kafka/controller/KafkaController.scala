@@ -2347,7 +2347,17 @@ class KafkaController(val config: KafkaConfig,
           controllerContext.partitionLeadershipInfo(tp) match {
             case Some(leaderIsrAndControllerEpoch) =>
               val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-              if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
+              if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
+                partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
+                None
+              } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
+                partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
+                None
+              } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
+                // If a partition is already in the desired state, just return it
+                partitionResponses(tp) = Right(currentLeaderAndIsr)
+                None
+              } else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
                 partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
                 info(
                   s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
@@ -2362,13 +2372,6 @@ class KafkaController(val config: KafkaConfig,
                   s"Rejecting AlterPartition from node $brokerId for $tp because the leader recovery state cannot change from " +
                   s"RECOVERED to RECOVERING: $newLeaderAndIsr"
                 )
-                None
-              } else if (newLeaderAndIsr.leaderEpoch < currentLeaderAndIsr.leaderEpoch) {
-                partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
-                None
-              } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
-                // If a partition is already in the desired state, just return it
-                partitionResponses(tp) = Right(currentLeaderAndIsr)
                 None
               } else {
                 Some(tp -> newLeaderAndIsr)
