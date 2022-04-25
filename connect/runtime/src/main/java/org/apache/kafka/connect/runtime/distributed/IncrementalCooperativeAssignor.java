@@ -881,6 +881,18 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             return allWorkers;
         }
 
+        @Override
+        public String toString() {
+            return "ClusterAssignment{"
+                    + "newlyAssignedConnectors=" + newlyAssignedConnectors
+                    + ", newlyAssignedTasks=" + newlyAssignedTasks
+                    + ", newlyRevokedConnectors=" + newlyRevokedConnectors
+                    + ", newlyRevokedTasks=" + newlyRevokedTasks
+                    + ", allAssignedConnectors=" + allAssignedConnectors
+                    + ", allAssignedTasks=" + allAssignedTasks
+                    + ", allWorkers=" + allWorkers
+                    + '}';
+        }
     }
 
 }
