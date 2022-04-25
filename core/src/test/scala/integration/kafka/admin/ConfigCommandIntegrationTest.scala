@@ -20,7 +20,7 @@ import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.{ConfigEntityName, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{Exit, Logging}
+import kafka.utils.{Exit, Logging, TestInfoUtils}
 import kafka.zk.{AdminZkClient, BrokerInfo}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.network.ListenerName
@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 
 class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(quorum: String): Unit = {
     assertNonZeroStatusExit(Array(
@@ -45,7 +45,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
       "--add-config", "security.inter.broker.protocol=PLAINTEXT"))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(quorum: String): Unit = {
     assertNonZeroStatusExit(Array(
@@ -73,7 +73,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     assertEquals(Some(1), exitStatus)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testDynamicBrokerConfigUpdateUsingZooKeeper(quorum: String): Unit = {
     val brokerId = "1"

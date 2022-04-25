@@ -33,9 +33,8 @@ import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.{mock, times, verify, when}
 
 import scala.collection.{Seq, mutable}
@@ -46,51 +45,45 @@ class ConfigCommandTest extends Logging {
   private val zkConnect = "localhost:2181"
   private val dummyAdminZkClient = new DummyAdminZkClient(null)
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldExitWithNonZeroStatusOnArgError(quorum: String): Unit = {
+  @Test
+  def shouldExitWithNonZeroStatusOnArgError(): Unit = {
     assertNonZeroStatusExit(Array("--blah"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldExitWithNonZeroStatusOnZkCommandWithTopicsEntity(quorum: String): Unit = {
+  @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithTopicsEntity(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
       "--entity-type", "topics",
       "--describe"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldExitWithNonZeroStatusOnZkCommandWithClientsEntity(quorum: String): Unit = {
+  @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithClientsEntity(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
       "--entity-type", "clients",
       "--describe"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldExitWithNonZeroStatusOnZkCommandWithIpsEntity(quorum: String): Unit = {
+  @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithIpsEntity(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
       "--entity-type", "ips",
       "--describe"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(quorum: String): Unit = {
+  @Test
+  def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(): Unit = {
     assertNonZeroStatusExit(Array(
       "--bootstrap-server", "localhost:9092",
       "--entity-type", "users",
       "--alter", "--add-config", "consumer_byte_rate=20000"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldExitWithNonZeroStatusOnBrokerCommandError(quorum: String): Unit = {
+  @Test
+  def shouldExitWithNonZeroStatusOnBrokerCommandError(): Unit = {
     assertNonZeroStatusExit(Array(
       "--bootstrap-server", "invalid host",
       "--entity-type", "brokers",
@@ -98,9 +91,8 @@ class ConfigCommandTest extends Logging {
       "--describe"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldExitWithNonZeroStatusOnBrokerCommandWithZkTlsConfigFile(quorum: String): Unit = {
+  @Test
+  def shouldExitWithNonZeroStatusOnBrokerCommandWithZkTlsConfigFile(): Unit = {
     assertNonZeroStatusExit(Array(
       "--bootstrap-server", "invalid host",
       "--entity-type", "users",
@@ -126,69 +118,58 @@ class ConfigCommandTest extends Logging {
     assertEquals(Some(1), exitStatus)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailParseArgumentsForClientsEntityTypeUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailParseArgumentsForClientsEntityTypeUsingZookeeper(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("clients", zkConfig = true))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldParseArgumentsForClientsEntityType(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForClientsEntityType(): Unit = {
     testArgumentParse("clients", zkConfig = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldParseArgumentsForUsersEntityTypeUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
     testArgumentParse("users", zkConfig = true)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldParseArgumentsForUsersEntityType(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForUsersEntityType(): Unit = {
     testArgumentParse("users", zkConfig = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailParseArgumentsForTopicsEntityTypeUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailParseArgumentsForTopicsEntityTypeUsingZookeeper(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("topics", zkConfig = true))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldParseArgumentsForTopicsEntityType(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForTopicsEntityType(): Unit = {
     testArgumentParse("topics", zkConfig = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldParseArgumentsForBrokersEntityTypeUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
     testArgumentParse("brokers", zkConfig = true)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldParseArgumentsForBrokersEntityType(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForBrokersEntityType(): Unit = {
     testArgumentParse("brokers", zkConfig = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldParseArgumentsForBrokerLoggersEntityType(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForBrokerLoggersEntityType(): Unit = {
     testArgumentParse("broker-loggers", zkConfig = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailParseArgumentsForIpEntityTypeUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("ips", zkConfig = true))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldParseArgumentsForIpEntityType(quorum: String): Unit = {
+  @Test
+  def shouldParseArgumentsForIpEntityType(): Unit = {
     testArgumentParse("ips", zkConfig = false)
   }
 
@@ -299,9 +280,8 @@ class ConfigCommandTest extends Logging {
     assertTrue(addedProps2.getProperty("f").isEmpty)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFailIfAddAndAddFile(quorum: String): Unit = {
+  @Test
+  def shouldFailIfAddAndAddFile(): Unit = {
     // Should not parse correctly
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "1",
@@ -313,9 +293,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testParseConfigsToBeAddedForAddConfigFile(quorum: String): Unit = {
+  @Test
+  def testParseConfigsToBeAddedForAddConfigFile(): Unit = {
     val fileContents =
       """a=b
         |c = d
@@ -379,117 +358,102 @@ class ConfigCommandTest extends Logging {
     testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testOptionEntityTypeNamesUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def testOptionEntityTypeNamesUsingZookeeper(): Unit = {
     doTestOptionEntityTypeNames(zkConfig = true)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testOptionEntityTypeNames(quorum: String): Unit = {
+  @Test
+  def testOptionEntityTypeNames(): Unit = {
     doTestOptionEntityTypeNames(zkConfig = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailIfUnrecognisedEntityTypeUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailIfUnrecognisedEntityTypeUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFailIfUnrecognisedEntityType(quorum: String): Unit = {
+  @Test
+  def shouldFailIfUnrecognisedEntityType(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailIfBrokerEntityTypeIsNotAnIntegerUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailIfBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFailIfBrokerEntityTypeIsNotAnInteger(quorum: String): Unit = {
+  @Test
+  def shouldFailIfBrokerEntityTypeIsNotAnInteger(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailIfShortBrokerEntityTypeIsNotAnIntegerUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailIfShortBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--broker", "A", "--alter", "--add-config", "a=b,c=d"))
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFailIfShortBrokerEntityTypeIsNotAnInteger(quorum: String): Unit = {
+  @Test
+  def shouldFailIfShortBrokerEntityTypeIsNotAnInteger(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--broker", "A", "--alter", "--add-config", "a=b,c=d"))
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailIfMixedEntityTypeFlagsUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailIfMixedEntityTypeFlagsUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFailIfMixedEntityTypeFlags(quorum: String): Unit = {
+  @Test
+  def shouldFailIfMixedEntityTypeFlags(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFailIfInvalidHost(quorum: String): Unit = {
+  @Test
+  def shouldFailIfInvalidHost(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailIfInvalidHostUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailIfInvalidHostUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFailIfUnresolvableHost(quorum: String): Unit = {
+  @Test
+  def shouldFailIfUnresolvableHost(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "admin", "--entity-type", "ips", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldFailIfUnresolvableHostUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldFailIfUnresolvableHostUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "admin", "--entity-type", "ips", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldAddClientConfigUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldAddClientConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-client-id",
       "--entity-type", "clients",
@@ -510,9 +474,8 @@ class ConfigCommandTest extends Logging {
     ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldAddIpConfigsUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldAddIpConfigsUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1.2.3.4",
       "--entity-type", "ips",
@@ -556,9 +519,8 @@ class ConfigCommandTest extends Logging {
     assertTrue(e.getMessage.contains(expectedErrorMessage), s"Unexpected exception: $e")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotAlterNonQuotaIpConfigsUsingBootstrapServer(quorum: String): Unit = {
+  @Test
+  def shouldNotAlterNonQuotaIpConfigsUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter anything that is not a connection quota
     // for ip entities
     val ipEntityOpts = List("--entity-type", "ips", "--entity-name", "127.0.0.1")
@@ -591,9 +553,8 @@ class ConfigCommandTest extends Logging {
     assertTrue(describedConfigs)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeIpConfigs(quorum: String): Unit = {
+  @Test
+  def testDescribeIpConfigs(): Unit = {
     val entityType = ClientQuotaEntity.IP
     val knownHost = "1.2.3.4"
     val defaultIpFilter = ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofDefaultEntity(entityType)).asJava)
@@ -655,9 +616,8 @@ class ConfigCommandTest extends Logging {
     assertTrue(alteredConfigs)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterIpConfig(quorum: String): Unit = {
+  @Test
+  def testAlterIpConfig(): Unit = {
     val (singleIpArgs, singleIpEntry) = toValues(Some("1.2.3.4"), ClientQuotaEntity.IP)
     val singleIpEntity = new ClientQuotaEntity(singleIpEntry.asJava)
     val (defaultIpArgs, defaultIpEntry) = toValues(Some(null), ClientQuotaEntity.IP)
@@ -676,9 +636,8 @@ class ConfigCommandTest extends Logging {
     verifyAlterQuotas(defaultIpArgs ++ addArgs, defaultIpEntity, Map.empty, addAlterationOps)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldAddClientConfig(quorum: String): Unit = {
+  @Test
+  def shouldAddClientConfig(): Unit = {
     val alterArgs = List("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
       "--delete-config", "request_percentage")
     val propsToDelete = Map("request_percentage" -> Double.box(50.0))
@@ -712,9 +671,8 @@ class ConfigCommandTest extends Logging {
   private val addScramOpts = List("--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
   private val deleteScramOpts = List("--delete-config", "SCRAM-SHA-256")
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotAlterNonQuotaNonScramUserOrClientConfigUsingBootstrapServer(quorum: String): Unit = {
+  @Test
+  def shouldNotAlterNonQuotaNonScramUserOrClientConfigUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter anything that is not a quota and not a SCRAM credential
     // for both user and client entities
     val invalidProp = "some_config"
@@ -728,25 +686,22 @@ class ConfigCommandTest extends Logging {
     verifyAlterCommandFails(invalidProp, clientEntityOpts ++ List("--delete-config", "some_config"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotAlterScramClientConfigUsingBootstrapServer(quorum: String): Unit = {
+  @Test
+  def shouldNotAlterScramClientConfigUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter SCRAM credentials for client entities
     verifyAlterCommandFails("SCRAM-SHA-256", clientEntityOpts ++ addScramOpts)
     verifyAlterCommandFails("SCRAM-SHA-256", clientEntityOpts ++ deleteScramOpts)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotCreateUserScramCredentialConfigWithUnderMinimumIterationsUsingBootstrapServer(quorum: String): Unit = {
+  @Test
+  def shouldNotCreateUserScramCredentialConfigWithUnderMinimumIterationsUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to create a SCRAM credential for a user
     // with an iterations value less than the minimum
     verifyAlterCommandFails("SCRAM-SHA-256", userEntityOpts ++ List("--add-config", "SCRAM-SHA-256=[iterations=100,password=foo-secret]"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotAlterUserScramCredentialAndClientQuotaConfigsSimultaneouslyUsingBootstrapServer(quorum: String): Unit = {
+  @Test
+  def shouldNotAlterUserScramCredentialAndClientQuotaConfigsSimultaneouslyUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter both SCRAM credentials and quotas for user entities
     val expectedErrorMessage = "SCRAM-SHA-256"
     val secondUserEntityOpts = List("--entity-type", "users", "--entity-name", "admin1")
@@ -765,9 +720,8 @@ class ConfigCommandTest extends Logging {
     verifyAlterCommandFails(expectedErrorMessage, secondUserEntityOpts ++ addQuotaOpts ++ userEntityOpts ++ deleteScramOpts)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer(quorum: String): Unit = {
+  @Test
+  def shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer(): Unit = {
     def verifyUserScramCredentialsNotDescribed(requestOpts: List[String]): Unit = {
       // User SCRAM credentials should not be described when specifying
       // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
@@ -799,9 +753,8 @@ class ConfigCommandTest extends Logging {
     verifyUserScramCredentialsNotDescribed(defaultUserOpt)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldAddTopicConfigUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldAddTopicConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
       "--entity-type", "topics",
@@ -822,15 +775,13 @@ class ConfigCommandTest extends Logging {
     ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldAlterTopicConfig(quorum: String): Unit = {
+  @Test
+  def shouldAlterTopicConfig(): Unit = {
     doShouldAlterTopicConfig(false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldAlterTopicConfigFile(quorum: String): Unit = {
+  @Test
+  def shouldAlterTopicConfigFile(): Unit = {
     doShouldAlterTopicConfig(true)
   }
 
@@ -908,9 +859,8 @@ class ConfigCommandTest extends Logging {
     verify(describeResult).all()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldDescribeConfigSynonyms(quorum: String): Unit = {
+  @Test
+  def shouldDescribeConfigSynonyms(): Unit = {
     val resourceName = "my-topic"
     val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", resourceName,
@@ -936,9 +886,8 @@ class ConfigCommandTest extends Logging {
     verify(describeResult).all()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldNotAllowAddBrokerQuotaConfigWhileBrokerUpUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldNotAllowAddBrokerQuotaConfigWhileBrokerUpUsingZookeeper(): Unit = {
     val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -953,9 +902,8 @@ class ConfigCommandTest extends Logging {
       () => ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldNotAllowDescribeBrokerWhileBrokerUpUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldNotAllowDescribeBrokerWhileBrokerUpUsingZookeeper(): Unit = {
     val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -969,9 +917,8 @@ class ConfigCommandTest extends Logging {
       () => ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldSupportDescribeBrokerBeforeBrokerUpUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldSupportDescribeBrokerBeforeBrokerUpUsingZookeeper(): Unit = {
     val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -992,9 +939,8 @@ class ConfigCommandTest extends Logging {
     ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new TestAdminZkClient(null))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldAddBrokerLoggerConfig(quorum: String): Unit = {
+  @Test
+  def shouldAddBrokerLoggerConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
     verifyAlterBrokerLoggerConfig(node, "1", "1", List(
       new ConfigEntry("kafka.log.LogCleaner", "INFO"),
@@ -1003,9 +949,8 @@ class ConfigCommandTest extends Logging {
     ))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(quorum: String): Unit = {
+  @Test
+  def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
       "--entity-type", ConfigType.Broker,
       "--describe"
@@ -1014,9 +959,8 @@ class ConfigCommandTest extends Logging {
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed(quorum: String): Unit = {
+  @Test
+  def testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigType.Broker,
       "--describe"
@@ -1025,9 +969,8 @@ class ConfigCommandTest extends Logging {
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeAllBrokerConfig(quorum: String): Unit = {
+  @Test
+  def testDescribeAllBrokerConfig(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigType.Broker,
       "--entity-name", "1",
@@ -1037,9 +980,8 @@ class ConfigCommandTest extends Logging {
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeAllTopicConfig(quorum: String): Unit = {
+  @Test
+  def testDescribeAllTopicConfig(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigType.Topic,
       "--entity-name", "foo",
@@ -1049,9 +991,8 @@ class ConfigCommandTest extends Logging {
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testDescribeAllBrokerConfigBootstrapServerRequired(quorum: String): Unit = {
+  @Test
+  def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
       "--entity-type", ConfigType.Broker,
       "--entity-name", "1",
@@ -1061,9 +1002,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => new ConfigCommandOptions(optsList.toArray).checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(quorum: String): Unit = {
+  @Test
+  def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigCommand.BrokerLoggerConfigType,
       "--entity-default",
@@ -1073,9 +1013,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => new ConfigCommandOptions(optsList.toArray).checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed(quorum: String): Unit = {
+  @Test
+  def testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigCommand.BrokerLoggerConfigType,
       "--entity-default",
@@ -1086,9 +1025,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => new ConfigCommandOptions(optsList.toArray).checkArgs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldRaiseInvalidConfigurationExceptionWhenAddingInvalidBrokerLoggerConfig(quorum: String): Unit = {
+  @Test
+  def shouldRaiseInvalidConfigurationExceptionWhenAddingInvalidBrokerLoggerConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
     // verifyAlterBrokerLoggerConfig tries to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
     // yet, we make it so DescribeConfigs returns only one logger, implying that kafka.server.ReplicaManager and kafka.log.LogCleaner are invalid
@@ -1097,16 +1035,14 @@ class ConfigCommandTest extends Logging {
     )))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldAddDefaultBrokerDynamicConfig(quorum: String): Unit = {
+  @Test
+  def shouldAddDefaultBrokerDynamicConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
     verifyAlterBrokerConfig(node, "", List("--entity-default"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldAddBrokerDynamicConfig(quorum: String): Unit = {
+  @Test
+  def shouldAddBrokerDynamicConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
     verifyAlterBrokerConfig(node, "1", List("--entity-name", "1"))
   }
@@ -1157,9 +1093,8 @@ class ConfigCommandTest extends Logging {
     verify(describeResult).all()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldDescribeConfigBrokerWithoutEntityName(quorum: String): Unit = {
+  @Test
+  def shouldDescribeConfigBrokerWithoutEntityName(): Unit = {
     val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-type", "brokers",
       "--describe"))
@@ -1244,9 +1179,8 @@ class ConfigCommandTest extends Logging {
     verify(describeResult).all()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldSupportCommaSeparatedValuesUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldSupportCommaSeparatedValuesUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
       "--entity-type", "topics",
@@ -1268,9 +1202,8 @@ class ConfigCommandTest extends Logging {
     ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldNotUpdateBrokerConfigIfMalformedEntityNameUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateBrokerConfigIfMalformedEntityNameUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1,2,3", //Don't support multiple brokers currently
       "--entity-type", "brokers",
@@ -1279,9 +1212,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotUpdateBrokerConfigIfMalformedEntityName(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateBrokerConfigIfMalformedEntityName(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "1,2,3", //Don't support multiple brokers currently
       "--entity-type", "brokers",
@@ -1290,9 +1222,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldNotUpdateBrokerConfigIfMalformedConfigUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateBrokerConfigIfMalformedConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -1301,9 +1232,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotUpdateBrokerConfigIfMalformedConfig(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateBrokerConfigIfMalformedConfig(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -1312,9 +1242,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldNotUpdateBrokerConfigIfMalformedBracketConfigUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateBrokerConfigIfMalformedBracketConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -1323,9 +1252,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotUpdateBrokerConfigIfMalformedBracketConfig(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateBrokerConfigIfMalformedBracketConfig(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -1334,9 +1262,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldNotUpdateConfigIfNonExistingConfigIsDeletedUsingZookeper(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateConfigIfNonExistingConfigIsDeletedUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
       "--entity-type", "topics",
@@ -1345,9 +1272,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[InvalidConfigurationException], () => ConfigCommand.alterConfigWithZk(null, createOpts, dummyAdminZkClient))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotUpdateConfigIfNonExistingConfigIsDeleted(quorum: String): Unit = {
+  @Test
+  def shouldNotUpdateConfigIfNonExistingConfigIsDeleted(): Unit = {
     val resourceName = "my-topic"
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", resourceName,
@@ -1377,9 +1303,8 @@ class ConfigCommandTest extends Logging {
     verify(describeResult).all()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def shouldNotDeleteBrokerConfigWhileBrokerUpUsingZookeeper(quorum: String): Unit = {
+  @Test
+  def shouldNotDeleteBrokerConfigWhileBrokerUpUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -1408,9 +1333,8 @@ class ConfigCommandTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(mockZkClient, createOpts, new TestAdminZkClient(null)))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testScramCredentials(quorum: String): Unit = {
+  @Test
+  def testScramCredentials(): Unit = {
     def createOpts(user: String, config: String): ConfigCommandOptions = {
       new ConfigCommandOptions(Array("--zookeeper", zkConnect,
         "--entity-name", user,
@@ -1454,9 +1378,8 @@ class ConfigCommandTest extends Logging {
     ConfigCommand.alterConfigWithZk(null, del512, CredentialChange("userB", Set(), 4096))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testQuotaConfigEntityUsingZookeeperNotAllowed(quorum: String): Unit = {
+  @Test
+  def testQuotaConfigEntityUsingZookeeperNotAllowed(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => doTestQuotaConfigEntity(zkConfig = true))
   }
 
@@ -1534,15 +1457,13 @@ class ConfigCommandTest extends Logging {
     checkInvalidArgs("users", None, alterOpts ++ Array("--entity-type", "clients"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testQuotaConfigEntity(quorum: String): Unit = {
+  @Test
+  def testQuotaConfigEntity(): Unit = {
     doTestQuotaConfigEntity(zkConfig = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUserClientQuotaOptsUsingZookeeperNotAllowed(quorum: String): Unit = {
+  @Test
+  def testUserClientQuotaOptsUsingZookeeperNotAllowed(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => doTestUserClientQuotaOpts(zkConfig = true))
   }
 
@@ -1591,17 +1512,14 @@ class ConfigCommandTest extends Logging {
         "--alter", "--add-config", "a=b,c=d")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUserClientQuotaOpts(quorum: String): Unit = {
+  @Test
+  def testUserClientQuotaOpts(): Unit = {
     doTestUserClientQuotaOpts(zkConfig = false)
   }
 
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testQuotaDescribeEntities(quorum: String): Unit = {
-    val zkClient: KafkaZkClient =  mock(classOf[KafkaZkClient])
+  @Test
+  def testQuotaDescribeEntities(): Unit = {
+    val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
 
     def checkEntities(opts: Array[String], expectedFetches: Map[String, Seq[String]], expectedEntityNames: Seq[String]): Unit = {
       val entity = ConfigCommand.parseEntity(new ConfigCommandOptions(opts :+ "--describe"))
