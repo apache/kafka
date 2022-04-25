@@ -20,21 +20,23 @@ import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.{ConfigEntityName, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{Exit, Logging}
+import kafka.utils.{Exit, Logging, TestInfoUtils}
 import kafka.zk.{AdminZkClient, BrokerInfo}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
 
-  @Test
-  def shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(quorum: String): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
       "--entity-name", "1",
@@ -43,8 +45,9 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
       "--add-config", "security.inter.broker.protocol=PLAINTEXT"))
   }
 
-  @Test
-  def shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(quorum: String): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
       "--entity-type", "users",
@@ -70,8 +73,9 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     assertEquals(Some(1), exitStatus)
   }
 
-  @Test
-  def testDynamicBrokerConfigUpdateUsingZooKeeper(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testDynamicBrokerConfigUpdateUsingZooKeeper(quorum: String): Unit = {
     val brokerId = "1"
     val adminZkClient = new AdminZkClient(zkClient)
     val alterOpts = Array("--zookeeper", zkConnect, "--entity-type", "brokers", "--alter")
