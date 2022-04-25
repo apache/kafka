@@ -241,7 +241,7 @@ public enum ApiKeys {
             b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>\n");
+        b.append("</tbody></table>\n");
         return b.toString();
     }
 
