@@ -260,7 +260,7 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static synchronized String statusAsJson(
+    private static String statusAsJson(
         String stage,
         long totalProcessed,
         long consumedSinceLastRebalanced,
