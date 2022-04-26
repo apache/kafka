@@ -175,11 +175,8 @@ public class TransactionManager {
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
         private long lastAckedOffset;
 
-        private static final Comparator<ProducerBatch> PRODUCER_BATCH_COMPARATOR = (b1, b2) -> {
-            if (b1.baseSequence() < b2.baseSequence()) return -1;
-            else if (b1.baseSequence() > b2.baseSequence()) return 1;
-            else return Integer.compare(b1.hashCode(), b2.hashCode());
-        };
+        private static final Comparator<ProducerBatch> PRODUCER_BATCH_COMPARATOR =
+            Comparator.comparingInt(ProducerBatch::producerEpoch).thenComparingInt(ProducerBatch::baseSequence);
 
         TopicPartitionEntry() {
             this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
