@@ -181,7 +181,7 @@ public class TransactionManager {
         // See https://github.com/apache/kafka/pull/12096#pullrequestreview-955554191 for details.
         private static final Comparator<ProducerBatch> PRODUCER_BATCH_COMPARATOR =
             Comparator.comparingLong(ProducerBatch::producerId)
-                .thenComparing(ProducerBatch::producerEpoch)
+                .thenComparingInt(ProducerBatch::producerEpoch)
                 .thenComparingInt(ProducerBatch::baseSequence);
 
         TopicPartitionEntry() {
