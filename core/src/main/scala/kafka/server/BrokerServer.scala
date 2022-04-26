@@ -129,7 +129,7 @@ class BrokerServer(
 
   @volatile var featureCache: FinalizedFeatureCache = null
 
-  var alterIsrManager: AlterIsrManager = null
+  var alterIsrManager: AlterPartitionManager = null
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
@@ -250,7 +250,7 @@ class BrokerServer(
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )
-      alterIsrManager = new DefaultAlterIsrManager(
+      alterIsrManager = new DefaultAlterPartitionManager(
         controllerChannelManager = alterIsrChannelManager,
         scheduler = kafkaScheduler,
         time = time,
@@ -269,7 +269,7 @@ class BrokerServer(
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
-        alterIsrManager = alterIsrManager,
+        alterPartitionManager = alterIsrManager,
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
         zkClient = None,

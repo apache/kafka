@@ -77,7 +77,7 @@ class ReplicaManagerTest {
   val time = new MockTime
   val scheduler = new MockScheduler(time)
   val metrics = new Metrics
-  var alterIsrManager: AlterIsrManager = _
+  var alterPartitionManager: AlterPartitionManager = _
   var config: KafkaConfig = _
   var quotaManager: QuotaManagers = _
 
@@ -91,7 +91,7 @@ class ReplicaManagerTest {
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     config = KafkaConfig.fromProps(props)
-    alterIsrManager = mock(classOf[AlterIsrManager])
+    alterPartitionManager = mock(classOf[AlterPartitionManager])
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
   }
 
@@ -114,7 +114,7 @@ class ReplicaManagerTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterPartitionManager)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -141,7 +141,7 @@ class ReplicaManagerTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterPartitionManager)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -165,7 +165,7 @@ class ReplicaManagerTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager,
+      alterPartitionManager = alterPartitionManager,
       threadNamePrefix = Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
@@ -220,7 +220,7 @@ class ReplicaManagerTest {
       quotaManagers = quotaManager,
       metadataCache = metadataCache,
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterPartitionManager)
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -741,8 +741,8 @@ class ReplicaManagerTest {
 
       assertTrue(partition.getReplica(1).isDefined)
       val followerReplica = partition.getReplica(1).get
-      assertEquals(-1L, followerReplica.logStartOffset)
-      assertEquals(-1L, followerReplica.logEndOffset)
+      assertEquals(-1L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(-1L, followerReplica.stateSnapshot.logEndOffset)
 
       // Leader appends some data
       for (i <- 1 to 5) {
@@ -774,8 +774,8 @@ class ReplicaManagerTest {
       )
 
       assertTrue(successfulFetch.isDefined)
-      assertEquals(0L, followerReplica.logStartOffset)
-      assertEquals(0L, followerReplica.logEndOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logEndOffset)
 
 
       // Next we receive an invalid request with a higher fetch offset, but an old epoch.
@@ -797,8 +797,8 @@ class ReplicaManagerTest {
       )
 
       assertTrue(successfulFetch.isDefined)
-      assertEquals(0L, followerReplica.logStartOffset)
-      assertEquals(0L, followerReplica.logEndOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logEndOffset)
 
       // Next we receive an invalid request with a higher fetch offset, but a diverging epoch.
       // We expect that the replica state does not get updated.
@@ -819,8 +819,8 @@ class ReplicaManagerTest {
       )
 
       assertTrue(successfulFetch.isDefined)
-      assertEquals(0L, followerReplica.logStartOffset)
-      assertEquals(0L, followerReplica.logEndOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logStartOffset)
+      assertEquals(0L, followerReplica.stateSnapshot.logEndOffset)
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2022,7 +2022,7 @@ class ReplicaManagerTest {
       brokerTopicStats = mockBrokerTopicStats,
       metadataCache = metadataCache,
       logDirFailureChannel = mockLogDirFailureChannel,
-      alterIsrManager = alterIsrManager,
+      alterPartitionManager = alterPartitionManager,
       delayedProducePurgatoryParam = Some(mockProducePurgatory),
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
@@ -2217,7 +2217,7 @@ class ReplicaManagerTest {
       quotaManagers = quotaManager,
       metadataCache = metadataCache,
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager,
+      alterPartitionManager = alterPartitionManager,
       delayedProducePurgatoryParam = Some(mockProducePurgatory),
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
@@ -2462,7 +2462,7 @@ class ReplicaManagerTest {
       brokerTopicStats = brokerTopicStats1,
       metadataCache = metadataCache0,
       logDirFailureChannel = new LogDirFailureChannel(config0.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterPartitionManager)
     val rm1 = new ReplicaManager(
       metrics = metrics,
       config = config1,
@@ -2473,7 +2473,7 @@ class ReplicaManagerTest {
       brokerTopicStats = brokerTopicStats2,
       metadataCache = metadataCache1,
       logDirFailureChannel = new LogDirFailureChannel(config1.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterPartitionManager)
 
     (rm0, rm1)
   }
@@ -2723,7 +2723,7 @@ class ReplicaManagerTest {
         quotaManagers = quotaManager,
         metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-        alterIsrManager = alterIsrManager) {
+        alterPartitionManager = alterPartitionManager) {
         override def getPartitionOrException(topicPartition: TopicPartition): Partition = {
           throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
         }

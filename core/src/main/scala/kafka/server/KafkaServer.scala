@@ -140,7 +140,7 @@ class KafkaServer(
 
   var clientToControllerChannelManager: BrokerToControllerChannelManager = null
 
-  var alterIsrManager: AlterIsrManager = null
+  var alterIsrManager: AlterPartitionManager = null
 
   var kafkaScheduler: KafkaScheduler = null
 
@@ -311,7 +311,7 @@ class KafkaServer(
 
         // Start alter partition manager based on the IBP version
         alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
-          AlterIsrManager(
+          AlterPartitionManager(
             config = config,
             metadataCache = metadataCache,
             scheduler = kafkaScheduler,
@@ -321,7 +321,7 @@ class KafkaServer(
             brokerEpochSupplier = () => kafkaController.brokerEpoch
           )
         } else {
-          AlterIsrManager(kafkaScheduler, time, zkClient)
+          AlterPartitionManager(kafkaScheduler, time, zkClient)
         }
         alterIsrManager.start()
 
@@ -479,7 +479,7 @@ class KafkaServer(
       quotaManagers = quotaManagers,
       metadataCache = metadataCache,
       logDirFailureChannel = logDirFailureChannel,
-      alterIsrManager = alterIsrManager,
+      alterPartitionManager = alterIsrManager,
       brokerTopicStats = brokerTopicStats,
       isShuttingDown = isShuttingDown,
       zkClient = Some(zkClient),
