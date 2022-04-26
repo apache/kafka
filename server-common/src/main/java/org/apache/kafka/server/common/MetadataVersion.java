@@ -151,7 +151,6 @@ public enum MetadataVersion {
     // Support for leader recovery for unclean leader election (KIP-704)
     IBP_3_2_IV0(4),
 
-    // KRaft GA
     IBP_3_3_IV0(5);
 
     private final Optional<Short> metadataVersion;
