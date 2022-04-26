@@ -68,7 +68,6 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -84,8 +83,6 @@ import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -93,116 +90,14 @@ import java.util.function.Supplier;
  */
 public class TransactionManager {
     private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
-    private static final int NO_LAST_ACKED_SEQUENCE_NUMBER = -1;
+    static final int NO_LAST_ACKED_SEQUENCE_NUMBER = -1;
 
     private final Logger log;
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
 
-    private static class TopicPartitionBookkeeper {
-
-        private final Map<TopicPartition, TopicPartitionEntry> topicPartitions = new HashMap<>();
-
-        private TopicPartitionEntry getPartition(TopicPartition topicPartition) {
-            TopicPartitionEntry ent = topicPartitions.get(topicPartition);
-            if (ent == null)
-                throw new IllegalStateException("Trying to get the sequence number for " + topicPartition +
-                        ", but the sequence number was never set for this partition.");
-            return ent;
-        }
-
-        private TopicPartitionEntry getOrCreatePartition(TopicPartition topicPartition) {
-            return topicPartitions.computeIfAbsent(topicPartition, tp -> new TopicPartitionEntry());
-        }
-
-        private boolean contains(TopicPartition topicPartition) {
-            return topicPartitions.containsKey(topicPartition);
-        }
-
-        private void reset() {
-            topicPartitions.clear();
-        }
-
-        private OptionalLong lastAckedOffset(TopicPartition topicPartition) {
-            TopicPartitionEntry entry = topicPartitions.get(topicPartition);
-            if (entry != null && entry.lastAckedOffset != ProduceResponse.INVALID_OFFSET)
-                return OptionalLong.of(entry.lastAckedOffset);
-            else
-                return OptionalLong.empty();
-        }
-
-        private OptionalInt lastAckedSequence(TopicPartition topicPartition) {
-            TopicPartitionEntry entry = topicPartitions.get(topicPartition);
-            if (entry != null && entry.lastAckedSequence != NO_LAST_ACKED_SEQUENCE_NUMBER)
-                return OptionalInt.of(entry.lastAckedSequence);
-            else
-                return OptionalInt.empty();
-        }
-
-        private void startSequencesAtBeginning(TopicPartition topicPartition, ProducerIdAndEpoch newProducerIdAndEpoch) {
-            final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
-            TopicPartitionEntry topicPartitionEntry = getPartition(topicPartition);
-            topicPartitionEntry.resetSequenceNumbers(inFlightBatch -> {
-                inFlightBatch.resetProducerState(newProducerIdAndEpoch, sequence.value, inFlightBatch.isTransactional());
-                sequence.value += inFlightBatch.recordCount;
-            });
-            topicPartitionEntry.producerIdAndEpoch = newProducerIdAndEpoch;
-            topicPartitionEntry.nextSequence = sequence.value;
-            topicPartitionEntry.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
-        }
-    }
-
-    private static class TopicPartitionEntry {
-
-        // The producer id/epoch being used for a given partition.
-        private ProducerIdAndEpoch producerIdAndEpoch;
-
-        // The base sequence of the next batch bound for a given partition.
-        private int nextSequence;
-
-        // The sequence number of the last record of the last ack'd batch from the given partition. When there are no
-        // in flight requests for a partition, the lastAckedSequence(topicPartition) == nextSequence(topicPartition) - 1.
-        private int lastAckedSequence;
-
-        // Keep track of the in flight batches bound for a partition, ordered by sequence. This helps us to ensure that
-        // we continue to order batches by the sequence numbers even when the responses come back out of order during
-        // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
-        // (either successfully or through a fatal failure).
-        private SortedSet<ProducerBatch> inflightBatchesBySequence;
-
-        // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
-        // responses which are due to the retention period elapsing, and those which are due to actual lost data.
-        private long lastAckedOffset;
-
-        // `inflightBatchesBySequence` should only have batches with the same producer id and producer
-        // epoch, but there is an edge case where we may remove the wrong batch if the comparator
-        // only takes `baseSequence` into account.
-        // See https://github.com/apache/kafka/pull/12096#pullrequestreview-955554191 for details.
-        private static final Comparator<ProducerBatch> PRODUCER_BATCH_COMPARATOR =
-            Comparator.comparingLong(ProducerBatch::producerId)
-                .thenComparingInt(ProducerBatch::producerEpoch)
-                .thenComparingInt(ProducerBatch::baseSequence);
-
-        TopicPartitionEntry() {
-            this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
-            this.nextSequence = 0;
-            this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
-            this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
-            this.inflightBatchesBySequence = new TreeSet<>(PRODUCER_BATCH_COMPARATOR);
-        }
-
-        void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
-            TreeSet<ProducerBatch> newInflights = new TreeSet<>(PRODUCER_BATCH_COMPARATOR);
-            for (ProducerBatch inflightBatch : inflightBatchesBySequence) {
-                resetSequence.accept(inflightBatch);
-                newInflights.add(inflightBatch);
-            }
-            inflightBatchesBySequence = newInflights;
-        }
-    }
-
-    private final TopicPartitionBookkeeper topicPartitionBookkeeper;
+    private final TxnPartitionBookkeeper topicPartitionBookkeeper;
 
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
 
@@ -320,7 +215,7 @@ public class TransactionManager {
         this.partitionsWithUnresolvedSequences = new HashMap<>();
         this.partitionsToRewriteSequences = new HashSet<>();
         this.retryBackoffMs = retryBackoffMs;
-        this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
+        this.topicPartitionBookkeeper = new TxnPartitionBookkeeper();
         this.apiVersions = apiVersions;
     }
 
