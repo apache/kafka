@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.record.RecordVersion;
 
@@ -44,144 +43,130 @@ import org.apache.kafka.common.record.RecordVersion;
  * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
  */
 public enum MetadataVersion {
-    IBP_0_8_0(-1),
-    IBP_0_8_1(-1),
-    IBP_0_8_2(-1),
-    IBP_0_9_0(-1),
+    IBP_0_8_0(-1, "0.8.0", ""),
+    IBP_0_8_1(-1, "0.8.1", ""),
+    IBP_0_8_2(-1, "0.8.2", ""),
+    IBP_0_9_0(-1, "0.9.0", ""),
 
     // 0.10.0-IV0 is introduced for KIP-31/32 which changes the message format.
-    IBP_0_10_0_IV0(-1),
+    IBP_0_10_0_IV0(-1, "0.10.0", "IV0"),
 
     // 0.10.0-IV1 is introduced for KIP-36(rack awareness) and KIP-43(SASL handshake).
-    IBP_0_10_0_IV1(-1),
+    IBP_0_10_0_IV1(-1, "0.10.0", "IV1"),
 
     // introduced for JoinGroup protocol change in KIP-62
-    IBP_0_10_1_IV0(-1),
+    IBP_0_10_1_IV0(-1, "0.10.1", "IV0"),
 
     // 0.10.1-IV1 is introduced for KIP-74(fetch response size limit).
-    IBP_0_10_1_IV1(-1),
+    IBP_0_10_1_IV1(-1, "0.10.1", "IV1"),
 
     // introduced ListOffsetRequest v1 in KIP-79
-    IBP_0_10_1_IV2(-1),
+    IBP_0_10_1_IV2(-1, "0.10.1", "IV2"),
 
     // introduced UpdateMetadataRequest v3 in KIP-103
-    IBP_0_10_2_IV0(-1),
+    IBP_0_10_2_IV0(-1, "0.10.2", "IV0"),
 
     // KIP-98 (idempotent and transactional producer support)
-    IBP_0_11_0_IV0(-1),
+    IBP_0_11_0_IV0(-1, "0.11.0", "IV0"),
 
     // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
-    IBP_0_11_0_IV1(-1),
+    IBP_0_11_0_IV1(-1, "0.11.0", "IV1"),
 
     // Introduced leader epoch fetches to the replica fetcher via KIP-101
-    IBP_0_11_0_IV2(-1),
+    IBP_0_11_0_IV2(-1, "0.11.0", "IV2"),
 
     // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
-    IBP_1_0_IV0(-1),
+    IBP_1_0_IV0(-1, "1.0", "IV0"),
 
     // Introduced DeleteGroupsRequest V0 via KIP-229, plus KIP-227 incremental fetch requests,
     // and KafkaStorageException for fetch requests.
-    IBP_1_1_IV0(-1),
+    IBP_1_1_IV0(-1, "1.1", "IV0"),
 
     // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279 (Fix log divergence between leader and follower after fast leader fail over)
-    IBP_2_0_IV0(-1),
+    IBP_2_0_IV0(-1, "2.0", "IV0"),
 
     // Several request versions were bumped due to KIP-219 (Improve quota communication)
-    IBP_2_0_IV1(-1),
+    IBP_2_0_IV1(-1, "2.0", "IV1"),
 
     // Introduced new schemas for group offset (v2) and group metadata (v2) (KIP-211)
-    IBP_2_1_IV0(-1),
+    IBP_2_1_IV0(-1, "2.1", "IV0"),
 
     // New Fetch, OffsetsForLeaderEpoch, and ListOffsets schemas (KIP-320)
-    IBP_2_1_IV1(-1),
+    IBP_2_1_IV1(-1, "2.1", "IV1"),
 
     // Support ZStandard Compression Codec (KIP-110)
-    IBP_2_1_IV2(-1),
+    IBP_2_1_IV2(-1, "2.1", "IV2"),
 
     // Introduced broker generation (KIP-380), and
     // LeaderAdnIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
-    IBP_2_2_IV0(-1),
+    IBP_2_2_IV0(-1, "2.2", "IV0"),
 
     // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)
-    IBP_2_2_IV1(-1),
+    IBP_2_2_IV1(-1, "2.2", "IV1"),
 
     // Introduced static membership.
-    IBP_2_3_IV0(-1),
+    IBP_2_3_IV0(-1, "2.3", "IV0"),
 
     // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
-    IBP_2_3_IV1(-1),
+    IBP_2_3_IV1(-1, "2.3", "IV1"),
 
     // Add adding_replicas and removing_replicas fields to LeaderAndIsrRequest
-    IBP_2_4_IV0(-1),
+    IBP_2_4_IV0(-1, "2.4", "IV0"),
 
     // Flexible version support in inter-broker APIs
-    IBP_2_4_IV1(-1),
+    IBP_2_4_IV1(-1, "2.4", "IV1"),
 
     // No new APIs, equivalent to 2.4-IV1
-    IBP_2_5_IV0(-1),
+    IBP_2_5_IV0(-1, "2.5", "IV0"),
 
     // Introduced StopReplicaRequest V3 containing the leader epoch for each partition (KIP-570)
-    IBP_2_6_IV0(-1),
+    IBP_2_6_IV0(-1, "2.6", "IV0"),
 
     // Introduced feature versioning support (KIP-584)
-    IBP_2_7_IV0(-1),
+    IBP_2_7_IV0(-1, "2.7", "IV0"),
 
     // Bup Fetch protocol for Raft protocol (KIP-595)
-    IBP_2_7_IV1(-1),
+    IBP_2_7_IV1(-1, "2.7", "IV1"),
 
     // Introduced AlterPartition (KIP-497)
-    IBP_2_7_IV2(-1),
+    IBP_2_7_IV2(-1, "2.7", "IV2"),
 
     // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
-    IBP_2_8_IV0(-1),
+    IBP_2_8_IV0(-1, "2.8", "IV0"),
 
     // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
-    IBP_2_8_IV1(-1),
+    IBP_2_8_IV1(-1, "2.8", "IV1"),
 
     // Introduce AllocateProducerIds (KIP-730)
-    IBP_3_0_IV0(1),
+    IBP_3_0_IV0(1, "3.0", "IV0"),
 
     // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
     // Assume message format version is 3.0 (KIP-724)
-    IBP_3_0_IV1(2),
+    IBP_3_0_IV1(2, "3.0", "IV1"),
 
     // Adds topic IDs to Fetch requests/responses (KIP-516)
-    IBP_3_1_IV0(3),
+    IBP_3_1_IV0(3, "3.1", "IV0"),
 
     // Support for leader recovery for unclean leader election (KIP-704)
-    IBP_3_2_IV0(4),
+    IBP_3_2_IV0(4, "3.2", "IV0"),
 
-    IBP_3_3_IV0(5);
+    IBP_3_3_IV0(5, "3.3", "IV0");
 
     private final Optional<Short> metadataVersion;
     private final String shortVersion;
     private final String version;
 
-    MetadataVersion(int metadataVersion) {
+    MetadataVersion(int metadataVersion, String shortVersion, String subVersion) {
         if (metadataVersion > 0) {
             this.metadataVersion = Optional.of((short) metadataVersion);
         } else {
             this.metadataVersion = Optional.empty();
         }
-
-        Pattern versionPattern = Pattern.compile("^IBP_([\\d_]+)(?:IV(\\d))?");
-        Matcher matcher = versionPattern.matcher(this.name());
-        if (matcher.find()) {
-            String withoutIV = matcher.group(1);
-            // remove any trailing underscores
-            if (withoutIV.endsWith("_")) {
-                withoutIV = withoutIV.substring(0, withoutIV.length() - 1);
-            }
-            shortVersion = withoutIV.replace("_", ".");
-
-            if (matcher.group(2) != null) { // versions less than IBP_0_10_0_IV0 do not have IVs
-                version = String.format("%s-IV%s", shortVersion, matcher.group(2));
-            } else {
-                version = shortVersion;
-            }
+        this.shortVersion = shortVersion;
+        if (subVersion.equals("")) {
+            this.version = shortVersion;
         } else {
-            throw new IllegalArgumentException("Metadata version: " + this.name() + " does not fit "
-                + "the accepted pattern.");
+            this.version = String.format("%s-%s", shortVersion, subVersion);
         }
     }
 
@@ -235,38 +220,18 @@ public enum MetadataVersion {
     static {
         {
             IBP_VERSIONS = new HashMap<>();
-            Pattern versionPattern = Pattern.compile("^IBP_([\\d_]+)(?:IV(\\d))?");
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
-            for (MetadataVersion version : MetadataVersion.values()) {
-                Matcher matcher = versionPattern.matcher(version.name());
-                if (matcher.find()) {
-                    String withoutIV = matcher.group(1);
-                    // remove any trailing underscores
-                    if (withoutIV.endsWith("_")) {
-                        withoutIV = withoutIV.substring(0, withoutIV.length() - 1);
-                    }
-                    String shortVersion = withoutIV.replace("_", ".");
-
-                    String normalizedVersion;
-                    if (matcher.group(2) != null) {
-                        normalizedVersion = String.format("%s-IV%s", shortVersion, matcher.group(2));
+            for (MetadataVersion metadataVersion : MetadataVersion.values()) {
+                maxInterVersion.compute(metadataVersion.shortVersion, (__, currentMetadataVersion) -> {
+                    if (currentMetadataVersion == null) {
+                        return metadataVersion;
+                    } else if (metadataVersion.compareTo(currentMetadataVersion) > 0) {
+                        return metadataVersion;
                     } else {
-                        normalizedVersion = shortVersion;
+                        return currentMetadataVersion;
                     }
-                    maxInterVersion.compute(shortVersion, (__, currentVersion) -> {
-                        if (currentVersion == null) {
-                            return version;
-                        } else if (version.compareTo(currentVersion) > 0) {
-                            return version;
-                        } else {
-                            return currentVersion;
-                        }
-                    });
-                    IBP_VERSIONS.put(normalizedVersion, version);
-                } else {
-                    throw new IllegalArgumentException("Metadata version: " + version.name() + " does not fit "
-                            + "any of the accepted patterns.");
-                }
+                });
+                IBP_VERSIONS.put(metadataVersion.version, metadataVersion);
             }
             IBP_VERSIONS.putAll(maxInterVersion);
         }

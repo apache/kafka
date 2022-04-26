@@ -148,9 +148,6 @@ class MetadataVersionTest {
 
         assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3"));
         assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
-
-
-
     }
 
     @Test
