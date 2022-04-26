@@ -116,8 +116,8 @@ class KafkaServerTest extends QuorumTestHarness {
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV1")
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
-    server.replicaManager.alterIsrManager match {
-      case _: ZkIsrManager =>
+    server.replicaManager.alterPartitionManager match {
+      case _: ZkAlterPartitionManager =>
       case _ => fail("Should use ZK for ISR manager in versions before 2.7-IV2")
     }
     server.shutdown()
@@ -129,8 +129,8 @@ class KafkaServerTest extends QuorumTestHarness {
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.toString)
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
-    server.replicaManager.alterIsrManager match {
-      case _: DefaultAlterIsrManager =>
+    server.replicaManager.alterPartitionManager match {
+      case _: DefaultAlterPartitionManager =>
       case _ => fail("Should use AlterIsr for ISR manager in versions after 2.7-IV2")
     }
     server.shutdown()

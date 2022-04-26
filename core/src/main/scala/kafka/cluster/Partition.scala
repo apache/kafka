@@ -46,9 +46,9 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
-trait IsrChangeListener {
-  def markExpand(): Unit
-  def markShrink(): Unit
+trait AlterPartitionListener {
+  def markIsrExpand(): Unit
+  def markIsrShrink(): Unit
   def markFailed(): Unit
 }
 
@@ -72,12 +72,12 @@ object Partition extends KafkaMetricsGroup {
             time: Time,
             replicaManager: ReplicaManager): Partition = {
 
-    val isrChangeListener = new IsrChangeListener {
-      override def markExpand(): Unit = {
+    val isrChangeListener = new AlterPartitionListener {
+      override def markIsrExpand(): Unit = {
         replicaManager.isrExpandRate.mark()
       }
 
-      override def markShrink(): Unit = {
+      override def markIsrShrink(): Unit = {
         replicaManager.isrShrinkRate.mark()
       }
 
@@ -95,11 +95,11 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      isrChangeListener = isrChangeListener,
+      alterPartitionListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
-      alterIsrManager = replicaManager.alterIsrManager)
+      alterIsrManager = replicaManager.alterPartitionManager)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -235,11 +235,11 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                isrChangeListener: IsrChangeListener,
+                alterPartitionListener: AlterPartitionListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                alterIsrManager: AlterPartitionManager) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -1417,14 +1417,14 @@ class Partition(val topicPartition: TopicPartition,
    * to the KRaft metadata log).
    *
    * @param proposedIsrState The ISR state change that was requested
-   * @param error The error returned from [[AlterIsrManager]]
+   * @param error The error returned from [[AlterPartitionManager]]
    * @return true if the `AlterPartition` request should be retried, false otherwise
    */
   private def handleAlterPartitionError(
     proposedIsrState: PendingPartitionChange,
     error: Errors
   ): Boolean = {
-    isrChangeListener.markFailed()
+    alterPartitionListener.markFailed()
     error match {
       case Errors.OPERATION_NOT_ATTEMPTED =>
         // Since the operation was not attempted, it is safe to reset back to the committed state.
@@ -1465,11 +1465,11 @@ class Partition(val topicPartition: TopicPartition,
     // Success from controller, still need to check a few things
     if (leaderAndIsr.leaderEpoch != leaderEpoch) {
       debug(s"Ignoring new ISR $leaderAndIsr since we have a stale leader epoch $leaderEpoch.")
-      isrChangeListener.markFailed()
+      alterPartitionListener.markFailed()
       false
     } else if (leaderAndIsr.partitionEpoch < partitionEpoch) {
       debug(s"Ignoring new ISR $leaderAndIsr since we have a newer version $partitionEpoch.")
-      isrChangeListener.markFailed()
+      alterPartitionListener.markFailed()
       false
     } else {
       // This is one of two states:
@@ -1482,8 +1482,8 @@ class Partition(val topicPartition: TopicPartition,
       info(s"ISR updated to ${partitionState.isr.mkString(",")} and version updated to $partitionEpoch")
 
       proposedIsrState match {
-        case PendingExpandIsr(_, _, _) => isrChangeListener.markExpand()
-        case PendingShrinkIsr(_, _, _) => isrChangeListener.markShrink()
+        case PendingExpandIsr(_, _, _) => alterPartitionListener.markIsrExpand()
+        case PendingShrinkIsr(_, _, _) => alterPartitionListener.markIsrShrink()
       }
 
       // we may need to increment high watermark since ISR could be down to 1

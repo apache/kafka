@@ -253,11 +253,11 @@ class PartitionLockTest extends Logging {
   private def setupPartitionWithMocks(logManager: LogManager): Partition = {
     val leaderEpoch = 1
     val brokerId = 0
-    val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
+    val isrChangeListener: AlterPartitionListener = mock(classOf[AlterPartitionListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
-    val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
+    val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 
     logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,

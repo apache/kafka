@@ -49,7 +49,7 @@ import scala.jdk.CollectionConverters._
  * Note that ISR state changes can still be initiated by the controller and sent to the partitions via LeaderAndIsr
  * requests.
  */
-trait AlterIsrManager {
+trait AlterPartitionManager {
   def start(): Unit = {}
 
   def shutdown(): Unit = {}
@@ -61,12 +61,14 @@ trait AlterIsrManager {
   ): CompletableFuture[LeaderAndIsr]
 }
 
-case class AlterIsrItem(topicPartition: TopicPartition,
-                        leaderAndIsr: LeaderAndIsr,
-                        future: CompletableFuture[LeaderAndIsr],
-                        controllerEpoch: Int) // controllerEpoch needed for Zk impl
+case class AlterPartitionItem(
+  topicPartition: TopicPartition,
+  leaderAndIsr: LeaderAndIsr,
+  future: CompletableFuture[LeaderAndIsr],
+  controllerEpoch: Int // controllerEpoch needed for `ZkAlterPartitionManager`
+)
 
-object AlterIsrManager {
+object AlterPartitionManager {
 
   /**
    * Factory to AlterPartition based implementation, used when IBP >= 2.7-IV2
@@ -79,7 +81,7 @@ object AlterIsrManager {
     metrics: Metrics,
     threadNamePrefix: Option[String],
     brokerEpochSupplier: () => Long
-  ): AlterIsrManager = {
+  ): AlterPartitionManager = {
     val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
 
     val channelManager = BrokerToControllerChannelManager(
@@ -91,7 +93,7 @@ object AlterIsrManager {
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )
-    new DefaultAlterIsrManager(
+    new DefaultAlterPartitionManager(
       controllerChannelManager = channelManager,
       scheduler = scheduler,
       time = time,
@@ -108,23 +110,23 @@ object AlterIsrManager {
     scheduler: Scheduler,
     time: Time,
     zkClient: KafkaZkClient
-  ): AlterIsrManager = {
-    new ZkIsrManager(scheduler, time, zkClient)
+  ): AlterPartitionManager = {
+    new ZkAlterPartitionManager(scheduler, time, zkClient)
   }
 
 }
 
-class DefaultAlterIsrManager(
+class DefaultAlterPartitionManager(
   val controllerChannelManager: BrokerToControllerChannelManager,
   val scheduler: Scheduler,
   val time: Time,
   val brokerId: Int,
   val brokerEpochSupplier: () => Long,
   ibpVersion: ApiVersion
-) extends AlterIsrManager with Logging with KafkaMetricsGroup {
+) extends AlterPartitionManager with Logging with KafkaMetricsGroup {
 
   // Used to allow only one pending ISR update per partition (visible for testing)
-  private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
+  private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterPartitionItem] = new ConcurrentHashMap[TopicPartition, AlterPartitionItem]()
 
   // Used to allow only one in-flight request at a time
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
@@ -143,8 +145,8 @@ class DefaultAlterIsrManager(
     controllerEpoch: Int
   ): CompletableFuture[LeaderAndIsr] = {
     val future = new CompletableFuture[LeaderAndIsr]()
-    val alterIsrItem = AlterIsrItem(topicPartition, leaderAndIsr, future, controllerEpoch)
-    val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
+    val alterPartitionItem = AlterPartitionItem(topicPartition, leaderAndIsr, future, controllerEpoch)
+    val enqueued = unsentIsrUpdates.putIfAbsent(alterPartitionItem.topicPartition, alterPartitionItem) == null
     if (enqueued) {
       maybePropagateIsrChanges()
     } else {
@@ -158,9 +160,9 @@ class DefaultAlterIsrManager(
     // Send all pending items if there is not already a request in-flight.
     if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
       // Copy current unsent ISRs but don't remove from the map, they get cleared in the response handler
-      val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
-      unsentIsrUpdates.values.forEach(item => inflightAlterIsrItems.append(item))
-      sendRequest(inflightAlterIsrItems.toSeq)
+      val inflightAlterPartitionItems = new ListBuffer[AlterPartitionItem]()
+      unsentIsrUpdates.values.forEach(item => inflightAlterPartitionItems.append(item))
+      sendRequest(inflightAlterPartitionItems.toSeq)
     }
   }
 
@@ -170,8 +172,8 @@ class DefaultAlterIsrManager(
     }
   }
 
-  private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
-    val message = buildRequest(inflightAlterIsrItems)
+  private def sendRequest(inflightAlterPartitionItems: Seq[AlterPartitionItem]): Unit = {
+    val message = buildRequest(inflightAlterPartitionItems)
     debug(s"Sending AlterPartition to controller $message")
 
     // We will not timeout AlterPartition request, instead letting it retry indefinitely
@@ -192,7 +194,7 @@ class DefaultAlterIsrManager(
               Errors.UNSUPPORTED_VERSION
             } else {
               val body = response.responseBody().asInstanceOf[AlterPartitionResponse]
-              handleAlterPartitionResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+              handleAlterPartitionResponse(body, message.brokerEpoch, inflightAlterPartitionItems)
             }
           } finally {
             // clear the flag so future requests can proceed
@@ -216,16 +218,16 @@ class DefaultAlterIsrManager(
       })
   }
 
-  private def buildRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): AlterPartitionRequestData = {
+  private def buildRequest(inflightAlterPartitionItems: Seq[AlterPartitionItem]): AlterPartitionRequestData = {
     val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(brokerEpochSupplier.apply())
 
-      inflightAlterIsrItems.groupBy(_.topicPartition.topic).foreach { case (topic, items) => 
+      inflightAlterPartitionItems.groupBy(_.topicPartition.topic).foreach { case (topic, items) =>
       val topicData = new AlterPartitionRequestData.TopicData()
         .setName(topic)
       message.topics.add(topicData)
-      items.foreach { item => 
+      items.foreach { item =>
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
@@ -245,7 +247,7 @@ class DefaultAlterIsrManager(
   def handleAlterPartitionResponse(
     alterPartitionResp: AlterPartitionResponse,
     sentBrokerEpoch: Long,
-    inflightAlterIsrItems: Seq[AlterIsrItem]
+    inflightAlterPartitionItems: Seq[AlterPartitionItem]
   ): Errors = {
     val data = alterPartitionResp.data
 
@@ -291,21 +293,21 @@ class DefaultAlterIsrManager(
         // Iterate across the items we sent rather than what we received to ensure we run the callback even if a
         // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
         // the leaderIsrUpdateLock write lock in Partition#sendAlterPartitionRequest
-        inflightAlterIsrItems.foreach { inflightAlterIsr =>
-          partitionResponses.get(inflightAlterIsr.topicPartition) match {
+        inflightAlterPartitionItems.foreach { inflightAlterPartition =>
+          partitionResponses.get(inflightAlterPartition.topicPartition) match {
             case Some(leaderAndIsrOrError) =>
               try {
                 leaderAndIsrOrError match {
-                  case Left(error) => inflightAlterIsr.future.completeExceptionally(error.exception)
-                  case Right(leaderAndIsr) => inflightAlterIsr.future.complete(leaderAndIsr)
+                  case Left(error) => inflightAlterPartition.future.completeExceptionally(error.exception)
+                  case Right(leaderAndIsr) => inflightAlterPartition.future.complete(leaderAndIsr)
                 }
               } finally {
                 // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-                unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
+                unsentIsrUpdates.remove(inflightAlterPartition.topicPartition)
               }
             case None =>
               // Don't remove this partition from the update map so it will get re-sent
-              warn(s"Partition ${inflightAlterIsr.topicPartition} was sent but not included in the response")
+              warn(s"Partition ${inflightAlterPartition.topicPartition} was sent but not included in the response")
           }
         }
 

@@ -20,13 +20,13 @@ package org.apache.kafka.jmh.partition;
 import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.IsrChangeListener;
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.LogOffsetMetadata;
@@ -121,12 +121,12 @@ public class UpdateFollowerFetchStateBenchmark {
             .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
-        IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
-        AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
+        AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
+        AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(topicPartition, 100,
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-                isrChangeListener, delayedOperations,
-                Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
+                alterPartitionListener, delayedOperations,
+                Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
         partition.makeLeader(partitionState, offsetCheckpoints, topicId);
     }
 

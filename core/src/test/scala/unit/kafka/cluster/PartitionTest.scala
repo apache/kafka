@@ -1734,7 +1734,7 @@ class PartitionTest extends AbstractPartitionTest {
       .when(kafkaZkClient)
       .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(1), any())
 
-    val zkIsrManager = AlterIsrManager(scheduler, time, kafkaZkClient)
+    val zkIsrManager = AlterPartitionManager(scheduler, time, kafkaZkClient)
     zkIsrManager.start()
 
     val partition = new Partition(topicPartition,
@@ -1963,8 +1963,8 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
-      mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
+      new SystemTime(), mock(classOf[AlterPartitionListener]), mock(classOf[DelayedOperations]),
+      mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterPartitionManager]))
 
     val replicas = Seq(0, 1, 2, 3)
     val isr = Set(0, 1, 2, 3)

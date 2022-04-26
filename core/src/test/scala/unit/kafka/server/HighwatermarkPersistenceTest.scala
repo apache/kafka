@@ -72,7 +72,7 @@ class HighwatermarkPersistenceTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
       logDirFailureChannel = logDirFailureChannels.head,
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -129,7 +129,7 @@ class HighwatermarkPersistenceTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
       logDirFailureChannel = logDirFailureChannels.head,
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

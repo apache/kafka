@@ -21,7 +21,7 @@ import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
@@ -88,7 +88,7 @@ public class CheckpointBench {
     private QuotaFactory.QuotaManagers quotaManagers;
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
-    private AlterIsrManager alterIsrManager;
+    private AlterPartitionManager alterPartitionManager;
 
 
     @SuppressWarnings("deprecation")
@@ -117,7 +117,7 @@ public class CheckpointBench {
                         this.metrics,
                         this.time, "");
 
-        this.alterIsrManager = TestUtils.createAlterIsrManager();
+        this.alterPartitionManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManagerBuilder().
             setConfig(brokerProperties).
             setMetrics(metrics).
@@ -128,7 +128,7 @@ public class CheckpointBench {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(metadataCache).
             setLogDirFailureChannel(failureChannel).
-            setAlterIsrManager(alterIsrManager).
+            setAlterPartitionManager(alterPartitionManager).
             build();
         replicaManager.startup();
 
