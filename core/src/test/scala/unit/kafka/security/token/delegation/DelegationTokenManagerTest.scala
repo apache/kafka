@@ -223,10 +223,13 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
     val config = KafkaConfig.fromProps(props)
 
+    val requester1 = SecurityUtils.parseKafkaPrincipal("User:requester1")
+
     val owner1 = SecurityUtils.parseKafkaPrincipal("User:owner1")
     val owner2 = SecurityUtils.parseKafkaPrincipal("User:owner2")
     val owner3 = SecurityUtils.parseKafkaPrincipal("User:owner3")
     val owner4 = SecurityUtils.parseKafkaPrincipal("User:owner4")
+    val owner5 = SecurityUtils.parseKafkaPrincipal("User:owner5")
 
     val renewer1 = SecurityUtils.parseKafkaPrincipal("User:renewer1")
     val renewer2 = SecurityUtils.parseKafkaPrincipal("User:renewer2")
@@ -252,31 +255,37 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
     tokenManager.createToken(owner4, owner4, List(owner1, renewer4), 2 * 60 * 60 * 1000L, createTokenResultCallBack)
 
-    assert(tokenManager.getAllTokenInformation.size == 4 )
+    tokenManager.createToken(requester1, owner5, List(renewer1), 1 * 60 * 60 * 1000L, createTokenResultCallBack)
+
+    assertEquals(5, tokenManager.getAllTokenInformation.size)
 
     //get tokens non-exiting owner
     var  tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(SecurityUtils.parseKafkaPrincipal("User:unknown")))
-    assert(tokens.size == 0)
+    assertEquals(0, tokens.size)
 
     //get all tokens for  empty owner list
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List())
-    assert(tokens.size == 0)
+    assertEquals(0, tokens.size)
 
     //get all tokens for owner1
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1))
-    assert(tokens.size == 2)
+    assertEquals(2, tokens.size)
 
     //get all tokens for owner1
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, null)
-    assert(tokens.size == 2)
+    assertEquals(2, tokens.size)
 
     //get all tokens for unknown owner
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, SecurityUtils.parseKafkaPrincipal("User:unknown"), null)
-    assert(tokens.size == 0)
+    assertEquals(0, tokens.size)
 
     //get all tokens for multiple owners (owner1, renewer4) and without permission for renewer4
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1, renewer4))
-    assert(tokens.size == 2)
+    assertEquals(2, tokens.size)
+
+    // get tokens for owner5 with requester1
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession, requester1, List(owner5))
+    assertEquals(1, tokens.size)
 
     def createAcl(aclBinding: AclBinding): Unit = {
       val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0).toCompletableFuture.get
@@ -287,22 +296,22 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId3, LITERAL),
       new AccessControlEntry(owner1.toString, WildcardHost, DESCRIBE, ALLOW)))
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1, renewer4))
-    assert(tokens.size == 3)
+    assertEquals(3, tokens.size)
 
     //get all tokens for renewer4 which is a renewer principal for some tokens
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer4, List(renewer4))
-    assert(tokens.size == 2)
+    assertEquals(2, tokens.size)
 
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and without permissions for renewer3
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
-    assert(tokens.size == 1)
+    assertEquals(1, tokens.size)
 
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and with permissions
     hostSession = Session(renewer2, InetAddress.getByName("192.168.1.1"))
     createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId2, LITERAL),
       new AccessControlEntry(renewer2.toString, WildcardHost, DESCRIBE, ALLOW)))
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
-    assert(tokens.size == 2)
+    assertEquals(2, tokens.size)
 
     aclAuthorizer.close()
   }
