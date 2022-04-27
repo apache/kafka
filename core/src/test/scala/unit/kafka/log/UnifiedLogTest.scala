@@ -3410,6 +3410,27 @@ class UnifiedLogTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion))
   }
 
+  def testBackgroundDeletionWithIOException(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments, "The number of segments should be 1")
+
+    // Delete the underlying directory to trigger a KafkaStorageException
+    val dir = log.dir
+    Utils.delete(dir)
+    dir.createNewFile()
+
+    var kafkaStorageExceptionCaptured = false
+    try {
+      log.delete()
+    } catch {
+      case _: KafkaStorageException =>
+        kafkaStorageExceptionCaptured = true
+    }
+    assertTrue(kafkaStorageExceptionCaptured)
+    assertTrue(log.logDirFailureChannel.hasOfflineLogDir(tmpDir.toString))
+  }
+
   /**
    * test renaming a log's dir without reinitialization, which is the case during topic deletion
    */
