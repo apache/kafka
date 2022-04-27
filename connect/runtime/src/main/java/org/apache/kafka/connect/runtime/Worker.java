@@ -225,11 +225,17 @@ public class Worker {
         workerConfigTransformer.close();
         executor.shutdown();
         try {
+            // Wait a while for existing tasks to terminate
             if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                executor.shutdownNow();
+                executor.shutdownNow(); //cancel current executing threads
+                // Wait a while for tasks to respond to being cancelled
+                if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+                    log.error("Pool did not terminate");
             }
         } catch (InterruptedException e) {
-            executor.shutdownNow();
+            executor.shutdownNow(); // (Re-)Cancel if current thread also interrupted
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
         }
     }
 

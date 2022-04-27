@@ -1205,7 +1205,7 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         verify(executorService, times(1)).shutdown();
         verify(executorService, times(1)).shutdownNow();
-        verify(executorService, times(1)).awaitTermination(1000L, TimeUnit.MILLISECONDS);
+        verify(executorService, times(2)).awaitTermination(1000L, TimeUnit.MILLISECONDS);
         verifyNoMoreInteractions(executorService);
 
     }
