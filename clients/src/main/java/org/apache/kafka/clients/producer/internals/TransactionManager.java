@@ -175,8 +175,14 @@ public class TransactionManager {
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
         private long lastAckedOffset;
 
+        // `inflightBatchesBySequence` should only have batches with the same producer id and producer
+        // epoch, but there is an edge case where we may remove the wrong batch if the comparator
+        // only takes `baseSequence` into account.
+        // See https://github.com/apache/kafka/pull/12096#pullrequestreview-955554191 for details.
         private static final Comparator<ProducerBatch> PRODUCER_BATCH_COMPARATOR =
-            Comparator.comparingInt(ProducerBatch::producerEpoch).thenComparingInt(ProducerBatch::baseSequence);
+            Comparator.comparingLong(ProducerBatch::producerId)
+                .thenComparing(ProducerBatch::producerEpoch)
+                .thenComparingInt(ProducerBatch::baseSequence);
 
         TopicPartitionEntry() {
             this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
