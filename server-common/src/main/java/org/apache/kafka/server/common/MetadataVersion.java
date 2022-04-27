@@ -205,13 +205,10 @@ public enum MetadataVersion {
 
     public RecordVersion recordVersion() {
         if (this.isLessThan(IBP_0_10_0_IV0)) {
-            // IBPs less than IBP_0_10_0_IV0 use Record Version V0
             return RecordVersion.V0;
         } else if (this.isLessThan(IBP_0_11_0_IV0)) {
-            // IBPs >= IBP_0_10_0_IV0 and less than IBP_0_11_0_IV0 use V1
             return RecordVersion.V1;
         } else {
-            // all greater IBPs use V2
             return RecordVersion.V2;
         }
     }
