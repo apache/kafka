@@ -230,7 +230,7 @@ public class Worker {
                 executor.shutdownNow(); //cancel current executing threads
                 // Wait a while for tasks to respond to being cancelled
                 if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
-                    log.error("Pool did not terminate");
+                    log.error("Executor did not terminate in time");
             }
         } catch (InterruptedException e) {
             executor.shutdownNow(); // (Re-)Cancel if current thread also interrupted
