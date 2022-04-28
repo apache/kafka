@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, Properties}
-
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
@@ -34,6 +33,7 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -2615,13 +2615,7 @@ class ReplicaManagerTest {
 
   @Test
   def testStopReplicaWithDeletePartitionAndExistingPartitionAndNewerLeaderEpochAndIOException(): Unit = {
-    // 1. Even though we are trying to trigger an IOException by deleting the underlying log directory,
-    // the foreground deletion of a replica no longer reads from the underlying directory, and thus
-    // should trigger no exceptions. It means the stopReplica operation running the foreground
-    // deletion should be able to finish without any errors.
-    // 2. During the background deletion, a FileSystemException will be triggered when we try
-    // to delete the log segments, which is then converted to a KafkaStorageException.
-    testStopReplicaWithExistingPartition(2, true, true, Errors.NONE)
+    testStopReplicaWithExistingPartition(2, true, true, Errors.KAFKA_STORAGE_ERROR)
   }
 
   @Test
@@ -2689,10 +2683,11 @@ class ReplicaManagerTest {
     assertEquals(Some(1L), readLogStartOffsetCheckpoint().get(tp0))
 
     if (throwIOException) {
-      // Delete the underlying directory to trigger an KafkaStorageException
-      val dir = partition.log.get.dir
-      Utils.delete(dir)
-      dir.createNewFile()
+      // Replace underlying PartitionMetadataFile with a mock which thrown
+      // a KafkaStorageException when maybeFlush is called.
+      val mockPartitionMetadataFile = mock(classOf[PartitionMetadataFile])
+      when(mockPartitionMetadataFile.maybeFlush()).thenThrow(new KafkaStorageException())
+      partition.log.get.partitionMetadataFile = Some(mockPartitionMetadataFile)
     }
 
     val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
