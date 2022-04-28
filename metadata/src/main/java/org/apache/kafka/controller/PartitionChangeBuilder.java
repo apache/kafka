@@ -244,7 +244,7 @@ public class PartitionChangeBuilder {
      * We need to bump the leader epoch if:
      * 1. The leader changed, or
      * 2. The new ISR does not contain all the nodes that the old ISR did, or
-     * 3. The new replia list does not contain all the nodes that the old replia list did.
+     * 3. The new replica list does not contain all the nodes that the old replica list did.
      *
      * Changes that do NOT fall in any of these categories will increase the partition epoch, but
      * not the leader epoch. Note that if the leader epoch increases, the partition epoch will
