@@ -47,6 +47,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -267,13 +268,13 @@ public class TransactionalMessageCopier {
         long remaining,
         String transactionalId
     ) {
-        Map<String, Object> statusData = new HashMap<>();
-        statusData.put("stage", stage);
+        Map<String, Object> statusData = new LinkedHashMap<>();
         statusData.put("transactionalId", transactionalId);
+        statusData.put("stage", stage);
+        statusData.put("time", FORMAT.format(new Date()));
         statusData.put("totalProcessed", totalProcessed);
         statusData.put("consumed", consumedSinceLastRebalanced);
         statusData.put("remaining", remaining);
-        statusData.put("time", FORMAT.format(new Date()));
         return toJsonString(statusData);
     }
 
