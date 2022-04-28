@@ -733,12 +733,18 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       killBroker(0)
       val aliveServers = brokers.filterNot(_.config.brokerId == 0)
       TestUtils.waitForPartitionMetadata(aliveServers, underMinIsrTopic, 0)
-      val output = TestUtils.grabConsoleOutput(
-        topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
+      var output = ""
+      TestUtils.waitUntilTrue(
+        () => {
+          output = TestUtils.grabConsoleOutput(
+            topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
+          2 == output.split("\n").length
+        }, "Couldn't get topics with under-min-isr partitions"
+      )
       val rows = output.split("\n")
+      assertEquals(2, rows.length)
       assertTrue(rows(0).startsWith(s"\tTopic: $underMinIsrTopic"))
       assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"))
-      assertEquals(2, rows.length)
     } finally {
       restartDeadBrokers()
     }
