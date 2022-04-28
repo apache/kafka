@@ -129,7 +129,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -1099,7 +1098,7 @@ public class KafkaProducerTest {
         producer.send(record);
 
         verify(interceptors).onSend(record);
-        verify(interceptors).onSendError(eq(record), isNull(), notNull());
+        verify(interceptors).onSendError(eq(record), notNull(), notNull());
 
         producer.close(Duration.ofMillis(0));
     }
@@ -2074,7 +2073,8 @@ public class KafkaProducerTest {
                 futureRecordMetadata,
                 false,
                 false,
-                false);
+                false,
+                0);
         });
 
         return futureRecordMetadata;
@@ -2131,7 +2131,8 @@ public class KafkaProducerTest {
                 null,
                 false,
                 false,
-                true);
+                true,
+                0);
         });
 
         when(ctx.accumulator.append(
@@ -2154,7 +2155,8 @@ public class KafkaProducerTest {
                 futureRecordMetadata,
                 false,
                 true,
-                false);
+                false,
+                0);
         });
 
         return futureRecordMetadata;

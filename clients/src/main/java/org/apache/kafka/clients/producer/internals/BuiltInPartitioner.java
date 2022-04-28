@@ -16,20 +16,12 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.DefaultRecord;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,8 +37,6 @@ import java.util.function.Supplier;
 public class BuiltInPartitioner {
     private final String topic;
     private final int stickyBatchSize;
-    private final CompressionType compression;
-    private final ApiVersions apiVersions;
 
     private volatile PartitionLoadStats partitionLoadStats = null;
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
@@ -59,17 +49,10 @@ public class BuiltInPartitioner {
      *
      * @param topic The topic
      * @param stickyBatchSize How much to produce to partition before switch
-     * @param compression The compression codec for the records
-     * @param apiVersions Request API versions for current connected brokers
      */
-    public BuiltInPartitioner(String topic,
-                              int stickyBatchSize,
-                              CompressionType compression,
-                              ApiVersions apiVersions) {
+    public BuiltInPartitioner(String topic, int stickyBatchSize) {
         this.topic = topic;
         this.stickyBatchSize = stickyBatchSize;
-        this.compression = compression;
-        this.apiVersions = apiVersions;
     }
 
     /**
@@ -128,47 +111,65 @@ public class BuiltInPartitioner {
     }
 
     /**
-     * Calculate the partition trying to optimize for batching and broker load.
-     * We keep track of bytes produced to partition and switch to a new one only after a certain amount of
-     * bytes has been produced (a.k.a. "sticky" partitioning logic).
+     * Peek currently chosen sticky partition.  This method works in conjunction with {@link #isPartitionChanged}
+     * and {@link #updatePartitionInfo}.  The workflow is the following:
      *
-     * @param key The record key
-     * @param value The record value
-     * @param headers The record header
-     * @param byteSizeStatsMap The map partition -> byte size stats
-     * @param cluster The cluster information
-     * @return The partition to use for this record
+     * 1. peekCurrentPartitionInfo is called to know which partition to lock.
+     * 2. Lock partition's batch queue.
+     * 3. isPartitionChanged under lock to make sure that nobody raced us.
+     * 4. Append data to buffer.
+     * 5. updatePartitionInfo to update produced bytes and maybe switch partition.
+     *
+     *  It's important that steps 3-5 are under partition's batch queue lock.
+     *
+     * @param cluster The cluster information (needed if there is no current partition)
+     * @return sticky partition info object
      */
-    public int partition(byte[] key, byte[] value, Header[] headers,
-                         ConcurrentMap<Integer, PartitionByteSizeStats> byteSizeStatsMap, Cluster cluster) {
-        // Loop to retry if our atomic ops are raced.
-        while (true) {
-            StickyPartitionInfo partitionInfo = stickyPartitionInfo.get();
-            if (partitionInfo == null || partitionInfo.producedBytes.get() >= stickyBatchSize) {
-                // The partition has exceeded the "stickiness" limit, need to switch.
-                int partition = nextPartition(cluster);
-                StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(partition);
-                if (!stickyPartitionInfo.compareAndSet(partitionInfo, newPartitionInfo)) {
-                    // We've got raced, retry.
-                    continue;
-                }
-                partitionInfo = newPartitionInfo;
-            }
+    StickyPartitionInfo peekCurrentPartitionInfo(Cluster cluster) {
+        StickyPartitionInfo partitionInfo = stickyPartitionInfo.get();
+        if (partitionInfo != null)
+            return partitionInfo;
 
-            // Try to update bookkeeping information for the partition.
-            final int recordSize = estimateRecordSize(byteSizeStatsMap.get(partitionInfo.index), key, value, headers);
-            final int prevProducedBytes = partitionInfo.producedBytes.getAndAdd(recordSize);
+        // We're the first to create it.
+        int partition = nextPartition(cluster);
+        partitionInfo = new StickyPartitionInfo(partition);
+        if (stickyPartitionInfo.compareAndSet(null, partitionInfo))
+            return partitionInfo;
 
-            // We need to check if a concurrent thread has raced us and exceeded the "stickiness" limit
-            // between the check and update.  For example:
-            //  1. Thread1 notices partition1 is under limit, proceeds to use it.
-            //  2. Thread2 notices partition1 is under limit, proceeds to use it.
-            //  3. Thread1 updates the bookkeeping, drives partition1 over the limit.
-            //  4. Thread2 updates the bookkeeping, sees that the partition1 is over the limit, retries.
-            if (prevProducedBytes < stickyBatchSize)
-                return partitionInfo.index;
+        // Someone has raced us.
+        return stickyPartitionInfo.get();
+    }
 
-            // We've got raced, retry.
+    /**
+     * Check if partition is changed by a concurrent thread.  NOTE this function needs to be called under
+     * the partition's batch queue lock.
+     *
+     * @param partitionInfo The sticky partition info object returned by peekCurrentPartitionInfo
+     * @return true if sticky partition object is changed (race condition)
+     */
+    boolean isPartitionChanged(StickyPartitionInfo partitionInfo) {
+        return partitionInfo != null && stickyPartitionInfo.get() != partitionInfo;
+    }
+
+    /**
+     * Update partition info with the number of bytes appended and maybe switch partition.
+     * NOTE this function needs to be called under the partition's batch queue lock.
+     *
+     * @param partitionInfo The sticky partition info object returned by peekCurrentPartitionInfo
+     * @param appendedBytes The number of bytes appended to this partition
+     * @param cluster The cluster information
+     */
+    void updatePartitionInfo(StickyPartitionInfo partitionInfo, int appendedBytes, Cluster cluster) {
+        if (partitionInfo == null)
+            return;
+
+        assert partitionInfo == stickyPartitionInfo.get();
+        int producedBytes = partitionInfo.producedBytes.addAndGet(appendedBytes);
+        if (producedBytes >= stickyBatchSize) {
+            // We've produced enough to this partition, switch to next.
+            int partition = nextPartition(cluster);
+            StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(partition);
+            stickyPartitionInfo.set(newPartitionInfo);
         }
     }
 
@@ -247,45 +248,18 @@ public class BuiltInPartitioner {
     }
 
     /**
-     * Estimate the number of bytes a record would take in a batch.
-     * Note that this function has side effects.
-     * Visible for testing
-     */
-    public int estimateRecordSize(PartitionByteSizeStats byteSizeStats, byte[] key, byte[] value, Header[] headers) {
-        float estimatedCompressionRatio = CompressionRatioEstimator.estimation(topic, compression);
-        if (byteSizeStats == null) {
-            return MemoryRecordsBuilder.estimateRecordSize(apiVersions.maxUsableProduceMagic(),
-                compression, estimatedCompressionRatio, DefaultRecord.MAX_RECORD_OVERHEAD, key, value, headers);
-        }
-        // We don't really know the record size until it's serialized in a batch (and when compression
-        // is used we don't even know until the batch is closed), but the sticky partitioner keeps track
-        // of how much data each partition receives, and makes switching decision, before the record comes
-        // to the batch.  To do proper estimation we keep track of 3 things:
-        //  1. Average record overhead.
-        //  2. Expected compression ratio.
-        //  3. Batch headers.
-        //
-        // Even though this is just an estimate, the imprecision should be uniform over time, e.g. a partition that
-        // gets more batches because it's on faster broker would have the batch headers properly accounted for
-        // etc.
-        int recordSize = MemoryRecordsBuilder.estimateRecordSize(apiVersions.maxUsableProduceMagic(),
-            compression, estimatedCompressionRatio,
-            byteSizeStats.avgRecordOverhead.get().intValue(), key, value, headers);
-
-        // Note that we clear the batch headers when we get them, so this function has side effects.
-        int batchHeaderBytes = byteSizeStats.batchHeaderBytes.getAndSet(0);
-        return batchHeaderBytes + recordSize;
-    }
-
-    /**
      * Info for the current sticky partition.
      */
-    private static class StickyPartitionInfo {
-        public final int index;
-        public final AtomicInteger producedBytes = new AtomicInteger();
+    public static class StickyPartitionInfo {
+        private final int index;
+        private final AtomicInteger producedBytes = new AtomicInteger();
 
         StickyPartitionInfo(int index) {
             this.index = index;
+        }
+
+        public int partition() {
+            return index;
         }
     }
 
@@ -302,36 +276,6 @@ public class BuiltInPartitioner {
             this.cumulativeFrequencyTable = cumulativeFrequencyTable;
             this.partitionIds = partitionIds;
             this.length = length;
-        }
-    }
-
-    /**
-     * Per-partition stats that keep track of information needed to calculate accurate byte sizes.
-     * There is one stats object per partition.
-     */
-    public final static class PartitionByteSizeStats {
-        private final AtomicInteger batchHeaderBytes = new AtomicInteger(0);
-        private final AtomicReference<Double> avgRecordOverhead = new AtomicReference<>((double) DefaultRecord.MAX_RECORD_OVERHEAD);
-
-        /**
-         * Update batch stats.
-         *
-         * @param magic Max usable magic
-         * @param compression Compression type
-         */
-        public void onNewBatch(byte magic, CompressionType compression) {
-            batchHeaderBytes.addAndGet(AbstractRecords.recordBatchHeaderSizeInBytes(magic, compression));
-        }
-
-        /**
-         * Update record overhead stats.
-         *
-         * @param recordOverhead The overhead of the produced record
-         */
-        public void updateRecordOverhead(int recordOverhead) {
-            // Exponential moving average.
-            final double decayCoefficient = 0.5;
-            avgRecordOverhead.updateAndGet(v -> v * (1.0 - decayCoefficient) + recordOverhead * decayCoefficient);
         }
     }
 }

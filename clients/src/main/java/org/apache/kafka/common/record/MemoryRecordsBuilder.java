@@ -51,10 +51,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         }
     });
 
-    public static class RecordInfo {
-        public int recordOverhead = 0;
-    }
-
     private final TimestampType timestampType;
     private final CompressionType compressionType;
     // Used to hold a reference to the underlying ByteBuffer so that we can write the record batch header and access
@@ -775,23 +771,16 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * Estimate compressed record size.
-     */
-    static private int estimateCompressedBytes(CompressionType compressionType, float estimatedCompressionRatio, int sizeInBytes) {
-        if (compressionType == CompressionType.NONE) {
-            return sizeInBytes;
-        } else {
-            // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return (int) (sizeInBytes * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
-        }
-    }
-
-    /**
      * Get an estimate of the number of bytes written (based on the estimation factor hard-coded in {@link CompressionType}.
      * @return The estimated number of bytes written
      */
     private int estimatedBytesWritten() {
-        return batchHeaderSizeInBytes + estimateCompressedBytes(compressionType, estimatedCompressionRatio, uncompressedRecordsSizeInBytes);
+        if (compressionType == CompressionType.NONE) {
+            return batchHeaderSizeInBytes + uncompressedRecordsSizeInBytes;
+        } else {
+            // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
+            return batchHeaderSizeInBytes + (int) (uncompressedRecordsSizeInBytes * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
+        }
     }
 
     /**
@@ -802,44 +791,11 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * Estimate record size given the record data and various configurations and estimations.
-     */
-    public static int estimateRecordSize(byte magic,
-                                         CompressionType compressionType, float estimatedCompressionRatio,
-                                         int recordOverhead,
-                                         byte[] key, byte[] value, Header[] headers) {
-
-        ByteBuffer keyBuffer = wrapNullable(key);
-        ByteBuffer valueBuffer = wrapNullable(value);
-
-        final int recordSizeInBytes;
-        if (magic < RecordBatch.MAGIC_VALUE_V2) {
-            recordSizeInBytes = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
-        } else {
-            recordSizeInBytes = DefaultRecord.sizeInBytes(recordOverhead, keyBuffer, valueBuffer, headers);
-        }
-
-        // Note that hasRoom doesn't use compression factor when estimating size of a new record
-        // because it tries to be conservative and just apply the compression factor to the written
-        // bytes of the current batch.  Here we don't know which batch this record is going to go
-        // into, so we have to apply compression faction to the record itself.
-        return estimateCompressedBytes(compressionType, estimatedCompressionRatio, recordSizeInBytes);
-    }
-
-    /**
-     * Check if we have room for a new record containing the given key/value pair. If no records have been
-     * appended, then this returns true.  This overload takes recordInfo argument that returns record info.
-     */
-    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value, Header[] headers, RecordInfo recordInfo) {
-        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), headers, recordInfo);
-    }
-
-    /**
      * Check if we have room for a new record containing the given key/value pair. If no records have been
      * appended, then this returns true.
      */
     public boolean hasRoomFor(long timestamp, byte[] key, byte[] value, Header[] headers) {
-        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), headers, null);
+        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
     /**
@@ -850,12 +806,12 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * accurate if compression is used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
      */
-    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, RecordInfo recordInfo) {
+    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         if (isFull())
             return false;
 
         // We always allow at least one record to be appended (the ByteBufferOutputStream will grow as needed)
-        if (numRecords == 0 && recordInfo == null)
+        if (numRecords == 0)
             return true;
 
         final int recordSize;
@@ -865,12 +821,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
             recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, headers);
-            if (recordInfo != null)
-                recordInfo.recordOverhead = DefaultRecord.sizeOfRecordOverheadInBytes(nextOffsetDelta, timestampDelta);
         }
 
         // Be conservative and not take compression of the new record into consideration.
-        return numRecords == 0 || this.writeLimit >= estimatedBytesWritten() + recordSize;
+        return this.writeLimit >= estimatedBytesWritten() + recordSize;
     }
 
     public boolean isClosed() {

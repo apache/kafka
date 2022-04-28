@@ -1128,31 +1128,32 @@ public class RecordAccumulatorTest {
             assertEquals(partition1, partition[0]);
             assertEquals(1, mockRandom.get());
 
-            // Produce large record, we should exceed "sticky" limit, but stay on this partition
-            // as we switch after the "sticky" limit is exceeded.
+            // Produce large record, we should exceed "sticky" limit, but produce to this partition
+            // as we switch after the "sticky" limit is exceeded.  The partition is switched after
+            // we produce.
             byte[] largeValue = new byte[batchSize];
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition1, partition[0]);
-            assertEquals(1, mockRandom.get());
-
-            // Produce large record, we should switch to next partition.
-            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
-                callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition2, partition[0]);
             assertEquals(2, mockRandom.get());
 
             // Produce large record, we should switch to next partition.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition3, partition[0]);
+            assertEquals(partition2, partition[0]);
             assertEquals(3, mockRandom.get());
+
+            // Produce large record, we should switch to next partition.
+            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+                callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
+            assertEquals(partition3, partition[0]);
+            assertEquals(4, mockRandom.get());
 
             // Produce large record, we should switch to first partition again.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition1, partition[0]);
-            assertEquals(4, mockRandom.get());
+            assertEquals(5, mockRandom.get());
         } finally {
             BuiltInPartitioner.mockRandom = null;
         }
@@ -1232,6 +1233,10 @@ public class RecordAccumulatorTest {
             accum.updateNodeLatencyStats(0, time.milliseconds() - 200, true);
             accum.updateNodeLatencyStats(0, time.milliseconds(), false);
             accum.ready(cluster, time.milliseconds());
+
+            // Do one append, because partition gets switched after append.
+            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+                    callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
 
             for (int c = 10; c-- > 0; ) {
                 accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,

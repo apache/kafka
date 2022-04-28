@@ -540,16 +540,6 @@ public class DefaultRecord implements Record {
         return headers;
     }
 
-    public static int sizeInBytes(int recordOverhead,
-                                  ByteBuffer key,
-                                  ByteBuffer value,
-                                  Header[] headers) {
-        int keySize = key == null ? -1 : key.remaining();
-        int valueSize = value == null ? -1 : value.remaining();
-        int bodySize = sizeOfBodyInBytes(recordOverhead, keySize, valueSize, headers);
-        return bodySize + ByteUtils.sizeOfVarint(bodySize);
-    }
-
     public static int sizeInBytes(int offsetDelta,
                                   long timestampDelta,
                                   ByteBuffer key,
@@ -578,28 +568,16 @@ public class DefaultRecord implements Record {
         return sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, headers);
     }
 
-    public static int sizeOfRecordOverheadInBytes(int offsetDelta, long timestampDelta) {
-        int size = 1; // always one byte for attributes
-        size += ByteUtils.sizeOfVarint(offsetDelta);
-        size += ByteUtils.sizeOfVarlong(timestampDelta);
-        return size;
-    }
-
-    private static int sizeOfBodyInBytes(int recordOverhead,
-                                        int keySize,
-                                        int valueSize,
-                                        Header[] headers) {
-        return recordOverhead + sizeOf(keySize, valueSize, headers);
-    }
-
-
     public static int sizeOfBodyInBytes(int offsetDelta,
                                         long timestampDelta,
                                         int keySize,
                                         int valueSize,
                                         Header[] headers) {
-        int recordOverhead = sizeOfRecordOverheadInBytes(offsetDelta, timestampDelta);
-        return sizeOfBodyInBytes(recordOverhead, keySize, valueSize, headers);
+        int size = 1; // always one byte for attributes
+        size += ByteUtils.sizeOfVarint(offsetDelta);
+        size += ByteUtils.sizeOfVarlong(timestampDelta);
+        size += sizeOf(keySize, valueSize, headers);
+        return size;
     }
 
     private static int sizeOf(int keySize, int valueSize, Header[] headers) {

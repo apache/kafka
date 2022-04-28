@@ -16,21 +16,17 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
@@ -50,9 +46,6 @@ public class BuiltInPartitionerTest {
     final static String TOPIC_C = "topicC";
     final static Header[] EMPTY_HEADERS = Record.EMPTY_HEADERS;
 
-    final int nullRecordSize =  new BuiltInPartitioner("dontcare", 1, CompressionType.NONE, new ApiVersions())
-            .estimateRecordSize(null, null, null, new Header[0]);
-
     @AfterEach
     public void tearDown() {
         BuiltInPartitioner.mockRandom = null;
@@ -68,25 +61,35 @@ public class BuiltInPartitionerTest {
         Cluster testCluster = new Cluster("clusterId", asList(NODES), allPartitions,
             Collections.emptySet(), Collections.emptySet());
 
-        ConcurrentMap<Integer, BuiltInPartitioner.PartitionByteSizeStats> sizeStatsMap = new CopyOnWriteMap<>();
         // Create partitions with "sticky" batch size to accommodate 3 records.
-        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(TOPIC_A, nullRecordSize * 3, CompressionType.NONE, new ApiVersions());
+        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(TOPIC_A, 3);
 
         // Test the partition is not switched until sticky batch size is reached.
         // Mock random number generator with just sequential integer.
         AtomicInteger mockRandom = new AtomicInteger();
         BuiltInPartitioner.mockRandom = () -> mockRandom.getAndAdd(1);
 
-        int partA = builtInPartitionerA.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster);
-        assertEquals(partA, builtInPartitionerA.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster));
-        assertEquals(partA, builtInPartitionerA.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster));
+        BuiltInPartitioner.StickyPartitionInfo partitionInfo = builtInPartitionerA.peekCurrentPartitionInfo(testCluster);
+        int partA = partitionInfo.partition();
+        builtInPartitionerA.updatePartitionInfo(partitionInfo, 1, testCluster);
 
-        assertNotEquals(partA, builtInPartitionerA.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster));
+        partitionInfo = builtInPartitionerA.peekCurrentPartitionInfo(testCluster);
+        assertEquals(partA, partitionInfo.partition());
+        builtInPartitionerA.updatePartitionInfo(partitionInfo, 1, testCluster);
+
+        partitionInfo = builtInPartitionerA.peekCurrentPartitionInfo(testCluster);
+        assertEquals(partA, partitionInfo.partition());
+        builtInPartitionerA.updatePartitionInfo(partitionInfo, 1, testCluster);
+
+        // After producing 3 records, partition must've switched.
+        assertNotEquals(partA, builtInPartitionerA.peekCurrentPartitionInfo(testCluster).partition());
 
         // Check that switching works even when there is one partition.
-        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(TOPIC_B, nullRecordSize, CompressionType.NONE, new ApiVersions());
+        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(TOPIC_B, 1);
         for (int c = 10; c-- > 0; ) {
-            assertEquals(0, builtInPartitionerB.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster));
+            partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
+            assertEquals(0, partitionInfo.partition());
+            builtInPartitionerB.updatePartitionInfo(partitionInfo, 1, testCluster);
         }
     }
 
@@ -104,34 +107,48 @@ public class BuiltInPartitionerTest {
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
             Collections.emptySet(), Collections.emptySet());
 
-        ConcurrentMap<Integer, BuiltInPartitioner.PartitionByteSizeStats> sizeStatsMap = new CopyOnWriteMap<>();
         // Create partitions with "sticky" batch size to accommodate 1 record.
-        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(TOPIC_A, nullRecordSize, CompressionType.NONE, new ApiVersions());
+        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(TOPIC_A, 1);
 
         // Assure we never choose partition 1 because it is unavailable.
-        int partA = builtInPartitionerA.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster);
+        BuiltInPartitioner.StickyPartitionInfo partitionInfo = builtInPartitionerA.peekCurrentPartitionInfo(testCluster);
+        int partA = partitionInfo.partition();
+        builtInPartitionerA.updatePartitionInfo(partitionInfo, 1, testCluster);
+
         boolean foundAnotherPartA = false;
         assertNotEquals(1, partA);
         for (int aPartitions = 0; aPartitions < 100; aPartitions++) {
-            int anotherPartA = builtInPartitionerA.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster);
+            partitionInfo = builtInPartitionerA.peekCurrentPartitionInfo(testCluster);
+            int anotherPartA = partitionInfo.partition();
+            builtInPartitionerA.updatePartitionInfo(partitionInfo, 1, testCluster);
+
             assertNotEquals(1, anotherPartA);
             foundAnotherPartA = foundAnotherPartA || anotherPartA != partA;
         }
         assertTrue(foundAnotherPartA, "Expected to find partition other than " + partA);
 
-        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(TOPIC_B, nullRecordSize, CompressionType.NONE, new ApiVersions());
+        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(TOPIC_B, 1);
         // Assure we always choose partition 1 for topic B.
-        int partB = builtInPartitionerB.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster);
+        partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
+        int partB = partitionInfo.partition();
+        builtInPartitionerB.updatePartitionInfo(partitionInfo, 1, testCluster);
+
         assertEquals(1, partB);
         for (int bPartitions = 0; bPartitions < 100; bPartitions++) {
-            assertEquals(1, builtInPartitionerB.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster));
+            partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
+            assertEquals(1, partitionInfo.partition());
+            builtInPartitionerB.updatePartitionInfo(partitionInfo, 1, testCluster);
         }
 
         // Assure that we still choose the partition when there are no partitions available.
-        BuiltInPartitioner builtInPartitionerC = new BuiltInPartitioner(TOPIC_C, nullRecordSize, CompressionType.NONE, new ApiVersions());
-        int partC = builtInPartitionerC.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster);
+        BuiltInPartitioner builtInPartitionerC = new BuiltInPartitioner(TOPIC_C, 1);
+        partitionInfo = builtInPartitionerC.peekCurrentPartitionInfo(testCluster);
+        int partC = partitionInfo.partition();
+        builtInPartitionerC.updatePartitionInfo(partitionInfo, 1, testCluster);
         assertEquals(0, partC);
-        partC = builtInPartitionerC.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster);
+
+        partitionInfo = builtInPartitionerC.peekCurrentPartitionInfo(testCluster);
+        partC = partitionInfo.partition();
         assertEquals(0, partC);
     }
 
@@ -141,7 +158,7 @@ public class BuiltInPartitionerTest {
         AtomicInteger mockRandom = new AtomicInteger();
         BuiltInPartitioner.mockRandom = () -> mockRandom.getAndAdd(1);
 
-        BuiltInPartitioner builtInPartitioner = new BuiltInPartitioner(TOPIC_A, nullRecordSize, CompressionType.NONE, new ApiVersions());
+        BuiltInPartitioner builtInPartitioner = new BuiltInPartitioner(TOPIC_A, 1);
 
         // Simulate partition queue sizes.
         int[] queueSizes = {5, 0, 3, 0, 1};
@@ -158,7 +175,6 @@ public class BuiltInPartitionerTest {
 
         Cluster testCluster = new Cluster("clusterId", asList(NODES), allPartitions,
             Collections.emptySet(), Collections.emptySet());
-        ConcurrentMap<Integer, BuiltInPartitioner.PartitionByteSizeStats> sizeStatsMap = new CopyOnWriteMap<>();
 
         // Issue a certain number of partition calls to validate that the partitions would be
         // distributed with frequencies that are reciprocal to the queue sizes.  The number of
@@ -169,7 +185,9 @@ public class BuiltInPartitionerTest {
         int[] frequencies = new int[queueSizes.length];
 
         for (int i = 0; i < numberOfIterations; i++) {
-            ++frequencies[builtInPartitioner.partition(null, null, EMPTY_HEADERS, sizeStatsMap, testCluster)];
+            BuiltInPartitioner.StickyPartitionInfo partitionInfo = builtInPartitioner.peekCurrentPartitionInfo(testCluster);
+            ++frequencies[partitionInfo.partition()];
+            builtInPartitioner.updatePartitionInfo(partitionInfo, 1, testCluster);
         }
 
         // Verify that frequencies are reciprocal of queue sizes.
