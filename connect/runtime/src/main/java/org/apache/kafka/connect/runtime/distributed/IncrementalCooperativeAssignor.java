@@ -45,7 +45,6 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
 import static org.apache.kafka.connect.util.ConnectUtils.combineCollections;
@@ -108,10 +107,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Max config offset root: {}, local snapshot config offsets root: {}",
                   maxOffset, coordinator.configSnapshot().offset());
 
-        short protocolVersion = memberConfigs.values().stream()
-            .allMatch(state -> state.assignment().version() == CONNECT_PROTOCOL_V2)
-                ? CONNECT_PROTOCOL_V2
-                : CONNECT_PROTOCOL_V1;
+        short protocolVersion = ConnectProtocolCompatibility.fromProtocol(protocol).protocolVersion();
 
         Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);
         if (leaderOffset == null) {
@@ -119,7 +115,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     memberConfigs.keySet(), Assignment.CONFIG_MISMATCH,
                     leaderId, memberConfigs.get(leaderId).url(), maxOffset,
                     ClusterAssignment.EMPTY, 0, protocolVersion);
-            return serializeAssignments(assignments);
+            return serializeAssignments(assignments, protocolVersion);
         }
         return performTaskAssignment(leaderId, leaderOffset, memberConfigs, coordinator, protocolVersion);
     }
@@ -185,7 +181,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                         delay, protocolVersion);
 
         log.debug("Actual assignments: {}", assignments);
-        return serializeAssignments(assignments);
+        return serializeAssignments(assignments, protocolVersion);
     }
 
     // Visible for testing
@@ -336,13 +332,16 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Incremental connector assignments: {}", incrementalConnectorAssignments);
         log.debug("Incremental task assignments: {}", incrementalTaskAssignments);
 
+        Map<String, Collection<String>> revokedConnectors = transformValues(toRevoke, ConnectorsAndTasks::connectors);
+        Map<String, Collection<ConnectorTaskId>> revokedTasks = transformValues(toRevoke, ConnectorsAndTasks::tasks);
+
         return new ClusterAssignment(
                 incrementalConnectorAssignments,
                 incrementalTaskAssignments,
-                transformValues(toRevoke, ConnectorsAndTasks::connectors),
-                transformValues(toRevoke, ConnectorsAndTasks::tasks),
-                connectorAssignments,
-                taskAssignments
+                revokedConnectors,
+                revokedTasks,
+                diff(connectorAssignments, revokedConnectors),
+                diff(taskAssignments, revokedTasks)
         );
     }
 
@@ -676,12 +675,13 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * @param assignments the map of worker assignments
      * @return the serialized map of assignments to workers
      */
-    protected Map<String, ByteBuffer> serializeAssignments(Map<String, ExtendedAssignment> assignments) {
+    protected Map<String, ByteBuffer> serializeAssignments(Map<String, ExtendedAssignment> assignments, short protocolVersion) {
+        boolean sessioned = protocolVersion >= CONNECT_PROTOCOL_V2;
         return assignments.entrySet()
                 .stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
-                    e -> IncrementalCooperativeConnectProtocol.serializeAssignment(e.getValue())));
+                    e -> IncrementalCooperativeConnectProtocol.serializeAssignment(e.getValue(), sessioned)));
     }
 
     private static ConnectorsAndTasks diff(ConnectorsAndTasks base,
@@ -700,7 +700,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Map<String, Collection<T>> incremental = new HashMap<>();
         for (Map.Entry<String, Collection<T>> entry : base.entrySet()) {
             List<T> values = new ArrayList<>(entry.getValue());
-            values.removeAll(toSubtract.get(entry.getKey()));
+            values.removeAll(toSubtract.getOrDefault(entry.getKey(), Collections.emptySet()));
             incremental.put(entry.getKey(), values);
         }
         return incremental;

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.RequestFuture;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -27,6 +28,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -47,8 +49,16 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class IncrementalCooperativeAssignorTest {
+
+    // Offset isn't used in most tests but is required for creating a config snapshot object,
+    // so just use some arbitrary constant for that
+    private static final long CONFIG_OFFSET = 618;
 
     private Map<String, Integer> connectors;
     private Time time;
@@ -887,6 +897,107 @@ public class IncrementalCooperativeAssignorTest {
         assertEmptyAssignment();
     }
 
+    @Test
+    public void testLeaderStateUpdated() {
+        // Sanity test to make sure that the coordinator's leader state is actually updated after a rebalance
+        connectors.clear();
+        String leader = "followMe";
+        Map<String, ExtendedWorkerState> workerStates = new HashMap<>();
+        workerStates.put(leader, new ExtendedWorkerState("followMe:618", CONFIG_OFFSET, ExtendedAssignment.empty()));
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+        when(coordinator.configSnapshot()).thenReturn(configState());
+        assignor.performTaskAssignment(
+                leader,
+                CONFIG_OFFSET,
+                workerStates,
+                coordinator,
+                IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2
+        );
+        verify(coordinator).leaderState(notNull());
+    }
+
+    @Test
+    public void testProtocolV1() {
+        // Sanity test to make sure that the right protocol is chosen during the assignment
+        connectors.clear();
+        String leader = "followMe";
+        List<JoinGroupResponseData.JoinGroupResponseMember> memberMetadata = new ArrayList<>();
+        ExtendedAssignment leaderAssignment = new ExtendedAssignment(
+                IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1,
+                ConnectProtocol.Assignment.NO_ERROR,
+                leader,
+                "followMe:618",
+                CONFIG_OFFSET,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                0
+        );
+        ExtendedWorkerState leaderState = new ExtendedWorkerState("followMe:618", CONFIG_OFFSET, leaderAssignment);
+        JoinGroupResponseData.JoinGroupResponseMember leaderMetadata = new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId(leader)
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(leaderState, false).array());
+        memberMetadata.add(leaderMetadata);
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+        when(coordinator.configSnapshot()).thenReturn(configState());
+        Map<String, ByteBuffer> serializedAssignments = assignor.performAssignment(
+                leader,
+                ConnectProtocolCompatibility.COMPATIBLE.protocol(),
+                memberMetadata,
+                coordinator
+        );
+        serializedAssignments.forEach((worker, serializedAssignment) -> {
+            ExtendedAssignment assignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(serializedAssignment);
+            assertEquals(
+                    "Incorrect protocol version in assignment for worker " + worker,
+                    IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1,
+                    assignment.version()
+            );
+        });
+    }
+
+    @Test
+    public void testProtocolV2() {
+        // Sanity test to make sure that the right protocol is chosen during the assignment
+        connectors.clear();
+        String leader = "followMe";
+        List<JoinGroupResponseData.JoinGroupResponseMember> memberMetadata = new ArrayList<>();
+        ExtendedAssignment leaderAssignment = new ExtendedAssignment(
+                IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2,
+                ConnectProtocol.Assignment.NO_ERROR,
+                leader,
+                "followMe:618",
+                CONFIG_OFFSET,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                0
+        );
+        ExtendedWorkerState leaderState = new ExtendedWorkerState("followMe:618", CONFIG_OFFSET, leaderAssignment);
+        JoinGroupResponseData.JoinGroupResponseMember leaderMetadata = new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId(leader)
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(leaderState, true).array());
+        memberMetadata.add(leaderMetadata);
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+        when(coordinator.configSnapshot()).thenReturn(configState());
+        Map<String, ByteBuffer> serializedAssignments = assignor.performAssignment(
+                leader,
+                ConnectProtocolCompatibility.SESSIONED.protocol(),
+                memberMetadata,
+                coordinator
+        );
+        serializedAssignments.forEach((worker, serializedAssignment) -> {
+            ExtendedAssignment assignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(serializedAssignment);
+            assertEquals(
+                    "Incorrect protocol version in assignment for worker " + worker,
+                    IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2,
+                    assignment.version()
+            );
+        });
+    }
+
     private void performStandardRebalance() {
         performRebalance(false, false);
     }
@@ -993,7 +1104,7 @@ public class IncrementalCooperativeAssignorTest {
                         connectorTaskId -> Collections.emptyMap()
                 ));
         return new ClusterConfigState(
-                16,
+                CONFIG_OFFSET,
                 null,
                 taskCounts,
                 connectorConfigs,
@@ -1010,6 +1121,19 @@ public class IncrementalCooperativeAssignorTest {
             workerAssignment.connectors().addAll(returnedAssignments.newlyAssignedConnectors(worker));
             workerAssignment.tasks().removeAll(returnedAssignments.newlyRevokedTasks(worker));
             workerAssignment.tasks().addAll(returnedAssignments.newlyAssignedTasks(worker));
+
+            assertEquals(
+                    "Complete connector assignment for worker " + worker + " does not match expectations " +
+                            "based on prior assignment and new revocations and assignments",
+                    workerAssignment.connectors(),
+                    returnedAssignments.allAssignedConnectors().get(worker)
+            );
+            assertEquals(
+                    "Complete task assignment for worker " + worker + " does not match expectations " +
+                            "based on prior assignment and new revocations and assignments",
+                    workerAssignment.tasks(),
+                    returnedAssignments.allAssignedTasks().get(worker)
+            );
         });
     }
 
