@@ -39,6 +39,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.clients.CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
+import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -425,9 +427,9 @@ public class ProducerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
-                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                                .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
-                                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                                        DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .define(SECURITY_PROVIDERS_CONFIG,
@@ -507,11 +509,18 @@ public class ProducerConfig extends AbstractConfig {
             final int inFlightConnection = this.getInt(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             if (MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < inFlightConnection) {
                 if (userConfiguredIdempotence) {
-                    throw new ConfigException("Must set " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
-                        " to use the idempotent producer.");
+                    throw new ConfigException("Must set " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most " +
+                        MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + " to use the idempotent producer.");
                 }
-                log.warn("Idempotence will be disabled because {} is set to {}, which is greater than 5. " +
-                    "Please note that in v4.0.0 and onward, this will become an error.", MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
+                log.warn("Idempotence will be disabled because {} is set to {}, which is greater than " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE +
+                    ". Please note that in v4.0.0 and onward, this will become an error.", MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
+                shouldDisableIdempotence = true;
+            }
+
+            String securityProtocol = this.getString(SECURITY_PROTOCOL_CONFIG);
+            if (!this.getString(SECURITY_PROTOCOL_CONFIG).equals(DEFAULT_SECURITY_PROTOCOL) && !userConfiguredIdempotence) {
+                log.warn("Idempotence will be disabled because {} is set to {}, and this may cause authorization error." +
+                    "Please note that in v4.0.0 and onward, this will become an error." , SECURITY_PROTOCOL_CONFIG, securityProtocol);
                 shouldDisableIdempotence = true;
             }
         }
