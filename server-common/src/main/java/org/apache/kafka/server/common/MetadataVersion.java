@@ -152,26 +152,26 @@ public enum MetadataVersion {
 
     IBP_3_3_IV0(5, "3.3", "IV0");
 
-    private final Optional<Short> metadataVersion;
-    private final String shortVersion;
-    private final String version;
+    private final Optional<Short> featureLevel;
+    private final String apacheRelease;
+    private final String name;
 
-    MetadataVersion(int metadataVersion, String shortVersion, String subVersion) {
-        if (metadataVersion > 0) {
-            this.metadataVersion = Optional.of((short) metadataVersion);
+    MetadataVersion(int featureLevel, String apacheRelease, String subVersion) {
+        if (featureLevel > 0) {
+            this.featureLevel = Optional.of((short) featureLevel);
         } else {
-            this.metadataVersion = Optional.empty();
+            this.featureLevel = Optional.empty();
         }
-        this.shortVersion = shortVersion;
-        if (subVersion.equals("")) {
-            this.version = shortVersion;
+        this.apacheRelease = apacheRelease;
+        if (subVersion.isEmpty()) {
+            this.name = apacheRelease;
         } else {
-            this.version = String.format("%s-%s", shortVersion, subVersion);
+            this.name = String.format("%s-%s", apacheRelease, subVersion);
         }
     }
 
-    public Optional<Short> metadataVersion() {
-        return metadataVersion;
+    public Optional<Short> featureLevel() {
+        return featureLevel;
     }
 
     public boolean isSaslInterBrokerHandshakeRequestEnabled() {
@@ -203,7 +203,7 @@ public enum MetadataVersion {
     }
 
 
-    public RecordVersion recordVersion() {
+    public RecordVersion highestSupportedRecordVersion() {
         if (this.isLessThan(IBP_0_10_0_IV0)) {
             return RecordVersion.V0;
         } else if (this.isLessThan(IBP_0_11_0_IV0)) {
@@ -219,32 +219,26 @@ public enum MetadataVersion {
             IBP_VERSIONS = new HashMap<>();
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
             for (MetadataVersion metadataVersion : MetadataVersion.values()) {
-                maxInterVersion.compute(metadataVersion.shortVersion, (__, currentMetadataVersion) -> {
-                    if (currentMetadataVersion == null) {
-                        return metadataVersion;
-                    } else if (metadataVersion.compareTo(currentMetadataVersion) > 0) {
-                        return metadataVersion;
-                    } else {
-                        return currentMetadataVersion;
-                    }
-                });
-                IBP_VERSIONS.put(metadataVersion.version, metadataVersion);
+                maxInterVersion.put(metadataVersion.apacheRelease, metadataVersion);
+                IBP_VERSIONS.put(metadataVersion.name, metadataVersion);
             }
             IBP_VERSIONS.putAll(maxInterVersion);
         }
     }
 
     public String shortVersion() {
-        return shortVersion;
+        return apacheRelease;
     }
 
     public String version() {
-        return version;
+        return name;
     }
 
     /**
      * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
      * "0.10.0", "0.10.0-IV1"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
+     * Note that 'misconfigured' values such as "1.0.1" will be parsed to `IBP_1_0_IV0` as we ignore anything after the first
+     * two digits for versions that don't start with "0."
      */
     public static MetadataVersion fromVersionString(String versionString) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
@@ -291,6 +285,6 @@ public enum MetadataVersion {
 
     @Override
     public String toString() {
-        return version;
+        return name;
     }
 }

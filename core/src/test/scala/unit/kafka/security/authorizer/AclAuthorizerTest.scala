@@ -716,7 +716,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   @Test
   def testThrowsOnAddPrefixedAclIfInterBrokerProtocolVersionTooLow(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(MetadataVersion.IBP_2_0_IV0))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV0))
     val e = assertThrows(classOf[ApiException],
       () => addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED)))
     assertTrue(e.getCause.isInstanceOf[UnsupportedVersionException], s"Unexpected exception $e")

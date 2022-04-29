@@ -159,7 +159,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   def remoteLogConfig = _remoteLogConfig
 
   @nowarn("cat=deprecation")
-  def recordVersion = messageFormatVersion.recordVersion
+  def recordVersion = messageFormatVersion.highestSupportedRecordVersion
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -572,7 +572,7 @@ object LogConfig {
     def shouldIgnore: Boolean = shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion)
 
     def shouldWarn: Boolean =
-      interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1) && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
+      interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1) && messageFormatVersion.highestSupportedRecordVersion.precedes(RecordVersion.V2)
 
     @nowarn("cat=deprecation")
     def topicWarningMessage(topicName: String): String = {

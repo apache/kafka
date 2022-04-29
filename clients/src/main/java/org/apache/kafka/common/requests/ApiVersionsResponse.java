@@ -275,7 +275,7 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionsResponse apiVersionsResponse(
-        Integer throttleTimeMs,
+        int throttleTimeMs,
         RecordVersion minRecordVersion,
         Features<SupportedVersionRange> latestSupportedFeatures,
         NodeApiVersions controllerApiVersions,
@@ -293,11 +293,11 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionsResponse apiVersionsResponse(
-        Integer throttleTimeMs,
+        int throttleTimeMs,
         RecordVersion minRecordVersion,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Features<FinalizedVersionRange> finalizedFeatures,
-        Long finalizedFeaturesEpoch,
+        long finalizedFeaturesEpoch,
         NodeApiVersions controllerApiVersions,
         ListenerType listenerType
     ) {

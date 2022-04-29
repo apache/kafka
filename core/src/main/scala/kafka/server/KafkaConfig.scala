@@ -2159,13 +2159,13 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     if (messageFormatVersion.shouldWarn)
       warn(messageFormatVersion.brokerWarningMessage)
 
-    val recordVersion = logMessageFormatVersion.recordVersion
-    require(interBrokerProtocolVersion.recordVersion().value >= recordVersion.value,
+    val recordVersion = logMessageFormatVersion.highestSupportedRecordVersion
+    require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= recordVersion.value,
       s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
       s"is set to version ${MetadataVersion.minSupportedFor(recordVersion).shortVersion} or higher")
 
     if (offsetsTopicCompressionCodec == ZStdCompressionCodec)
-      require(interBrokerProtocolVersion.recordVersion().value >= IBP_2_1_IV0.recordVersion().value,
+      require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= IBP_2_1_IV0.highestSupportedRecordVersion().value,
         "offsets.topic.compression.codec zstd can only be used when inter.broker.protocol.version " +
         s"is set to version ${IBP_2_1_IV0.shortVersion} or higher")
 

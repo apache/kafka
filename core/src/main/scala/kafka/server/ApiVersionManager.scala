@@ -83,7 +83,7 @@ class DefaultApiVersionManager(
     finalizedFeaturesOpt match {
       case Some(finalizedFeatures) => ApiVersionsResponse.apiVersionsResponse(
         throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
+        interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
         finalizedFeatures.features,
         finalizedFeatures.epoch,
@@ -91,7 +91,7 @@ class DefaultApiVersionManager(
         listenerType)
       case None => ApiVersionsResponse.apiVersionsResponse(
         throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
+        interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
         controllerApiVersions.orNull,
         listenerType)

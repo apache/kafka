@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.common;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
@@ -41,6 +42,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 class MetadataVersionTest {
+
+    @Test
+    public void testFeatureLevel() {
+        MetadataVersion[] metadataVersions = MetadataVersion.values();
+        int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(IBP_3_0_IV0);
+        for (int i = 0; i < firstFeatureLevelIndex; i++) {
+            assertFalse(metadataVersions[i].featureLevel().isPresent());
+        }
+        short expectedFeatureLevel = 1;
+        for (int i = firstFeatureLevelIndex; i < metadataVersions.length; i++) {
+            MetadataVersion metadataVersion = metadataVersions[i];
+            short featureLevel = metadataVersion.featureLevel().orElseThrow(() ->
+                new IllegalArgumentException(
+                    String.format("Metadata version %s must have a non-null feature level", metadataVersion.version())));
+            assertEquals(expectedFeatureLevel, featureLevel,
+                String.format("Metadata version %s should have feature level %s", metadataVersion.version(), expectedFeatureLevel));
+            expectedFeatureLevel += 1;
+        }
+    }
 
     @Test
     public void testFromVersionString() {
