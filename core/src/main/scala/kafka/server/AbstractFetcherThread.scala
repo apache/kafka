@@ -701,12 +701,18 @@ abstract class AbstractFetcherThread(name: String,
        * and the current leader's log start offset.
        */
       val leaderStartOffset = fetchEarliestOffsetFromLeader(topicPartition, currentLeaderEpoch)
-      warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
-        s"leader's start offset $leaderStartOffset")
+
       val offsetToFetch = Math.max(leaderStartOffset, replicaEndOffset)
       // Only truncate log when current leader's log start offset is greater than follower's log end offset.
-      if (leaderStartOffset > replicaEndOffset)
+      if (leaderStartOffset > replicaEndOffset) {
+        warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
+          s"leader's start offset $leaderStartOffset")
         truncateFullyAndStartAt(topicPartition, leaderStartOffset)
+      } else {
+        warn(s"Keep fetch offset for partition $topicPartition from $replicaEndOffset to $replicaEndOffset " +
+          s"because it's still between leader's start offset $leaderStartOffset and leader's end offset $leaderEndOffset")
+      }
+
 
       val initialLag = leaderEndOffset - offsetToFetch
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
