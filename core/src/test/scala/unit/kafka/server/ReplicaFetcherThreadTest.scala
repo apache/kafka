@@ -29,7 +29,6 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{FetchResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -103,7 +102,7 @@ class ReplicaFetcherThreadTest {
                                          leaderEndpointBlockingSend: BlockingSend): ReplicaFetcherThread = {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${sourceBroker.id}, fetcherId=$fetcherId] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
-    val leader = new RemoteLeaderEndPoint(leaderEndpointBlockingSend, fetchSessionHandler, brokerConfig)
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler, brokerConfig, replicaMgr, quota)
     new ReplicaFetcherThread(name,
       leader,
       sourceBroker,
@@ -111,7 +110,6 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaMgr,
       quota,
-      fetchSessionHandler,
       logContext.logPrefix)
   }
 
@@ -123,15 +121,9 @@ class ReplicaFetcherThreadTest {
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
-    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
-    val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
-    val endpoint = new ReplicaFetcherBlockingSend(brokerEndPoint, config, new Metrics, new SystemTime, 0, s"broker-${config.brokerId}-fetcher-0", logContext)
-    val leader = new RemoteLeaderEndPoint(endpoint, fetchSessionHandler, config)
-    val thread = new ReplicaFetcherThread("bob", leader, brokerEndPoint, config, failedPartitions, replicaManager, UnboundedQuota, fetchSessionHandler, logContext.logPrefix)
-
-    assertEquals(ApiKeys.FETCH.latestVersion, thread.fetchRequestVersion)
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, leader.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, leader.listOffsetRequestVersion)
+    assertEquals(ApiKeys.FETCH.latestVersion, config.fetchRequestVersion)
+    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.offsetForLeaderEpochRequestVersion)
+    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.listOffsetRequestVersion)
   }
 
   @Test
@@ -591,8 +583,8 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new ReplicaFetcherMockBlockingSend(Collections.emptyMap(), brokerEndPoint, new SystemTime())
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
-    val leader = new RemoteLeaderEndPoint(mockNetwork, fetchSessionHandler, config)
-    val thread = new ReplicaFetcherThread("bob", leader, brokerEndPoint, config, failedPartitions, replicaManager, quota, fetchSessionHandler, logContext.logPrefix) {
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config, replicaManager, quota)
+    val thread = new ReplicaFetcherThread("bob", leader, brokerEndPoint, config, failedPartitions, replicaManager, quota, logContext.logPrefix) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
     }
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialLEO), t1p1 -> initialFetchState(Some(topicId1), initialLEO)))
@@ -1048,16 +1040,17 @@ class ReplicaFetcherThreadTest {
     when(replicaQuota.isThrottled(any[TopicPartition])).thenReturn(false)
     when(log.logStartOffset).thenReturn(0)
 
-    val thread = createReplicaFetcherThread(
-      "bob",
-      0,
+    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
+    val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config, replicaManager, replicaQuota)
+    val thread = new ReplicaFetcherThread("bob",
+      leader,
       brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
       replicaQuota,
-      mockBlockingSend
-    )
+      logContext.logPrefix)
 
     val leaderEpoch = 1
 
@@ -1066,7 +1059,7 @@ class ReplicaFetcherThreadTest {
         t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
         t2p1 -> PartitionFetchState(Some(topicId2), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None))
 
-    val ResultWithPartitions(fetchRequestOpt, _) = thread.buildFetch(partitionMap)
+    val ResultWithPartitions(fetchRequestOpt, _) = thread.leader.buildFetch(partitionMap)
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequestBuilder = fetchRequestOpt.get.fetchRequest
@@ -1086,14 +1079,14 @@ class ReplicaFetcherThreadTest {
     responseData.put(tid2p1, new FetchResponseData.PartitionData())
     val fetchResponse = FetchResponse.of(Errors.NONE, 0, 123, responseData)
 
-    thread.fetchSessionHandler.handleResponse(fetchResponse, ApiKeys.FETCH.latestVersion())
+    leader.fetchSessionHandler.handleResponse(fetchResponse, ApiKeys.FETCH.latestVersion())
 
     // Remove t1p0, change the ID for t2p1, and keep t1p1 the same
     val newTopicId = Uuid.randomUuid()
     val partitionMap2 = Map(
       t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
       t2p1 -> PartitionFetchState(Some(newTopicId), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None))
-    val ResultWithPartitions(fetchRequestOpt2, _) = thread.buildFetch(partitionMap2)
+    val ResultWithPartitions(fetchRequestOpt2, _) = thread.leader.buildFetch(partitionMap2)
 
     // Since t1p1 didn't change, we drop that one
     val partitionDataMap2 = partitionMap2.drop(1).map { case (tp, state) =>

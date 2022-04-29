@@ -124,4 +124,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
   def close(): Unit = {
     networkClient.close()
   }
+
+  override def toString: String = {
+    s"ReplicaFetcherBlockingSend($sourceBroker, fetcherId=$fetcherId)"
+  }
 }

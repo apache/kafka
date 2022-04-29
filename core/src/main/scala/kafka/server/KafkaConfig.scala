@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util
 import java.util.{Collections, Locale, Properties}
-import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1, KAFKA_2_1_IV0, KAFKA_2_7_IV0, KAFKA_2_8_IV0, KAFKA_3_0_IV1}
+import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV0, KAFKA_0_10_0_IV1, KAFKA_0_10_1_IV1, KAFKA_0_10_1_IV2, KAFKA_0_11_0_IV0, KAFKA_0_11_0_IV1, KAFKA_0_9_0, KAFKA_1_1_IV0, KAFKA_2_0_IV0, KAFKA_2_0_IV1, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_1_IV2, KAFKA_2_2_IV1, KAFKA_2_3_IV1, KAFKA_2_7_IV0, KAFKA_2_7_IV1, KAFKA_2_8_IV0, KAFKA_3_0_IV1, KAFKA_3_1_IV0}
 import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
@@ -1753,6 +1753,40 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
   val interBrokerProtocolVersion = ApiVersion(interBrokerProtocolVersionString)
+
+
+  val listOffsetRequestVersion: Short = {
+    if (interBrokerProtocolVersion >= KAFKA_3_0_IV1) 7
+    else if (interBrokerProtocolVersion >= KAFKA_2_8_IV0) 6
+    else if (interBrokerProtocolVersion >= KAFKA_2_2_IV1) 5
+    else if (interBrokerProtocolVersion >= KAFKA_2_1_IV1) 4
+    else if (interBrokerProtocolVersion >= KAFKA_2_0_IV1) 3
+    else if (interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 2
+    else if (interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) 1
+    else 0
+  }
+
+  val offsetForLeaderEpochRequestVersion: Short = {
+    if (interBrokerProtocolVersion >= KAFKA_2_8_IV0) 4
+    else if (interBrokerProtocolVersion >= KAFKA_2_3_IV1) 3
+    else if (interBrokerProtocolVersion >= KAFKA_2_1_IV1) 2
+    else if (interBrokerProtocolVersion >= KAFKA_2_0_IV0) 1
+    else 0
+  }
+
+  val fetchRequestVersion: Short =
+    if (interBrokerProtocolVersion >= KAFKA_3_1_IV0) 13
+    else if (interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
+    else if (interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
+    else if (interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
+    else if (interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
+    else if (interBrokerProtocolVersion >= KAFKA_1_1_IV0) 7
+    else if (interBrokerProtocolVersion >= KAFKA_0_11_0_IV1) 5
+    else if (interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 4
+    else if (interBrokerProtocolVersion >= KAFKA_0_10_1_IV1) 3
+    else if (interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2
+    else if (interBrokerProtocolVersion >= KAFKA_0_9_0) 1
+    else 0
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)

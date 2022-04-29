@@ -121,6 +121,7 @@ public class ReplicaFetcherThreadBenchmark {
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
     private Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
+    private ReplicaQuota replicaQuota;
     private Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
 
     @Setup(Level.Trial)
@@ -233,13 +234,28 @@ public class ReplicaFetcherThreadBenchmark {
             setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
             setAlterIsrManager(TestUtils.createAlterIsrManager()).
             build();
-        fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
+        replicaQuota = new ReplicaQuota() {
+            @Override
+            public boolean isQuotaExceeded() {
+                return false;
+            }
+
+            @Override
+            public void record(long value) {
+            }
+
+            @Override
+            public boolean isThrottled(TopicPartition topicPartition) {
+                return false;
+            }
+        };
+        fetcher = new ReplicaFetcherBenchThread(config, replicaManager, replicaQuota, pool);
         fetcher.addPartitions(initialFetchStates);
         // force a pass to move partitions to fetching state. We do this in the setup phase
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched), ApiKeys.FETCH.latestVersion());
+        ((RemoteLeaderEndPoint) fetcher.leader()).fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)
@@ -290,10 +306,12 @@ public class ReplicaFetcherThreadBenchmark {
 
         ReplicaFetcherBenchThread(KafkaConfig config,
                                   ReplicaManager replicaManager,
+                                  ReplicaQuota replicaQuota,
                                   Pool<TopicPartition,
                                   Partition> partitions) {
             super("name",
                     new RemoteLeaderEndPoint(
+                            String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
                             new ReplicaFetcherBlockingSend(
                                     new BrokerEndPoint(3, "host", 3000),
                                     config,
@@ -305,7 +323,9 @@ public class ReplicaFetcherThreadBenchmark {
                             ),
                             new FetchSessionHandler(
                                     new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
-                            config
+                            config,
+                            replicaManager,
+                            replicaQuota
                     ) {
                         @Override
                         public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
@@ -336,23 +356,7 @@ public class ReplicaFetcherThreadBenchmark {
                     config,
                     new FailedPartitions(),
                     replicaManager,
-                    new ReplicaQuota() {
-                        @Override
-                        public boolean isQuotaExceeded() {
-                            return false;
-                        }
-
-                        @Override
-                        public void record(long value) {
-                        }
-
-                        @Override
-                        public boolean isThrottled(TopicPartition topicPartition) {
-                            return false;
-                        }
-                    },
-                    new FetchSessionHandler(
-                            new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
+                    replicaQuota,
                     String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)
             );
 

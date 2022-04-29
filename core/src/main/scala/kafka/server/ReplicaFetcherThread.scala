@@ -20,17 +20,9 @@ package kafka.server
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
-import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
-import kafka.utils.Implicits._
-import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.{TopicPartition, Uuid}
-
-import java.util.Optional
-import scala.collection.{Map, mutable}
-import scala.compat.java8.OptionConverters._
+import org.apache.kafka.common.TopicPartition
 
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
@@ -39,7 +31,6 @@ class ReplicaFetcherThread(name: String,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
                            quota: ReplicaQuota,
-                           private[server] val fetchSessionHandler: FetchSessionHandler,
                            logPrefix: String)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
@@ -52,27 +43,7 @@ class ReplicaFetcherThread(name: String,
 
   this.logIdent = logPrefix
 
-  // Visible for testing
-  private[server] val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_1_IV0) 13
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_1_1_IV0) 7
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV1) 5
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 4
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV1) 3
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
-    else 0
-
-  private val maxWait = brokerConfig.replicaFetchWaitMaxMs
-  private val minBytes = brokerConfig.replicaFetchMinBytes
-  private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
-  private val fetchSize = brokerConfig.replicaFetchMaxBytes
   override protected val isOffsetForLeaderEpochSupported: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
-  override protected val isTruncationOnFetchSupported = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.localLogOrException(topicPartition).latestEpoch
@@ -168,57 +139,11 @@ class ReplicaFetcherThread(name: String,
 
   def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {
     // oversized messages don't cause replication to fail from fetch request version 3 (KIP-74)
-    if (fetchRequestVersion <= 2 && records.sizeInBytes > 0 && records.validBytes <= 0)
+    if (brokerConfig.fetchRequestVersion <= 2 && records.sizeInBytes > 0 && records.validBytes <= 0)
       error(s"Replication is failing due to a message that is greater than replica.fetch.max.bytes for partition $topicPartition. " +
         "This generally occurs when the max.message.bytes has been overridden to exceed this value and a suitably large " +
         "message has also been sent. To fix this problem increase replica.fetch.max.bytes in your broker config to be " +
         "equal or larger than your settings for max.message.bytes, both at a broker and topic level.")
-  }
-
-  override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
-    val partitionsWithError = mutable.Set[TopicPartition]()
-
-    val builder = fetchSessionHandler.newBuilder(partitionMap.size, false)
-    partitionMap.forKeyValue { (topicPartition, fetchState) =>
-      // We will not include a replica in the fetch request if it should be throttled.
-      if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
-        try {
-          val logStartOffset = this.logStartOffset(topicPartition)
-          val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
-          else
-            Optional.empty[Integer]
-          builder.add(topicPartition, new FetchRequest.PartitionData(
-            fetchState.topicId.getOrElse(Uuid.ZERO_UUID),
-            fetchState.fetchOffset,
-            logStartOffset,
-            fetchSize,
-            Optional.of(fetchState.currentLeaderEpoch),
-            lastFetchedEpoch))
-        } catch {
-          case _: KafkaStorageException =>
-            // The replica has already been marked offline due to log directory failure and the original failure should have already been logged.
-            // This partition should be removed from ReplicaFetcherThread soon by ReplicaManager.handleLogDirFailure()
-            partitionsWithError += topicPartition
-        }
-      }
-    }
-
-    val fetchData = builder.build()
-    val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
-      None
-    } else {
-      val version: Short = if (fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) 12 else fetchRequestVersion
-      val requestBuilder = FetchRequest.Builder
-        .forReplica(version, brokerConfig.brokerId, maxWait, minBytes, fetchData.toSend)
-        .setMaxBytes(maxBytes)
-        .removed(fetchData.toForget)
-        .replaced(fetchData.toReplace)
-        .metadata(fetchData.metadata)
-      Some(ReplicaFetch(fetchData.sessionPartitions(), requestBuilder))
-    }
-
-    ResultWithPartitions(fetchRequestOpt, partitionsWithError)
   }
 
   /**
@@ -244,14 +169,6 @@ class ReplicaFetcherThread(name: String,
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.truncateFullyAndStartAt(offset, isFuture = false)
-  }
-
-  /**
-   *  To avoid ISR thrashing, we only throttle a replica on the follower if it's in the throttled replica list,
-   *  the quota is exceeded and the replica is not in sync.
-   */
-  private def shouldFollowerThrottle(quota: ReplicaQuota, fetchState: PartitionFetchState, topicPartition: TopicPartition): Boolean = {
-    !fetchState.isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
 }

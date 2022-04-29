@@ -81,8 +81,6 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit
 
-  protected def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]]
-
   protected def latestEpoch(topicPartition: TopicPartition): Option[Int]
 
   protected def logStartOffset(topicPartition: TopicPartition): Long
@@ -92,8 +90,6 @@ abstract class AbstractFetcherThread(name: String,
   protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch]
 
   protected val isOffsetForLeaderEpochSupported: Boolean
-
-  protected val isTruncationOnFetchSupported: Boolean
 
   override def shutdown(): Unit = {
     initiateShutdown()
@@ -114,7 +110,7 @@ abstract class AbstractFetcherThread(name: String,
 
   private def maybeFetch(): Unit = {
     val fetchRequestOpt = inLock(partitionMapLock) {
-      val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = buildFetch(partitionStates.partitionStateMap.asScala)
+      val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = leader.buildFetch(partitionStates.partitionStateMap.asScala)
 
       handlePartitionsWithErrors(partitionsWithError, "maybeFetch")
 
@@ -357,7 +353,7 @@ abstract class AbstractFetcherThread(name: String,
                         fetcherStats.byteRate.mark(validBytes)
                       }
                     }
-                    if (isTruncationOnFetchSupported) {
+                    if (leader.isTruncationOnFetchSupported) {
                       FetchResponse.divergingEpoch(partitionData).ifPresent { divergingEpoch =>
                         divergingEndOffsets += topicPartition -> new EpochEndOffset()
                           .setPartition(topicPartition.partition)
@@ -475,7 +471,7 @@ abstract class AbstractFetcherThread(name: String,
       currentState
     } else if (initialFetchState.initOffset < 0) {
       fetchOffsetAndTruncate(tp, initialFetchState.topicId, initialFetchState.currentLeaderEpoch)
-    } else if (isTruncationOnFetchSupported) {
+    } else if (leader.isTruncationOnFetchSupported) {
       // With old message format, `latestEpoch` will be empty and we use Truncating state
       // to truncate to high watermark.
       val lastFetchedEpoch = latestEpoch(tp)
@@ -530,7 +526,7 @@ abstract class AbstractFetcherThread(name: String,
         val maybeTruncationComplete = fetchOffsets.get(topicPartition) match {
           case Some(offsetTruncationState) =>
             val lastFetchedEpoch = latestEpoch(topicPartition)
-            val state = if (isTruncationOnFetchSupported || offsetTruncationState.truncationCompleted)
+            val state = if (leader.isTruncationOnFetchSupported || offsetTruncationState.truncationCompleted)
               Fetching
             else
               Truncating

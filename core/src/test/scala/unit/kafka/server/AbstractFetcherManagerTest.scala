@@ -300,6 +300,10 @@ class AbstractFetcherManagerTest {
     override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
 
     override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
+
+    override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = ResultWithPartitions(None, Set.empty)
+
+    override val isTruncationOnFetchSupported: Boolean = false
   }
 
   private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)
@@ -320,8 +324,6 @@ class AbstractFetcherManagerTest {
 
     override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {}
 
-    override protected def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = ResultWithPartitions(None, Set.empty)
-
     override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = Some(0)
 
     override protected def logStartOffset(topicPartition: TopicPartition): Long = 1
@@ -331,7 +333,6 @@ class AbstractFetcherManagerTest {
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(OffsetAndEpoch(1, 0))
 
     override protected val isOffsetForLeaderEpochSupported: Boolean = false
-    override protected val isTruncationOnFetchSupported: Boolean = false
   }
 
 }

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -24,22 +25,82 @@ import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochR
 
 import scala.collection.Map
 
+/**
+ * The LeaderEndPoint acts as an abstraction which serves all fetches from the leader
+ * for the fetcher threads.
+ */
 trait LeaderEndPoint {
 
   type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 
+  /**
+   * A boolean specifying if truncation when fetching from the leader is supported
+   */
+  def isTruncationOnFetchSupported: Boolean
+
+  /**
+   * Initiate closing access to fetches from leader.
+   */
   def initiateClose(): Unit
 
+  /**
+   * Closes access to fetches from leader.
+   */
   def close(): Unit
 
+  /**
+   * Given a fetchRequest, carries out the expected request and returns
+   * the results from fetching from the leader.
+   *
+   * @param fetchRequest The fetch request we want to carry out
+   *
+   * @return A map of topic partition -> fetch data
+   */
   def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData]
 
+  /**
+   * Fetches the log start offset of the given topic partition, at a specific
+   * leader epoch, from the leader.
+   *
+   * @param topicPartition The topic partition that we want to fetch from
+   * @param currentLeaderEpoch An int representing the current leader epoch that we want to fetch from
+   *
+   * @return A long representing the earliest offset in the leader's topic partition.
+   */
   def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
+  /**
+   * Fetches the log end offset of the given topic partition, at a specific
+   * leader epoch, from the leader.
+   *
+   * @param topicPartition The topic partition that we want to fetch from
+   * @param currentLeaderEpoch An int representing the current leader epoch that we want to fetch from
+   *
+   * @return A long representing the latest offset in the leader's topic partition.
+   */
   def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
+  /**
+   * Fetches offset for leader epoch from the leader for each given topic partition
+   *
+   * @param partitions A map of topic partition -> leader epoch of the future replica
+   *
+   * @return A map of topic partition -> end offset for a requested leader epoch
+   */
   def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
 
+  /**
+   * Builds a fetch request, given a partition map.
+   *
+   * @param partitionMap A map of topic partitions to their respective partition fetch state
+   *
+   * @return A ResultWithPartitions, used to create the fetchRequest for fetch.
+   */
+  def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]]
+
+  /**
+   * Returns a string representation of the LeaderEndPoint.
+   */
   override def toString: String = super.toString
 }

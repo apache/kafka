@@ -17,12 +17,14 @@
 
 package kafka.server
 
-import java.util.Collections
-import kafka.api.{KAFKA_0_10_1_IV2, KAFKA_0_11_0_IV0, KAFKA_2_0_IV0, KAFKA_2_0_IV1, KAFKA_2_1_IV1, KAFKA_2_2_IV1, KAFKA_2_3_IV1, KAFKA_2_8_IV0, KAFKA_3_0_IV1}
+import java.util.{Collections, Optional}
+import kafka.api.{ApiVersion, KAFKA_0_10_1_IV2}
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
 import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -30,32 +32,34 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.Map
+import scala.collection.{Map, mutable}
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 
-class RemoteLeaderEndPoint(val endpoint: BlockingSend,
-                           val fetchSessionHandler: FetchSessionHandler,
-                           val brokerConfig: KafkaConfig) extends LeaderEndPoint with Logging {
+/**
+ * Facilitates fetches from a remote replica leader.
+ *
+ * @param logPrefix The log prefix from the ReplicaFetcherThread
+ * @param endpoint A ReplicaFetcherBlockingSend
+ * @param fetchSessionHandler A FetchSessionHandler to track the partitions in the session
+ * @param brokerConfig A config file with broker related configurations
+ * @param replicaMgr A ReplicaManager
+ * @param quota The quota, used when building a fetch request
+ */
+class RemoteLeaderEndPoint(logPrefix: String,
+                           endpoint: BlockingSend,
+                           private[server] val fetchSessionHandler: FetchSessionHandler, // visible for testing
+                           brokerConfig: KafkaConfig,
+                           replicaMgr: ReplicaManager,
+                           quota: ReplicaQuota) extends LeaderEndPoint with Logging {
 
-  // Visible for testing
-  private[server] val listOffsetRequestVersion: Short = {
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV1) 7
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 6
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_2_IV1) 5
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 4
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 3
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 2
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) 1
-    else 0
-  }
+  this.logIdent = logPrefix
 
-  // Visible for testing
-  private[server] val offsetForLeaderEpochRequestVersion: Short = {
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 4
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 3
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 2
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) 1
-    else 0
-  }
+  private val maxWait = brokerConfig.replicaFetchWaitMaxMs
+  private val minBytes = brokerConfig.replicaFetchMinBytes
+  private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
+  private val fetchSize = brokerConfig.replicaFetchMaxBytes
+
+  override val isTruncationOnFetchSupported = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
 
   override def initiateClose(): Unit = endpoint.initiateClose()
 
@@ -98,7 +102,7 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
           .setTimestamp(earliestOrLatest)))
-    val requestBuilder = ListOffsetsRequest.Builder.forReplica(listOffsetRequestVersion, brokerConfig.brokerId)
+    val requestBuilder = ListOffsetsRequest.Builder.forReplica(brokerConfig.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = endpoint.sendRequest(requestBuilder)
@@ -133,7 +137,7 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
     }
 
     val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(
-      offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
+      brokerConfig.offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
     debug(s"Sending offset for leader epoch request $epochRequest")
 
     try {
@@ -158,6 +162,60 @@ class RemoteLeaderEndPoint(val endpoint: BlockingSend,
             .setErrorCode(error.code)
         }
     }
+  }
+
+  override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
+    val partitionsWithError = mutable.Set[TopicPartition]()
+
+    val builder = fetchSessionHandler.newBuilder(partitionMap.size, false)
+    partitionMap.forKeyValue { (topicPartition, fetchState) =>
+      // We will not include a replica in the fetch request if it should be throttled.
+      if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
+        try {
+          val logStartOffset = replicaMgr.localLogOrException(topicPartition).logStartOffset
+          val lastFetchedEpoch = if (isTruncationOnFetchSupported)
+            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+          else
+            Optional.empty[Integer]
+          builder.add(topicPartition, new FetchRequest.PartitionData(
+            fetchState.topicId.getOrElse(Uuid.ZERO_UUID),
+            fetchState.fetchOffset,
+            logStartOffset,
+            fetchSize,
+            Optional.of(fetchState.currentLeaderEpoch),
+            lastFetchedEpoch))
+        } catch {
+          case _: KafkaStorageException =>
+            // The replica has already been marked offline due to log directory failure and the original failure should have already been logged.
+            // This partition should be removed from ReplicaFetcherThread soon by ReplicaManager.handleLogDirFailure()
+            partitionsWithError += topicPartition
+        }
+      }
+    }
+
+    val fetchData = builder.build()
+    val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
+      None
+    } else {
+      val version: Short = if (brokerConfig.fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) 12 else brokerConfig.fetchRequestVersion
+      val requestBuilder = FetchRequest.Builder
+        .forReplica(version, brokerConfig.brokerId, maxWait, minBytes, fetchData.toSend)
+        .setMaxBytes(maxBytes)
+        .removed(fetchData.toForget)
+        .replaced(fetchData.toReplace)
+        .metadata(fetchData.metadata)
+      Some(ReplicaFetch(fetchData.sessionPartitions(), requestBuilder))
+    }
+
+    ResultWithPartitions(fetchRequestOpt, partitionsWithError)
+  }
+
+  /**
+   *  To avoid ISR thrashing, we only throttle a replica on the follower if it's in the throttled replica list,
+   *  the quota is exceeded and the replica is not in sync.
+   */
+  private def shouldFollowerThrottle(quota: ReplicaQuota, fetchState: PartitionFetchState, topicPartition: TopicPartition): Boolean = {
+    !fetchState.isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
   override def toString: String = s"RemoteLeaderEndPoint with ReplicaFetcherBlockingSend $endpoint"
