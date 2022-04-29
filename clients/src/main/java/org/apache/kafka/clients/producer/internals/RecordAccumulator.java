@@ -205,7 +205,7 @@ public class RecordAccumulator {
             // we don't have an in-progress record batch try to allocate a new batch
             if (abortOnNewBatch) {
                 // Return a result that will cause another call to append.
-                return new RecordAppendResult(null, false, false, true);
+                return RecordAppendResult.ABORT_ON_NEW_BATCH_RESULT;
             }
 
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
@@ -846,6 +846,7 @@ public class RecordAccumulator {
      * Metadata about a record just appended to the record accumulator
      */
     public final static class RecordAppendResult {
+        public static final RecordAppendResult ABORT_ON_NEW_BATCH_RESULT = new RecordAppendResult(null, false, false, true);
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;

@@ -975,7 +975,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
-                    serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
+                    serializedValue, headers, interceptCallback, remainingWaitMs, partitioner.canAbortOnNewBatch(record.partition(), serializedKey), nowMs);
 
             if (result.abortForNewBatch) {
                 int prevPartition = partition;

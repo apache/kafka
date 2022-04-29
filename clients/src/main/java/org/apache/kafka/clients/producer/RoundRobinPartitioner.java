@@ -71,4 +71,8 @@ public class RoundRobinPartitioner implements Partitioner {
 
     public void close() {}
 
+    @Override
+    public boolean canAbortOnNewBatch(Integer recordPartition, byte[] keyBytes) {
+        return false;
+    }
 }
