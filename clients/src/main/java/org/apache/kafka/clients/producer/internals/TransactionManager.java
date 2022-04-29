@@ -832,27 +832,13 @@ public class TransactionManager {
                     iter.remove();
                 } else {
                     // We would enter this branch if all in flight batches were ultimately expired in the producer.
-                    if (isTransactional()) {
-                        // For the transactional producer, we bump the epoch if possible, otherwise we transition to a fatal error
-                        String unackedMessagesErr = "The client hasn't received acknowledgment for some previously " +
-                                "sent messages and can no longer retry them. ";
-                        if (canBumpEpoch()) {
-                            epochBumpRequired = true;
-                            KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
-                                    "the transaction and continue.");
-                            transitionToAbortableError(exception);
-                        } else {
-                            KafkaException exception = new KafkaException(unackedMessagesErr + "It isn't safe to continue.");
-                            transitionToFatalError(exception);
-                        }
-                    } else {
+                    if (!isTransactional()) {
                         // For the idempotent producer, bump the epoch
                         log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
                                         "Going to bump epoch and reset sequence numbers.", topicPartition,
                                 lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER), sequenceNumber(topicPartition));
                         requestEpochBumpForPartition(topicPartition);
                     }
-
                     iter.remove();
                 }
             }
