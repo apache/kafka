@@ -1346,7 +1346,7 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<List<CreatePartitionsTopicResult>>
-            createPartitions(List<CreatePartitionsTopic> topics) {
+            createPartitions(List<CreatePartitionsTopic> topics, boolean validateOnly) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         List<CreatePartitionsTopicResult> results = new ArrayList<>();
         for (CreatePartitionsTopic topic : topics) {
@@ -1364,7 +1364,25 @@ public class ReplicationControlManager {
                 setErrorCode(apiError.error().code()).
                 setErrorMessage(apiError.message()));
         }
-        return new ControllerResult<>(records, results, true);
+        StringBuilder resultsBuilder = new StringBuilder();
+        String resultsPrefix = "";
+        for (CreatePartitionsTopicResult result : results) {
+            resultsBuilder.append(resultsPrefix).append(result.name()).append(": ");
+            Errors error = Errors.forCode(result.errorCode());
+            if (error == Errors.NONE) {
+                resultsBuilder.append("SUCCESS");
+            } else {
+                resultsBuilder.append(error).append(" (").append(result.errorMessage()).append(")");
+            }
+            resultsPrefix = ", ";
+        }
+        if (validateOnly) {
+            log.info("Validate-only CreatePartitions result(s): {}", resultsBuilder);
+            return ControllerResult.atomicOf(Collections.emptyList(), results);
+        } else {
+            log.info("CreatePartitions result(s): {}", resultsBuilder);
+            return ControllerResult.atomicOf(records, results);
+        }
     }
 
     void createPartitions(CreatePartitionsTopic topic,

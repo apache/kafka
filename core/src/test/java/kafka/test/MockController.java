@@ -410,10 +410,16 @@ public class MockController implements Controller {
         throw new UnsupportedOperationException();
     }
 
+    boolean lastCreatePartitionsValidateOnly = false;
+    public boolean isLastCreatePartitionsValidateOnly() {
+        return this.lastCreatePartitionsValidateOnly;
+    }
+
     @Override
     synchronized public CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
         ControllerRequestContext context,
-        List<CreatePartitionsTopic> topicList
+        List<CreatePartitionsTopic> topicList,
+        boolean validateOnly
     ) {
         if (!active) {
             CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();
@@ -432,6 +438,7 @@ public class MockController implements Controller {
                     setErrorMessage("No such topic as " + topic.name()));
             }
         }
+        lastCreatePartitionsValidateOnly = validateOnly;
         return CompletableFuture.completedFuture(results);
     }
 

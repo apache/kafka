@@ -242,7 +242,7 @@ public class ReplicationControlManagerTest {
                     setBrokerIds(Replicas.toList(replicas[i])));
             }
             ControllerResult<List<CreatePartitionsTopicResult>> result =
-                replicationControl.createPartitions(Collections.singletonList(topic));
+                replicationControl.createPartitions(Collections.singletonList(topic), false);
             assertEquals(1, result.response().size());
             CreatePartitionsTopicResult topicResult = result.response().get(0);
             assertEquals(name, topicResult.name());
@@ -992,9 +992,7 @@ public class ReplicationControlManagerTest {
             setName("baz").setCount(3).setAssignments(null));
         topics.add(new CreatePartitionsTopic().
             setName("quux").setCount(2).setAssignments(null));
-        ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
-            replicationControl.createPartitions(topics);
-        assertEquals(asList(new CreatePartitionsTopicResult().
+        List<CreatePartitionsTopicResult> expectedResult = asList(new CreatePartitionsTopicResult().
                 setName("foo").
                 setErrorCode(NONE.code()).
                 setErrorMessage(null),
@@ -1009,8 +1007,17 @@ public class ReplicationControlManagerTest {
             new CreatePartitionsTopicResult().
                 setName("quux").
                 setErrorCode(INVALID_PARTITIONS.code()).
-                setErrorMessage("Topic already has 2 partition(s).")),
-            createPartitionsResult.response());
+                setErrorMessage("Topic already has 2 partition(s)."));
+        ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
+            replicationControl.createPartitions(topics, true);
+        assertEquals(expectedResult, createPartitionsResult.response());
+        assertTrue(createPartitionsResult.records().isEmpty(), "Found records for validateOnly " +
+            "CreatePartitions request");
+        ctx.replay(createPartitionsResult.records());
+        createPartitionsResult = replicationControl.createPartitions(topics, false);
+        assertEquals(expectedResult, createPartitionsResult.response());
+        assertFalse(createPartitionsResult.records().isEmpty(), "Found no records for " +
+            "CreatePartitions request");
         ctx.replay(createPartitionsResult.records());
         List<CreatePartitionsTopic> topics2 = new ArrayList<>();
         topics2.add(new CreatePartitionsTopic().
@@ -1026,7 +1033,7 @@ public class ReplicationControlManagerTest {
             setName("foo2").setCount(3).setAssignments(asList(
             new CreatePartitionsAssignment().setBrokerIds(asList(2, 0)))));
         ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult2 =
-            replicationControl.createPartitions(topics2);
+            replicationControl.createPartitions(topics2, false);
         assertEquals(asList(new CreatePartitionsTopicResult().
                 setName("foo").
                 setErrorCode(NONE.code()).

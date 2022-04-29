@@ -729,17 +729,27 @@ class ControllerApisTest {
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
-    assertEquals(Set(new CreatePartitionsTopicResult().setName("foo").
-        setErrorCode(NONE.code()).
-        setErrorMessage(null),
+    request.setValidateOnly(true)
+    val expectedResult = Set(new CreatePartitionsTopicResult().setName("foo").
+      setErrorCode(NONE.code()).
+      setErrorMessage(null),
       new CreatePartitionsTopicResult().setName("bar").
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate topic name."),
       new CreatePartitionsTopicResult().setName("baz").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
-        setErrorMessage(null)),
+        setErrorMessage(null))
+    assertEquals(expectedResult,
       controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
         _ => Set("foo", "bar")).get().asScala.toSet)
+    assertTrue(controller.isLastCreatePartitionsValidateOnly)
+
+    // Remove the validateOnly flag in the request.
+    request.setValidateOnly(false)
+    assertEquals(expectedResult,
+      controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
+        _ => Set("foo", "bar")).get().asScala.toSet)
+    assertFalse(controller.isLastCreatePartitionsValidateOnly)
   }
 
   @Test
