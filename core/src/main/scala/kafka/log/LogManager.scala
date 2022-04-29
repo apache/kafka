@@ -84,7 +84,7 @@ class LogManager(logDirs: Seq[File],
   // to replace the current log of the partition after the future log catches up with the current log
   private val futureLogs = new Pool[TopicPartition, UnifiedLog]()
   // Each element in the queue contains the log object to be deleted and the time it is scheduled for deletion.
-  private val _logsToBeDeleted = new LinkedBlockingQueue[(UnifiedLog, Long)]()
+  private val logsToBeDeleted = new LinkedBlockingQueue[(UnifiedLog, Long)]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile private var _currentDefaultConfig = initialDefaultConfig
@@ -102,9 +102,6 @@ class LogManager(logDirs: Seq[File],
   }
 
   def currentDefaultConfig: LogConfig = _currentDefaultConfig
-
-  // Visible for testing
-  def logsToBeDeleted = _logsToBeDeleted
 
   def liveLogDirs: Seq[File] = {
     if (_liveLogDirs.size == logDirs.size)
@@ -253,11 +250,11 @@ class LogManager(logDirs: Seq[File],
   }
 
   private def addLogToBeDeleted(log: UnifiedLog): Unit = {
-    this._logsToBeDeleted.add((log, time.milliseconds()))
+    this.logsToBeDeleted.add((log, time.milliseconds()))
   }
 
   // Only for testing
-  private[log] def hasLogsToBeDeleted: Boolean = !_logsToBeDeleted.isEmpty
+  private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
   private[log] def loadLog(logDir: File,
                            hadCleanShutdown: Boolean,
@@ -956,15 +953,15 @@ class LogManager(logDirs: Seq[File],
     val fileDeleteDelayMs = currentDefaultConfig.fileDeleteDelayMs
     try {
       def nextDeleteDelayMs: Long = {
-        if (!_logsToBeDeleted.isEmpty) {
-          val (_, scheduleTimeMs) = _logsToBeDeleted.peek()
+        if (!logsToBeDeleted.isEmpty) {
+          val (_, scheduleTimeMs) = logsToBeDeleted.peek()
           scheduleTimeMs + fileDeleteDelayMs - time.milliseconds()
         } else
           fileDeleteDelayMs
       }
 
       while ({nextDelayMs = nextDeleteDelayMs; nextDelayMs <= 0}) {
-        val (removedLog, _) = _logsToBeDeleted.take()
+        val (removedLog, _) = logsToBeDeleted.take()
         if (removedLog != null) {
           try {
             removedLog.delete()

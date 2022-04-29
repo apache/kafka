@@ -2683,7 +2683,7 @@ class ReplicaManagerTest {
     assertEquals(Some(1L), readLogStartOffsetCheckpoint().get(tp0))
 
     if (throwIOException) {
-      // Replace underlying PartitionMetadataFile with a mock which thrown
+      // Replace underlying PartitionMetadataFile with a mock which throws
       // a KafkaStorageException when maybeFlush is called.
       val mockPartitionMetadataFile = mock(classOf[PartitionMetadataFile])
       when(mockPartitionMetadataFile.maybeFlush()).thenThrow(new KafkaStorageException())

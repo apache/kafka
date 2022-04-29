@@ -286,7 +286,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
 
-  @volatile var partitionMetadataFile : Option[PartitionMetadataFile] = None
+  @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
   locally {
     initializePartitionMetadata()
