@@ -1570,11 +1570,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Completely delete the local log directory and all contents from the file system with no delay.
-   *
-   * Visible for testing.
+   * Completely delete the local log directory and all contents from the file system with no delay
    */
-  def delete(): Unit = {
+  private[log] def delete(): Unit = {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         localLog.checkIfMemoryMappedBufferClosed()
