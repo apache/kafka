@@ -125,7 +125,7 @@
     <p>
     This combination of pagecache and sendfile means that on a Kafka cluster where the consumers are mostly caught up you will see no read activity on the disks whatsoever as they will be serving data entirely from cache.
     <p>
-    TLS/SSL libraries operate at the user space (in-kernel <code>SSL_sendfile</code> is currently not supported by Kafka). Due to this restriction, <code>sendfile</code> could not be used when transport layer enables SSL protocol. For enabling
+    TLS/SSL libraries operate at the user space (in-kernel <code>SSL_sendfile</code> is currently not supported by Kafka). Due to this restriction, <code>sendfile</code> is not used when SSL is enabled. For enabling
     SSL configuration, refer to <code>security.protocol</code> and <code>security.inter.broker.protocol</code>
     <p>
     For more background on the sendfile and zero-copy support in Java, see this <a href="https://developer.ibm.com/articles/j-zerocopy/">article</a>.
