@@ -227,9 +227,7 @@ abstract class QuorumTestHarness extends Logging {
     var out: PrintStream = null
     try {
       out = new PrintStream(stream)
-      if (StorageTool.formatCommand(out, directories, metaProperties, false) != 0) {
-        throw new RuntimeException(stream.toString())
-      }
+      StorageTool.formatCommand(out, directories, metaProperties, ignoreFormatted = false)
       debug(s"Formatted storage directory(ies) ${directories}")
     } finally {
       if (out != null) out.close()

@@ -30,6 +30,10 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.mutable
 
 object StorageTool extends Logging {
+
+  private val SUCCESS_RESULT_CODE = 0
+  private val ERROR_RESULT_CODE = 1
+
   def main(args: Array[String]): Unit = {
     try {
       val parser = ArgumentParsers.
@@ -76,11 +80,12 @@ object StorageTool extends Logging {
             throw new TerseFailure("The kafka configuration file appears to be for " +
               "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
           }
-          Exit.exit(formatCommand(System.out, directories, metaProperties, ignoreFormatted ))
+          formatCommand(System.out, directories, metaProperties, ignoreFormatted )
+          Exit.exit(SUCCESS_RESULT_CODE)
 
         case "random-uuid" =>
           System.out.println(Uuid.randomUuid)
-          Exit.exit(0)
+          Exit.exit(SUCCESS_RESULT_CODE)
 
         case _ =>
           throw new RuntimeException(s"Unknown command $command")
@@ -88,7 +93,7 @@ object StorageTool extends Logging {
     } catch {
       case e: TerseFailure =>
         System.err.println(e.getMessage)
-        System.exit(1)
+        System.exit(ERROR_RESULT_CODE)
     }
   }
 
@@ -201,16 +206,24 @@ object StorageTool extends Logging {
     new MetaProperties(effectiveClusterId.toString, config.nodeId)
   }
 
+  /**
+   * Execute the format command, initialize the directory and write metadata into meta.properties.
+   *
+   * @param stream          used to print log.
+   * @param directories     config value of 'metadata.log.dir', 'log.dirs' and 'log.dir', need to initialize metadata.
+   * @param metaProperties  needed to write into 'meta.properties'.
+   * @param ignoreFormatted if true, will ignore formatted directory.
+   */
   def formatCommand(stream: PrintStream,
                     directories: Seq[String],
                     metaProperties: MetaProperties,
-                    ignoreFormatted: Boolean): Int = {
+                    ignoreFormatted: Boolean): Unit = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
     }
-    val unformattedDirectories = directories.filter(directory => {
+    val unFormattedDirectories = directories.filter(directory => {
       if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
-          true
+        true
       } else if (!ignoreFormatted) {
         throw new TerseFailure(s"Log directory ${directory} is already formatted. " +
           "Use --ignore-formatted to ignore this directory and format the others.")
@@ -218,10 +231,10 @@ object StorageTool extends Logging {
         false
       }
     })
-    if (unformattedDirectories.isEmpty) {
+    if (unFormattedDirectories.isEmpty) {
       stream.println("All of the log directories are already formatted.")
     }
-    unformattedDirectories.foreach(directory => {
+    unFormattedDirectories.foreach(directory => {
       try {
         Files.createDirectories(Paths.get(directory))
       } catch {
@@ -233,6 +246,5 @@ object StorageTool extends Logging {
       checkpoint.write(metaProperties.toProperties)
       stream.println(s"Formatting ${directory}")
     })
-    0
   }
 }
