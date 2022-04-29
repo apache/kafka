@@ -18,7 +18,9 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
 
 import java.util.Arrays;
 import java.util.List;
@@ -35,6 +37,7 @@ import java.util.function.Supplier;
  * (described in detail in KIP-794).  There is one partitioner object per topic.
  */
 public class BuiltInPartitioner {
+    private final Logger log;
     private final String topic;
     private final int stickyBatchSize;
 
@@ -50,7 +53,8 @@ public class BuiltInPartitioner {
      * @param topic The topic
      * @param stickyBatchSize How much to produce to partition before switch
      */
-    public BuiltInPartitioner(String topic, int stickyBatchSize) {
+    public BuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
+        this.log = logContext.logger(BuiltInPartitioner.class);
         this.topic = topic;
         this.stickyBatchSize = stickyBatchSize;
     }
@@ -76,6 +80,7 @@ public class BuiltInPartitioner {
             return random % partitions.size();
         } else {
             // Calculate next partition based on load distribution.
+            // Note that partitions without leader are excluded from the partitionLoadStats.
             assert partitionLoadStats.length > 0;
 
             int[] cumulativeFrequencyTable = partitionLoadStats.cumulativeFrequencyTable;
@@ -132,6 +137,7 @@ public class BuiltInPartitioner {
 
         // We're the first to create it.
         int partition = nextPartition(cluster);
+        log.trace("Switching to partition {} in topic {}", partition, topic);
         partitionInfo = new StickyPartitionInfo(partition);
         if (stickyPartitionInfo.compareAndSet(null, partitionInfo))
             return partitionInfo;
@@ -148,6 +154,7 @@ public class BuiltInPartitioner {
      * @return true if sticky partition object is changed (race condition)
      */
     boolean isPartitionChanged(StickyPartitionInfo partitionInfo) {
+        // partitionInfo may be null if the caller didn't use built-in partitioner.
         return partitionInfo != null && stickyPartitionInfo.get() != partitionInfo;
     }
 
@@ -160,6 +167,7 @@ public class BuiltInPartitioner {
      * @param cluster The cluster information
      */
     void updatePartitionInfo(StickyPartitionInfo partitionInfo, int appendedBytes, Cluster cluster) {
+        // partitionInfo may be null if the caller didn't use built-in partitioner.
         if (partitionInfo == null)
             return;
 
@@ -168,6 +176,7 @@ public class BuiltInPartitioner {
         if (producedBytes >= stickyBatchSize) {
             // We've produced enough to this partition, switch to next.
             int partition = nextPartition(cluster);
+            log.trace("Switching to partition {} in topic {}", partition, topic);
             StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(partition);
             stickyPartitionInfo.set(newPartitionInfo);
         }
@@ -186,6 +195,7 @@ public class BuiltInPartitioner {
      */
     public void updatePartitionLoadStats(int[] queueSizes, int[] partitionIds, int length) {
         if (queueSizes == null) {
+            log.trace("No load stats for topic {}, not using adaptive", topic);
             partitionLoadStats = null;
             return;
         }
@@ -200,6 +210,8 @@ public class BuiltInPartitioner {
         // go through adaptive logic, even if we have one partition.
         // See also RecordAccumulator#partitionReady where the queueSizes are built.
         if (length < 1 || queueSizes.length < 2) {
+            log.trace("The number of partitions is too small: {} and {}, not using adaptive for topic {}",
+                    length, queueSizes.length, topic);
             partitionLoadStats = null;
             return;
         }
@@ -235,6 +247,7 @@ public class BuiltInPartitioner {
             // No need to have complex probability logic when all queue sizes are the same,
             // and we didn't exclude partitions that experience high latencies (greater than
             // partitioner.availability.timeout.ms).
+            log.trace("All queue lengths are the same, not using adaptive for topic {}", topic);
             partitionLoadStats = null;
             return;
         }
@@ -244,6 +257,8 @@ public class BuiltInPartitioner {
         for (int i = 1; i < length; i++) {
             queueSizes[i] = maxSizePlus1 - queueSizes[i] + queueSizes[i - 1];
         }
+        log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}",
+                topic, queueSizes, partitionIds, length);
         partitionLoadStats = new PartitionLoadStats(queueSizes, partitionIds, length);
     }
 

@@ -19,8 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +43,7 @@ public class BuiltInPartitionerTest {
     final static String TOPIC_A = "topicA";
     final static String TOPIC_B = "topicB";
     final static String TOPIC_C = "topicC";
-    final static Header[] EMPTY_HEADERS = Record.EMPTY_HEADERS;
+    final LogContext logContext = new LogContext();
 
     @AfterEach
     public void tearDown() {
@@ -62,7 +61,7 @@ public class BuiltInPartitionerTest {
             Collections.emptySet(), Collections.emptySet());
 
         // Create partitions with "sticky" batch size to accommodate 3 records.
-        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(TOPIC_A, 3);
+        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(logContext, TOPIC_A, 3);
 
         // Test the partition is not switched until sticky batch size is reached.
         // Mock random number generator with just sequential integer.
@@ -85,7 +84,7 @@ public class BuiltInPartitionerTest {
         assertNotEquals(partA, builtInPartitionerA.peekCurrentPartitionInfo(testCluster).partition());
 
         // Check that switching works even when there is one partition.
-        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(TOPIC_B, 1);
+        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(logContext, TOPIC_B, 1);
         for (int c = 10; c-- > 0; ) {
             partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
             assertEquals(0, partitionInfo.partition());
@@ -108,7 +107,7 @@ public class BuiltInPartitionerTest {
             Collections.emptySet(), Collections.emptySet());
 
         // Create partitions with "sticky" batch size to accommodate 1 record.
-        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(TOPIC_A, 1);
+        BuiltInPartitioner builtInPartitionerA = new BuiltInPartitioner(logContext, TOPIC_A, 1);
 
         // Assure we never choose partition 1 because it is unavailable.
         BuiltInPartitioner.StickyPartitionInfo partitionInfo = builtInPartitionerA.peekCurrentPartitionInfo(testCluster);
@@ -127,7 +126,7 @@ public class BuiltInPartitionerTest {
         }
         assertTrue(foundAnotherPartA, "Expected to find partition other than " + partA);
 
-        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(TOPIC_B, 1);
+        BuiltInPartitioner builtInPartitionerB = new BuiltInPartitioner(logContext, TOPIC_B, 1);
         // Assure we always choose partition 1 for topic B.
         partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
         int partB = partitionInfo.partition();
@@ -141,7 +140,7 @@ public class BuiltInPartitionerTest {
         }
 
         // Assure that we still choose the partition when there are no partitions available.
-        BuiltInPartitioner builtInPartitionerC = new BuiltInPartitioner(TOPIC_C, 1);
+        BuiltInPartitioner builtInPartitionerC = new BuiltInPartitioner(logContext, TOPIC_C, 1);
         partitionInfo = builtInPartitionerC.peekCurrentPartitionInfo(testCluster);
         int partC = partitionInfo.partition();
         builtInPartitionerC.updatePartitionInfo(partitionInfo, 1, testCluster);
@@ -158,7 +157,7 @@ public class BuiltInPartitionerTest {
         AtomicInteger mockRandom = new AtomicInteger();
         BuiltInPartitioner.mockRandom = () -> mockRandom.getAndAdd(1);
 
-        BuiltInPartitioner builtInPartitioner = new BuiltInPartitioner(TOPIC_A, 1);
+        BuiltInPartitioner builtInPartitioner = new BuiltInPartitioner(logContext, TOPIC_A, 1);
 
         // Simulate partition queue sizes.
         int[] queueSizes = {5, 0, 3, 0, 1};

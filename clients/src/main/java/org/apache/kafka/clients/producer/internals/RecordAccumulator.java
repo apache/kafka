@@ -67,6 +67,7 @@ import org.slf4j.Logger;
  */
 public class RecordAccumulator {
 
+    private final LogContext logContext;
     private final Logger log;
     private volatile boolean closed;
     private final AtomicInteger flushesInProgress;
@@ -124,6 +125,7 @@ public class RecordAccumulator {
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool) {
+        this.logContext = logContext;
         this.log = logContext.logger(RecordAccumulator.class);
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
@@ -254,7 +256,7 @@ public class RecordAccumulator {
                                      boolean abortOnNewBatch,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(k, batchSize));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(logContext, k, batchSize));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -285,8 +287,11 @@ public class RecordAccumulator {
                 Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(effectivePartition, k -> new ArrayDeque<>());
                 synchronized (dq) {
                     // After taking the lock, validate that the partition hasn't changed and retry.
-                    if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo))
+                    if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
+                        log.trace("Partition {} for topic {} switched by a concurrent append, retrying",
+                                partitionInfo.partition(), topic);
                         continue;
+                    }
                     RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
                     if (appendResult != null) {
                         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster);
@@ -309,10 +314,13 @@ public class RecordAccumulator {
 
                 synchronized (dq) {
                     // After taking the lock, validate that the partition hasn't changed and retry.
-                    if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo))
+                    if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
+                        log.trace("Partition {} for topic {} switched by a concurrent append, retrying",
+                                partitionInfo.partition(), topic);
                         continue;
+                    }
                     RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer);
-                    // Don't deallocate this buffer in the finally block as it's being used in the record batch
+                    // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
                     topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster);
@@ -346,7 +354,7 @@ public class RecordAccumulator {
                                               byte[] value,
                                               Header[] headers,
                                               AppendCallbacks callbacks,
-                                              ByteBuffer buffer) throws InterruptedException {
+                                              ByteBuffer buffer) {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
         // Update the current time in case the buffer allocation blocked above.
@@ -942,7 +950,7 @@ public class RecordAccumulator {
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(), k -> new TopicInfo(k, batchSize));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(), k -> new TopicInfo(logContext, k, batchSize));
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
     }
 
@@ -1089,7 +1097,7 @@ public class RecordAccumulator {
     }
 
     /**
-     * Partitioner config for built-in paritioner
+     * Partitioner config for built-in partitioner
      */
     public static final class PartitionerConfig {
         private final boolean enableAdaptivePartitioning;
@@ -1098,8 +1106,8 @@ public class RecordAccumulator {
         /**
          * Partitioner config
          *
-         * @param enableAdaptivePartitioning If it's true, partition switching adapts to broker load, otherwise parition
-         *        swiching is random.
+         * @param enableAdaptivePartitioning If it's true, partition switching adapts to broker load, otherwise partition
+         *        switching is random.
          * @param partitionAvailabilityTimeoutMs If a broker cannot process produce requests from a partition
          *        for the specified time, the partition is treated by the partitioner as not available.
          *        If the timeout is 0, this logic is disabled.
@@ -1170,8 +1178,8 @@ public class RecordAccumulator {
         public final ConcurrentMap<Integer /*partition*/, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
         public final BuiltInPartitioner builtInPartitioner;
 
-        public TopicInfo(String topic, int stickyBatchSize) {
-            builtInPartitioner = new BuiltInPartitioner(topic, stickyBatchSize);
+        public TopicInfo(LogContext logContext, String topic, int stickyBatchSize) {
+            builtInPartitioner = new BuiltInPartitioner(logContext, topic, stickyBatchSize);
         }
     }
 

@@ -484,7 +484,6 @@ public class SenderTest {
                     }
                 } else if (exception != null)
                     unexpectedException.compareAndSet(null, exception);
-
             }
         };
 
@@ -580,7 +579,7 @@ public class SenderTest {
             assertEquals(time1, stats.drainTimeMs);
             assertEquals(time1, stats.readyTimeMs);
 
-            // Make client not ready.
+            // Make the node 1 not ready.
             client.throttle(metadata.fetch().nodeById(0), 100);
 
             // Time passes, but we don't have anything to send.

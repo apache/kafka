@@ -1054,8 +1054,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             log.debug("Exception occurred during message send:", e);
             if (callback != null) {
                 TopicPartition tp = appendCallbacks.topicPartition();
-                if (tp == null)
-                    tp = ProducerInterceptors.extractTopicPartition(record);
                 RecordMetadata nullMetadata = new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
                 callback.onCompletion(nullMetadata, e);
             }
