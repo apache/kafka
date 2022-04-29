@@ -3420,14 +3420,9 @@ class UnifiedLogTest {
     Utils.delete(dir)
     dir.createNewFile()
 
-    var kafkaStorageExceptionCaptured = false
-    try {
+    assertThrows(classOf[KafkaStorageException], () => {
       log.delete()
-    } catch {
-      case _: KafkaStorageException =>
-        kafkaStorageExceptionCaptured = true
-    }
-    assertTrue(kafkaStorageExceptionCaptured)
+    })
     assertTrue(log.logDirFailureChannel.hasOfflineLogDir(tmpDir.toString))
   }
 
@@ -3444,6 +3439,8 @@ class UnifiedLogTest {
     assertTrue(newDir.exists())
 
     log.renameDir(newDir.getName, false)
+    assertTrue(log.leaderEpochCache.isEmpty)
+    assertTrue(log.partitionMetadataFile.isEmpty)
     assertEquals(0, log.logEndOffset)
     // verify that records appending can still succeed
     // even with the uninitialized leaderEpochCache and partitionMetadataFile
