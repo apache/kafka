@@ -19,6 +19,7 @@ package org.apache.kafka.common.config;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -56,6 +57,7 @@ public final class ConfigResource {
 
     private final Type type;
     private final String name;
+    private final List<String> configurationKeys;
 
     /**
      * Create an instance of this class with the provided parameters.
@@ -64,10 +66,17 @@ public final class ConfigResource {
      * @param name a non-null resource name
      */
     public ConfigResource(Type type, String name) {
+        this(type, name, Collections.emptyList());
+    }
+
+    public ConfigResource(Type type, String name, List<String> configurationKeys) {
         Objects.requireNonNull(type, "type should not be null");
         Objects.requireNonNull(name, "name should not be null");
+        Objects.requireNonNull(configurationKeys, "List of configuration keys should not be null");
+
         this.type = type;
         this.name = name;
+        this.configurationKeys = configurationKeys;
     }
 
     /**
@@ -82,6 +91,13 @@ public final class ConfigResource {
      */
     public String name() {
         return name;
+    }
+
+    /**
+     * Return list of configuration keys to fetch.
+     */
+    public List<String> configurationKeys() {
+        return configurationKeys;
     }
 
     /**
@@ -113,6 +129,6 @@ public final class ConfigResource {
 
     @Override
     public String toString() {
-        return "ConfigResource(type=" + type + ", name='" + name + "')";
+        return "ConfigResource(type=" + type + ", name='" + name + "', configuration keys=" + configurationKeys + ")";
     }
 }
