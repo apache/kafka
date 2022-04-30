@@ -25,12 +25,12 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
-
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
-import kafka.utils.{Log4jController, TestUtils}
+import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -1688,8 +1688,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(0, allReassignmentsMap.size())
   }
 
-  @Test
-  def testValidIncrementalAlterConfigs(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testValidIncrementalAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     // Create topics
@@ -1718,13 +1719,38 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
     ).asJavaCollection
 
-    var alterResult = client.incrementalAlterConfigs(Map(
+    var alterConfigs = Map(
       topic1Resource -> topic1AlterConfigs,
       topic2Resource -> topic2AlterConfigs
-    ).asJava)
+    )
+    var alterResult = client.incrementalAlterConfigs(alterConfigs.asJava)
 
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
+
+    if (isKRaftTest()) {
+      TestUtils.waitUntilTrue(
+        () => {
+          alterConfigs.forall { case(resource, ops) =>
+            brokers.forall { broker =>
+              val topicProps = broker.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(resource.name())
+              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(broker.config), topicProps)
+              ops.asScala.forall { op =>
+                op.configEntry().value().split(",").forall { configValue =>
+                  // Verify we have `SET` or `APPEND` successfully
+                  if (op.opType() == AlterConfigOp.OpType.SET) {
+                    topicProps.get(op.configEntry().name()).toString == configValue
+                  } else if (op.opType() == AlterConfigOp.OpType.APPEND) {
+                    logConfig.getList(op.configEntry().name()).contains(configValue)
+                  } else {
+                    true
+                  }
+                }
+              }
+            }
+          }
+        }, "Timeout waiting for topic configs propagating to brokers")
+    }
 
     // Verify that topics were updated correctly
     var describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
@@ -1740,7 +1766,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals("lz4", configs.get(topic2Resource).get(LogConfig.CompressionTypeProp).value)
     assertEquals("delete,compact", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value)
 
-    //verify subtract operation, including from an empty property
+    // verify subtract operation, including from an empty property
     topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT),
       new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, "0"), AlterConfigOp.OpType.SUBTRACT)
@@ -1751,12 +1777,31 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete), AlterConfigOp.OpType.SUBTRACT)
     ).asJavaCollection
 
-    alterResult = client.incrementalAlterConfigs(Map(
+    alterConfigs = Map(
       topic1Resource -> topic1AlterConfigs,
       topic2Resource -> topic2AlterConfigs
-    ).asJava)
+    )
+    alterResult = client.incrementalAlterConfigs(alterConfigs.asJava)
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
+
+    if (isKRaftTest()) {
+      TestUtils.waitUntilTrue(
+        () => {
+          alterConfigs.forall { case(resource, ops) =>
+            brokers.forall { broker =>
+              val topicProps = broker.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(resource.name())
+              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(broker.config), topicProps)
+              ops.asScala.forall { op =>
+                // Verify we have `SUBTRACT` successfully
+                op.configEntry().value().split(",").forall { configValue =>
+                  !logConfig.getList(op.configEntry().name()).contains(configValue)
+                }
+              }
+            }
+          }
+        }, "Timeout waiting for topic configs propagating to brokers")
+    }
 
     // Verify that topics were updated correctly
     describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
@@ -1785,7 +1830,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
 
-    //Alter topics with validateOnly=true with invalid configs
+    // Alter topics with validateOnly=true with invalid configs
     topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "zip"), AlterConfigOp.OpType.SET)
     ).asJava
@@ -1794,8 +1839,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topic1Resource -> topic1AlterConfigs
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
-      Some("Invalid config value for resource"))
+    if (isKRaftTest()) {
+      assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
+        Some("Invalid value zip for configuration compression.type"))
+    } else {
+      assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
+        Some("Invalid config value for resource"))
+    }
   }
 
   @Test
@@ -2285,7 +2335,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Note: this test requires some custom static broker and controller configurations, which are set up in
    * BaseAdminIntegrationTest.modifyConfigs and BaseAdminIntegrationTest.kraftControllerConfigs.
    */
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateTopicsReturnsConfigs(quorum: String): Unit = {
     client = Admin.create(super.createConfig)

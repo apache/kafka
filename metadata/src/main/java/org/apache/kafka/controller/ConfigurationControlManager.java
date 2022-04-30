@@ -215,13 +215,17 @@ public class ConfigurationControlManager {
                     }
                     List<String> newValueParts = getParts(newValue, key, configResource);
                     if (opType == APPEND) {
-                        if (!newValueParts.contains(opValue)) {
-                            newValueParts.add(opValue);
+                        for (String value: opValue.split(",")) {
+                            if (!newValueParts.contains(value)) {
+                                newValueParts.add(value);
+                            }
                         }
-                        newValue = String.join(",", newValueParts);
-                    } else if (newValueParts.remove(opValue)) {
-                        newValue = String.join(",", newValueParts);
+                    } else {
+                        for (String value: opValue.split(",")) {
+                            newValueParts.remove(value);
+                        }
                     }
+                    newValue = String.join(",", newValueParts);
                     break;
             }
             if (!Objects.equals(currentValue, newValue)) {
