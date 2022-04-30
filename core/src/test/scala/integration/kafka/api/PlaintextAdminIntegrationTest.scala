@@ -29,6 +29,7 @@ import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.{Defaults, DynamicConfig, KafkaConfig}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
@@ -2208,11 +2209,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   // Verify that createTopics and alterConfigs fail with null values
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testNullConfigs(quorum: String): Unit = {
 
     def validateLogConfig(compressionType: String): Unit = {
-      val logConfig = zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
+      val logConfig = if (isKRaftTest()) {
+        val topicProps = brokers.head.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(topic)
+        LogConfig.fromProps(Collections.emptyMap[String, AnyRef], topicProps)
+      } else {
+        zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
+      }
 
       assertEquals(compressionType, logConfig.originals.get(LogConfig.CompressionTypeProp))
       assertNull(logConfig.originals.get(LogConfig.RetentionBytesProp))
@@ -2225,13 +2231,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       LogConfig.CompressionTypeProp -> "producer"
     ).asJava
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
-    val e1 = assertThrows(classOf[ExecutionException],
-      () => client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all.get())
-    assertTrue(e1.getCause.isInstanceOf[InvalidRequestException],
-      s"Unexpected exception ${e1.getCause.getClass}")
+    assertFutureExceptionTypeEquals(
+      client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all,
+      classOf[InvalidRequestException],
+      Some("Null value not supported for topic configs : retention.bytes")
+    )
 
-    val validConfigs = Map[String, String](LogConfig.CompressionTypeProp -> "producer").asJava
-    client.createTopics(Collections.singletonList(newTopic.configs(validConfigs))).all.get()
+    val validConfigs = Map[String, String](LogConfig.CompressionTypeProp -> "producer")
+    client.createTopics(Collections.singletonList(newTopic.configs(validConfigs.asJava))).all.get()
     waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
     validateLogConfig(compressionType = "producer")
 
@@ -2240,10 +2247,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(LogConfig.RetentionBytesProp, null), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
     )
-    val e2 = assertThrows(classOf[ExecutionException],
-      () => client.incrementalAlterConfigs(Map(topicResource -> alterOps.asJavaCollection).asJava).all.get)
-    assertTrue(e2.getCause.isInstanceOf[InvalidRequestException],
-      s"Unexpected exception ${e2.getCause.getClass}")
+    assertFutureExceptionTypeEquals(
+      client.incrementalAlterConfigs(Map(topicResource -> alterOps.asJavaCollection).asJava).all,
+      classOf[InvalidRequestException],
+      Some("Null value not supported for : retention.bytes")
+    )
     validateLogConfig(compressionType = "producer")
   }
 
