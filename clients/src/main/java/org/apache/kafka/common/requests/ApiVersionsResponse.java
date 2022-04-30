@@ -278,24 +278,6 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         RecordVersion minRecordVersion,
         Features<SupportedVersionRange> latestSupportedFeatures,
-        NodeApiVersions controllerApiVersions,
-        ListenerType listenerType
-    ) {
-        return apiVersionsResponse(
-            throttleTimeMs,
-            minRecordVersion,
-            latestSupportedFeatures,
-            Features.emptyFinalizedFeatures(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            controllerApiVersions,
-            listenerType
-        );
-    }
-
-    public static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        RecordVersion minRecordVersion,
-        Features<SupportedVersionRange> latestSupportedFeatures,
         Features<FinalizedVersionRange> finalizedFeatures,
         long finalizedFeaturesEpoch,
         NodeApiVersions controllerApiVersions,

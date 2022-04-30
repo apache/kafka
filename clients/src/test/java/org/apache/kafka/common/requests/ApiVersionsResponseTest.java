@@ -116,6 +116,8 @@ public class ApiVersionsResponseTest {
             10,
             RecordVersion.V1,
             Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(),
+            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER
         );
@@ -160,6 +162,8 @@ public class ApiVersionsResponseTest {
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(),
+            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER
         );
@@ -176,6 +180,8 @@ public class ApiVersionsResponseTest {
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(),
+            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER
         );

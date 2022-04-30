@@ -148,25 +148,24 @@ public enum MetadataVersion {
     IBP_3_1_IV0(3, "3.1", "IV0"),
 
     // Support for leader recovery for unclean leader election (KIP-704)
-    IBP_3_2_IV0(4, "3.2", "IV0"),
+    IBP_3_2_IV0(4, "3.2", "IV0");
 
-    IBP_3_3_IV0(5, "3.3", "IV0");
-
+    private static final MetadataVersion[] METADATA_VERSIONS = MetadataVersion.values();
     private final Optional<Short> featureLevel;
-    private final String apacheRelease;
-    private final String name;
+    private final String release;
+    private final String ibpVersion;
 
-    MetadataVersion(int featureLevel, String apacheRelease, String subVersion) {
+    MetadataVersion(int featureLevel, String release, String subVersion) {
         if (featureLevel > 0) {
             this.featureLevel = Optional.of((short) featureLevel);
         } else {
             this.featureLevel = Optional.empty();
         }
-        this.apacheRelease = apacheRelease;
+        this.release = release;
         if (subVersion.isEmpty()) {
-            this.name = apacheRelease;
+            this.ibpVersion = release;
         } else {
-            this.name = String.format("%s-%s", apacheRelease, subVersion);
+            this.ibpVersion = String.format("%s-%s", release, subVersion);
         }
     }
 
@@ -219,19 +218,19 @@ public enum MetadataVersion {
             IBP_VERSIONS = new HashMap<>();
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
             for (MetadataVersion metadataVersion : MetadataVersion.values()) {
-                maxInterVersion.put(metadataVersion.apacheRelease, metadataVersion);
-                IBP_VERSIONS.put(metadataVersion.name, metadataVersion);
+                maxInterVersion.put(metadataVersion.release, metadataVersion);
+                IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
             }
             IBP_VERSIONS.putAll(maxInterVersion);
         }
     }
 
     public String shortVersion() {
-        return apacheRelease;
+        return release;
     }
 
     public String version() {
-        return name;
+        return ibpVersion;
     }
 
     /**
@@ -271,8 +270,7 @@ public enum MetadataVersion {
     }
 
     public static MetadataVersion latest() {
-        MetadataVersion[] values = MetadataVersion.values();
-        return values[values.length - 1];
+        return METADATA_VERSIONS[METADATA_VERSIONS.length - 1];
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {
@@ -285,6 +283,6 @@ public enum MetadataVersion {
 
     @Override
     public String toString() {
-        return name;
+        return ibpVersion;
     }
 }

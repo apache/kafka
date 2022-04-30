@@ -18,6 +18,7 @@ package kafka.server
 
 import kafka.network
 import kafka.network.RequestChannel
+import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
@@ -93,6 +94,8 @@ class DefaultApiVersionManager(
         throttleTimeMs,
         interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
+        Features.emptyFinalizedFeatures,
+        ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
         controllerApiVersions.orNull,
         listenerType)
     }
