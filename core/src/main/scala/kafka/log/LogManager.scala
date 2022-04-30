@@ -138,6 +138,16 @@ class LogManager(logDirs: Seq[File],
 
   newGauge("remainingLogsToRecovery", () => numRemainingLogs.get())
 
+//  for (dir <- logDirs) {
+//    Map("dir" -> dir, "remainingSegments" -> numRemainingLogs.get())
+//  }
+  for (dir <- logDirs) {
+    for (i <- 0 until numRecoveryThreadsPerDataDir) {
+      newGauge("remainingSegmentsToRecovery", () => numRemainingLogs.get(),
+        Map("dir" -> dir, "threadNum" -> i))
+    }
+  }
+
   /**
    * Create and check validity of the given directories that are not in the given offline directories, specifically:
    * <ol>
