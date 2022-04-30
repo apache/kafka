@@ -144,7 +144,7 @@ class LogManager(logDirs: Seq[File],
   for (dir <- logDirs) {
     for (i <- 0 until numRecoveryThreadsPerDataDir) {
       newGauge("remainingSegmentsToRecovery", () => numRemainingLogs.get(),
-        Map("dir" -> dir, "threadNum" -> i))
+        Map("dir" -> dir, "threadNum" -> i.toString))
     }
   }
 
