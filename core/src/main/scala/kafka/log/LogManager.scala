@@ -144,10 +144,13 @@ class LogManager(logDirs: Seq[File],
 //  }
   for (dir <- logDirs) {
     for (i <- 0 until numRecoveryThreadsPerDataDir) {
-      val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
-      println("!!! threadName is " + threadName)
-      println("!!! numRemainingSegments is " + numRemainingSegments)
-      newGauge("remainingSegmentsToRecovery", () => numRemainingSegments.get(threadName),
+
+      newGauge("remainingSegmentsToRecovery", () => {
+
+        println("!!! thread is " + this)
+        println("!!! numRemainingSegments is " + numRemainingSegments)
+        numRemainingSegments.get("log-recovery-/home/parallels/Documents/kafka-logs-0")
+      },
         Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
     }
   }
