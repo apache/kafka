@@ -146,8 +146,13 @@ class LogManager(logDirs: Seq[File],
     for (i <- 0 until numRecoveryThreadsPerDataDir) {
 
       newGauge("remainingSegmentsToRecovery", () => {
-
         println("!!! thread is " + this)
+        val elements = Thread.currentThread.getStackTrace
+        for (i <- 1 until elements.length) {
+          val s = elements(i)
+          System.out.println("\tat " + s.getClassName + "." + s.getMethodName + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+        }
+
         println("!!! numRemainingSegments is " + numRemainingSegments)
         numRemainingSegments.get("log-recovery-/home/parallels/Documents/kafka-logs-0")
       },
