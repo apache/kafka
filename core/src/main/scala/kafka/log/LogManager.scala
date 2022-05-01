@@ -90,6 +90,7 @@ class LogManager(logDirs: Seq[File],
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
   private val numRemainingLogs = new AtomicInteger(0)
+  private val numRemainingSegments = collection.mutable.Map.empty[String, Int]
 
   // This map contains all partitions whose logs are getting loaded and initialized. If log configuration
   // of these partitions get updated at the same time, the corresponding entry in this map is set to "true",
@@ -143,7 +144,10 @@ class LogManager(logDirs: Seq[File],
 //  }
   for (dir <- logDirs) {
     for (i <- 0 until numRecoveryThreadsPerDataDir) {
-      newGauge("remainingSegmentsToRecovery", () => numRemainingLogs.get(),
+      val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
+      println("!!! threadName is " + threadName)
+      println("!!! numRemainingSegments is " + numRemainingSegments)
+      newGauge("remainingSegmentsToRecovery", () => numRemainingSegments.get(threadName),
         Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
     }
   }
@@ -274,7 +278,8 @@ class LogManager(logDirs: Seq[File],
                            recoveryPoints: Map[TopicPartition, Long],
                            logStartOffsets: Map[TopicPartition, Long],
                            defaultConfig: LogConfig,
-                           topicConfigOverrides: Map[String, LogConfig]): UnifiedLog = {
+                           topicConfigOverrides: Map[String, LogConfig],
+                           numRemainingSegments: collection.mutable.Map[String, Int]): UnifiedLog = {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
@@ -294,7 +299,8 @@ class LogManager(logDirs: Seq[File],
       logDirFailureChannel = logDirFailureChannel,
       lastShutdownClean = hadCleanShutdown,
       topicId = None,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      numRemainingSegments = numRemainingSegments)
 
     if (logDir.getName.endsWith(UnifiedLog.DeleteDirSuffix)) {
       addLogToBeDeleted(log)
@@ -319,6 +325,18 @@ class LogManager(logDirs: Seq[File],
     log
   }
 
+  import java.util.concurrent.ThreadFactory
+
+  class NameableThreadFactory(val baseName: String) extends ThreadFactory {
+    val threadsNum = new AtomicInteger(0)
+//    final private var namePattern = null
+
+    override def newThread(runnable: Runnable): Thread = {
+      KafkaThread.nonDaemon(s"$baseName-${threadsNum.getAndIncrement()}", runnable)
+//      new Thread(runnable, String.format(namePattern, threadsNum.getAndIncrement()))
+    }
+  }
+
   /**
    * Recover and load all logs in the given data directories
    */
@@ -335,7 +353,8 @@ class LogManager(logDirs: Seq[File],
       var hadCleanShutdown: Boolean = false
       try {
         val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
-          KafkaThread.nonDaemon(s"log-recovery-$logDirAbsolutePath", _))
+          new NameableThreadFactory(s"log-recovery-$logDirAbsolutePath"))
+//          KafkaThread.nonDaemon(s"log-recovery-$logDirAbsolutePath", _))
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
@@ -378,10 +397,12 @@ class LogManager(logDirs: Seq[File],
           val runnable: Runnable = () => {
             try {
               debug(s"Loading log $logDir, with ${numRemainingLogs.get()} logs remaining")
+              info(s"!!! numRemainingSegments: $numRemainingSegments")
+              info(s"!!! current thread: ${Thread.currentThread().getName}")
 
               val logLoadStartMs = time.hiResClockMs()
               val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
-                defaultConfig, topicConfigOverrides)
+                defaultConfig, topicConfigOverrides, numRemainingSegments)
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
               val currentNumLoaded = numLogsLoaded.incrementAndGet()
 

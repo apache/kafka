@@ -77,7 +77,8 @@ class LogLoader(
   logStartOffsetCheckpoint: Long,
   recoveryPointCheckpoint: Long,
   leaderEpochCache: Option[LeaderEpochFileCache],
-  producerStateManager: ProducerStateManager
+  producerStateManager: ProducerStateManager,
+  numRemainingSegments: collection.mutable.Map[String, Int] = mutable.Map.empty
 ) extends Logging {
   logIdent = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
 
@@ -409,10 +410,14 @@ class LogLoader(
       val unflushedIter = unflushed.iterator
       var truncated = false
       var numFlushed = 0
+      val threadName = Thread.currentThread().getName
+
 
       while (unflushedIter.hasNext && !truncated) {
+        Thread.sleep(500)
         val segment = unflushedIter.next()
         info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
+        numRemainingSegments += (threadName -> (unflushedSize - numFlushed))
         val truncatedBytes =
           try {
             recoverSegment(segment)
