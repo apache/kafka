@@ -417,7 +417,7 @@ class LogLoader(
         Thread.sleep(500)
         val segment = unflushedIter.next()
         info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
-        numRemainingSegments += (threadName -> (unflushedSize - numFlushed))
+
         val truncatedBytes =
           try {
             recoverSegment(segment)
@@ -436,6 +436,7 @@ class LogLoader(
           truncated = true
         }
         numFlushed += 1
+        numRemainingSegments += (threadName -> (unflushedSize - numFlushed))
       }
     }
 
