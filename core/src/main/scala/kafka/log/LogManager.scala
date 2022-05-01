@@ -148,6 +148,7 @@ class LogManager(logDirs: Seq[File],
 //      println("!!! threadName is " + threadName)
 //      println("!!! numRemainingSegments is " + numRemainingSegments)
       newGauge("remainingSegmentsToRecovery", () => {
+        println("!!! threadName is " + threadName)
         println("!!! numRemainingSegments is " + numRemainingSegments)
         numRemainingSegments.get(threadName).get
       },
