@@ -271,7 +271,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
 
             <p>Store password configs <code>ssl.keystore.password</code> and <code>ssl.truststore.password</code> are not used for PEM.
             If private key is encrypted using a password, the key password must be provided in <code>ssl.key.password</code>. Private keys may be provided
-            in unencrypted form without a password when PEM is specified directly in the config value. In production deployments, configs should be encrypted or
+            in unencrypted form without a password. In production deployments, configs should be encrypted or
             externalized using password protection feature in Kafka in this case. Note that the default SSL engine factory has limited capabilities for decryption
             of encrypted private keys when external tools like OpenSSL are used for encryption. Third party libraries like BouncyCastle may be integrated witn a
             custom <code>SslEngineFactory</code> to support a wider range of encrypted private keys.</p>
