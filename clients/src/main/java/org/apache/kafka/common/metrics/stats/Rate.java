@@ -84,7 +84,7 @@ public class Rate implements MeasurableStat {
          * A special scenario occurs when rate calculation is performed before at least `config.samples` have completed
          * (e.g. if only 1 second has elapsed in a 30 second). In such a scenario, window duration would be equal to the
          * time elapsed in the current window (since oldest non-obsolete window is current window). This leads to the
-         * following values for rate. Consider the following example:
+         * following values for rate based on the above window duration formula above. Consider the following example:
          *      config.timeWindowMs() = 1s
          *      config.samples() = 2
          *      Record events (E) at timestamps:
@@ -95,9 +95,10 @@ public class Rate implements MeasurableStat {
          *      Rate calculated at T1 + 50ms = 2/0.05s = 40 events per second
          *      Rate calculated at T1 + 60ms = 3/0.06s = 50 events per second
          * When the Rate function in this class is used to calculate throttling, this approach doesn't handle the
-         * scenarios where an occasional burst of traffic will be acceptable and instead opts for ensuring a
-         * conservative approach of assuming higher values of rate. Note that {@link SimpleRate} uses this approach.
-         * But this function uses a different technique described later.
+         * scenarios where an occasional burst of traffic will be acceptable (because the overall rate might exceed at
+         * the first request itself) and instead opts for ensuring a conservative approach of assuming higher values of
+         * rate. Note that {@link SimpleRate} uses this approach. But current implementation uses a different formula
+         * for this special case as described later.
          *
          * ## Special case: First window after prolonged period of no record events
          * Another special scenario occurs when a record event is received after multiples of `config.timeWindowMs`
@@ -108,21 +109,18 @@ public class Rate implements MeasurableStat {
          *
          * In both the above special cases, the algorithm in this function takes the same approach i.e. it assumes
          * presence of prior windows with zero records. Hence, the duration of computation time window is determined by:
-         *          window duration = (now - start time of oldest non-obsolete window)
+         *          window duration = (now - start time of oldest non-obsolete window) + time duration of missing windows
          *
          */
         long totalElapsedTimeMs = now - stat.oldest(now).lastWindowMs;
 
         // Check how many full windows of data we have currently retained
         int numFullWindows = (int) (totalElapsedTimeMs / config.timeWindowMs());
-
         int minFullWindows = config.samples() - 1; // i.e. prior samples = required samples - current sample
 
-        // ## Special case: First window after prolonged period of no record events
         // If the available windows are less than the minimum required, add the difference to the totalElapsedTime
-        if (numFullWindows < minFullWindows) {
+        if (numFullWindows < minFullWindows)
             totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
-        }
 
         return totalElapsedTimeMs;
     }
