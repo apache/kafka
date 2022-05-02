@@ -66,9 +66,9 @@ public abstract class SampledStat implements MeasurableStat {
         Sample sample = current(recordingTimeMs);
         if (sample.isComplete(recordingTimeMs, config)) {
             final long previousWindowStartTime = sample.lastWindowMs;
-            sample = advance(config, recordingTimeMs);
             final long previousWindowEndtime = previousWindowStartTime + config.timeWindowMs();
-            sample.lastWindowMs = recordingTimeMs - ((recordingTimeMs - previousWindowEndtime) % config.timeWindowMs());
+            final long startTimeOfNewWindow = recordingTimeMs - ((recordingTimeMs - previousWindowEndtime) % config.timeWindowMs());
+            sample = advance(config, startTimeOfNewWindow);
         }
         update(sample, config, value, recordingTimeMs);
         sample.eventCount++;
@@ -76,15 +76,15 @@ public abstract class SampledStat implements MeasurableStat {
 
     private Sample advance(MetricConfig config, long timeMs) {
         this.current = (this.current + 1) % config.samples();
+        Sample sample;
         if (this.current >= samples.size()) {
-            Sample sample = newSample(timeMs);
+            sample = newSample(timeMs);
             this.samples.add(sample);
-            return sample;
         } else {
-            Sample sample = current(timeMs);
+            sample = current(timeMs);
             sample.reset(timeMs);
-            return sample;
         }
+        return sample;
     }
 
     protected Sample newSample(long timeMs) {
@@ -106,7 +106,7 @@ public abstract class SampledStat implements MeasurableStat {
     public Sample oldest(long now) {
         if (samples.size() == 0)
             this.samples.add(newSample(now));
-        return samples.stream().min(Comparator.comparingLong(Sample::lastWindowMs)).orElse(samples.get(0));
+        return samples.stream().min(Comparator.comparingLong(s -> s.lastWindowMs)).orElse(samples.get(0));
     }
 
     @Override
@@ -152,10 +152,6 @@ public abstract class SampledStat implements MeasurableStat {
 
         public boolean isComplete(long timeMs, MetricConfig config) {
             return timeMs - lastWindowMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
-        }
-
-        public long lastWindowMs() {
-            return this.lastWindowMs;
         }
 
         @Override
