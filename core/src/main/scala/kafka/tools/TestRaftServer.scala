@@ -73,7 +73,7 @@ class TestRaftServer(
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
-    socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
+    socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager, DataPlaneAcceptor.ControllerServerMetricPrefix, DataPlaneAcceptor.ControllerServerThreadPrefix)
     socketServer.startup(startProcessingRequests = false)
 
     val metaProperties = MetaProperties(

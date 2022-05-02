@@ -25,7 +25,6 @@ import java.util
 import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.ConnectionQuotas._
@@ -78,7 +77,9 @@ class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
-                   val apiVersionManager: ApiVersionManager)
+                   val apiVersionManager: ApiVersionManager,
+                   serverMetricPrefix: String = DataPlaneAcceptor.KafkaServerMetricPrefix,
+                   serverThreadPrefix: String = DataPlaneAcceptor.KafkaServerThreadPrefix)
   extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
   private val maxQueuedRequests = config.queuedMaxRequests
@@ -89,10 +90,11 @@ class SocketServer(val config: KafkaConfig,
 
   this.logIdent = logContext.logPrefix
 
-  private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
-  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)
-  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", MetricsGroup)
+  private val memoryPoolSensor = metrics.sensor(s"${serverMetricPrefix}MemoryPoolUtilization")
+  private val memoryPoolDepletedPercentMetricName = metrics.metricName(s"${serverMetricPrefix}MemoryPoolAvgDepletedPercent", MetricsGroup)
+  private val memoryPoolDepletedTimeMetricName = metrics.metricName(s"${serverMetricPrefix}MemoryPoolDepletedTimeTotal", MetricsGroup)
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
+
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
   // data-plane
   private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, DataPlaneAcceptor]()
@@ -140,7 +142,8 @@ class SocketServer(val config: KafkaConfig,
 
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
-    newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+
+    newGauge(s"$serverMetricPrefix${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
       val ioWaitRatioMetricNames = dataPlaneProcessors.map { p =>
         metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
       }
@@ -156,9 +159,9 @@ class SocketServer(val config: KafkaConfig,
         Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
       }.getOrElse(Double.NaN)
     })
-    newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
-    newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
-    newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+    newGauge(s"${serverMetricPrefix}MemoryPoolAvailable", () => memoryPool.availableMemory)
+    newGauge(s"${serverMetricPrefix}MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
+    newGauge(s"$serverMetricPrefix${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
       val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.map { p =>
         metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
       }
@@ -500,6 +503,10 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
 object DataPlaneAcceptor {
   val ThreadPrefix = "data-plane"
   val MetricPrefix = ""
+  val KafkaServerThreadPrefix = ""
+  val KafkaServerMetricPrefix = ""
+  val ControllerServerThreadPrefix = "controller-"
+  val ControllerServerMetricPrefix = "Controller"
   val ListenerReconfigurableConfigs = Set(KafkaConfig.NumNetworkThreadsProp)
 }
 
@@ -678,7 +685,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     "Acceptor",
     s"${metricPrefix()}AcceptorBlockedPercent",
     Map(ListenerMetricTag -> endPoint.listenerName.value))
-  private val blockedPercentMeter = newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
+  private val blockedPercentMeter = newMeter(blockedPercentMeterMetricName, "blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
 
