@@ -90,10 +90,10 @@ public class Rate implements MeasurableStat {
          *      Record events (E) at timestamps:
          *          E1 = CurrentTimeStamp (T1)
          *          E2 = T1 + 30ms
-         *          E2 = T1 + 60ms
+         *          E3 = T1 + 60ms
          *      Rate calculated at T1 + 20ms = 1/0.02s = 50 events per second
          *      Rate calculated at T1 + 50ms = 2/0.05s = 40 events per second
-         *      Rate calculated at T2 + 60ms = 3/0.06s = 50 events per second
+         *      Rate calculated at T1 + 60ms = 3/0.06s = 50 events per second
          * When the Rate function in this class is used to calculate throttling, this approach doesn't handle the
          * scenarios where an occasional burst of traffic will be acceptable and instead opts for ensuring a
          * conservative approach of assuming higher values of rate. Note that {@link SimpleRate} uses this approach.
