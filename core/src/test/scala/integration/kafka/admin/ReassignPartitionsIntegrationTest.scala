@@ -19,8 +19,8 @@ package kafka.admin
 
 import java.io.Closeable
 import java.util.{Collections, HashMap, List}
+
 import kafka.admin.ReassignPartitionsCommand._
-import kafka.api.KAFKA_2_7_IV1
 import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ZkAlterPartitionManager}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
@@ -30,6 +30,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 
@@ -66,7 +67,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     // the `AlterIsr` API. In this case, the controller will register individual
     // watches for each reassigning partition so that the reassignment can be
     // completed as soon as the ISR is expanded.
-    val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> KAFKA_2_7_IV1.version)
+    val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.version)
     cluster = new ReassignPartitionsTestCluster(zkConnect, configOverrides = configOverrides)
     cluster.setup()
     executeAndVerifyReassignment()
@@ -89,7 +90,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
       maxDelayMs = 500
     )
 
-    val oldIbpConfig = Map(KafkaConfig.InterBrokerProtocolVersionProp -> KAFKA_2_7_IV1.version)
+    val oldIbpConfig = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.version)
     val brokerConfigOverrides = Map(1 -> oldIbpConfig, 2 -> oldIbpConfig, 3 -> oldIbpConfig)
 
     cluster = new ReassignPartitionsTestCluster(zkConnect, brokerConfigOverrides = brokerConfigOverrides)

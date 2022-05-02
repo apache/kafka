@@ -19,9 +19,7 @@ package kafka.server
 
 import java.util.Collections
 import java.util.stream.{Stream => JStream}
-import kafka.api.ApiVersion
-import kafka.api.KAFKA_2_7_IV2
-import kafka.api.KAFKA_3_2_IV0
+
 import kafka.api.LeaderAndIsr
 import kafka.utils.{MockScheduler, MockTime}
 import kafka.zk.KafkaZkClient
@@ -33,6 +31,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
@@ -43,6 +43,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
+
 import scala.jdk.CollectionConverters._
 
 class AlterPartitionManagerTest {
@@ -64,10 +65,10 @@ class AlterPartitionManagerTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("provideApiVersions"))
-  def testBasic(apiVersion: ApiVersion): Unit = {
+  @MethodSource(Array("provideMetadataVersions"))
+  def testBasic(metadataVersion: MetadataVersion): Unit = {
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, metadataVersion)
     alterIsrManager.start()
     alterIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
     verify(brokerToController).start()
@@ -77,31 +78,31 @@ class AlterPartitionManagerTest {
   @ParameterizedTest
   @MethodSource(Array("provideLeaderRecoveryState"))
   def testBasicSentLeaderRecoveryState(
-    apiVersion: ApiVersion,
+    metadataVersion: MetadataVersion,
     leaderRecoveryState: LeaderRecoveryState
   ): Unit = {
     val requestCapture = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, metadataVersion)
     alterIsrManager.start()
     alterIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1), leaderRecoveryState, 10), 0)
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(requestCapture.capture(), any())
 
     val request = requestCapture.getValue.build()
-    val expectedLeaderRecoveryState = if (apiVersion >= KAFKA_3_2_IV0) leaderRecoveryState else LeaderRecoveryState.RECOVERED
+    val expectedLeaderRecoveryState = if (metadataVersion.isAtLeast(IBP_3_2_IV0)) leaderRecoveryState else LeaderRecoveryState.RECOVERED
     assertEquals(expectedLeaderRecoveryState.value, request.data.topics.get(0).partitions.get(0).leaderRecoveryState())
   }
 
   @ParameterizedTest
-  @MethodSource(Array("provideApiVersions"))
-  def testOverwriteWithinBatch(apiVersion: ApiVersion): Unit = {
+  @MethodSource(Array("provideMetadataVersions"))
+  def testOverwriteWithinBatch(metadataVersion: MetadataVersion): Unit = {
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, metadataVersion)
     alterIsrManager.start()
 
     // Only send one ISR update for a given topic+partition
@@ -133,13 +134,13 @@ class AlterPartitionManagerTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("provideApiVersions"))
-  def testSingleBatch(apiVersion: ApiVersion): Unit = {
+  @MethodSource(Array("provideMetadataVersions"))
+  def testSingleBatch(metadataVersion: MetadataVersion): Unit = {
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, metadataVersion)
     alterIsrManager.start()
 
     // First request will send batch of one
@@ -209,7 +210,7 @@ class AlterPartitionManagerTest {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, KAFKA_3_2_IV0)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, IBP_3_2_IV0)
     alterIsrManager.start()
     alterIsrManager.submit(tp0, leaderAndIsr, 0)
 
@@ -269,7 +270,7 @@ class AlterPartitionManagerTest {
     reset(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, KAFKA_3_2_IV0)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, IBP_3_2_IV0)
     alterIsrManager.start()
 
     val future = alterIsrManager.submit(tp, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
@@ -288,12 +289,12 @@ class AlterPartitionManagerTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("provideApiVersions"))
-  def testOneInFlight(apiVersion: ApiVersion): Unit = {
+  @MethodSource(Array("provideMetadataVersions"))
+  def testOneInFlight(metadataVersion: MetadataVersion): Unit = {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, metadataVersion)
     alterIsrManager.start()
 
     // First submit will send the request
@@ -316,13 +317,13 @@ class AlterPartitionManagerTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("provideApiVersions"))
-  def testPartitionMissingInResponse(apiVersion: ApiVersion): Unit = {
+  @MethodSource(Array("provideMetadataVersions"))
+  def testPartitionMissingInResponse(metadataVersion: MetadataVersion): Unit = {
     brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
 
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => brokerEpoch, apiVersion)
+    val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => brokerEpoch, metadataVersion)
     alterIsrManager.start()
 
     def matchesAlterIsr(topicPartitions: Set[TopicPartition]): AbstractRequest.Builder[_ <: AbstractRequest] = {
@@ -422,21 +423,21 @@ class AlterPartitionManagerTest {
 }
 
 object AlterPartitionManagerTest {
-  def provideApiVersions(): JStream[ApiVersion] = {
+  def provideMetadataVersions(): JStream[MetadataVersion] = {
     JStream.of(
       // Supports KIP-704: unclean leader recovery
-      KAFKA_3_2_IV0,
+      IBP_3_2_IV0,
       // Supports KIP-497: alter partition
-      KAFKA_2_7_IV2
+      IBP_2_7_IV2
     )
   }
 
   def provideLeaderRecoveryState(): JStream[Arguments] = {
-    // Multiply apiVersions by leaderRecoveryState
-    provideApiVersions().flatMap { apiVersion =>
+    // Multiply metadataVersions by leaderRecoveryState
+    provideMetadataVersions().flatMap { metadataVersion =>
       JStream.of(
-        Arguments.of(apiVersion, LeaderRecoveryState.RECOVERED),
-        Arguments.of(apiVersion, LeaderRecoveryState.RECOVERING)
+        Arguments.of(metadataVersion, LeaderRecoveryState.RECOVERED),
+        Arguments.of(metadataVersion, LeaderRecoveryState.RECOVERING)
       )
     }
   }

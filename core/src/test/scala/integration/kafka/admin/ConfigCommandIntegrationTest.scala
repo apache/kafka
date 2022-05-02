@@ -17,7 +17,6 @@
 package kafka.admin
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
-import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.{ConfigEntityName, KafkaConfig, QuorumTestHarness}
 import kafka.utils.{Exit, Logging, TestInfoUtils}
@@ -25,6 +24,7 @@ import kafka.zk.{AdminZkClient, BrokerInfo}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -173,7 +173,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     zkClient.createTopLevelPaths()
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val endpoint = new EndPoint("localhost", 9092, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
-    val brokerInfo = BrokerInfo(Broker(id, Seq(endpoint), rack = None), ApiVersion.latestVersion, jmxPort = 9192)
+    val brokerInfo = BrokerInfo(Broker(id, Seq(endpoint), rack = None), MetadataVersion.latest, jmxPort = 9192)
     zkClient.registerBroker(brokerInfo)
   }
 }

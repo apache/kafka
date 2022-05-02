@@ -20,8 +20,6 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, TimeUnit}
 
-import kafka.api.ApiVersion
-import kafka.api.KAFKA_3_2_IV0
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
@@ -35,6 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -122,7 +121,7 @@ class DefaultAlterPartitionManager(
   val time: Time,
   val brokerId: Int,
   val brokerEpochSupplier: () => Long,
-  ibpVersion: ApiVersion
+  ibpVersion: MetadataVersion
 ) extends AlterPartitionManager with Logging with KafkaMetricsGroup {
 
   // Used to allow only one pending ISR update per partition (visible for testing)
@@ -234,7 +233,7 @@ class DefaultAlterPartitionManager(
           .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
-        if (ibpVersion >= KAFKA_3_2_IV0) {
+        if (ibpVersion.isAtLeast(MetadataVersion.IBP_3_2_IV0)) {
           partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
         }
 

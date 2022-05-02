@@ -2301,6 +2301,7 @@ project(':jmh-benchmarks') {
       // jmh requires jopt 4.x while `core` depends on 5.0, they are not binary compatible
       exclude group: 'net.sf.jopt-simple', module: 'jopt-simple'
     }
+    implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':streams')

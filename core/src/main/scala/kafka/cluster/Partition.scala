@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -232,7 +233,7 @@ case class CommittedPartitionState(
  */
 class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
-                interBrokerProtocolVersion: ApiVersion,
+                interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
                 time: Time,
                 alterPartitionListener: AlterPartitionListener,

@@ -16,7 +16,6 @@
   */
 package kafka.cluster
 
-import kafka.api.ApiVersion
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
@@ -30,9 +29,10 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
-
 import java.io.File
 import java.util.Properties
+
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.jdk.CollectionConverters._
 
@@ -90,7 +90,7 @@ class AbstractPartitionTest {
       .thenReturn(None)
   }
 
-  protected def interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion
+  protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest
 
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()

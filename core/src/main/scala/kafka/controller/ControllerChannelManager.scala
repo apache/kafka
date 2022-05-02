@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{KafkaException, Node, Reconfigurable, TopicPartition, Uuid}
+import org.apache.kafka.server.common.MetadataVersion._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.HashMap
@@ -390,7 +391,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
         .setIsNew(isNew || alreadyNew)
 
-      if (config.interBrokerProtocolVersion >= KAFKA_3_2_IV0) {
+      if (config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)) {
         partitionState.setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
       }
 
@@ -460,12 +461,12 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
   private def sendLeaderAndIsrRequest(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     val leaderAndIsrRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_3_2_IV0) 6
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV1) 5
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 4
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV0) 3
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2
-      else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
+      if (config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)) 6
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV1)) 5
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV1)) 4
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV0)) 3
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV0)) 2
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_1_0_IV0)) 1
       else 0
 
     leaderAndIsrRequestMap.forKeyValue { (broker, leaderAndIsrPartitionStates) =>
@@ -511,13 +512,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
     val partitionStates = updateMetadataRequestPartitionInfoMap.values.toBuffer
     val updateMetadataRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV1) 7
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 6
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
-      else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
-      else if (config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
-      else if (config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2
-      else if (config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
+      if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV1)) 7
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV1)) 6
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV0)) 5
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_1_0_IV0)) 4
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_0_10_2_IV0)) 3
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_0_10_0_IV1)) 2
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_0_9_0)) 1
       else 0
 
     val liveBrokers = controllerContext.liveOrShuttingDownBrokers.iterator.map { broker =>
@@ -567,9 +568,9 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   private def sendStopReplicaRequests(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     val traceEnabled = stateChangeLog.isTraceEnabled
     val stopReplicaRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_2_6_IV0) 3
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 2
-      else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
+      if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_6_IV0)) 3
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV1)) 2
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV0)) 1
       else 0
 
     def responseCallback(brokerId: Int, isPartitionDeleted: TopicPartition => Boolean)

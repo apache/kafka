@@ -20,7 +20,6 @@ package kafka.server
 import java.util.{Optional, Properties}
 import java.util.concurrent.ExecutionException
 
-import kafka.api.KAFKA_2_7_IV0
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
@@ -33,8 +32,9 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKe
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows, assertTrue}
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -45,7 +45,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   override def brokerCount = 3
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
   }
 
   private def defaultSupportedFeatures(): Features[SupportedVersionRange] = {

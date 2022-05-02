@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
 
 import com.yammer.metrics.core.Timer
-import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.controller.KafkaController.AlterPartitionCallback
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
@@ -32,6 +32,8 @@ import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
@@ -630,32 +632,32 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithNonExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Option.empty, IBP_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), IBP_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), IBP_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithNonExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Option.empty, IBP_2_6_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), IBP_2_6_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), IBP_2_6_IV0)
   }
 
   @Test
@@ -782,7 +784,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   private def testControllerFeatureZNodeSetup(initialZNode: Option[FeatureZNode],
-                                              interBrokerProtocolVersion: ApiVersion): Unit = {
+                                              interBrokerProtocolVersion: MetadataVersion): Unit = {
     val versionBeforeOpt = initialZNode match {
       case Some(node) =>
         zkClient.createFeatureZNode(node)
@@ -809,7 +811,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
     val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-    if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
+    if (interBrokerProtocolVersion.isAtLeast(IBP_2_7_IV0)) {
       val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures)
       initialZNode match {
         case Some(node) => {
@@ -1213,7 +1215,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testTopicIdsAreNotAdded(): Unit = {
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     TestUtils.waitUntilControllerElected(zkClient)
     val controller = getController().kafkaController
     val tp1 = new TopicPartition("t1", 0)
@@ -1275,7 +1277,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val assignment = Map(tp.partition -> ReplicaAssignment(Seq(0), List(), List()))
     val adminZkClient = new AdminZkClient(zkClient)
 
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     adminZkClient.createTopic(tp.topic, 1, 1)
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
@@ -1316,7 +1318,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testNoTopicIdPersistsThroughControllerReelection(): Unit = {
-    servers = makeServers(2, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(2, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = getController().kafkaController
     val tp = new TopicPartition("t", 0)
@@ -1356,7 +1358,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testTopicIdCreatedOnUpgrade(): Unit = {
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = getController().kafkaController
     val tp = new TopicPartition("t", 0)
@@ -1393,12 +1395,12 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   @Test
   def testTopicIdCreatedOnUpgradeMultiBrokerScenario(): Unit = {
     // Simulate an upgrade scenario where the controller is still on a pre-topic ID IBP, but the other two brokers are upgraded.
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.IBP_2_7_IV0))
     servers = servers ++ makeServers(3, startingIdNumber = 1)
     val originalControllerId = TestUtils.waitUntilControllerElected(zkClient)
     assertEquals(0, originalControllerId)
     val controller = getController().kafkaController
-    assertEquals(KAFKA_2_7_IV0, servers(originalControllerId).config.interBrokerProtocolVersion)
+    assertEquals(IBP_2_7_IV0, servers(originalControllerId).config.interBrokerProtocolVersion)
     val remainingBrokers = servers.filter(_.config.brokerId != originalControllerId)
     val tp = new TopicPartition("t", 0)
     // Only the remaining brokers will have the replicas for the partition
@@ -1452,7 +1454,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val adminZkClient = new AdminZkClient(zkClient)
 
     // start server with old IBP
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     // use create topic with ZK client directly, without topic ID
     adminZkClient.createTopic(tp.topic, 1, 1)
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
@@ -1478,7 +1480,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // Downgrade back to 2.7
     servers(0).shutdown()
     servers(0).awaitShutdown()
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     val topicIdAfterDowngrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
@@ -1611,7 +1613,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
                           listeners : Option[String] = None,
                           listenerSecurityProtocolMap : Option[String] = None,
                           controlPlaneListenerName : Option[String] = None,
-                          interBrokerProtocolVersion: Option[ApiVersion] = None,
+                          interBrokerProtocolVersion: Option[MetadataVersion] = None,
                           logDirCount: Int = 1,
                           startingIdNumber: Int = 0): Seq[KafkaServer] = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)

@@ -17,13 +17,13 @@
 
 package kafka.server
 
-import kafka.api.ApiVersion
 import kafka.utils.TestUtils
 import org.apache.kafka.common.security.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
-
 import java.util.Properties
+
+import org.apache.kafka.server.common.MetadataVersion
 
 class KafkaServerTest extends QuorumTestHarness {
 
@@ -126,7 +126,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testAlterIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.toString)
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.latest.toString)
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
     server.replicaManager.alterPartitionManager match {
