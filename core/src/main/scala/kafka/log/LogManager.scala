@@ -215,11 +215,11 @@ class LogManager(logDirs: Seq[File],
    * @param dir        the absolute path of the log directory
    */
   def handleLogDirFailure(dir: String): Unit = {
-    warn(s"Stopping serving logs in dir $dir")
+    fatal(s"!!! Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
       if (_liveLogDirs.isEmpty) {
-        fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
+        fatal(s"!!! Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
         Exit.halt(1)
       }
 
