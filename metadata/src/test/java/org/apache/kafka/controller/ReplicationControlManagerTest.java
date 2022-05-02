@@ -1009,7 +1009,8 @@ public class ReplicationControlManagerTest {
             new CreatePartitionsTopicResult().
                 setName("quux").
                 setErrorCode(INVALID_PARTITIONS.code()).
-                setErrorMessage("Topic already has 2 partition(s).")), createPartitionsResult.response());
+                setErrorMessage("Topic already has 2 partition(s).")),
+            createPartitionsResult.response());
         ctx.replay(createPartitionsResult.records());
         List<CreatePartitionsTopic> topics2 = new ArrayList<>();
         topics2.add(new CreatePartitionsTopic().
