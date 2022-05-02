@@ -125,6 +125,32 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
+        RecordVersion minRecordVersion,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Features<FinalizedVersionRange> finalizedFeatures,
+        long finalizedFeaturesEpoch,
+        NodeApiVersions controllerApiVersions,
+        ListenerType listenerType
+    ) {
+        ApiVersionCollection apiKeys;
+        if (controllerApiVersions != null) {
+            apiKeys = intersectForwardableApis(
+                listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
+        } else {
+            apiKeys = filterApis(minRecordVersion, listenerType);
+        }
+
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            apiKeys,
+            latestSupportedFeatures,
+            finalizedFeatures,
+            finalizedFeaturesEpoch
+        );
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
         ApiVersionCollection apiVersions,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Features<FinalizedVersionRange> finalizedFeatures,
@@ -272,31 +298,5 @@ public class ApiVersionsResponse extends AbstractResponse {
             .setApiKey(apiKey.id)
             .setMinVersion(apiKey.oldestVersion())
             .setMaxVersion(apiKey.latestVersion());
-    }
-
-    public static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        RecordVersion minRecordVersion,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
-        long finalizedFeaturesEpoch,
-        NodeApiVersions controllerApiVersions,
-        ListenerType listenerType
-    ) {
-        ApiVersionCollection apiKeys;
-        if (controllerApiVersions != null) {
-            apiKeys = ApiVersionsResponse.intersectForwardableApis(
-                listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
-        } else {
-            apiKeys = ApiVersionsResponse.filterApis(minRecordVersion, listenerType);
-        }
-
-        return ApiVersionsResponse.createApiVersionsResponse(
-            throttleTimeMs,
-            apiKeys,
-            latestSupportedFeatures,
-            finalizedFeatures,
-            finalizedFeaturesEpoch
-        );
     }
 }

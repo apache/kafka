@@ -150,7 +150,7 @@ public enum MetadataVersion {
     // Support for leader recovery for unclean leader election (KIP-704)
     IBP_3_2_IV0(4, "3.2", "IV0");
 
-    private static final MetadataVersion[] METADATA_VERSIONS = MetadataVersion.values();
+    public static final MetadataVersion[] VALUES = MetadataVersion.values();
     private final Optional<Short> featureLevel;
     private final String release;
     private final String ibpVersion;
@@ -217,7 +217,7 @@ public enum MetadataVersion {
         {
             IBP_VERSIONS = new HashMap<>();
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
-            for (MetadataVersion metadataVersion : MetadataVersion.values()) {
+            for (MetadataVersion metadataVersion : VALUES) {
                 maxInterVersion.put(metadataVersion.release, metadataVersion);
                 IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
             }
@@ -270,7 +270,7 @@ public enum MetadataVersion {
     }
 
     public static MetadataVersion latest() {
-        return METADATA_VERSIONS[METADATA_VERSIONS.length - 1];
+        return VALUES[VALUES.length - 1];
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {

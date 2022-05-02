@@ -112,7 +112,7 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             10,
             RecordVersion.V1,
             Features.emptySupportedFeatures(),
@@ -130,7 +130,7 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             10,
             RecordVersion.V1,
             Features.supportedFeatures(
@@ -157,8 +157,9 @@ public class ApiVersionsResponseTest {
         assertEquals(10, response.data().finalizedFeaturesEpoch());
     }
 
+    @Test
     public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),
@@ -176,7 +177,7 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void testMetadataQuorumApisAreDisabled() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),

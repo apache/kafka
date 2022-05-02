@@ -45,14 +45,13 @@ class MetadataVersionTest {
 
     @Test
     public void testFeatureLevel() {
-        MetadataVersion[] metadataVersions = MetadataVersion.values();
-        int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(IBP_3_0_IV0);
+        int firstFeatureLevelIndex = Arrays.asList(MetadataVersion.VALUES).indexOf(IBP_3_0_IV0);
         for (int i = 0; i < firstFeatureLevelIndex; i++) {
-            assertFalse(metadataVersions[i].featureLevel().isPresent());
+            assertFalse(MetadataVersion.VALUES[i].featureLevel().isPresent());
         }
         short expectedFeatureLevel = 1;
-        for (int i = firstFeatureLevelIndex; i < metadataVersions.length; i++) {
-            MetadataVersion metadataVersion = metadataVersions[i];
+        for (int i = firstFeatureLevelIndex; i < MetadataVersion.VALUES.length; i++) {
+            MetadataVersion metadataVersion = MetadataVersion.VALUES[i];
             short featureLevel = metadataVersion.featureLevel().orElseThrow(() ->
                 new IllegalArgumentException(
                     String.format("Metadata version %s must have a non-null feature level", metadataVersion.version())));
@@ -243,15 +242,8 @@ class MetadataVersionTest {
     }
 
     @Test
-    public void testMetadataVersionValidator() {
-        String str = new MetadataVersionValidator().toString();
-        String[] apiVersions = str.substring(1).split(",");
-        assertEquals(MetadataVersion.values().length, apiVersions.length);
-    }
-
-    @Test
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             10,
             RecordVersion.V1,
             Features.emptySupportedFeatures(),
@@ -269,7 +261,7 @@ class MetadataVersionTest {
 
     @Test
     public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             10,
             RecordVersion.V1,
             Features.supportedFeatures(
@@ -304,7 +296,7 @@ class MetadataVersionTest {
 
     @Test
     public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),
@@ -322,7 +314,7 @@ class MetadataVersionTest {
 
     @Test
     public void testMetadataQuorumApisAreDisabled() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),

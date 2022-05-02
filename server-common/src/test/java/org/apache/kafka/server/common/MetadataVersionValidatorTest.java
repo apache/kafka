@@ -14,27 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.common;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class MetadataVersionValidator implements Validator {
+import org.junit.jupiter.api.Test;
 
-    @Override
-    public void ensureValid(String name, Object value) {
-        try {
-            MetadataVersion.fromVersionString(value.toString());
-        } catch (IllegalArgumentException e) {
-            throw new ConfigException(name, value.toString(), e.getMessage());
-        }
+public class MetadataVersionValidatorTest {
+
+    @Test
+    public void testMetadataVersionValidator() {
+        String str = new MetadataVersionValidator().toString();
+        String[] apiVersions = str.substring(1).split(",");
+        assertEquals(MetadataVersion.VALUES.length, apiVersions.length);
     }
 
-    @Override
-    public String toString() {
-        return "[" + Arrays.stream(MetadataVersion.VALUES).distinct().map(MetadataVersion::version).collect(
-             Collectors.joining(", ")) + "]";
-    }
 }
