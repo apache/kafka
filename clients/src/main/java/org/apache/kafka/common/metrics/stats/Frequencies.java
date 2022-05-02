@@ -133,7 +133,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
         purgeObsoleteSamples(config, now);
         long totalCount = 0;
         for (Sample sample : samples) {
-            totalCount += sample.getEventCount();
+            totalCount += sample.eventCount;
         }
         if (totalCount == 0) {
             return 0.0d;
@@ -153,7 +153,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
     double totalCount() {
         long count = 0;
         for (Sample sample : samples) {
-            count += sample.getEventCount();
+            count += sample.eventCount;
         }
         return count;
     }

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics.stats;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -35,8 +36,13 @@ import org.apache.kafka.common.metrics.MetricConfig;
 public abstract class SampledStat implements MeasurableStat {
 
     private final double initialValue;
+    /**
+     * Index of the latest stored sample.
+     */
     private int current = 0;
-
+    /**
+     * Stores the recorded samples in a ring buffer.
+     */
     protected List<Sample> samples;
 
     public SampledStat(double initialValue) {
@@ -59,13 +65,13 @@ public abstract class SampledStat implements MeasurableStat {
     public void record(MetricConfig config, double value, long recordingTimeMs) {
         Sample sample = current(recordingTimeMs);
         if (sample.isComplete(recordingTimeMs, config)) {
-            final long previousWindowStartTime = sample.getLastWindowMs();
+            final long previousWindowStartTime = sample.lastWindowMs;
             sample = advance(config, recordingTimeMs);
             final long previousWindowEndtime = previousWindowStartTime + config.timeWindowMs();
-            sample.setLastWindowMs(recordingTimeMs - ((recordingTimeMs - previousWindowEndtime) % config.timeWindowMs()));
+            sample.lastWindowMs = recordingTimeMs - ((recordingTimeMs - previousWindowEndtime) % config.timeWindowMs());
         }
         update(sample, config, value, recordingTimeMs);
-        sample.setEventCount(sample.getEventCount() + 1);
+        sample.eventCount++;
     }
 
     private Sample advance(MetricConfig config, long timeMs) {
@@ -100,14 +106,7 @@ public abstract class SampledStat implements MeasurableStat {
     public Sample oldest(long now) {
         if (samples.size() == 0)
             this.samples.add(newSample(now));
-        Sample oldest = this.samples.get(0);
-        for (int i = 1; i < this.samples.size(); i++) {
-            Sample curr = this.samples.get(i);
-            if ((curr.getLastWindowMs() < oldest.getLastWindowMs()) && curr.isActive()) { // only consider active samples
-                oldest = curr;
-            }
-        }
-        return oldest;
+        return samples.stream().min(Comparator.comparingLong(Sample::lastWindowMs)).orElse(samples.get(0));
     }
 
     @Override
@@ -127,40 +126,25 @@ public abstract class SampledStat implements MeasurableStat {
     protected void purgeObsoleteSamples(MetricConfig config, long now) {
         long expireAge = config.samples() * config.timeWindowMs();
         for (Sample sample : samples) {
-            if (now - sample.getLastWindowMs() >= expireAge)
+            if (now - sample.lastWindowMs >= expireAge)
                 sample.reset(now);
         }
     }
 
     protected static class Sample {
-        private double initialValue;
-        private long eventCount;
-        private long lastWindowMs;
-        private double value;
-
-        /**
-         * A Sample object could be re-used in a ring buffer to store future samples for space efficiency.
-         * Thus, a sample could be in either of the following lifecycle states:
-         * NOT_INITIALIZED: Sample has not been initialized.
-         * ACTIVE: Sample has values and is currently
-         * RESET: Sample has been reset and the object is not destroyed so that it could be used for storing future
-         *        samples.
-         */
-        private enum LifecycleState {
-            NOT_INITIALIZED, ACTIVE, RESET
-        }
-        private LifecycleState currentLifecycleState;
+        public double initialValue;
+        public long eventCount;
+        public long lastWindowMs;
+        public double value;
 
         public Sample(double initialValue, long now) {
             this.initialValue = initialValue;
             this.eventCount = 0;
             this.lastWindowMs = now;
             this.value = initialValue;
-            this.currentLifecycleState = LifecycleState.ACTIVE;
         }
 
         public void reset(long now) {
-            this.currentLifecycleState = LifecycleState.RESET;
             this.eventCount = 0;
             this.lastWindowMs = now;
             this.value = initialValue;
@@ -170,44 +154,8 @@ public abstract class SampledStat implements MeasurableStat {
             return timeMs - lastWindowMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
         }
 
-        public boolean isActive() {
-            return currentLifecycleState == LifecycleState.ACTIVE;
-        }
-
-        public double getInitialValue() {
-            return initialValue;
-        }
-
-        public void setInitialValue(final double initialValue) {
-            this.currentLifecycleState = LifecycleState.ACTIVE;
-            this.initialValue = initialValue;
-        }
-
-        public long getEventCount() {
-            return eventCount;
-        }
-
-        public void setEventCount(final long eventCount) {
-            this.currentLifecycleState = LifecycleState.ACTIVE;
-            this.eventCount = eventCount;
-        }
-
-        public long getLastWindowMs() {
-            return lastWindowMs;
-        }
-
-        public void setLastWindowMs(final long lastWindowMs) {
-            this.currentLifecycleState = LifecycleState.ACTIVE;
-            this.lastWindowMs = lastWindowMs;
-        }
-
-        public double getValue() {
-            return value;
-        }
-
-        public void setValue(final double value) {
-            this.currentLifecycleState = LifecycleState.ACTIVE;
-            this.value = value;
+        public long lastWindowMs() {
+            return this.lastWindowMs;
         }
 
         @Override

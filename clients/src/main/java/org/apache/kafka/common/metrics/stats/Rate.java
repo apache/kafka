@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -49,6 +50,10 @@ public class Rate implements MeasurableStat {
     public Rate(TimeUnit unit, SampledStat stat) {
         this.stat = stat;
         this.unit = unit;
+    }
+
+    public String unitName() {
+        return unit.name().substring(0, unit.name().length() - 2).toLowerCase(Locale.ROOT);
     }
 
     @Override
@@ -106,7 +111,7 @@ public class Rate implements MeasurableStat {
          *          window duration = (now - start time of oldest non-obsolete window)
          *
          */
-        long totalElapsedTimeMs = now - stat.oldest(now).getLastWindowMs();
+        long totalElapsedTimeMs = now - stat.oldest(now).lastWindowMs;
 
         // Check how many full windows of data we have currently retained
         int numFullWindows = (int) (totalElapsedTimeMs / config.timeWindowMs());

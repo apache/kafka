@@ -82,7 +82,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
         purgeObsoleteSamples(config, now);
         float count = 0.0f;
         for (Sample sample : this.samples)
-            count += sample.getEventCount();
+            count += sample.eventCount;
         if (count == 0.0f)
             return Double.NaN;
         float sum = 0.0f;
