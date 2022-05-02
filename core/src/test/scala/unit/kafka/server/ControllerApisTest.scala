@@ -20,9 +20,8 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.Collections.singletonList
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.{CompletableFuture, ExecutionException}
-
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -729,8 +728,7 @@ class ControllerApisTest {
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
-    request.setValidateOnly(true)
-    val expectedResult = Set(new CreatePartitionsTopicResult().setName("foo").
+    assertEquals(Set(new CreatePartitionsTopicResult().setName("foo").
       setErrorCode(NONE.code()).
       setErrorMessage(null),
       new CreatePartitionsTopicResult().setName("bar").
@@ -738,18 +736,46 @@ class ControllerApisTest {
         setErrorMessage("Duplicate topic name."),
       new CreatePartitionsTopicResult().setName("baz").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
-        setErrorMessage(null))
-    assertEquals(expectedResult,
+        setErrorMessage(null)),
       controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
         _ => Set("foo", "bar")).get().asScala.toSet)
-    assertTrue(controller.isLastCreatePartitionsValidateOnly)
+  }
 
-    // Remove the validateOnly flag in the request.
-    request.setValidateOnly(false)
-    assertEquals(expectedResult,
+  @Test
+  def testValidateOnlyCreatePartitionsRequest(): Unit = {
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+    val request = new CreatePartitionsRequestData()
+    request.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))
+    request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
+    request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
+    request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
+    request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
+    request.setValidateOnly(true)
+
+    // Check if the controller is called correctly with the 'validateOnly' field set.
+    when(controller.createPartitions(
+      any(),
+      ArgumentMatchers.eq(
+        Collections.singletonList(
+          new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))),
+      ArgumentMatchers.eq(true))).thenReturn(CompletableFuture
+      .completedFuture(Collections.singletonList(
+        new CreatePartitionsTopicResult().setName("foo").
+          setErrorCode(NONE.code()).
+          setErrorMessage(null)
+      )))
+    assertEquals(Set(new CreatePartitionsTopicResult().setName("foo").
+      setErrorCode(NONE.code()).
+      setErrorMessage(null),
+      new CreatePartitionsTopicResult().setName("bar").
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Duplicate topic name."),
+      new CreatePartitionsTopicResult().setName("baz").
+        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
+        setErrorMessage(null)),
       controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
         _ => Set("foo", "bar")).get().asScala.toSet)
-    assertFalse(controller.isLastCreatePartitionsValidateOnly)
   }
 
   @Test
