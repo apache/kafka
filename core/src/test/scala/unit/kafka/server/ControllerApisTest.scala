@@ -58,6 +58,8 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -716,33 +718,9 @@ class ControllerApisTest {
         _ => Set("foo", "bar")))
   }
 
-  @Test
-  def testCreatePartitionsRequest(): Unit = {
-    val controller = new MockController.Builder().
-      newInitialTopic("foo", Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-      newInitialTopic("bar", Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")).build()
-    val controllerApis = createControllerApis(None, controller)
-    val request = new CreatePartitionsRequestData()
-    request.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))
-    request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
-    request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
-    request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
-    request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
-    assertEquals(Set(new CreatePartitionsTopicResult().setName("foo").
-      setErrorCode(NONE.code()).
-      setErrorMessage(null),
-      new CreatePartitionsTopicResult().setName("bar").
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Duplicate topic name."),
-      new CreatePartitionsTopicResult().setName("baz").
-        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
-        setErrorMessage(null)),
-      controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
-        _ => Set("foo", "bar")).get().asScala.toSet)
-  }
-
-  @Test
-  def testValidateOnlyCreatePartitionsRequest(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testCreatePartitionsRequest(validateOnly: Boolean): Unit = {
     val controller = mock(classOf[Controller])
     val controllerApis = createControllerApis(None, controller)
     val request = new CreatePartitionsRequestData()
@@ -751,7 +729,9 @@ class ControllerApisTest {
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
-    request.setValidateOnly(true)
+
+    // Set the validateOnly flag and check the controller just validates the request.
+    request.setValidateOnly(validateOnly)
 
     // Check if the controller is called correctly with the 'validateOnly' field set.
     when(controller.createPartitions(
@@ -759,7 +739,7 @@ class ControllerApisTest {
       ArgumentMatchers.eq(
         Collections.singletonList(
           new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))),
-      ArgumentMatchers.eq(true))).thenReturn(CompletableFuture
+      ArgumentMatchers.eq(validateOnly))).thenReturn(CompletableFuture
       .completedFuture(Collections.singletonList(
         new CreatePartitionsTopicResult().setName("foo").
           setErrorCode(NONE.code()).

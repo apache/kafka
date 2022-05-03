@@ -328,8 +328,7 @@ public interface Controller extends AclMutator, AutoCloseable {
      * Create partitions on certain topics.
      *
      * @param topics        The list of topics to create partitions for.
-     * @param validateOnly  If true, create partitions is just validated and returns response
-     *                      without actually creating partitions.
+     * @param validateOnly  If true, the request is validated, but no partitions will be created.
      *
      * @return              A future yielding per-topic results.
      */
