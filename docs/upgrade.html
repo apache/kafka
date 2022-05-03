@@ -73,7 +73,13 @@
             via Connect worker and/or connector configuration. Connect may enable idempotent producers
             by default in a future major release.</li>
         <li>Kafka has replaced log4j and slf4j-log4j12 with reload4j and slf4j-reload4j due to security concerns.
-             More information can be found at <a href"https://reload4j.qos.ch">reload4j</a>.</li>
+            This only affects modules that specify a logging backend (<code>connect-runtime</code> and <code>kafka-tools</code> are two such examples).
+            A number of modules, including <code>kafka-clients</code>, leave it to the application to specify the logging backend.
+            More information can be found at <a href"https://reload4j.qos.ch">reload4j</a>.
+            Projects that depend on the affected modules from the Kafka project should use
+            <a href="https://www.slf4j.org/manual.html#swapping">slf4j-log4j12 version 1.7.35 or above</a> or
+            slf4j-reload4j to avoid
+            <a href="https://www.slf4j.org/codes.html#no_tlm">possible compatibility issues originating from the logging framework</a>.</li>
         <li>The example connectors, <code>FileStreamSourceConnector</code> and <code>FileStreamSinkConnector</code>, have been 
             removed from the default classpath. To use them in Kafka Connect standalone or distributed mode they need to be 
             explicitly added, for example <code>CLASSPATH=./lib/connect-file-3.2.0.jar ./bin/connect-distributed.sh</code>.</li>
