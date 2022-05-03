@@ -729,11 +729,9 @@ class ControllerApisTest {
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
-
-    // Set the validateOnly flag and check the controller just validates the request.
     request.setValidateOnly(validateOnly)
 
-    // Check if the controller is called correctly with the 'validateOnly' field set.
+    // Check if the controller is called correctly with the 'validateOnly' field set appropriately.
     when(controller.createPartitions(
       any(),
       ArgumentMatchers.eq(
