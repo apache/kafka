@@ -168,7 +168,7 @@ public class ApiVersionsResponseTest {
             null,
             ListenerType.ZK_BROKER
         );
-        assertEquals(new HashSet<ApiKeys>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data().supportedFeatures().isEmpty());
         assertTrue(response.data().finalizedFeatures().isEmpty());

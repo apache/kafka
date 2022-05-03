@@ -38,7 +38,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
   }
 
   /**
-   * Returns the default finalized features that a new Kafka cluster with IBP config >= KAFKA_2_7_IV0
+   * Returns the default finalized features that a new Kafka cluster with IBP config >= IBP_2_7_IV0
    * needs to be bootstrapped with.
    */
   def defaultFinalizedFeatures: Features[FinalizedVersionRange] = {
