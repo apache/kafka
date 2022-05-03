@@ -45,7 +45,7 @@ public class ConnectExceptionMapper implements ExceptionMapper<Exception> {
                     .build();
         }
 
-        if (exception instanceof NotFoundException) {
+        if (exception instanceof NotFoundException || exception instanceof javax.ws.rs.NotFoundException) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(new ErrorMessage(Response.Status.NOT_FOUND.getStatusCode(), exception.getMessage()))
                     .build();
