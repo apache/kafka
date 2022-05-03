@@ -34,8 +34,8 @@ class TrogdorService(KafkaPathResolverMixin, Service):
         AGENT_STDOUT_STDERR             The path where we store the agents's stdout/stderr output.
         COORDINATOR_LOG                 The path where we store the coordinator's log4j output.
         AGENT_LOG                       The path where we store the agent's log4j output.
-        AGENT_LOG4J_PROPERTIES          The path to the agent log4j.properties file for log config.
-        COORDINATOR_LOG4J_PROPERTIES    The path to the coordinator log4j.properties file for log config.
+        AGENT_LOG4J2_PROPERTIES         The path to the agent log4j2.properties file for log config.
+        COORDINATOR_LOG4J2_PROPERTIES   The path to the coordinator log4j2.properties file for log config.
         CONFIG_PATH                     The path to the trogdor configuration file.
         DEFAULT_AGENT_PORT              The default port to use for trogdor_agent daemons.
         DEFAULT_COORDINATOR_PORT        The default port to use for trogdor_coordinator daemons.
@@ -48,8 +48,8 @@ class TrogdorService(KafkaPathResolverMixin, Service):
     AGENT_STDOUT_STDERR = os.path.join(PERSISTENT_ROOT, "trogdor-agent-stdout-stderr.log")
     COORDINATOR_LOG = os.path.join(PERSISTENT_ROOT, "trogdor-coordinator.log")
     AGENT_LOG = os.path.join(PERSISTENT_ROOT, "trogdor-agent.log")
-    COORDINATOR_LOG4J_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-coordinator-log4j.properties")
-    AGENT_LOG4J_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-agent-log4j.properties")
+    COORDINATOR_LOG4J2_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-coordinator-log4j2.properties")
+    AGENT_LOG4J2_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-agent-log4j2.properties")
     CONFIG_PATH = os.path.join(PERSISTENT_ROOT, "trogdor.conf")
     DEFAULT_AGENT_PORT=8888
     DEFAULT_COORDINATOR_PORT=8889
@@ -141,26 +141,26 @@ class TrogdorService(KafkaPathResolverMixin, Service):
             self._start_agent_node(node)
 
     def _start_coordinator_node(self, node):
-        node.account.create_file(TrogdorService.COORDINATOR_LOG4J_PROPERTIES,
-                                 self.render('log4j.properties',
+        node.account.create_file(TrogdorService.COORDINATOR_LOG4J2_PROPERTIES,
+                                 self.render('log4j2.properties',
                                              log_path=TrogdorService.COORDINATOR_LOG))
         self._start_trogdor_daemon("coordinator", TrogdorService.COORDINATOR_STDOUT_STDERR,
-                                   TrogdorService.COORDINATOR_LOG4J_PROPERTIES,
+                                   TrogdorService.COORDINATOR_LOG4J2_PROPERTIES,
                                    TrogdorService.COORDINATOR_LOG, node)
         self.logger.info("Started trogdor coordinator on %s." % node.name)
 
     def _start_agent_node(self, node):
-        node.account.create_file(TrogdorService.AGENT_LOG4J_PROPERTIES,
-                                 self.render('log4j.properties',
+        node.account.create_file(TrogdorService.AGENT_LOG4J2_PROPERTIES,
+                                 self.render('log4j2.properties',
                                              log_path=TrogdorService.AGENT_LOG))
         self._start_trogdor_daemon("agent", TrogdorService.AGENT_STDOUT_STDERR,
-                                   TrogdorService.AGENT_LOG4J_PROPERTIES,
+                                   TrogdorService.AGENT_LOG4J2_PROPERTIES,
                                    TrogdorService.AGENT_LOG, node)
         self.logger.info("Started trogdor agent on %s." % node.name)
 
     def _start_trogdor_daemon(self, daemon_name, stdout_stderr_capture_path,
-                              log4j_properties_path, log_path, node):
-        cmd = "export KAFKA_LOG4J_OPTS='-Dlog4j.configuration=file:%s'; " % log4j_properties_path
+                              log4j2_properties_path, log_path, node):
+        cmd = "export KAFKA_LOG4J_OPTS='-Dlog4j.configurationFile=file:%s'; " % log4j2_properties_path
         cmd += "%s %s --%s.config %s --node-name %s 1>> %s 2>> %s &" % \
                (self.path.script("trogdor.sh", node),
                 daemon_name,

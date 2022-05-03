@@ -35,10 +35,10 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
@@ -581,15 +581,15 @@ public class KGroupedStreamImplTest {
     public void shouldLogAndMeasureSkipsInAggregate() {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamAggregate.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create();
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             processData(driver);
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] "
-                    + "offset=[6]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key or value. topic=[topic] partition=[0] offset=[6] ")
             );
         }
     }
@@ -631,15 +631,15 @@ public class KGroupedStreamImplTest {
                 .withValueSerde(Serdes.String())
         );
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamReduce.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create();
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             processData(driver);
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] "
-                    + "offset=[6]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key or value. topic=[topic] partition=[0] offset=[6] ")
             );
         }
     }

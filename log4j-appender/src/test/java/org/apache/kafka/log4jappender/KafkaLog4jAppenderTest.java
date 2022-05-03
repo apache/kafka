@@ -35,6 +35,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -149,7 +150,10 @@ public class KafkaLog4jAppenderTest {
         Properties props = getLog4jConfigWithRealProducer(true);
         PropertyConfigurator.configure(props);
 
-        logger.error(getMessage(0));
+        assertDoesNotThrow(() -> logger.error(getMessage(0)));
+
+        // close the appender. If this process is omitted, `PropertyConfigurator#configure` call may hang up.
+        Logger.getRootLogger().getAppender("KAFKA").close();
     }
 
     @Test
@@ -158,6 +162,9 @@ public class KafkaLog4jAppenderTest {
         PropertyConfigurator.configure(props);
 
         assertThrows(RuntimeException.class, () -> logger.error(getMessage(0)));
+
+        // close the appender. If this process is omitted, `PropertyConfigurator#configure` call may hang up.
+        Logger.getRootLogger().getAppender("KAFKA").close();
     }
 
     private void replaceProducerWithMocked(MockKafkaLog4jAppender mockKafkaLog4jAppender, boolean success) {
@@ -214,4 +221,3 @@ public class KafkaLog4jAppenderTest {
         return props;
     }
 }
-

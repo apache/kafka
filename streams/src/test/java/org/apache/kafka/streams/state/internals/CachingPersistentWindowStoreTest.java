@@ -38,13 +38,13 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -997,41 +997,45 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
-        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() throws InterruptedException {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
+            logCaptureContext.setLatch(2);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingWindowStore.class);
-             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L)) {
+            final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
+            final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 
-            final List<String> messages = appender.getMessages();
+            logCaptureContext.await();
             assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Returning empty iterator for fetch with invalid key range: from > to." +
+                        " This may be due to range arguments set in the wrong order," +
+                        " or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                        " Note that the built-in numerical serdes do not follow this for negative numbers ")
             );
         }
     }
 
     @Test
-    public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey() {
+    public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey() throws InterruptedException {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingWindowStore.class);
-             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 cachingStore.backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(0L), Instant.ofEpochMilli(10L))) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
+            logCaptureContext.setLatch(2);
+
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                cachingStore.backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(0L), Instant.ofEpochMilli(10L));
             assertFalse(iterator.hasNext());
 
-            final List<String> messages = appender.getMessages();
+            logCaptureContext.await();
             assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                logCaptureContext.getMessages(),
+                hasItem("WARN Returning empty iterator for fetch with invalid key range: from > to." +
                     " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+                    " Note that the built-in numerical serdes do not follow this for negative numbers ")
             );
         }
     }

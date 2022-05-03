@@ -35,8 +35,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
@@ -159,7 +159,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException {
+    public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException, InterruptedException {
         final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
         stateManager.initialize();
         stateManager.updateChangelogOffsets(offsets);
@@ -170,9 +170,11 @@ public class GlobalStateManagerImplTest {
         file.createNewFile();
         file.setWritable(false);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
+            logCaptureContext.setLatch(2);
             stateManager.checkpoint();
-            assertThat(appender.getMessages(), hasItem(containsString(
+            logCaptureContext.await();
+            assertThat(logCaptureContext.getMessages(), hasItem(containsString(
                 "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
         }
     }

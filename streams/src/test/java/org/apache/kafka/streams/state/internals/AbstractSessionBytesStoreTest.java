@@ -32,9 +32,9 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -58,8 +58,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -709,7 +709,7 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldLogAndMeasureExpiredRecords() throws InterruptedException {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
@@ -722,7 +722,9 @@ public abstract class AbstractSessionBytesStoreTest {
         context.setSystemTimeMs(time.milliseconds());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
+            logCaptureContext.setLatch(2);
+
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
             // Note that rocksdb will only expire segments at a time (where segment interval = 60,000 for this retention period)
             sessionStore.put(new Windowed<>("initial record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
@@ -731,8 +733,8 @@ public abstract class AbstractSessionBytesStoreTest {
             sessionStore.put(new Windowed<>("late record", new SessionWindow(0, 0)), 0L);
             sessionStore.put(new Windowed<>("another on-time record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
 
-            final List<String> messages = appender.getMessages();
-            assertThat(messages, hasItem("Skipping record for expired segment."));
+            logCaptureContext.await();
+            assertThat(logCaptureContext.getMessages(), hasItem("WARN Skipping record for expired segment. "));
         }
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
@@ -790,23 +792,25 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() throws InterruptedException {
         final String keyFrom = Serdes.String().deserializer()
             .deserialize("", Serdes.Integer().serializer().serialize("", -1));
         final String keyTo = Serdes.String().deserializer()
             .deserialize("", Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-             final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
+            logCaptureContext.setLatch(1);
+
+            final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 
-            final List<String> messages = appender.getMessages();
+            logCaptureContext.await();
             assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                logCaptureContext.getMessages(),
+                hasItem("WARN Returning empty iterator for fetch with invalid key range: from > to." +
                     " This may be due to range arguments set in the wrong order, " +
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+                    " Note that the built-in numerical serdes do not follow this for negative numbers ")
             );
         }
     }

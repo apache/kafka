@@ -43,7 +43,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -228,33 +228,35 @@ public class KStreamKTableJoinTest {
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullLeftKey() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "A");
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
-                    + "offset=[0]"));
-        }
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
-            final TestInputTopic<Integer, String> inputTopic =
-                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-            inputTopic.pipeInput(1, null);
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
-                    + "offset=[0]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
+                    + "offset=[0] ")
             );
         }
     }
 
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullLeftValue() throws InterruptedException {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
+            logCaptureContext.setLatch(5);
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+            inputTopic.pipeInput(1, null);
+
+            logCaptureContext.await();
+            assertThat(
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
+                    + "offset=[0] ")
+            );
+        }
+    }
 
     private final String expectedTopologyWithGeneratedRepartitionTopicNames =
         "Topologies:\n"
