@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{LogAppendInfo, LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
@@ -40,10 +39,13 @@ import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, never, times, verify, when}
-
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional}
+
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -250,15 +252,15 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldFetchLeaderEpochOnFirstFetchOnlyIfLeaderEpochKnownToBothIbp26(): Unit = {
-    verifyFetchLeaderEpochOnFirstFetch(KAFKA_2_6_IV0)
+    verifyFetchLeaderEpochOnFirstFetch(IBP_2_6_IV0)
   }
 
   @Test
   def shouldNotFetchLeaderEpochOnFirstFetchWithTruncateOnFetch(): Unit = {
-    verifyFetchLeaderEpochOnFirstFetch(ApiVersion.latestVersion, epochFetchCount = 0)
+    verifyFetchLeaderEpochOnFirstFetch(MetadataVersion.latest, epochFetchCount = 0)
   }
 
-  private def verifyFetchLeaderEpochOnFirstFetch(ibp: ApiVersion, epochFetchCount: Int = 1): Unit = {
+  private def verifyFetchLeaderEpochOnFirstFetch(ibp: MetadataVersion, epochFetchCount: Int = 1): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.version)
     val config = KafkaConfig.fromProps(props)
@@ -1074,7 +1076,7 @@ class ReplicaFetcherThreadTest {
 
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_6_IV0.version)
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_6_IV0.version)
     KafkaConfig.fromProps(props)
   }
 }

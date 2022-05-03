@@ -20,7 +20,6 @@ package kafka.server
 import java.util.Collections
 import java.util.Optional
 
-import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import kafka.server.AbstractFetcherThread.ReplicaFetch
@@ -38,6 +37,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.common.MetadataVersion._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -72,44 +72,44 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_1_IV0) 13
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_1_1_IV0) 7
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV1) 5
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 4
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV1) 3
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
+    if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_3_1_IV0)) 13
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_7_IV1)) 12
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 11
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV2)) 10
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)) 8
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_1_1_IV0)) 7
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV1)) 5
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV0)) 4
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV1)) 3
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_10_0_IV0)) 2
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_9_0)) 1
     else 0
 
   // Visible for testing
   private[server] val offsetForLeaderEpochRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 4
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 3
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 2
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) 1
+    if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 4
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 3
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV1)) 2
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV0)) 1
     else 0
 
   // Visible for testing
   private[server] val listOffsetRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV1) 7
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 6
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_2_IV1) 5
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 4
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 3
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 2
-    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) 1
+    if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)) 7
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 6
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV1)) 5
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV1)) 4
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)) 3
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV0)) 2
+    else if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV2)) 1
     else 0
 
   private val maxWait = brokerConfig.replicaFetchWaitMaxMs
   private val minBytes = brokerConfig.replicaFetchMinBytes
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
-  override protected val isOffsetForLeaderEpochSupported: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
-  override protected val isTruncationOnFetchSupported = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
+  override protected val isOffsetForLeaderEpochSupported: Boolean = brokerConfig.interBrokerProtocolVersion.isOffsetForLeaderEpochSupported
+  override protected val isTruncationOnFetchSupported = brokerConfig.interBrokerProtocolVersion.isTruncationOnFetchSupported
   val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
@@ -261,7 +261,7 @@ class ReplicaFetcherThread(name: String,
 
      Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE =>
-        if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
+        if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV2))
           responsePartition.offset
         else
           responsePartition.oldStyleOffsets.get(0)

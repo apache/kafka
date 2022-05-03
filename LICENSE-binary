@@ -208,50 +208,53 @@ License Version 2.0:
 audience-annotations-0.5.0
 commons-cli-1.4
 commons-lang3-3.8.1
-jackson-annotations-2.12.3
-jackson-core-2.12.3
+jackson-annotations-2.12.6
+jackson-core-2.12.6
 jackson-databind-2.12.6.1
-jackson-dataformat-csv-2.12.3
-jackson-datatype-jdk8-2.12.3
-jackson-jaxrs-base-2.12.3
-jackson-jaxrs-json-provider-2.12.3
-jackson-module-jaxb-annotations-2.12.3
+jackson-dataformat-csv-2.12.6
+jackson-datatype-jdk8-2.12.6
+jackson-jaxrs-base-2.12.6
+jackson-jaxrs-json-provider-2.12.6
+jackson-module-jaxb-annotations-2.12.6
 jackson-module-paranamer-2.10.5
-jackson-module-scala_2.13-2.12.3
+jackson-module-scala_2.13-2.12.6
 jakarta.validation-api-2.0.2
 javassist-3.27.0-GA
-jetty-client-9.4.43.v20210629
-jetty-continuation-9.4.43.v20210629
-jetty-http-9.4.43.v20210629
-jetty-io-9.4.43.v20210629
-jetty-security-9.4.43.v20210629
-jetty-server-9.4.43.v20210629
-jetty-servlet-9.4.43.v20210629
-jetty-servlets-9.4.43.v20210629
-jetty-util-9.4.43.v20210629
-jetty-util-ajax-9.4.43.v20210629
+jetty-client-9.4.44.v20210927
+jetty-continuation-9.4.44.v20210927
+jetty-http-9.4.44.v20210927
+jetty-io-9.4.44.v20210927
+jetty-security-9.4.44.v20210927
+jetty-server-9.4.44.v20210927
+jetty-servlet-9.4.44.v20210927
+jetty-servlets-9.4.44.v20210927
+jetty-util-9.4.44.v20210927
+jetty-util-ajax-9.4.44.v20210927
 jersey-common-2.34
 jersey-server-2.34
-jose4j-0.7.8
+jose4j-0.7.9
 lz4-java-1.8.0
-maven-artifact-3.8.1
+maven-artifact-3.8.4
 metrics-core-4.1.12.1
-netty-buffer-4.1.68.Final
-netty-codec-4.1.68.Final
-netty-common-4.1.68.Final
-netty-handler-4.1.68.Final
-netty-resolver-4.1.68.Final
-netty-transport-4.1.68.Final
-netty-transport-native-epoll-4.1.68.Final
-netty-transport-native-unix-common-4.1.68.Final
-plexus-utils-3.2.1
+metrics-core-2.2.0
+netty-buffer-4.1.73.Final
+netty-codec-4.1.73.Final
+netty-common-4.1.73.Final
+netty-handler-4.1.73.Final
+netty-resolver-4.1.73.Final
+netty-tcnative-classes-2.0.46.Final
+netty-transport-4.1.73.Final
+netty-transport-classes-epoll-4.1.73.Final
+netty-transport-native-epoll-4.1.73.Final
+netty-transport-native-unix-common-4.1.73.Final
+plexus-utils-3.3.0
 reload4j-1.2.19
-rocksdbjni-6.22.1.1
-scala-collection-compat_2.13-2.4.4
-scala-library-2.13.6
-scala-logging_2.13-3.9.3
-scala-reflect-2.13.6
-scala-java8-compat_2.13-1.0.0
+rocksdbjni-6.29.4.1
+scala-collection-compat_2.13-2.6.0
+scala-library-2.13.8
+scala-logging_2.13-3.9.4
+scala-reflect-2.13.8
+scala-java8-compat_2.13-1.0.2
 snappy-java-1.1.8.4
 zookeeper-3.6.3
 zookeeper-jute-3.6.3
@@ -306,12 +309,12 @@ slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
 ---------------------------------------
 BSD 2-Clause
 
-zstd-jni-1.5.0-4 see: licenses/zstd-jni-BSD-2-clause
+zstd-jni-1.5.2-1 see: licenses/zstd-jni-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause
 
-jline-3.12.1, see: licenses/jline-BSD-3-clause
+jline-3.21.0, see: licenses/jline-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 
 ---------------------------------------

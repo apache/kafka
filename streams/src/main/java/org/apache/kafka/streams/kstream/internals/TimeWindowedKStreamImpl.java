@@ -20,12 +20,15 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
+import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -39,6 +42,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
@@ -47,6 +51,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     private final Windows<W> windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
+    private EmitStrategy emitStrategy = EmitStrategy.onWindowUpdate();
 
     TimeWindowedKStreamImpl(final Windows<W> windows,
                             final InternalStreamsBuilder builder,
@@ -107,7 +112,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
                 materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());
@@ -155,7 +160,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
                 materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, initializer, aggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());
@@ -202,10 +207,20 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return aggregateBuilder.build(
                 new NamedInternal(reduceName),
                 materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());
+    }
+
+    //@Override
+    public TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
+        if (this.windows instanceof UnlimitedWindows
+            && emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+            throw new IllegalArgumentException("ON_WINDOW_CLOSE emit strategy cannot be used for UnlimitedWindows");
+        }
+        this.emitStrategy = emitStrategy;
+        return this;
     }
 
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
@@ -232,11 +247,19 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     );
                     break;
                 case ROCKS_DB:
-                    supplier = Stores.persistentTimestampedWindowStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.size()),
-                        false
+                    supplier = emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE ?
+                        RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            Duration.ofMillis(windows.size()),
+                            false,
+                            false
+                        ) :
+                        Stores.persistentTimestampedWindowStore(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            Duration.ofMillis(windows.size()),
+                            false
                     );
                     break;
                 default:

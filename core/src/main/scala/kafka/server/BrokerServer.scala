@@ -33,6 +33,7 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
+import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.metrics.Metrics
@@ -63,8 +64,8 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
     raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
         asScala.getOrElse(
       throw new RuntimeException("A snapshot already exists with " +
-        s"committedOffset=${committedOffset}, committedEpoch=${committedEpoch}, " +
-        s"lastContainedLogTime=${lastContainedLogTime}")
+        s"committedOffset=$committedOffset, committedEpoch=$committedEpoch, " +
+        s"lastContainedLogTime=$lastContainedLogTime")
     )
   }
 }
@@ -80,8 +81,7 @@ class BrokerServer(
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
   val initialOfflineDirs: Seq[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-  val supportedFeatures: util.Map[String, VersionRange]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends KafkaBroker {
 
   override def brokerState: BrokerState = lifecycleManager.state
@@ -127,7 +127,9 @@ class BrokerServer(
 
   var forwardingManager: ForwardingManager = null
 
-  var alterIsrManager: AlterIsrManager = null
+  @volatile var featureCache: FinalizedFeatureCache = null
+
+  var alterIsrManager: AlterPartitionManager = null
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
@@ -141,10 +143,6 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = null
 
-  val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
-
-  val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
-
   val clusterId: String = metaProps.clusterId
 
   var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
@@ -152,6 +150,8 @@ class BrokerServer(
   var metadataListener: BrokerMetadataListener = null
 
   var metadataPublisher: BrokerMetadataPublisher = null
+
+  val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
 
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
@@ -223,6 +223,8 @@ class BrokerServer(
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
+      featureCache = new FinalizedFeatureCache(brokerFeatures)
+
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
         config,
@@ -248,7 +250,7 @@ class BrokerServer(
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )
-      alterIsrManager = new DefaultAlterIsrManager(
+      alterIsrManager = new DefaultAlterPartitionManager(
         controllerChannelManager = alterIsrChannelManager,
         scheduler = kafkaScheduler,
         time = time,
@@ -267,7 +269,7 @@ class BrokerServer(
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
-        alterIsrManager = alterIsrManager,
+        alterPartitionManager = alterIsrManager,
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
         zkClient = None,
@@ -332,10 +334,16 @@ class BrokerServer(
           setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
           setSecurityProtocol(ep.securityProtocol.id))
       }
+
+      val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
+        case (k: String, v: SupportedVersionRange) =>
+          k -> VersionRange.of(v.min, v.max)
+      }.asJava
+
       lifecycleManager.start(() => metadataListener.highestMetadataOffset,
         BrokerToControllerChannelManager(controllerNodeProvider, time, metrics, config,
           "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong),
-        metaProps.clusterId, networkListeners, supportedFeatures)
+        metaProps.clusterId, networkListeners, featuresRemapped)
 
       // Register a listener with the Raft layer to receive metadata event notifications
       raftManager.register(metadataListener)

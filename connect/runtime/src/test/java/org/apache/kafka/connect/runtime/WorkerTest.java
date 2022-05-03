@@ -103,12 +103,14 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstructionWithAnswer;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @RunWith(Parameterized.class)
@@ -411,7 +413,7 @@ public class WorkerTest extends ThreadedTest {
         when(plugins.newConnector(connectorAlias)).thenReturn(sinkConnector);
         when(delegatingLoader.connectorLoader(connectorAlias)).thenReturn(pluginLoader);
         when(sinkConnector.version()).thenReturn("1.0");
-        
+
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
         connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)))
@@ -1168,6 +1170,63 @@ public class WorkerTest extends ThreadedTest {
         }
         //verify metric is created with correct jmx prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1")));
+    }
+
+    @Test
+    public void testExecutorServiceShutdown() throws InterruptedException {
+        ExecutorService executorService = mock(ExecutorService.class);
+        doNothing().when(executorService).shutdown();
+        when(executorService.awaitTermination(1000L, TimeUnit.MILLISECONDS)).thenReturn(true);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config,
+                            offsetBackingStore, executorService,
+                            noneConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        assertEquals(Collections.emptySet(), worker.connectorNames());
+        worker.stop();
+        verify(executorService, times(1)).shutdown();
+        verify(executorService, times(1)).awaitTermination(1000L, TimeUnit.MILLISECONDS);
+        verifyNoMoreInteractions(executorService);
+
+    }
+
+    @Test
+    public void testExecutorServiceShutdownWhenTerminationFails() throws InterruptedException {
+        ExecutorService executorService = mock(ExecutorService.class);
+        doNothing().when(executorService).shutdown();
+        when(executorService.awaitTermination(1000L, TimeUnit.MILLISECONDS)).thenReturn(false);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config,
+                            offsetBackingStore, executorService,
+                            noneConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        assertEquals(Collections.emptySet(), worker.connectorNames());
+        worker.stop();
+        verify(executorService, times(1)).shutdown();
+        verify(executorService, times(1)).shutdownNow();
+        verify(executorService, times(2)).awaitTermination(1000L, TimeUnit.MILLISECONDS);
+        verifyNoMoreInteractions(executorService);
+
+    }
+
+    @Test
+    public void testExecutorServiceShutdownWhenTerminationThrowsException() throws InterruptedException {
+        ExecutorService executorService = mock(ExecutorService.class);
+        doNothing().when(executorService).shutdown();
+        when(executorService.awaitTermination(1000L, TimeUnit.MILLISECONDS)).thenThrow(new InterruptedException("interrupt"));
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config,
+                            offsetBackingStore, executorService,
+                            noneConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        assertEquals(Collections.emptySet(), worker.connectorNames());
+        worker.stop();
+        verify(executorService, times(1)).shutdown();
+        verify(executorService, times(1)).shutdownNow();
+        verify(executorService, times(1)).awaitTermination(1000L, TimeUnit.MILLISECONDS);
+        verifyNoMoreInteractions(executorService);
+
     }
 
     private void assertStatusMetrics(long expected, String metricName) {

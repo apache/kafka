@@ -89,7 +89,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
 
         valueGetterSupplier.put("lhs1", "lhsValue");
         final long[] oldHash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "oldLhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(oldHash, "rhsValue"), 0));
+        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(oldHash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded, empty());
     }
@@ -114,7 +114,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
 
         valueGetterSupplier.put("lhs1", null);
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue"), 0));
+        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded, empty());
     }
@@ -139,7 +139,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
 
         valueGetterSupplier.put("lhs1", "lhsValue");
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue"), 0));
+        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,rhsValue)", 0)));
@@ -165,7 +165,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
 
         valueGetterSupplier.put("lhs1", "lhsValue");
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
+        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
@@ -191,7 +191,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
 
         valueGetterSupplier.put("lhs1", "lhsValue");
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
+        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,null)", 0)));
@@ -217,7 +217,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
 
         valueGetterSupplier.put("lhs1", null);
         final long[] hash = null;
-        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
+        processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));

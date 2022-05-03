@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_0_8_2, KAFKA_3_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.message._
@@ -32,11 +31,13 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
+
 import org.apache.kafka.common.Node
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.function.Executable
 
@@ -547,23 +548,23 @@ class KafkaConfigTest {
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(ApiVersion.latestVersion, conf.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.latest, conf.interBrokerProtocolVersion)
 
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
     // We need to set the message format version to make the configuration valid.
     props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.0")
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_0_8_2, conf2.interBrokerProtocolVersion)
+    assertEquals(IBP_0_8_2, conf2.interBrokerProtocolVersion)
 
     // check that 0.8.2.0 is the same as 0.8.2.1
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.1")
     // We need to set the message format version to make the configuration valid
     props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.1")
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
+    assertEquals(IBP_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
-    assertTrue(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
+    assertTrue(MetadataVersion.latest.isAtLeast(conf3.interBrokerProtocolVersion))
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -690,20 +691,20 @@ class KafkaConfigTest {
   @nowarn("cat=deprecation")
   @Test
   def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
-    def buildConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
+    def buildConfig(interBrokerProtocol: MetadataVersion, messageFormat: MetadataVersion): KafkaConfig = {
       val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
       props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
       props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
       KafkaConfig.fromProps(props)
     }
 
-    ApiVersion.allVersions.foreach { interBrokerVersion =>
-      ApiVersion.allVersions.foreach { messageFormatVersion =>
-        if (interBrokerVersion.recordVersion.value >= messageFormatVersion.recordVersion.value) {
+    MetadataVersion.VALUES.foreach { interBrokerVersion =>
+      MetadataVersion.VALUES.foreach { messageFormatVersion =>
+        if (interBrokerVersion.highestSupportedRecordVersion.value >= messageFormatVersion.highestSupportedRecordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
-          if (interBrokerVersion >= KAFKA_3_0_IV1)
-            assertEquals(KAFKA_3_0_IV1, config.logMessageFormatVersion)
+          if (interBrokerVersion.isAtLeast(IBP_3_0_IV1))
+            assertEquals(IBP_3_0_IV1, config.logMessageFormatVersion)
           else
             assertEquals(messageFormatVersion, config.logMessageFormatVersion)
         } else {

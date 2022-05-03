@@ -85,7 +85,7 @@ public class PartitionRegistrationTest {
                 setLeader(1).
                 setLeaderEpoch(123).
                 setIsr(Arrays.asList(1, 2)).
-                setZkVersion(456).
+                setPartitionEpoch(456).
                 setReplicas(Arrays.asList(1, 2, 3)).
                 setAddingReplicas(Collections.emptyList()).
                 setRemovingReplicas(Collections.emptyList()).
@@ -98,7 +98,7 @@ public class PartitionRegistrationTest {
                 setLeader(2).
                 setLeaderEpoch(234).
                 setIsr(Arrays.asList(2, 3, 4)).
-                setZkVersion(567).
+                setPartitionEpoch(567).
                 setReplicas(Arrays.asList(2, 3, 4)).
                 setAddingReplicas(Collections.emptyList()).
                 setRemovingReplicas(Collections.emptyList()).

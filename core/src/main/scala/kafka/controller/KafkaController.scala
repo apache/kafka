@@ -33,12 +33,13 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.{FeatureZNodeStatus, _}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
+import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
-import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterPartitionRequestData, AlterPartitionResponseData, UpdateFeaturesRequestData}
+import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
@@ -330,36 +331,36 @@ class KafkaController(val config: KafkaConfig,
    * This method sets up the FeatureZNode with enabled status, which means that the finalized
    * features stored in the FeatureZNode are active. The enabled status should be written by the
    * controller to the FeatureZNode only when the broker IBP config is greater than or equal to
-   * KAFKA_2_7_IV0.
+   * IBP_2_7_IV0.
    *
    * There are multiple cases handled here:
    *
    * 1. New cluster bootstrap:
    *    A new Kafka cluster (i.e. it is deployed first time) is almost always started with IBP config
-   *    setting greater than or equal to KAFKA_2_7_IV0. We would like to start the cluster with all
+   *    setting greater than or equal to IBP_2_7_IV0. We would like to start the cluster with all
    *    the possible supported features finalized immediately. Assuming this is the case, the
    *    controller will start up and notice that the FeatureZNode is absent in the new cluster,
    *    it will then create a FeatureZNode (with enabled status) containing the entire list of
    *    supported features as its finalized features.
    *
-   * 2. Broker binary upgraded, but IBP config set to lower than KAFKA_2_7_IV0:
-   *    Imagine there was an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, and the
+   * 2. Broker binary upgraded, but IBP config set to lower than IBP_2_7_IV0:
+   *    Imagine there was an existing Kafka cluster with IBP config less than IBP_2_7_IV0, and the
    *    broker binary has now been upgraded to a newer version that supports the feature versioning
-   *    system (KIP-584). But the IBP config is still set to lower than KAFKA_2_7_IV0, and may be
+   *    system (KIP-584). But the IBP config is still set to lower than IBP_2_7_IV0, and may be
    *    set to a higher value later. In this case, we want to start with no finalized features and
    *    allow the user to finalize them whenever they are ready i.e. in the future whenever the
-   *    user sets IBP config to be greater than or equal to KAFKA_2_7_IV0, then the user could start
+   *    user sets IBP config to be greater than or equal to IBP_2_7_IV0, then the user could start
    *    finalizing the features. This process ensures we do not enable all the possible features
    *    immediately after an upgrade, which could be harmful to Kafka.
    *    This is how we handle such a case:
-   *      - Before the IBP config upgrade (i.e. IBP config set to less than KAFKA_2_7_IV0), the
+   *      - Before the IBP config upgrade (i.e. IBP config set to less than IBP_2_7_IV0), the
    *        controller will start up and check if the FeatureZNode is absent.
    *        - If the node is absent, it will react by creating a FeatureZNode with disabled status
    *          and empty finalized features.
    *        - Otherwise, if a node already exists in enabled status then the controller will just
    *          flip the status to disabled and clear the finalized features.
    *      - After the IBP config upgrade (i.e. IBP config set to greater than or equal to
-   *        KAFKA_2_7_IV0), when the controller starts up it will check if the FeatureZNode exists
+   *        IBP_2_7_IV0), when the controller starts up it will check if the FeatureZNode exists
    *        and whether it is disabled.
    *         - If the node is in disabled status, the controller won’t upgrade all features immediately.
    *           Instead it will just switch the FeatureZNode status to enabled status. This lets the
@@ -367,17 +368,17 @@ class KafkaController(val config: KafkaConfig,
    *         - Otherwise, if a node already exists in enabled status then the controller will leave
    *           the node umodified.
    *
-   * 3. Broker binary upgraded, with existing cluster IBP config >= KAFKA_2_7_IV0:
-   *    Imagine there was an existing Kafka cluster with IBP config >= KAFKA_2_7_IV0, and the broker
-   *    binary has just been upgraded to a newer version (that supports IBP config KAFKA_2_7_IV0 and
+   * 3. Broker binary upgraded, with existing cluster IBP config >= IBP_2_7_IV0:
+   *    Imagine there was an existing Kafka cluster with IBP config >= IBP_2_7_IV0, and the broker
+   *    binary has just been upgraded to a newer version (that supports IBP config IBP_2_7_IV0 and
    *    higher). The controller will start up and find that a FeatureZNode is already present with
    *    enabled status and existing finalized features. In such a case, the controller leaves the node
    *    unmodified.
    *
    * 4. Broker downgrade:
    *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
-   *    KAFKA_2_7_IV0. Then, the user decided to downgrade the cluster by setting IBP config to a
-   *    value less than KAFKA_2_7_IV0. This means the user is also disabling the feature versioning
+   *    IBP_2_7_IV0. Then, the user decided to downgrade the cluster by setting IBP config to a
+   *    value less than IBP_2_7_IV0. This means the user is also disabling the feature versioning
    *    system (KIP-584). In this case, when the controller starts up with the lower IBP config, it
    *    will switch the FeatureZNode status to disabled with empty features.
    */
@@ -412,14 +413,14 @@ class KafkaController(val config: KafkaConfig,
    * Sets up the FeatureZNode with disabled status. This status means the feature versioning system
    * (KIP-584) is disabled, and, the finalized features stored in the FeatureZNode are not relevant.
    * This status should be written by the controller to the FeatureZNode only when the broker
-   * IBP config is less than KAFKA_2_7_IV0.
+   * IBP config is less than IBP_2_7_IV0.
    *
    * NOTE:
    * 1. When this method returns, existing finalized features (if any) will be cleared from the
    *    FeatureZNode.
    * 2. This method, unlike enableFeatureVersioning() need not wait for the FinalizedFeatureCache
    *    to be updated, because, such updates to the cache (via FinalizedFeatureChangeListener)
-   *    are disabled when IBP config is < than KAFKA_2_7_IV0.
+   *    are disabled when IBP config is < than IBP_2_7_IV0.
    */
   private def disableFeatureVersioning(): Unit = {
     val newNode = FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())
@@ -1230,7 +1231,7 @@ class KafkaController(val config: KafkaConfig,
               val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, epoch)
               controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
               finalLeaderIsrAndControllerEpoch = Some(leaderIsrAndControllerEpoch)
-              info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}, zkVersion=${leaderAndIsr.zkVersion}")
+              info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}, zkVersion=${leaderAndIsr.partitionEpoch}")
               true
             case Some(Left(e)) => throw e
             case None => false
@@ -1928,8 +1929,9 @@ class KafkaController(val config: KafkaConfig,
    *
    * @return         the new FinalizedVersionRange or error, as described above.
    */
-  private def newFinalizedVersionRangeOrIncompatibilityError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[FinalizedVersionRange, ApiError] = {
-    if (UpdateFeaturesRequest.isDeleteRequest(update)) {
+  private def newFinalizedVersionRangeOrIncompatibilityError(update: UpdateFeaturesRequest.FeatureUpdateItem):
+      Either[FinalizedVersionRange, ApiError] = {
+    if (update.isDeleteRequest) {
       throw new IllegalArgumentException(s"Provided feature update can not be meant to delete the feature: $update")
     }
 
@@ -1941,7 +1943,7 @@ class KafkaController(val config: KafkaConfig,
     } else {
       var newVersionRange: FinalizedVersionRange = null
       try {
-        newVersionRange = new FinalizedVersionRange(supportedVersionRange.min, update.maxVersionLevel)
+        newVersionRange = new FinalizedVersionRange(update.versionLevel(), update.versionLevel())
       } catch {
         case _: IllegalArgumentException => {
           // This exception means the provided maxVersionLevel is invalid. It is handled below
@@ -1951,7 +1953,7 @@ class KafkaController(val config: KafkaConfig,
       if (newVersionRange == null) {
         Right(new ApiError(Errors.INVALID_REQUEST,
           "Could not apply finalized feature update because the provided" +
-          s" maxVersionLevel:${update.maxVersionLevel} is lower than the" +
+          s" maxVersionLevel:${update.versionLevel} is lower than the" +
           s" supported minVersion:${supportedVersionRange.min}."))
       } else {
         val newFinalizedFeature =
@@ -1985,9 +1987,9 @@ class KafkaController(val config: KafkaConfig,
    * @return                       the new FinalizedVersionRange to be updated into ZK or error
    *                               as described above.
    */
-  private def validateFeatureUpdate(update: UpdateFeaturesRequestData.FeatureUpdateKey,
+  private def validateFeatureUpdate(update: UpdateFeaturesRequest.FeatureUpdateItem,
                                     existingVersionRange: Option[FinalizedVersionRange]): Either[Option[FinalizedVersionRange], ApiError] = {
-    def newVersionRangeOrError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[Option[FinalizedVersionRange], ApiError] = {
+    def newVersionRangeOrError(update: UpdateFeaturesRequest.FeatureUpdateItem): Either[Option[FinalizedVersionRange], ApiError] = {
       newFinalizedVersionRangeOrIncompatibilityError(update)
         .fold(versionRange => Left(Some(versionRange)), error => Right(error))
     }
@@ -1995,9 +1997,12 @@ class KafkaController(val config: KafkaConfig,
     if (update.feature.isEmpty) {
       // Check that the feature name is not empty.
       Right(new ApiError(Errors.INVALID_REQUEST, "Feature name can not be empty."))
+    } else if (update.upgradeType.equals(UpgradeType.UNKNOWN)) {
+      Right(new ApiError(Errors.INVALID_REQUEST, "Received unknown upgrade type."))
     } else {
+
       // We handle deletion requests separately from non-deletion requests.
-      if (UpdateFeaturesRequest.isDeleteRequest(update)) {
+      if (update.isDeleteRequest) {
         if (existingVersionRange.isEmpty) {
           // Disallow deletion of a non-existing finalized feature.
           Right(new ApiError(Errors.INVALID_REQUEST,
@@ -2005,39 +2010,33 @@ class KafkaController(val config: KafkaConfig,
         } else {
           Left(Option.empty)
         }
-      } else if (update.maxVersionLevel() < 1) {
-        // Disallow deletion of a finalized feature without allowDowngrade flag set.
+      } else if (update.versionLevel() < 1) {
+        // Disallow deletion of a finalized feature without SAFE downgrade type.
         Right(new ApiError(Errors.INVALID_REQUEST,
-                           s"Can not provide maxVersionLevel: ${update.maxVersionLevel} less" +
-                           s" than 1 without setting the allowDowngrade flag to true in the request."))
+                           s"Can not provide maxVersionLevel: ${update.versionLevel} less" +
+                           s" than 1 without setting the SAFE downgradeType in the request."))
       } else {
         existingVersionRange.map(existing =>
-          if (update.maxVersionLevel == existing.max) {
+          if (update.versionLevel == existing.max) {
             // Disallow a case where target maxVersionLevel matches existing maxVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"Can not ${if (update.allowDowngrade) "downgrade" else "upgrade"}" +
+                               s"Can not ${if (update.upgradeType.equals(UpgradeType.SAFE_DOWNGRADE)) "downgrade" else "upgrade"}" +
                                s" a finalized feature from existing maxVersionLevel:${existing.max}" +
                                " to the same value."))
-          } else if (update.maxVersionLevel < existing.max && !update.allowDowngrade) {
-            // Disallow downgrade of a finalized feature without the allowDowngrade flag set.
+          } else if (update.versionLevel < existing.max && !update.upgradeType.equals(UpgradeType.SAFE_DOWNGRADE)) {
+            // Disallow downgrade of a finalized feature without the downgradeType set.
             Right(new ApiError(Errors.INVALID_REQUEST,
                                s"Can not downgrade finalized feature from existing" +
                                s" maxVersionLevel:${existing.max} to provided" +
-                               s" maxVersionLevel:${update.maxVersionLevel} without setting the" +
-                               " allowDowngrade flag in the request."))
-          } else if (update.allowDowngrade && update.maxVersionLevel > existing.max) {
-            // Disallow a request that sets allowDowngrade flag without specifying a
+                               s" maxVersionLevel:${update.versionLevel} without setting the" +
+                               " downgradeType to SAFE in the request."))
+          } else if (!update.upgradeType.equals(UpgradeType.UPGRADE) && update.versionLevel > existing.max) {
+            // Disallow a request that sets downgradeType without specifying a
             // maxVersionLevel that's lower than the existing maxVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"When the allowDowngrade flag set in the request, the provided" +
-                               s" maxVersionLevel:${update.maxVersionLevel} can not be greater than" +
+                               s"When the downgradeType is set to SAFE set in the request, the provided" +
+                               s" maxVersionLevel:${update.versionLevel} can not be greater than" +
                                s" existing maxVersionLevel:${existing.max}."))
-          } else if (update.maxVersionLevel < existing.min) {
-            // Disallow downgrade of a finalized feature below the existing finalized
-            // minVersionLevel.
-            Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"Can not downgrade finalized feature to maxVersionLevel:${update.maxVersionLevel}" +
-                               s" because it's lower than the existing minVersionLevel:${existing.min}."))
           } else {
             newVersionRangeOrError(update)
           }
@@ -2057,7 +2056,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def processFeatureUpdatesWithActiveController(request: UpdateFeaturesRequest,
                                                         callback: UpdateFeaturesCallback): Unit = {
-    val updates = request.data.featureUpdates
+    val updates = request.featureUpdates
     val existingFeatures = featureCache.get
       .map(featuresAndEpoch => featuresAndEpoch.features.features().asScala)
       .getOrElse(Map[String, FinalizedVersionRange]())
@@ -2299,7 +2298,7 @@ class KafkaController(val config: KafkaConfig,
                         .setLeaderEpoch(leaderAndIsr.leaderEpoch)
                         .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
                         .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
-                        .setPartitionEpoch(leaderAndIsr.zkVersion)
+                        .setPartitionEpoch(leaderAndIsr.partitionEpoch)
                     )
                 }
             }
@@ -2348,7 +2347,17 @@ class KafkaController(val config: KafkaConfig,
           controllerContext.partitionLeadershipInfo(tp) match {
             case Some(leaderIsrAndControllerEpoch) =>
               val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-              if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
+              if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
+                partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
+                None
+              } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
+                partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
+                None
+              } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
+                // If a partition is already in the desired state, just return it
+                partitionResponses(tp) = Right(currentLeaderAndIsr)
+                None
+              } else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
                 partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
                 info(
                   s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
@@ -2363,13 +2372,6 @@ class KafkaController(val config: KafkaConfig,
                   s"Rejecting AlterPartition from node $brokerId for $tp because the leader recovery state cannot change from " +
                   s"RECOVERED to RECOVERING: $newLeaderAndIsr"
                 )
-                None
-              } else if (newLeaderAndIsr.leaderEpoch < currentLeaderAndIsr.leaderEpoch) {
-                partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
-                None
-              } else if (newLeaderAndIsr.equalsIgnoreZk(currentLeaderAndIsr)) {
-                // If a partition is already in the desired state, just return it
-                partitionResponses(tp) = Right(currentLeaderAndIsr)
                 None
               } else {
                 Some(tp -> newLeaderAndIsr)
@@ -2389,7 +2391,7 @@ class KafkaController(val config: KafkaConfig,
         case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>
           isrOrError match {
             case Right(updatedIsr) =>
-              debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.zkVersion}]")
+              debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.partitionEpoch}]")
               partitionResponses(partition) = Right(updatedIsr)
               Some(partition -> updatedIsr)
             case Left(e) =>
@@ -2682,7 +2684,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
     leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.mkString(","))
     leaderAndIsrInfo.append(",LeaderRecoveryState:" + leaderAndIsr.leaderRecoveryState)
     leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
-    leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.zkVersion)
+    leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.partitionEpoch)
     leaderAndIsrInfo.append(",ControllerEpoch:" + controllerEpoch + ")")
     leaderAndIsrInfo.toString()
   }

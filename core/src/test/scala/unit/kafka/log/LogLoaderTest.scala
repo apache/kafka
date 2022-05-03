@@ -21,7 +21,7 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util.Properties
-import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
+
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
 import kafka.server.metadata.MockConfigRepository
@@ -29,6 +29,8 @@ import kafka.utils.{CoreUtils, MockTime, Scheduler, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, DefaultRecordBatch, MemoryRecords, RecordBatch, RecordVersion, SimpleRecord, TimestampType}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -177,12 +179,12 @@ class LogLoaderTest {
 
   @Test
   def testProducerSnapshotsRecoveryAfterUncleanShutdownV1(): Unit = {
-    testProducerSnapshotsRecoveryAfterUncleanShutdown(ApiVersion.minSupportedFor(RecordVersion.V1).version)
+    testProducerSnapshotsRecoveryAfterUncleanShutdown(MetadataVersion.minSupportedFor(RecordVersion.V1).version)
   }
 
   @Test
   def testProducerSnapshotsRecoveryAfterUncleanShutdownCurrentMessageFormat(): Unit = {
-    testProducerSnapshotsRecoveryAfterUncleanShutdown(ApiVersion.latestVersion.version)
+    testProducerSnapshotsRecoveryAfterUncleanShutdown(MetadataVersion.latest.version)
   }
 
   private def createLog(dir: File,
@@ -267,7 +269,7 @@ class LogLoaderTest {
     val expectedSegmentsWithReads = mutable.Set[Long]()
     val expectedSnapshotOffsets = mutable.Set[Long]()
 
-    if (logConfig.messageFormatVersion < KAFKA_0_11_0_IV0) {
+    if (logConfig.messageFormatVersion.isLessThan(IBP_0_11_0_IV0)) {
       expectedSegmentsWithReads += activeSegmentOffset
       expectedSnapshotOffsets ++= log.logSegments.map(_.baseOffset).toVector.takeRight(2) :+ log.logEndOffset
     } else {
