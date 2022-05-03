@@ -303,8 +303,6 @@
               files="(MetadataImage).java"/>
     <suppress checks="ImportControl"
               files="ApiVersionsResponse.java"/>
-    <suppress checks="AvoidStarImport"
-              files="MetadataVersionTest.java"/>
 
     <!-- Storage -->
     <suppress checks="(CyclomaticComplexity|ParameterNumber)"
