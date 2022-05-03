@@ -740,7 +740,6 @@ class ControllerApis(val requestChannel: RequestChannel,
     request: CreatePartitionsRequestData,
     getAlterAuthorizedTopics: Iterable[String] => Set[String]
   ): CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
-    debug(s"Processing createPartitions request $request")
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
     val duplicateTopicNames = new util.HashSet[String]()
     val topicNames = new util.HashSet[String]()

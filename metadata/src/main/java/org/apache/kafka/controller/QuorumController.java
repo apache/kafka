@@ -1673,7 +1673,13 @@ public final class QuorumController implements Controller {
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
             final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(topics);
-            return validateOnly ? result.withoutRecords() : result;
+            if (validateOnly) {
+                log.debug("Validate-only CreatePartitions result(s): {}", result.response());
+                return result.withoutRecords();
+            } else {
+                log.debug("CreatePartitions result(s): {}", result.response());
+                return result;
+            }
         });
     }
 

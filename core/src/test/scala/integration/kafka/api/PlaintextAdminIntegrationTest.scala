@@ -677,7 +677,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(exceptionMsgStr, e.getCause.getMessage)
     assertEquals(3, numPartitions(topic2))
 
-    // finally, try to add partitions to a topic queued for deletion
+    // Delete the topic. Verify addition of partitions to deleted topic is not possible. In
+    // Zookeeper mode, the topic is queued for deletion. In KRaft, the deletion occurs
+    // immediately and hence we have a different Exception thrown in the response.
     val deleteResult = client.deleteTopics(asList(topic1))
     deleteResult.topicNameValues.get(topic1).get
     alterResult = client.createPartitions(Map(topic1 ->
