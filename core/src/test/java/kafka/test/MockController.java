@@ -413,7 +413,8 @@ public class MockController implements Controller {
     @Override
     synchronized public CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
         ControllerRequestContext context,
-        List<CreatePartitionsTopic> topicList
+        List<CreatePartitionsTopic> topicList,
+        boolean validateOnly
     ) {
         if (!active) {
             CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();

@@ -343,6 +343,22 @@ public class BrokerHeartbeatManager {
     }
 
     /**
+     * Register this broker if we haven't already, and make sure its fencing state is
+     * correct.
+     *
+     * @param brokerId          The broker ID.
+     * @param fenced            True only if the broker is currently fenced.
+     */
+    void register(int brokerId, boolean fenced) {
+        BrokerHeartbeatState broker = brokers.get(brokerId);
+        if (broker == null) {
+            touch(brokerId, fenced, -1);
+        } else if (broker.fenced() != fenced) {
+            touch(brokerId, fenced, broker.metadataOffset);
+        }
+    }
+
+    /**
      * Update broker state, including lastContactNs.
      *
      * @param brokerId          The broker ID.

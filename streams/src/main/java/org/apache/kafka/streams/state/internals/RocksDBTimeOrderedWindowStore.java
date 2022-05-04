@@ -21,6 +21,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -34,6 +38,8 @@ public class RocksDBTimeOrderedWindowStore
 
     private final boolean retainDuplicates;
     private final long windowSize;
+
+    private StateStoreContext stateStoreContext;
     private int seqnum = 0;
 
     RocksDBTimeOrderedWindowStore(
@@ -49,6 +55,7 @@ public class RocksDBTimeOrderedWindowStore
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
+        stateStoreContext = context;
         wrapped().init(context, root);
     }
 
@@ -166,6 +173,21 @@ public class RocksDBTimeOrderedWindowStore
 
     public boolean hasIndex() {
         return wrapped().hasIndex();
+    }
+
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            getPosition(),
+            stateStoreContext
+        );
     }
 
     private void maybeUpdateSeqnumForDups() {
