@@ -332,8 +332,11 @@ public class MockController implements Controller {
     }
 
     @Override
-    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topicList) {
+    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
+        long deadlineNs,
+        List<CreatePartitionsTopic> topicList,
+        boolean validateOnly
+    ) {
         if (!active) {
             CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();
             future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);

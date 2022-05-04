@@ -53,7 +53,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    waitUntilBrokerMetadataIsPropagated(servers)
+    waitUntilBrokerMetadataIsPropagated(brokers)
   }
 
   @AfterEach
