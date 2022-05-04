@@ -736,7 +736,8 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       TestUtils.waitUntilTrue(
         () => aliveServers.forall(
           broker =>
-            broker.metadataCache.getPartitionInfo(underMinIsrTopic, 0).get.isr().size() < 6),
+            broker.metadataCache.getPartitionInfo(underMinIsrTopic, 0).get.isr().size() < 6
+              && broker.metadataCache.getPartitionInfo(offlineTopic, 0).isEmpty),
         "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
       )
 
