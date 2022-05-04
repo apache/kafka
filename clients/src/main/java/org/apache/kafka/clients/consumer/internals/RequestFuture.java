@@ -55,7 +55,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * Check whether the response is ready to be handled
      * @return true if the response is ready, false otherwise
      */
-    public boolean isDone() {
+    public boolean hasComplete() {
         return result.get() != INCOMPLETE_SENTINEL;
     }
 
@@ -80,7 +80,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the request completed and was successful
      */
     public boolean succeeded() {
-        return isDone() && !failed();
+        return hasComplete() && !failed();
     }
 
     /**
