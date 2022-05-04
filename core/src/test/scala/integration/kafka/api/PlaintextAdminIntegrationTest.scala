@@ -490,7 +490,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       var e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidPartitionsException when newCount is a decrease")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
-      var exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      var exceptionMsgStr = if (isKRaftTest()) {
         "The topic create-partitions-topic-1 currently has 3 partition(s); 1 would not be an increase."
       } else {
         "Topic currently has 3 partitions, which is higher than the requested 1."
@@ -504,7 +504,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic2).get,
         () => s"$desc: Expect InvalidPartitionsException when requesting a noop")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "Topic already has 3 partition(s)."
       } else {
         "Topic already has 3 partitions."
@@ -535,7 +535,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(unknownTopic).get,
         () => s"$desc: Expect InvalidTopicException when using an unknown topic")
       assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "This server does not host this topic-partition."
       } else {
         "The topic 'an-unknown-topic' does not exist."
@@ -548,7 +548,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidPartitionsException when newCount is invalid")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "The topic create-partitions-topic-1 currently has 3 partition(s); -22 would not be an increase."
       } else {
         "Topic currently has 3 partitions, which is higher than the requested -22."
@@ -563,7 +563,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidPartitionsException when #brokers != replication factor")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
           "consistent with previous partitions, which have 1 replica(s)."
       } else {
@@ -579,7 +579,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "Attempted to add 3 additional partition(s), but only 1 assignment(s) were specified."
       } else {
         "Increasing the number of partitions by 3 but 1 assignments provided."
@@ -592,7 +592,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         NewPartitions.increaseTo(4, asList(asList(1), asList(2)))).asJava, option)
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "Attempted to add 1 additional partition(s), but only 2 assignment(s) were specified."
       } else {
         "Increasing the number of partitions by 1 but 2 assignments provided."
@@ -607,7 +607,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments has duplicate brokers")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "The manual partition assignment includes the broker 1 more than once."
       } else {
         "Duplicate brokers not allowed in replica assignment: 1, 1 for partition id 3."
@@ -621,7 +621,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments have differently sized inner lists")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
           "consistent with previous partitions, which have 1 replica(s)."
       } else {
@@ -637,7 +637,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments contains an unknown broker")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "The manual partition assignment includes broker 12, but no such broker is registered."
       } else {
         "Unknown broker(s) in replica assignment: 12."
@@ -651,7 +651,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments is empty")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+      exceptionMsgStr = if (isKRaftTest()) {
         "Attempted to add 1 additional partition(s), but only 0 assignment(s) were specified."
       } else {
         "Increasing the number of partitions by 1 but 0 assignments provided."
@@ -669,7 +669,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.waitUntilTrue(() => numPartitions(topic1) == 4, "Timed out waiting for new partitions to appear")
     var e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic2).get)
     assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
-    val exceptionMsgStr = if (TestInfoUtils.isKRaft(testInfo)) {
+    val exceptionMsgStr = if (isKRaftTest()) {
       "The topic create-partitions-topic-2 currently has 3 partition(s); 2 would not be an increase."
     } else {
       "Topic currently has 3 partitions, which is higher than the requested 2."
@@ -686,7 +686,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       NewPartitions.increaseTo(4)).asJava, validateOnly)
     e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
       () => "Expect InvalidTopicException or UnknownTopicOrPartitionException when the topic is queued for deletion")
-    if (TestInfoUtils.isKRaft(testInfo)) {
+    if (isKRaftTest()) {
       assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], e.toString)
       assertEquals("This server does not host this topic-partition.", e.getCause.getMessage)
     } else {
