@@ -808,7 +808,7 @@ public class QuorumControllerTest {
                     controller.findTopicNames(context0, Collections.singletonList(Uuid.ZERO_UUID));
                 CompletableFuture<List<CreatePartitionsTopicResult>> createPartitionsFuture =
                     controller.createPartitions(context0, Collections.singletonList(
-                        new CreatePartitionsTopic()));
+                        new CreatePartitionsTopic()), false);
                 CompletableFuture<ElectLeadersResponseData> electLeadersFuture =
                     controller.electLeaders(context0, new ElectLeadersRequestData().setTimeoutMs(0).
                         setTopicPartitions(null));
@@ -862,7 +862,7 @@ public class QuorumControllerTest {
                 CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNamesFuture =
                     controller.findTopicNames(ANONYMOUS_CONTEXT, Collections.emptyList());
                 CompletableFuture<List<CreatePartitionsTopicResult>> createPartitionsFuture =
-                    controller.createPartitions(ANONYMOUS_CONTEXT, Collections.emptyList());
+                    controller.createPartitions(ANONYMOUS_CONTEXT, Collections.emptyList(), false);
                 CompletableFuture<ElectLeadersResponseData> electLeadersFuture =
                     controller.electLeaders(ANONYMOUS_CONTEXT, new ElectLeadersRequestData());
                 CompletableFuture<AlterPartitionReassignmentsResponseData> alterReassignmentsFuture =

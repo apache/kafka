@@ -1364,7 +1364,7 @@ public class ReplicationControlManager {
                 setErrorCode(apiError.error().code()).
                 setErrorMessage(apiError.message()));
         }
-        return new ControllerResult<>(records, results, true);
+        return ControllerResult.atomicOf(records, results);
     }
 
     void createPartitions(CreatePartitionsTopic topic,

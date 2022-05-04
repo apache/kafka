@@ -767,7 +767,7 @@ class ControllerApis(val requestChannel: RequestChannel,
           setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
       }
     }
-    controller.createPartitions(context, topics).thenApply { results =>
+    controller.createPartitions(context, topics, request.validateOnly).thenApply { results =>
       results.forEach(response => responses.add(response))
       responses
     }
