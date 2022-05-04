@@ -498,8 +498,8 @@ public class StreamsConfig extends AbstractConfig {
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
-    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the \" +\n" +
-        "        \"<code>org.apache.kafka.common.serialization.Serde</code> interface.. Note that setting this config in KafkaStreams application would result " +
+    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface. Note that setting this config in KafkaStreams application would result " +
         "in an error as it is meant to be used only from Plain consumer client.";
 
     /** {@code default key.serde} */
