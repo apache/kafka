@@ -55,7 +55,7 @@ public class WindowedStreamPartitionerTest {
     public void testCopartitioning() {
         final Random rand = new Random();
         @SuppressWarnings("deprecation")
-        final DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
+        final org.apache.kafka.clients.producer.internals.DefaultPartitioner defaultPartitioner = new org.apache.kafka.clients.producer.internals.DefaultPartitioner();
         final WindowedSerializer<Integer> timeWindowedSerializer = new TimeWindowedSerializer<>(intSerializer);
         final WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(timeWindowedSerializer);
 
