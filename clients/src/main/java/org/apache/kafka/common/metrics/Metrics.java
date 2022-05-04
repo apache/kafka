@@ -509,7 +509,7 @@ public class Metrics implements Closeable {
                                         Objects.requireNonNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
-        registerMetric(m);
+        registerMetric(m, true);
     }
 
     /**
@@ -522,6 +522,58 @@ public class Metrics implements Closeable {
      */
     public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
         addMetric(metricName, null, metricValueProvider);
+    }
+
+    /**
+     * Create or get an existing metric to monitor an object that implements Measurable.
+     * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
+     *
+     * This method is kept for binary compatibility purposes, it has the same behaviour as
+     * {@link #metricOrElseCreate(MetricName, MetricConfig, MetricValueProvider)}.
+     *
+     * @param metricName The name of the metric
+     * @param config The configuration to use when measuring this measurable
+     * @param measurable The measurable that will be measured by this metric
+     * @return Existing KafkaMetric if already registered or else a newly created one
+     */
+    public KafkaMetric metricOrElseCreate(MetricName metricName, MetricConfig config, Measurable measurable) {
+        return metricOrElseCreate(metricName, config, (MetricValueProvider<?>) measurable);
+    }
+
+    /**
+     * Create or get an existing metric to monitor an object that implements MetricValueProvider.
+     * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
+     * This method takes care of synchronisation while updating/accessing metrics by concurrent threads.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     * @return Existing KafkaMetric if already registered or else a newly created one
+     */
+    public KafkaMetric metricOrElseCreate(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
+        return metricOrElseCreate(metricName, null, metricValueProvider);
+    }
+
+    /**
+     * Create or get an existing metric to monitor an object that implements MetricValueProvider.
+     * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
+     * This method takes care of synchronisation while updating/accessing metrics by concurrent threads.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     * @return Existing KafkaMetric if already registered or else a newly created one
+     */
+    public KafkaMetric metricOrElseCreate(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
+        if (this.metrics.containsKey(metricName)) {
+            return this.metrics.get(metricName);
+        }
+        KafkaMetric metric = new KafkaMetric(new Object(),
+                Objects.requireNonNull(metricName),
+                Objects.requireNonNull(metricValueProvider),
+                config == null ? this.config : config,
+                time);
+
+        registerMetric(metric, false);
+        return this.metrics.get(metricName);
     }
 
     /**
@@ -563,10 +615,15 @@ public class Metrics implements Closeable {
         }
     }
 
-    synchronized void registerMetric(KafkaMetric metric) {
+    synchronized void registerMetric(KafkaMetric metric, boolean raiseIfMetricExists) {
         MetricName metricName = metric.metricName();
-        if (this.metrics.containsKey(metricName))
-            throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+        if (this.metrics.containsKey(metricName)) {
+            if (raiseIfMetricExists) {
+                throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+            } else {
+                return;
+            }
+        }
         this.metrics.put(metricName, metric);
         for (MetricsReporter reporter : reporters) {
             try {
