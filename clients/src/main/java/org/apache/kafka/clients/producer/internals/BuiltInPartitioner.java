@@ -67,17 +67,19 @@ public class BuiltInPartitioner {
 
         // Cache volatile variable in local variable.
         PartitionLoadStats partitionLoadStats = this.partitionLoadStats;
+        int partition;
 
         if (partitionLoadStats == null) {
             // We don't have stats to do adaptive partitioning (or it's disabled), just switch to the next
             // partition based on uniform distribution.
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-            if (availablePartitions.size() > 0)
-                return availablePartitions.get(random % availablePartitions.size()).partition();
-
-            // We don't have available partitions, just pick one among all partitions.
-            List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-            return random % partitions.size();
+            if (availablePartitions.size() > 0) {
+                partition = availablePartitions.get(random % availablePartitions.size()).partition();
+            } else {
+                // We don't have available partitions, just pick one among all partitions.
+                List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+                partition = random % partitions.size();
+            }
         } else {
             // Calculate next partition based on load distribution.
             // Note that partitions without leader are excluded from the partitionLoadStats.
@@ -101,8 +103,11 @@ public class BuiltInPartitioner {
             // get 0, and we need the next one, so adding 1 works here as well.
             int partitionIndex = Math.abs(searchResult + 1);
             assert partitionIndex < partitionLoadStats.length;
-            return partitionLoadStats.partitionIds[partitionIndex];
+            partition = partitionLoadStats.partitionIds[partitionIndex];
         }
+
+        log.trace("Switching to partition {} in topic {}", partition, topic);
+        return partition;
     }
 
     /**
@@ -136,9 +141,7 @@ public class BuiltInPartitioner {
             return partitionInfo;
 
         // We're the first to create it.
-        int partition = nextPartition(cluster);
-        log.trace("Switching to partition {} in topic {}", partition, topic);
-        partitionInfo = new StickyPartitionInfo(partition);
+        partitionInfo = new StickyPartitionInfo(nextPartition(cluster));
         if (stickyPartitionInfo.compareAndSet(null, partitionInfo))
             return partitionInfo;
 
@@ -175,19 +178,17 @@ public class BuiltInPartitioner {
         int producedBytes = partitionInfo.producedBytes.addAndGet(appendedBytes);
         if (producedBytes >= stickyBatchSize) {
             // We've produced enough to this partition, switch to next.
-            int partition = nextPartition(cluster);
-            log.trace("Switching to partition {} in topic {}", partition, topic);
-            StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(partition);
+            StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(nextPartition(cluster));
             stickyPartitionInfo.set(newPartitionInfo);
         }
     }
 
     /**
-     * Update partition load stats from the queue sizes of each partition.
+     * Update partition load stats from the queue sizes of each partition
      * NOTE: queueSizes are modified in place to avoid allocations
      *
-     * @param queueSizes The queue sizes
-     * @param partitionIds The partition ids for the queues
+     * @param queueSizes The queue sizes, partitions without leaders are excluded
+     * @param partitionIds The partition ids for the queues, partitions without leaders are excluded
      * @param length The logical length of the arrays (could be less): we may eliminate some partitions
      *               based on latency, but to avoid reallocation of the arrays, we just decrement
      *               logical length
@@ -210,7 +211,7 @@ public class BuiltInPartitioner {
         // go through adaptive logic, even if we have one partition.
         // See also RecordAccumulator#partitionReady where the queueSizes are built.
         if (length < 1 || queueSizes.length < 2) {
-            log.trace("The number of partitions is too small: {} and {}, not using adaptive for topic {}",
+            log.trace("The number of partitions is too small: available={}, all={}, not using adaptive for topic {}",
                     length, queueSizes.length, topic);
             partitionLoadStats = null;
             return;

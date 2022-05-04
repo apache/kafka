@@ -1002,7 +1002,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
 
             // Try to calculate partition, but note that after this call it can be RecordMetadata.UNKNOWN_PARTITION,
-            // which means that the RecordAccumulator would pick a partition based on broker load.
+            // which means that the RecordAccumulator would pick a partition using built-in logic (which may
+            // take into account broker load, the amount of data produced to each partition, etc.).
             int partition = partition(record, serializedKey, serializedValue, cluster);
 
             setReadOnly(record.headers());

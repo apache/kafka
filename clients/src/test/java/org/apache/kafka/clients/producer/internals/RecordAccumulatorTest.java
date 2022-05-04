@@ -1109,11 +1109,11 @@ public class RecordAccumulatorTest {
             RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize, CompressionType.NONE, 0);
 
             // Set up callbacks so that we know what partition is chosen.
-            final int[] partition = {RecordMetadata.UNKNOWN_PARTITION};
+            final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
             RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
                 @Override
                 public void setPartition(int p) {
-                    partition[0] = p;
+                    partition.set(p);
                 }
 
                 @Override
@@ -1125,7 +1125,7 @@ public class RecordAccumulatorTest {
             // Produce small record, we should switch to first partition.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, value, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition1, partition[0]);
+            assertEquals(partition1, partition.get());
             assertEquals(1, mockRandom.get());
 
             // Produce large record, we should exceed "sticky" limit, but produce to this partition
@@ -1134,25 +1134,25 @@ public class RecordAccumulatorTest {
             byte[] largeValue = new byte[batchSize];
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition1, partition[0]);
+            assertEquals(partition1, partition.get());
             assertEquals(2, mockRandom.get());
 
             // Produce large record, we should switch to next partition.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition2, partition[0]);
+            assertEquals(partition2, partition.get());
             assertEquals(3, mockRandom.get());
 
             // Produce large record, we should switch to next partition.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition3, partition[0]);
+            assertEquals(partition3, partition.get());
             assertEquals(4, mockRandom.get());
 
             // Produce large record, we should switch to first partition again.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition1, partition[0]);
+            assertEquals(partition1, partition.get());
             assertEquals(5, mockRandom.get());
         } finally {
             BuiltInPartitioner.mockRandom = null;
@@ -1191,11 +1191,11 @@ public class RecordAccumulatorTest {
             accum.ready(cluster, time.milliseconds());
 
             // Set up callbacks so that we know what partition is chosen.
-            final int[] partition = {RecordMetadata.UNKNOWN_PARTITION};
+            final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
             RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
                 @Override
                 public void setPartition(int p) {
-                    partition[0] = p;
+                    partition.set(p);
                 }
 
                 @Override
@@ -1220,7 +1220,7 @@ public class RecordAccumulatorTest {
             for (int i = 0; i < numberOfIterations; i++) {
                 accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                     callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-                ++frequencies[partition[0]];
+                ++frequencies[partition.get()];
             }
 
             // Verify that frequencies are reciprocal of queue sizes.
@@ -1241,7 +1241,7 @@ public class RecordAccumulatorTest {
             for (int c = 10; c-- > 0; ) {
                 accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                     callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-                assertEquals(partition3, partition[0]);
+                assertEquals(partition3, partition.get());
             }
         } finally {
             BuiltInPartitioner.mockRandom = null;
