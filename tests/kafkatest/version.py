@@ -106,6 +106,9 @@ class KafkaVersion(LooseVersion):
         # Self-managed clusters always support topic ID, so this method only applies to ZK clusters.
         return self >= V_2_8_0
 
+    def supports_fk_joins(self):
+        return hasattr(self, "version") and self >= V_2_4_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
