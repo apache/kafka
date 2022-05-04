@@ -1573,8 +1573,13 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
           if (leaderAndIsrRequest.`type`() == LeaderAndIsrRequestType.FULL) {
+            stateChangeLogger.trace("received FULL LeaderAndISR request")
             val partitionsToDelete = findStrayPartitions(allRequestPartitions, logManager.allLogs)
             deleteStrayReplicas(partitionsToDelete)
+          } else if (leaderAndIsrRequest.`type`() == LeaderAndIsrRequestType.INCREMENTAL) {
+            stateChangeLogger.trace("received INCREMENTAL LeaderAndISR request, skip finding of stray partitions")
+          } else {
+            stateChangeLogger.trace("received UNKNOWN LeaderAndISR request, skip finding of stray partitions")
           }
 
           val partitionsToBeLeader = partitionStates.filter { case (_, partitionState) =>
@@ -2432,6 +2437,7 @@ class ReplicaManager(val config: KafkaConfig,
     logs.flatMap{ log => {
       val topicPartition = log.topicPartition
       if (!requestPartitions.contains(topicPartition)) {
+        stateChangeLogger.trace(s"$topicPartition is not found in the LeaderAndISR request and is identified as a stray partition")
         Some(topicPartition)
       } else {
         None
