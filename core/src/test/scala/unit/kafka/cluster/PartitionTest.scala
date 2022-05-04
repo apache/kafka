@@ -1910,8 +1910,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue(partition.log.isDefined)
     val log = partition.log.get
     assertEquals(expectedTopicId, log.topicId.get)
-    assertTrue(log.partitionMetadataFile.exists())
-    assertEquals(expectedTopicId, log.partitionMetadataFile.read().topicId)
+    assertTrue(log.partitionMetadataFile.get.exists())
+    assertEquals(expectedTopicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test

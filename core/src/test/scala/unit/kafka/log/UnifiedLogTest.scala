@@ -1853,12 +1853,12 @@ class UnifiedLogTest {
     val record = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("simpleValue".getBytes))
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.record(topicId)
+    log.partitionMetadataFile.get.record(topicId)
 
     // Should trigger a synchronous flush
     log.appendAsLeader(record, leaderEpoch = 0)
-    assertTrue(log.partitionMetadataFile.exists())
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertTrue(log.partitionMetadataFile.get.exists())
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
@@ -1867,15 +1867,15 @@ class UnifiedLogTest {
     var log = createLog(logDir, logConfig)
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.record(topicId)
+    log.partitionMetadataFile.get.record(topicId)
 
     // Should trigger a synchronous flush
     log.close()
 
     // We open the log again, and the partition metadata file should exist with the same ID.
     log = createLog(logDir, logConfig)
-    assertTrue(log.partitionMetadataFile.exists())
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertTrue(log.partitionMetadataFile.get.exists())
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
@@ -1902,14 +1902,14 @@ class UnifiedLogTest {
     val topicId = Uuid.randomUuid()
     log.assignTopicId(topicId)
     // We should not write to this file or set the topic ID
-    assertFalse(log.partitionMetadataFile.exists())
+    assertFalse(log.partitionMetadataFile.get.exists())
     assertEquals(None, log.topicId)
     log.close()
 
     val log2 = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()),  keepPartitionMetadataFile = false)
 
     // We should not write to this file or set the topic ID
-    assertFalse(log2.partitionMetadataFile.exists())
+    assertFalse(log2.partitionMetadataFile.get.exists())
     assertEquals(None, log2.topicId)
     log2.close()
   }
@@ -2253,7 +2253,7 @@ class UnifiedLogTest {
 
     // Ensure that after a directory rename, the epoch cache is written to the right location
     val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp))
+    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(LeaderEpochCheckpointFile.newFile(log.dir).exists())
@@ -2274,7 +2274,7 @@ class UnifiedLogTest {
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
     val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp))
+    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
@@ -2283,7 +2283,7 @@ class UnifiedLogTest {
     // Check the topic ID remains in memory and was copied correctly.
     assertTrue(log.topicId.isDefined)
     assertEquals(topicId, log.topicId.get)
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
@@ -2293,17 +2293,17 @@ class UnifiedLogTest {
 
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.record(topicId)
+    log.partitionMetadataFile.get.record(topicId)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
     val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp))
+    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
     // Check the file holds the correct contents.
-    assertTrue(log.partitionMetadataFile.exists())
-    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    assertTrue(log.partitionMetadataFile.get.exists())
+    assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
   }
 
   @Test
@@ -3408,6 +3408,50 @@ class UnifiedLogTest {
 
     log.updateHighWatermark(25L)
     assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion))
+  }
+
+  def testBackgroundDeletionWithIOException(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments, "The number of segments should be 1")
+
+    // Delete the underlying directory to trigger a KafkaStorageException
+    val dir = log.dir
+    Utils.delete(dir)
+    dir.createNewFile()
+
+    assertThrows(classOf[KafkaStorageException], () => {
+      log.delete()
+    })
+    assertTrue(log.logDirFailureChannel.hasOfflineLogDir(tmpDir.toString))
+  }
+
+  /**
+   * test renaming a log's dir without reinitialization, which is the case during topic deletion
+   */
+  @Test
+  def testRenamingDirWithoutReinitialization(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments, "The number of segments should be 1")
+
+    val newDir = TestUtils.randomPartitionLogDir(tmpDir)
+    assertTrue(newDir.exists())
+
+    log.renameDir(newDir.getName, false)
+    assertTrue(log.leaderEpochCache.isEmpty)
+    assertTrue(log.partitionMetadataFile.isEmpty)
+    assertEquals(0, log.logEndOffset)
+    // verify that records appending can still succeed
+    // even with the uninitialized leaderEpochCache and partitionMetadataFile
+    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)))
+    log.appendAsLeader(records, leaderEpoch = 0)
+    assertEquals(1, log.logEndOffset)
+
+    // verify that the background deletion can succeed
+    log.delete()
+    assertEquals(0, log.numberOfSegments, "The number of segments should be 0")
+    assertFalse(newDir.exists())
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
