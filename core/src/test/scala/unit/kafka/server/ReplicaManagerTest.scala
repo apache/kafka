@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, Properties}
-
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
@@ -34,6 +33,7 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -2684,10 +2684,11 @@ class ReplicaManagerTest {
     assertEquals(Some(1L), readLogStartOffsetCheckpoint().get(tp0))
 
     if (throwIOException) {
-      // Delete the underlying directory to trigger an KafkaStorageException
-      val dir = partition.log.get.dir
-      Utils.delete(dir)
-      dir.createNewFile()
+      // Replace underlying PartitionMetadataFile with a mock which throws
+      // a KafkaStorageException when maybeFlush is called.
+      val mockPartitionMetadataFile = mock(classOf[PartitionMetadataFile])
+      when(mockPartitionMetadataFile.maybeFlush()).thenThrow(new KafkaStorageException())
+      partition.log.get.partitionMetadataFile = Some(mockPartitionMetadataFile)
     }
 
     val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
@@ -2770,8 +2771,8 @@ class ReplicaManagerTest {
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds.get(topicPartition.topic())
       val log = replicaManager.localLog(topicPartition).get
-      assertTrue(log.partitionMetadataFile.exists())
-      val partitionMetadata = log.partitionMetadataFile.read()
+      assertTrue(log.partitionMetadataFile.get.exists())
+      val partitionMetadata = log.partitionMetadataFile.get.read()
 
       // Current version of PartitionMetadataFile is 0.
       assertEquals(0, partitionMetadata.version)
@@ -2791,7 +2792,7 @@ class ReplicaManagerTest {
       assertTrue(replicaManager.getLog(topicPartition).isDefined)
       var log = replicaManager.getLog(topicPartition).get
       assertEquals(None, log.topicId)
-      assertFalse(log.partitionMetadataFile.exists())
+      assertFalse(log.partitionMetadataFile.get.exists())
 
       val topicIds = Collections.singletonMap(topic, Uuid.randomUuid())
       val topicNames = topicIds.asScala.map(_.swap).asJava
@@ -2815,8 +2816,8 @@ class ReplicaManagerTest {
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds.get(topicPartition.topic())
       log = replicaManager.localLog(topicPartition).get
-      assertTrue(log.partitionMetadataFile.exists())
-      val partitionMetadata = log.partitionMetadataFile.read()
+      assertTrue(log.partitionMetadataFile.get.exists())
+      val partitionMetadata = log.partitionMetadataFile.get.read()
 
       // Current version of PartitionMetadataFile is 0.
       assertEquals(0, partitionMetadata.version)
@@ -2852,13 +2853,13 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, response.partitionErrors(Collections.emptyMap()).get(topicPartition))
       assertTrue(replicaManager.localLog(topicPartition).isDefined)
       val log = replicaManager.localLog(topicPartition).get
-      assertFalse(log.partitionMetadataFile.exists())
+      assertFalse(log.partitionMetadataFile.get.exists())
       assertTrue(log.topicId.isEmpty)
 
       val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(topicIds.asJava, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
       assertEquals(Errors.NONE, response2.partitionErrors(topicNames.asJava).get(topicPartition))
       assertTrue(replicaManager.localLog(topicPartition).isDefined)
-      assertTrue(log.partitionMetadataFile.exists())
+      assertTrue(log.partitionMetadataFile.get.exists())
       assertTrue(log.topicId.isDefined)
       assertEquals(topicId, log.topicId.get)
 
@@ -2868,18 +2869,18 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, response3.partitionErrors(Collections.emptyMap()).get(topicPartition2))
       assertTrue(replicaManager.localLog(topicPartition2).isDefined)
       val log2 = replicaManager.localLog(topicPartition2).get
-      assertFalse(log2.partitionMetadataFile.exists())
+      assertFalse(log2.partitionMetadataFile.get.exists())
       assertTrue(log2.topicId.isEmpty)
 
       val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(topicIds.asJava, ApiKeys.LEADER_AND_ISR.latestVersion, 1, 1), (_, _) => ())
       assertEquals(Errors.NONE, response4.partitionErrors(topicNames.asJava).get(topicPartition2))
       assertTrue(replicaManager.localLog(topicPartition2).isDefined)
-      assertTrue(log2.partitionMetadataFile.exists())
+      assertTrue(log2.partitionMetadataFile.get.exists())
       assertTrue(log2.topicId.isDefined)
       assertEquals(topicId, log2.topicId.get)
 
-      assertEquals(topicId, log.partitionMetadataFile.read().topicId)
-      assertEquals(topicId, log2.partitionMetadataFile.read().topicId)
+      assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
+      assertEquals(topicId, log2.partitionMetadataFile.get.read().topicId)
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 
@@ -2955,28 +2956,28 @@ class ReplicaManagerTest {
       val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "fakeTopic", ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
       assertTrue(replicaManager.localLog(topicPartitionFake).isDefined)
       val log = replicaManager.localLog(topicPartitionFake).get
-      assertFalse(log.partitionMetadataFile.exists())
+      assertFalse(log.partitionMetadataFile.get.exists())
       assertEquals(Errors.NONE, response.partitionErrors(topicNames).get(topicPartition))
 
       // There is no file if the topic has the default UUID.
       val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
       assertTrue(replicaManager.localLog(topicPartition).isDefined)
       val log2 = replicaManager.localLog(topicPartition).get
-      assertFalse(log2.partitionMetadataFile.exists())
+      assertFalse(log2.partitionMetadataFile.get.exists())
       assertEquals(Errors.NONE, response2.partitionErrors(topicNames).get(topicPartition))
 
       // There is no file if the request an older version
       val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 0), (_, _) => ())
       assertTrue(replicaManager.localLog(topicPartitionFoo).isDefined)
       val log3 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log3.partitionMetadataFile.exists())
+      assertFalse(log3.partitionMetadataFile.get.exists())
       assertEquals(Errors.NONE, response3.partitionErrors(topicNames).get(topicPartitionFoo))
 
       // There is no file if the request is an older version
       val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, "foo", 4), (_, _) => ())
       assertTrue(replicaManager.localLog(topicPartitionFoo).isDefined)
       val log4 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log4.partitionMetadataFile.exists())
+      assertFalse(log4.partitionMetadataFile.get.exists())
       assertEquals(Errors.NONE, response4.partitionErrors(topicNames).get(topicPartitionFoo))
     } finally replicaManager.shutdown(checkpointHW = false)
   }

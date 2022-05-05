@@ -82,7 +82,7 @@ class DefaultApiVersionManager(
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
     finalizedFeaturesOpt match {
-      case Some(finalizedFeatures) => ApiVersionsResponse.apiVersionsResponse(
+      case Some(finalizedFeatures) => ApiVersionsResponse.createApiVersionsResponse(
         throttleTimeMs,
         interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
@@ -90,7 +90,7 @@ class DefaultApiVersionManager(
         finalizedFeatures.epoch,
         controllerApiVersions.orNull,
         listenerType)
-      case None => ApiVersionsResponse.apiVersionsResponse(
+      case None => ApiVersionsResponse.createApiVersionsResponse(
         throttleTimeMs,
         interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,

@@ -14,27 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.common;
+package org.apache.kafka.streams.kstream.internals.emitstrategy;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 
-public class MetadataVersionValidator implements Validator {
-
-    @Override
-    public void ensureValid(String name, Object value) {
-        try {
-            MetadataVersion.fromVersionString(value.toString());
-        } catch (IllegalArgumentException e) {
-            throw new ConfigException(name, value.toString(), e.getMessage());
-        }
-    }
+/**
+ * An emit strategy which indicates only output when a window closes.
+ */
+public class WindowCloseStrategy implements EmitStrategy {
 
     @Override
-    public String toString() {
-        return "[" + Arrays.stream(MetadataVersion.VALUES).map(MetadataVersion::version).collect(
-             Collectors.joining(", ")) + "]";
+    public StrategyType type() {
+        return StrategyType.ON_WINDOW_CLOSE;
     }
+
 }

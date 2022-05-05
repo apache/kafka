@@ -92,7 +92,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
-public class TimeOrderedCachingPersistentWindowStoreTest {
+public class TimeOrderedWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 300;
     private static final long DEFAULT_TIMESTAMP = 10L;
@@ -245,7 +245,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
                     context.forward(record);
                 }
-
 
                 @Override
                 public void close() {
@@ -890,7 +889,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     public void shouldSkipNonExistBaseKeyInCache() {
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
 
-        final SegmentedCacheFunction baseCacheFunction = new SegmentedCacheFunction(new TimeFirstWindowKeySchema(), SEGMENT_INTERVAL);
         final SegmentedCacheFunction indexCacheFunction = new SegmentedCacheFunction(new KeyFirstWindowKeySchema(), SEGMENT_INTERVAL);
 
         final Bytes key = bytesKey("a");
