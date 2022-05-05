@@ -64,7 +64,7 @@ trait LeaderEndPoint {
    * leader epoch, from the leader.
    *
    * @param topicPartition The topic partition that we want to fetch from
-   * @param currentLeaderEpoch An int representing the current leader epoch that we want to fetch from
+   * @param currentLeaderEpoch An int representing the current leader epoch of the requester
    *
    * @return A long representing the earliest offset in the leader's topic partition.
    */
@@ -75,7 +75,7 @@ trait LeaderEndPoint {
    * leader epoch, from the leader.
    *
    * @param topicPartition The topic partition that we want to fetch from
-   * @param currentLeaderEpoch An int representing the current leader epoch that we want to fetch from
+   * @param currentLeaderEpoch An int representing the current leader epoch of the requester
    *
    * @return A long representing the latest offset in the leader's topic partition.
    */
@@ -84,7 +84,7 @@ trait LeaderEndPoint {
   /**
    * Fetches offset for leader epoch from the leader for each given topic partition
    *
-   * @param partitions A map of topic partition -> leader epoch of the future replica
+   * @param partitions A map of topic partition -> leader epoch of the replica
    *
    * @return A map of topic partition -> end offset for a requested leader epoch
    */
@@ -99,8 +99,4 @@ trait LeaderEndPoint {
    */
   def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]]
 
-  /**
-   * Returns a string representation of the LeaderEndPoint.
-   */
-  override def toString: String = super.toString
 }
