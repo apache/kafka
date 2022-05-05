@@ -274,7 +274,7 @@ class Log(@volatile private var _dir: File,
           val topicPartition: TopicPartition,
           @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
           val producerStateManager: ProducerStateManager,
-          logDirFailureChannel: LogDirFailureChannel,
+          private[log] val logDirFailureChannel: LogDirFailureChannel,
           @volatile private var _topicId: Option[Uuid],
           val keepPartitionMetadataFile: Boolean,
           val rlmEnabled: Boolean = false) extends Logging with KafkaMetricsGroup {
@@ -316,7 +316,7 @@ class Log(@volatile private var _dir: File,
    */
   @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
 
-  @volatile var partitionMetadataFile : PartitionMetadataFile = null
+  @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
   @volatile var localLogStartOffset: Long = logStartOffset
 
@@ -347,9 +347,12 @@ class Log(@volatile private var _dir: File,
    *   - Otherwise set _topicId to None
    */
   def initializeTopicId(): Unit =  {
-    if (partitionMetadataFile.exists()) {
+    val partMetadataFile = partitionMetadataFile.getOrElse(
+      throw new KafkaException("The partitionMetadataFile should have been initialized"))
+
+    if (partMetadataFile.exists()) {
       if (keepPartitionMetadataFile) {
-        val fileTopicId = partitionMetadataFile.read().topicId
+        val fileTopicId = partMetadataFile.read().topicId
         if (_topicId.isDefined && !_topicId.contains(fileTopicId))
           throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
             s"but log already contained topic ID $fileTopicId")
@@ -357,14 +360,14 @@ class Log(@volatile private var _dir: File,
         _topicId = Some(fileTopicId)
 
       } else {
-        try partitionMetadataFile.delete()
+        try partMetadataFile.delete()
         catch {
           case e: IOException =>
-            error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
+            error(s"Error while trying to delete partition metadata file ${partMetadataFile}", e)
         }
       }
     } else if (keepPartitionMetadataFile) {
-      _topicId.foreach(partitionMetadataFile.record)
+      _topicId.foreach(partMetadataFile.record)
       scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
     } else {
       // We want to keep the file and the in-memory topic ID in sync.
@@ -604,11 +607,11 @@ class Log(@volatile private var _dir: File,
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
-    partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
+    partitionMetadataFile = Some(new PartitionMetadataFile(partitionMetadata, logDirFailureChannel))
   }
 
   private def maybeFlushMetadataFile(): Unit = {
-    partitionMetadataFile.maybeFlush()
+    partitionMetadataFile.foreach(_.maybeFlush())
   }
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
@@ -623,9 +626,14 @@ class Log(@volatile private var _dir: File,
       case None =>
         if (keepPartitionMetadataFile) {
           _topicId = Some(topicId)
-          if (!partitionMetadataFile.exists()) {
-            partitionMetadataFile.record(topicId)
-            scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+          partitionMetadataFile match {
+            case Some(partMetadataFile) =>
+              if (!partMetadataFile.exists()) {
+                partMetadataFile.record(topicId)
+                scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+              }
+            case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
+              "since the partition is deleted")
           }
         }
     }
@@ -737,11 +745,14 @@ class Log(@volatile private var _dir: File,
   }
 
   /**
-   * Rename the directory of the log
+   * Rename the directory of the local log. If the log's directory is being renamed for async deletion due to a
+   * StopReplica request, then the shouldReinitialize parameter should be set to false, otherwise it should be set to true.
    *
+   * @param name The new name that this log's directory is being renamed to
+   * @param shouldReinitialize Whether the log's metadata should be reinitialized after renaming
    * @throws KafkaStorageException if rename fails
    */
-  def renameDir(name: String): Unit = {
+  def renameDir(name: String, shouldReinitialize: Boolean): Unit = {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
         // Flush partitionMetadata file before initializing again
@@ -753,10 +764,15 @@ class Log(@volatile private var _dir: File,
           _parentDir = renamedDir.getParent
           segments.updateParentDir(renamedDir)
           producerStateManager.updateParentDir(dir)
-          // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
-          // the checkpoint file in renamed log directory
-          initializeLeaderEpochCache()
-          initializePartitionMetadata()
+          if (shouldReinitialize) {
+            // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
+            // the checkpoint file in renamed log directory
+            initializeLeaderEpochCache()
+            initializePartitionMetadata()
+          } else {
+            leaderEpochCache = None
+            partitionMetadataFile = None
+          }
         }
       }
     }
