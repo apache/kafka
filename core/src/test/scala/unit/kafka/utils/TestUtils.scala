@@ -28,17 +28,17 @@ import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
-
 import com.yammer.metrics.core.{Gauge, Meter}
+
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, AlterPartitionListener}
+import kafka.cluster.{AlterPartitionListener, Broker, EndPoint}
 import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
 import kafka.log._
 import kafka.network.RequestChannel
-import kafka.server._
+import kafka.server.{ControllerServer, _}
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1125,6 +1125,23 @@ object TestUtils extends Logging {
 
     brokers.head.metadataCache.getPartitionInfo(topic, partition).getOrElse(
       throw new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
+  }
+
+  /**
+   * Wait until the kraft broker metadata have caught up to the controller
+   */
+  def waitForKRaftBrokerMetadataCatchupController(
+      brokers: Seq[KafkaBroker],
+      controllerServer: ControllerServer,
+      msg: String = "Timeout waiting for controller metadata propagating to brokers"
+  ): Unit = {
+    TestUtils.waitUntilTrue(
+      () => {
+        brokers.forall { broker =>
+          val metadataOffset = broker.metadataCache.asInstanceOf[KRaftMetadataCache].currentImage().highestOffsetAndEpoch().offset
+          metadataOffset >= controllerServer.raftManager.replicatedLog.endOffset().offset - 1
+        }
+      }, msg)
   }
 
   def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {

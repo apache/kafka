@@ -27,7 +27,6 @@ import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
@@ -1719,37 +1718,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
     ).asJavaCollection
 
-    var alterConfigs = Map(
+    var alterResult = client.incrementalAlterConfigs(Map(
       topic1Resource -> topic1AlterConfigs,
       topic2Resource -> topic2AlterConfigs
-    )
-    var alterResult = client.incrementalAlterConfigs(alterConfigs.asJava)
+    ).asJava)
 
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
 
     if (isKRaftTest()) {
-      TestUtils.waitUntilTrue(
-        () => {
-          alterConfigs.forall { case(resource, ops) =>
-            brokers.forall { broker =>
-              val topicProps = broker.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(resource.name())
-              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(broker.config), topicProps)
-              ops.asScala.forall { op =>
-                op.configEntry().value().split(",").forall { configValue =>
-                  // Verify we have `SET` or `APPEND` successfully
-                  if (op.opType() == AlterConfigOp.OpType.SET) {
-                    topicProps.get(op.configEntry().name()).toString == configValue
-                  } else if (op.opType() == AlterConfigOp.OpType.APPEND) {
-                    logConfig.getList(op.configEntry().name()).contains(configValue)
-                  } else {
-                    true
-                  }
-                }
-              }
-            }
-          }
-        }, "Timeout waiting for topic configs propagating to brokers")
+      TestUtils.waitForKRaftBrokerMetadataCatchupController(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
     }
 
     // Verify that topics were updated correctly
@@ -1777,30 +1755,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete), AlterConfigOp.OpType.SUBTRACT)
     ).asJavaCollection
 
-    alterConfigs = Map(
+    alterResult = client.incrementalAlterConfigs(Map(
       topic1Resource -> topic1AlterConfigs,
       topic2Resource -> topic2AlterConfigs
-    )
-    alterResult = client.incrementalAlterConfigs(alterConfigs.asJava)
+    ).asJava)
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
 
     if (isKRaftTest()) {
-      TestUtils.waitUntilTrue(
-        () => {
-          alterConfigs.forall { case(resource, ops) =>
-            brokers.forall { broker =>
-              val topicProps = broker.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(resource.name())
-              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(broker.config), topicProps)
-              ops.asScala.forall { op =>
-                // Verify we have `SUBTRACT` successfully
-                op.configEntry().value().split(",").forall { configValue =>
-                  !logConfig.getList(op.configEntry().name()).contains(configValue)
-                }
-              }
-            }
-          }
-        }, "Timeout waiting for topic configs propagating to brokers")
+      TestUtils.waitForKRaftBrokerMetadataCatchupController(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
     }
 
     // Verify that topics were updated correctly
@@ -1846,6 +1809,49 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
         Some("Invalid config value for resource"))
     }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAppendAlreadyExistsConfigsAndSubtractNotExistsConfigs(quorum: String): Unit = {
+    client = Admin.create(createConfig)
+
+    // Create topics
+    val topic = "incremental-alter-configs-topic"
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+
+    val appendValues = s"0:${brokers.head.config.brokerId}"
+    val subtractValues = brokers.tail.map(broker => s"0:${broker.config.brokerId}").mkString(",")
+    assertNotEquals("", subtractValues)
+
+    val topicCreateConfigs = new Properties
+    topicCreateConfigs.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, appendValues)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, topicCreateConfigs)
+
+    // Append value that is already present
+    val topicAppendConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, appendValues), AlterConfigOp.OpType.APPEND),
+    ).asJavaCollection
+
+    val appendResult = client.incrementalAlterConfigs(Map(topicResource -> topicAppendConfigs).asJava)
+    appendResult.all.get
+
+    // Subtract values that are not present
+    val topicSubtractConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, subtractValues), AlterConfigOp.OpType.SUBTRACT)
+    ).asJavaCollection
+    val subtractResult = client.incrementalAlterConfigs(Map(topicResource -> topicSubtractConfigs).asJava)
+    subtractResult.all.get
+
+    if (isKRaftTest()) {
+      TestUtils.waitForKRaftBrokerMetadataCatchupController(brokers, controllerServer)
+    }
+
+    // Verify that topics were updated correctly
+    val describeResult = client.describeConfigs(Seq(topicResource).asJava)
+    val configs = describeResult.all.get
+
+    assertEquals(appendValues, configs.get(topicResource).get(LogConfig.LeaderReplicationThrottledReplicasProp).value)
   }
 
   @Test

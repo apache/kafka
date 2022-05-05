@@ -499,7 +499,8 @@ object ConfigAdminManager {
             .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
             .getOrElse("")
             .split(",").toList
-          val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
+          val appendingValueList = alterConfigOp.configEntry.value.split(",").toList.filter(value => !oldValueList.contains(value))
+          val newValueList = oldValueList ::: appendingValueList
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {

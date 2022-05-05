@@ -213,19 +213,19 @@ public class ConfigurationControlManager {
                             "key " + key + " because its type is not LIST."));
                         return;
                     }
-                    List<String> newValueParts = getParts(newValue, key, configResource);
+                    List<String> oldValueList = getParts(newValue, key, configResource);
                     if (opType == APPEND) {
-                        for (String value: opValue.split(",")) {
-                            if (!newValueParts.contains(value)) {
-                                newValueParts.add(value);
+                        for (String value : opValue.split(",")) {
+                            if (!oldValueList.contains(value)) {
+                                oldValueList.add(value);
                             }
                         }
                     } else {
-                        for (String value: opValue.split(",")) {
-                            newValueParts.remove(value);
+                        for (String value : opValue.split(",")) {
+                            oldValueList.remove(value);
                         }
                     }
-                    newValue = String.join(",", newValueParts);
+                    newValue = String.join(",", oldValueList);
                     break;
             }
             if (!Objects.equals(currentValue, newValue)) {

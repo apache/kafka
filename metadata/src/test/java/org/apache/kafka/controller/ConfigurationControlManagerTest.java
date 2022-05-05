@@ -192,6 +192,15 @@ public class ConfigurationControlManagerTest {
 
         RecordTestUtils.replayAll(manager, result.records());
 
+        // It's ok for the appended value to be already present
+        result = manager
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true);
+        assertEquals(
+            ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
+            result
+        );
+        RecordTestUtils.replayAll(manager, result.records());
+
         result = manager
             .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true);
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
@@ -199,8 +208,17 @@ public class ConfigurationControlManagerTest {
                     setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
                 result);
-
         RecordTestUtils.replayAll(manager, result.records());
+
+        // It's ok for the deleted value not to be present
+        result = manager
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true);
+        assertEquals(
+            ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
+            result
+        );
+        RecordTestUtils.replayAll(manager, result.records());
+
         assertEquals("789", manager.getConfigs(MYTOPIC).get("abc"));
     }
 
