@@ -1495,6 +1495,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public TopicPartition topicPartition() {
+            if (record == null)
+                return null;
             return partition == RecordMetadata.UNKNOWN_PARTITION
                     ? ProducerInterceptors.extractTopicPartition(record)
                     : new TopicPartition(record.topic(), partition);
