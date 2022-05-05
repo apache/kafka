@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 
+import static org.apache.kafka.connect.json.JsonConverterConfig.SERIALIZE_ACCEPT_OPTIONAL_NULL_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -887,6 +888,23 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
+    @Test
+    public void testAcceptOptionalNullToJson() {
+        converter.configure(Collections.singletonMap(SERIALIZE_ACCEPT_OPTIONAL_NULL_CONFIG, true), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default-string\"},\"payload\":null}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void testNotAcceptOptionalNullToJson() {
+        converter.configure(Collections.singletonMap(SERIALIZE_ACCEPT_OPTIONAL_NULL_CONFIG, false), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default-string\"},\"payload\":\"default-string\"}");
+        assertEquals(expected, converted);
+    }
 
     private JsonNode parse(byte[] json) {
         try {

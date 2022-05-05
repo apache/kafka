@@ -46,6 +46,11 @@ public class JsonConverterConfig extends ConverterConfig {
         + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
     private static final String DECIMAL_FORMAT_DISPLAY = "Decimal Format";
 
+    public static final String SERIALIZE_ACCEPT_OPTIONAL_NULL_CONFIG = "serialize.accept.optional.null";
+    public static final boolean SERIALIZE_ACCEPT_OPTIONAL_NULL_DEFAULT = false;
+    private static final String SERIALIZE_ACCEPT_OPTIONAL_NULL_DOC = "For optional field which also has default value, "
+       + "if enable, serialize null as null, otherwise serialize null as default value.";
+    private static final String SERIALIZE_ACCEPT_OPTIONAL_NULL_DISPLAY = "accept.optional.null";
     private final static ConfigDef CONFIG;
 
     static {
@@ -66,6 +71,10 @@ public class JsonConverterConfig extends ConverterConfig {
                 DecimalFormat.NUMERIC.name()),
             Importance.LOW, DECIMAL_FORMAT_DOC, group, orderInGroup++,
             Width.MEDIUM, DECIMAL_FORMAT_DISPLAY);
+
+        CONFIG.define(SERIALIZE_ACCEPT_OPTIONAL_NULL_CONFIG, Type.BOOLEAN, SERIALIZE_ACCEPT_OPTIONAL_NULL_DEFAULT,
+                Importance.MEDIUM, SERIALIZE_ACCEPT_OPTIONAL_NULL_DOC, group, orderInGroup++,
+                Width.LONG, SERIALIZE_ACCEPT_OPTIONAL_NULL_DISPLAY);
     }
 
     public static ConfigDef configDef() {
@@ -111,4 +120,12 @@ public class JsonConverterConfig extends ConverterConfig {
         return decimalFormat;
     }
 
+    /**
+     * Get how to serialize null for optional field which also has default value.
+     *
+     * @return true serialize null as null; false serialize null as default value
+     */
+    public boolean serializeAcceptOptionalNull() {
+        return getBoolean(SERIALIZE_ACCEPT_OPTIONAL_NULL_CONFIG);
+    }
 }
