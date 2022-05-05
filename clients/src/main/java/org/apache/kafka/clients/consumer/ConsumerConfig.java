@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -451,8 +452,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
-                                        "latest",
-                                        in("latest", "earliest", "none"),
+                                        OffsetResetStrategy.LATEST.toString(),
+                                        in(Utils.enumOptions(OffsetResetStrategy.class)),
                                         Importance.MEDIUM,
                                         AUTO_OFFSET_RESET_DOC)
                                 .define(CHECK_CRCS_CONFIG,

@@ -21,22 +21,30 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import java.util.Arrays;
 
 public class SubscriptionResponseWrapper<FV> {
-    final static byte CURRENT_VERSION = 0x00;
+    final static byte CURRENT_VERSION = 0;
+    // v0 fields:
     private final long[] originalValueHash;
     private final FV foreignValue;
     private final byte version;
+    // non-serializing fields
+    private final Integer primaryPartition;
 
-    public SubscriptionResponseWrapper(final long[] originalValueHash, final FV foreignValue) {
-        this(originalValueHash, foreignValue, CURRENT_VERSION);
+    public SubscriptionResponseWrapper(final long[] originalValueHash, final FV foreignValue, final Integer primaryPartition) {
+        this(originalValueHash, foreignValue, CURRENT_VERSION, primaryPartition);
     }
 
-    public SubscriptionResponseWrapper(final long[] originalValueHash, final FV foreignValue, final byte version) {
-        if (version != CURRENT_VERSION) {
+    public SubscriptionResponseWrapper(
+        final long[] originalValueHash,
+        final FV foreignValue,
+        final byte version,
+        final Integer primaryPartition) {
+        if (version < 0 || version > CURRENT_VERSION) {
             throw new UnsupportedVersionException("SubscriptionWrapper does not support version " + version);
         }
         this.originalValueHash = originalValueHash;
         this.foreignValue = foreignValue;
         this.version = version;
+        this.primaryPartition = primaryPartition;
     }
 
     public long[] getOriginalValueHash() {
@@ -51,12 +59,17 @@ public class SubscriptionResponseWrapper<FV> {
         return version;
     }
 
+    public Integer getPrimaryPartition() {
+        return primaryPartition;
+    }
+
     @Override
     public String toString() {
         return "SubscriptionResponseWrapper{" +
             "version=" + version +
             ", foreignValue=" + foreignValue +
             ", originalValueHash=" + Arrays.toString(originalValueHash) +
+            ", primaryPartition=" + primaryPartition +
             '}';
     }
 }

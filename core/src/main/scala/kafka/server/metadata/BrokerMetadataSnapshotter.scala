@@ -38,7 +38,7 @@ class BrokerMetadataSnapshotter(
   threadNamePrefix: Option[String],
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
-  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=${brokerId}] ")
+  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=$brokerId] ")
   logIdent = logContext.logPrefix()
 
   /**

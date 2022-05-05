@@ -264,7 +264,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
         new RegistrationTimeoutEvent())
       sendBrokerRegistration()
-      info(s"Incarnation ${incarnationId} of broker ${nodeId} in cluster ${clusterId} " +
+      info(s"Incarnation $incarnationId of broker $nodeId in cluster $clusterId " +
         "is now STARTING.")
     }
   }
@@ -285,7 +285,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         setListeners(_advertisedListeners).
         setRack(rack.orNull)
     if (isDebugEnabled) {
-      debug(s"Sending broker registration ${data}")
+      debug(s"Sending broker registration $data")
     }
     _channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
       new BrokerRegistrationResponseHandler())
@@ -294,18 +294,18 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   private class BrokerRegistrationResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
-        error(s"Unable to register broker ${nodeId} because of an authentication exception.",
-          response.authenticationException());
+        error(s"Unable to register broker $nodeId because of an authentication exception.",
+          response.authenticationException())
         scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
-        error(s"Unable to register broker ${nodeId} because of an API version problem.",
-          response.versionMismatch());
+        error(s"Unable to register broker $nodeId because of an API version problem.",
+          response.versionMismatch())
         scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
-        warn(s"Unable to register broker ${nodeId}.")
+        warn(s"Unable to register broker $nodeId.")
         scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerRegistrationResponse]) {
-        error(s"Unable to register broker ${nodeId} because the controller returned an " +
+        error(s"Unable to register broker $nodeId because the controller returned an " +
           "invalid response type.")
         scheduleNextCommunicationAfterFailure()
       } else {
@@ -316,11 +316,11 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           _brokerEpoch = message.data().brokerEpoch()
           registered = true
           initialRegistrationSucceeded = true
-          info(s"Successfully registered broker ${nodeId} with broker epoch ${_brokerEpoch}")
+          info(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
           scheduleNextCommunicationImmediately() // Immediately send a heartbeat
         } else {
-          info(s"Unable to register broker ${nodeId} because the controller returned " +
-            s"error ${errorCode}")
+          info(s"Unable to register broker $nodeId because the controller returned " +
+            s"error $errorCode")
           scheduleNextCommunicationAfterFailure()
         }
       }
@@ -341,7 +341,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       setWantFence(!readyToUnfence).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
     if (isTraceEnabled) {
-      trace(s"Sending broker heartbeat ${data}")
+      trace(s"Sending broker heartbeat $data")
     }
     _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data),
       new BrokerHeartbeatResponseHandler())
@@ -350,18 +350,18 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
-        error(s"Unable to send broker heartbeat for ${nodeId} because of an " +
-          "authentication exception.", response.authenticationException());
+        error(s"Unable to send broker heartbeat for $nodeId because of an " +
+          "authentication exception.", response.authenticationException())
         scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
-        error(s"Unable to send broker heartbeat for ${nodeId} because of an API " +
-          "version problem.", response.versionMismatch());
+        error(s"Unable to send broker heartbeat for $nodeId because of an API " +
+          "version problem.", response.versionMismatch())
         scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
-        warn(s"Unable to send broker heartbeat for ${nodeId}. Retrying.")
+        warn(s"Unable to send broker heartbeat for $nodeId. Retrying.")
         scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerHeartbeatResponse]) {
-        error(s"Unable to send broker heartbeat for ${nodeId} because the controller " +
+        error(s"Unable to send broker heartbeat for $nodeId because the controller " +
           "returned an invalid response type.")
         scheduleNextCommunicationAfterFailure()
       } else {
@@ -371,7 +371,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           failedAttempts = 0
           _state match {
             case BrokerState.STARTING =>
-              if (message.data().isCaughtUp()) {
+              if (message.data().isCaughtUp) {
                 info(s"The broker has caught up. Transitioning from STARTING to RECOVERY.")
                 _state = BrokerState.RECOVERY
                 initialCatchUpFuture.complete(null)
@@ -382,7 +382,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
               // there is no recovery work to be done, we start up a bit quicker.
               scheduleNextCommunication(NANOSECONDS.convert(10, MILLISECONDS))
             case BrokerState.RECOVERY =>
-              if (!message.data().isFenced()) {
+              if (!message.data().isFenced) {
                 info(s"The broker has been unfenced. Transitioning from RECOVERY to RUNNING.")
                 _state = BrokerState.RUNNING
               } else {
@@ -417,7 +417,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
               scheduleNextCommunicationAfterSuccess()
           }
         } else {
-          warn(s"Broker ${nodeId} sent a heartbeat request but received error ${errorCode}.")
+          warn(s"Broker $nodeId sent a heartbeat request but received error $errorCode.")
           scheduleNextCommunicationAfterFailure()
         }
       }

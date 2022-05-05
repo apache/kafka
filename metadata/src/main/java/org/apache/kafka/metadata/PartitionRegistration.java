@@ -194,7 +194,7 @@ public class PartitionRegistration {
             setLeader(leader).
             setLeaderEpoch(leaderEpoch).
             setIsr(Replicas.toList(isr)).
-            setZkVersion(partitionEpoch).
+            setPartitionEpoch(partitionEpoch).
             setReplicas(Replicas.toList(replicas)).
             setAddingReplicas(Replicas.toList(addingReplicas)).
             setRemovingReplicas(Replicas.toList(removingReplicas)).

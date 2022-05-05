@@ -1901,10 +1901,13 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCallbackHandlesError() throws Exception {
+    public void testCallbackAndInterceptorHandleError() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000");
+        configs.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName());
+        configs.put(MockProducerInterceptor.APPEND_STRING_PROP, "something");
+
 
         Time time = new MockTime();
         ProducerMetadata producerMetadata = newMetadata(0, Long.MAX_VALUE);
@@ -1912,8 +1915,11 @@ public class KafkaProducerTest {
 
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
 
+        ProducerInterceptors<String, String> producerInterceptors =
+                new ProducerInterceptors<>(Arrays.asList(new MockProducerInterceptor()));
+
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
-                producerMetadata, client, null, time)) {
+                producerMetadata, client, producerInterceptors, time)) {
             ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
 
             // Here's the important piece of the test. Let's make sure that the RecordMetadata we get
@@ -1938,6 +1944,7 @@ public class KafkaProducerTest {
             };
 
             producer.send(record, callBack);
+            assertEquals(1, MockProducerInterceptor.ON_ACKNOWLEDGEMENT_COUNT.intValue());
         }
     }
 

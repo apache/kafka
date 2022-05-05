@@ -52,8 +52,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
+import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
@@ -1813,6 +1812,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   import TestMetricsReporter._
   val kafkaMetrics = ArrayBuffer[KafkaMetric]()
   @volatile var initializeCount = 0
+  @volatile var contextChangeCount = 0
   @volatile var configureCount = 0
   @volatile var reconfigureCount = 0
   @volatile var closeCount = 0
@@ -1820,7 +1820,12 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   @volatile var pollingInterval: Int = -1
   testReporters.add(this)
 
+  override def contextChange(metricsContext: MetricsContext): Unit = {
+    contextChangeCount += 1
+  }
+
   override def init(metrics: util.List[KafkaMetric]): Unit = {
+    assertTrue(contextChangeCount > 0, "contextChange must be called before init")
     kafkaMetrics ++= metrics.asScala
     initializeCount += 1
   }

@@ -18,7 +18,6 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -28,7 +27,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 
@@ -41,9 +39,9 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap());
 
-    private final Map<String, VersionRange> finalizedVersions;
+    private final Map<String, Short> finalizedVersions;
 
-    public FeaturesImage(Map<String, VersionRange> finalizedVersions) {
+    public FeaturesImage(Map<String, Short> finalizedVersions) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
     }
 
@@ -51,22 +49,20 @@ public final class FeaturesImage {
         return finalizedVersions.isEmpty();
     }
 
-    Map<String, VersionRange> finalizedVersions() {
+    Map<String, Short> finalizedVersions() {
         return finalizedVersions;
     }
 
-    private Optional<VersionRange> finalizedVersion(String feature) {
+    private Optional<Short> finalizedVersion(String feature) {
         return Optional.ofNullable(finalizedVersions.get(feature));
     }
 
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
         List<ApiMessageAndVersion> batch = new ArrayList<>();
-        for (Entry<String, VersionRange> entry : finalizedVersions.entrySet()) {
+        for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
             batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(entry.getKey()).
-                setMinFeatureLevel(entry.getValue().min()).
-                setMaxFeatureLevel(entry.getValue().max()),
-                FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+                setFeatureLevel(entry.getValue()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
         }
         out.accept(batch);
     }
@@ -83,9 +79,11 @@ public final class FeaturesImage {
         return finalizedVersions.equals(other.finalizedVersions);
     }
 
+
     @Override
     public String toString() {
-        return finalizedVersions.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", "));
+        return "FeaturesImage{" +
+                "finalizedVersions=" + finalizedVersions +
+                '}';
     }
 }

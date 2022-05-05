@@ -14,21 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.kstream.internals.emitstrategy;
 
-package org.apache.kafka.controller;
-
-import java.util.Random;
-
+import org.apache.kafka.streams.kstream.EmitStrategy;
 
 /**
- * A subclass of Random with a fixed seed and generation algorithm.
+ * An emit strategy which indicates output everytime when a window gets an update.
  */
-public class MockRandom extends Random {
-    private long state = 17;
+public class WindowUpdateStrategy implements EmitStrategy {
 
     @Override
-    protected int next(int bits) {
-        state = (state * 2862933555777941757L) + 3037000493L;
-        return (int) (state >>> (64 - bits));
+    public StrategyType type() {
+        return StrategyType.ON_WINDOW_UPDATE;
     }
 }

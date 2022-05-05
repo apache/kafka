@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.Locale;
+
 public enum OffsetResetStrategy {
-    LATEST, EARLIEST, NONE
+    LATEST, EARLIEST, NONE;
+
+    @Override
+    public String toString() {
+        return super.toString().toLowerCase(Locale.ROOT);
+    }
 }

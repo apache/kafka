@@ -86,7 +86,7 @@ class LocalLog(@volatile private var _dir: File,
 
   private[log] def dir: File = _dir
 
-  private[log] def name: String = dir.getName()
+  private[log] def name: String = dir.getName
 
   private[log] def parentDir: String = _parentDir
 
@@ -657,9 +657,9 @@ object LocalLog extends Logging {
    */
   private[log] def logDeleteDirName(topicPartition: TopicPartition): String = {
     val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
-    val suffix = s"-${topicPartition.partition()}.${uniqueId}${DeleteDirSuffix}"
+    val suffix = s"-${topicPartition.partition()}.$uniqueId$DeleteDirSuffix"
     val prefixLength = Math.min(topicPartition.topic().size, 255 - suffix.size)
-    s"${topicPartition.topic().substring(0, prefixLength)}${suffix}"
+    s"${topicPartition.topic().substring(0, prefixLength)}$suffix"
   }
 
   /**
@@ -923,7 +923,7 @@ object LocalLog extends Logging {
                                    isRecoveredSwapFile: Boolean = false): Iterable[LogSegment] = {
     val sortedNewSegments = newSegments.sortBy(_.baseOffset)
     // Some old segments may have been removed from index and scheduled for async deletion after the caller reads segments
-    // but before this method is executed. We want to filter out those segments to avoid calling asyncDeleteSegment()
+    // but before this method is executed. We want to filter out those segments to avoid calling deleteSegmentFiles()
     // multiple times for the same segment.
     val sortedOldSegments = oldSegments.filter(seg => existingSegments.contains(seg.baseOffset)).sortBy(_.baseOffset)
 
@@ -931,7 +931,7 @@ object LocalLog extends Logging {
     // if we crash in the middle of this we complete the swap in loadSegments()
     if (!isRecoveredSwapFile)
       sortedNewSegments.reverse.foreach(_.changeFileSuffixes(CleanedFileSuffix, SwapFileSuffix))
-    sortedNewSegments.reverse.foreach(existingSegments.add(_))
+    sortedNewSegments.reverse.foreach(existingSegments.add)
     val newSegmentBaseOffsets = sortedNewSegments.map(_.baseOffset).toSet
 
     // delete the old files

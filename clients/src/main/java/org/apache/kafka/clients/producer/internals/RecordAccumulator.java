@@ -81,7 +81,7 @@ public class RecordAccumulator {
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
-    private int drainIndex;
+    private final Map<String, Integer> nodesDrainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
 
@@ -115,7 +115,6 @@ public class RecordAccumulator {
                              TransactionManager transactionManager,
                              BufferPool bufferPool) {
         this.log = logContext.logger(RecordAccumulator.class);
-        this.drainIndex = 0;
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
         this.appendsInProgress = new AtomicInteger(0);
@@ -130,6 +129,7 @@ public class RecordAccumulator {
         this.muted = new HashSet<>();
         this.time = time;
         this.apiVersions = apiVersions;
+        nodesDrainIndex = new HashMap<>();
         this.transactionManager = transactionManager;
         registerMetrics(metrics, metricGrpName);
     }
@@ -378,12 +378,12 @@ public class RecordAccumulator {
     // producer id. We will not attempt to reorder messages if the producer id has changed, we will throw an
     // IllegalStateException instead.
     private void insertInSequenceOrder(Deque<ProducerBatch> deque, ProducerBatch batch) {
-        // When we are requeing and have enabled idempotence, the reenqueued batch must always have a sequence.
+        // When we are re-enqueueing and have enabled idempotence, the re-enqueued batch must always have a sequence.
         if (batch.baseSequence() == RecordBatch.NO_SEQUENCE)
             throw new IllegalStateException("Trying to re-enqueue a batch which doesn't have a sequence even " +
                 "though idempotency is enabled.");
 
-        if (transactionManager.nextBatchBySequence(batch.topicPartition) == null)
+        if (!transactionManager.hasInflightBatches(batch.topicPartition))
             throw new IllegalStateException("We are re-enqueueing a batch which is not tracked as part of the in flight " +
                 "requests. batch.topicPartition: " + batch.topicPartition + "; batch.baseSequence: " + batch.baseSequence());
 
@@ -559,13 +559,14 @@ public class RecordAccumulator {
         int size = 0;
         List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
-        /* to make starvation less likely this loop doesn't start at 0 */
+        /* to make starvation less likely each node has it's own drainIndex */
+        int drainIndex = getDrainIndex(node.idString());
         int start = drainIndex = drainIndex % parts.size();
         do {
             PartitionInfo part = parts.get(drainIndex);
             TopicPartition tp = new TopicPartition(part.topic(), part.partition());
-            this.drainIndex = (this.drainIndex + 1) % parts.size();
-
+            updateDrainIndex(node.idString(), drainIndex);
+            drainIndex = (drainIndex + 1) % parts.size();
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp))
                 continue;
@@ -636,6 +637,14 @@ public class RecordAccumulator {
             batch.drained(now);
         } while (start != drainIndex);
         return ready;
+    }
+
+    private int getDrainIndex(String idString) {
+        return nodesDrainIndex.computeIfAbsent(idString, s -> 0);
+    }
+
+    private void updateDrainIndex(String idString, int drainIndex) {
+        nodesDrainIndex.put(idString, drainIndex);
     }
 
     /**

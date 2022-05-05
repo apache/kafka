@@ -2207,7 +2207,7 @@ public class RequestResponseTest {
             .setLeader(2)
             .setLeaderEpoch(1)
             .setIsr(isr)
-            .setZkVersion(2)
+            .setPartitionEpoch(2)
             .setReplicas(replicas)
             .setIsNew(false));
         partitionStates.add(new LeaderAndIsrPartitionState()
@@ -2217,7 +2217,7 @@ public class RequestResponseTest {
             .setLeader(1)
             .setLeaderEpoch(1)
             .setIsr(isr)
-            .setZkVersion(2)
+            .setPartitionEpoch(2)
             .setReplicas(replicas)
             .setIsNew(false));
         partitionStates.add(new LeaderAndIsrPartitionState()
@@ -2227,7 +2227,7 @@ public class RequestResponseTest {
             .setLeader(0)
             .setLeaderEpoch(1)
             .setIsr(isr)
-            .setZkVersion(2)
+            .setPartitionEpoch(2)
             .setReplicas(replicas)
             .setIsNew(false));
 

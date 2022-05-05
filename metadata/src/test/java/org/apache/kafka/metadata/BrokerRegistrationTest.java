@@ -40,15 +40,15 @@ public class BrokerRegistrationTest {
     private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
         new BrokerRegistration(0, 0, Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
             Optional.empty(), false),
         new BrokerRegistration(1, 0, Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
             Optional.empty(), false),
         new BrokerRegistration(2, 0, Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", new VersionRange((short) 2, (short) 3)),
+            Collections.singletonMap("foo", VersionRange.of((short) 2, (short) 3)),
             Optional.of("myrack"), false));
 
     @Test

@@ -22,9 +22,7 @@
   "fields": [
     { "name": "Name", "type": "string", "versions": "0+",
       "about": "The feature name." },
-    { "name": "MinFeatureLevel", "type": "int16", "versions": "0+",
-      "about": "The current finalized minimum feature level of this feature for the cluster." },
-    { "name": "MaxFeatureLevel", "type": "int16", "versions": "0+",
-      "about": "The current finalized maximum feature level of this feature for the cluster." }
+    { "name": "FeatureLevel", "type": "int16", "versions": "0+",
+      "about": "The current finalized feature level of this feature for the cluster." }
   ]
 }

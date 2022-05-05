@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.{Collections, Optional}
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV2}
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
@@ -30,6 +29,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetFo
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
+import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -59,7 +59,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  override val isTruncationOnFetchSupported = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
+  override val isTruncationOnFetchSupported = brokerConfig.interBrokerProtocolVersion.isTruncationOnFetchSupported
 
   override def initiateClose(): Unit = endpoint.initiateClose()
 
@@ -112,7 +112,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE =>
-        if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
+        if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV2))
           responsePartition.offset
         else
           responsePartition.oldStyleOffsets.get(0)

@@ -17,18 +17,16 @@
 
 package org.apache.kafka.jmh.fetcher;
 
-import kafka.api.ApiVersion;
-import kafka.api.ApiVersion$;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.IsrChangeListener;
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
@@ -73,6 +71,7 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -150,7 +149,7 @@ public class ReplicaFetcherThreadBenchmark {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setMaxPidExpirationMs(60000).
-            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
@@ -171,16 +170,16 @@ public class ReplicaFetcherThreadBenchmark {
                     .setLeader(0)
                     .setLeaderEpoch(0)
                     .setIsr(replicas)
-                    .setZkVersion(1)
+                    .setPartitionEpoch(1)
                     .setReplicas(replicas)
                     .setIsNew(true);
 
-            IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
+            AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
-            AlterIsrManager isrChannelManager = Mockito.mock(AlterIsrManager.class);
-            Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
-                    0, Time.SYSTEM, isrChangeListener, new DelayedOperationsMock(tp),
+            AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
+            Partition partition = new Partition(tp, 100, MetadataVersion.latest(),
+                    0, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
@@ -232,7 +231,7 @@ public class ReplicaFetcherThreadBenchmark {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(metadataCache).
             setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
-            setAlterIsrManager(TestUtils.createAlterIsrManager()).
+            setAlterPartitionManager(TestUtils.createAlterIsrManager()).
             build();
         replicaQuota = new ReplicaQuota() {
             @Override
