@@ -128,15 +128,17 @@ class SocketServer(val config: KafkaConfig,
       }.sum / dataPlaneProcessors.size
     }
   })
-  newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
-    val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
-    val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
-      metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
-    }
-    ioWaitRatioMetricName.map { metricName =>
-      Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-    }.getOrElse(Double.NaN)
-  })
+  if (config.requiresZookeeper) {
+    newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+      val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
+      val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
+        metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
+      }
+      ioWaitRatioMetricName.map { metricName =>
+        Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
+      }.getOrElse(Double.NaN)
+    })
+  }
   newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
   newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
   newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
@@ -148,15 +150,17 @@ class SocketServer(val config: KafkaConfig,
       Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
     }.sum
   })
-  newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
-    val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
-    val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
-      metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
-    }
-    expiredConnectionsKilledCountMetricNames.map { metricName =>
-      Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
-    }.getOrElse(0.0)
-  })
+  if (config.requiresZookeeper) {
+    newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+      val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
+      val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
+        metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
+      }
+      expiredConnectionsKilledCountMetricNames.map { metricName =>
+        Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
+      }.getOrElse(0.0)
+    })
+  }
 
   // Create acceptors and processors for the statically configured endpoints when the
   // SocketServer is constructed. Note that this just opens the ports and creates the data
@@ -589,7 +593,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
 
   startFuture.thenRun(() => synchronized {
     if (!shouldRun.get()) {
-      debug(s"Ignoring start future for ${endPoint.listenerName} since it has already been shut down.")
+      debug(s"Ignoring start future for ${endPoint.listenerName} since the acceptor has already been shut down.")
     } else {
       debug(s"Starting processors for listener ${endPoint.listenerName}")
       started = true
@@ -1309,14 +1313,17 @@ private[kafka] class Processor(
   def beginShutdown(): Unit = {
     if (shouldRun.getAndSet(false)) {
       wakeup()
-      removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
-      metrics.removeMetric(expiredConnectionsKilledCountMetricName)
     }
   }
 
   def close(): Unit = {
-    beginShutdown()
-    thread.join()
+    try {
+      beginShutdown()
+      thread.join()
+    } finally {
+      removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
+      metrics.removeMetric(expiredConnectionsKilledCountMetricName)
+    }
   }
 }
 

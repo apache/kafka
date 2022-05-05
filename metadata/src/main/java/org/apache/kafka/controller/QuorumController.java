@@ -167,6 +167,10 @@ public final class QuorumController implements Controller {
             this.clusterId = clusterId;
         }
 
+        public int nodeId() {
+            return nodeId;
+        }
+
         public Builder setTime(Time time) {
             this.time = time;
             return this;

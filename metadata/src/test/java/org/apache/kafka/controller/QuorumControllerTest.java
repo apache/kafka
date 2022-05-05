@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,6 +35,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
@@ -81,6 +83,7 @@ import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -91,6 +94,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
@@ -1072,8 +1076,42 @@ public class QuorumControllerTest {
         }
     }
 
+    private static final Uuid FOO_ID = Uuid.fromString("igRktLOnR8ektWHr79F8mw");
+
+    private static final Map<Integer, Long> ALL_ZERO_BROKER_EPOCHS =
+        IntStream.of(0, 1, 2, 3).boxed().collect(Collectors.toMap(identity(), __ -> 0L));
+
     @Test
     public void testQuorumControllerCompletesAuthorizerInitialLoad() throws Throwable {
-        // TODO: add test here.
+        final int numControllers = 3;
+        List<StandardAuthorizer> authorizers = new ArrayList<>(numControllers);
+        for (int i = 0; i < numControllers; i++) {
+            StandardAuthorizer authorizer = new StandardAuthorizer();
+            authorizer.configure(Collections.emptyMap());
+            authorizers.add(authorizer);
+        }
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(numControllers, Optional.empty())) {
+            logEnv.appendInitialRecords(expectedSnapshotContent(FOO_ID, ALL_ZERO_BROKER_EPOCHS));
+            logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2));
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setAuthorizer(authorizers.get(b.nodeId()));
+            })) {
+                QuorumController active = controlEnv.activeController();
+                assertInitialLoadFuturesNotComplete(authorizers);
+                active.unregisterBroker(ANONYMOUS_CONTEXT, 3).get();
+                assertInitialLoadFuturesNotComplete(authorizers);
+                logEnv.logManagers().forEach(m -> m.setMaxReadOffset(Long.MAX_VALUE));
+                TestUtils.waitForCondition(() -> {
+                    return authorizers.stream().allMatch(a -> a.initialLoadFuture().isDone());
+                }, "Failed to complete initial authorizer load for all controllers.");
+            }
+        }
+    }
+
+    private static void assertInitialLoadFuturesNotComplete(List<StandardAuthorizer> authorizers) {
+        for (int i = 0; i < authorizers.size(); i++) {
+            assertFalse(authorizers.get(i).initialLoadFuture().isDone(),
+                "authorizer " + i + " should not have completed loading.");
+        }
     }
 }
