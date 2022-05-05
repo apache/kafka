@@ -429,7 +429,7 @@ class LogManager(logDirs: Seq[File],
       // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
         Option(overrides.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
-          val messageFormatVersion = new MessageFormatVersion(versionString, interBrokerProtocolVersion.ibpVersion)
+          val messageFormatVersion = new MessageFormatVersion(versionString, interBrokerProtocolVersion.version)
           if (messageFormatVersion.shouldIgnore) {
             val copy = new Properties()
             copy.putAll(overrides)

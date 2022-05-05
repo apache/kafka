@@ -555,7 +555,7 @@ object LogConfig {
     logProps.put(CompressionTypeProp, kafkaConfig.compressionType)
     logProps.put(UncleanLeaderElectionEnableProp, kafkaConfig.uncleanLeaderElectionEnable)
     logProps.put(PreAllocateEnableProp, kafkaConfig.logPreAllocateEnable)
-    logProps.put(MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.ibpVersion)
+    logProps.put(MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.version)
     logProps.put(MessageTimestampTypeProp, kafkaConfig.logMessageTimestampType.name)
     logProps.put(MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs: java.lang.Long)
     logProps.put(MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)

@@ -100,7 +100,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
-      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.ibpVersion)
+      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
       if (messageFormatVersion.shouldIgnore) {
         if (messageFormatVersion.shouldWarn)
           warn(messageFormatVersion.topicWarningMessage(topic))

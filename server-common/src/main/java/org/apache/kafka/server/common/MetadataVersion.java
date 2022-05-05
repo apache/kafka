@@ -157,7 +157,7 @@ public enum MetadataVersion {
 
     public static final String FEATURE_NAME = "metadata.version";
 
-    public static final MetadataVersion[] METADATA_VERSIONS;
+    public static final MetadataVersion[] VALUES;
 
     private final Optional<Short> featureLevel;
     private final String release;
@@ -181,6 +181,11 @@ public enum MetadataVersion {
             this.ibpVersion = String.format("%s-%s", release, subVersion);
         }
         this.didMetadataChange = didMetadataChange;
+    }
+
+
+    public short featureLevel() {
+        return featureLevel.orElse((short) -1);
     }
 
     public boolean isSaslInterBrokerHandshakeRequestEnabled() {
@@ -227,11 +232,11 @@ public enum MetadataVersion {
         {
             // Make a copy of values() and omit UNINITIALIZED
             MetadataVersion[] enumValues = MetadataVersion.values();
-            METADATA_VERSIONS = Arrays.copyOfRange(enumValues, 1, enumValues.length);
+            VALUES = Arrays.copyOfRange(enumValues, 1, enumValues.length);
 
             IBP_VERSIONS = new HashMap<>();
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
-            for (MetadataVersion metadataVersion : METADATA_VERSIONS) {
+            for (MetadataVersion metadataVersion : VALUES) {
                 maxInterVersion.put(metadataVersion.release, metadataVersion);
                 IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
             }
@@ -239,15 +244,11 @@ public enum MetadataVersion {
         }
     }
 
-    public short featureLevel() {
-        return featureLevel.orElse((short) -1);
-    }
-
-    public String release() {
+    public String shortVersion() {
         return release;
     }
 
-    public String ibpVersion() {
+    public String version() {
         return ibpVersion;
     }
 
@@ -297,7 +298,7 @@ public enum MetadataVersion {
     }
 
     public static MetadataVersion latest() {
-        return METADATA_VERSIONS[METADATA_VERSIONS.length - 1];
+        return VALUES[VALUES.length - 1];
     }
 
     public Optional<MetadataVersion> previous() {

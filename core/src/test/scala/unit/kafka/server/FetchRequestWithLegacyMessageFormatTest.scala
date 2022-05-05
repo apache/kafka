@@ -49,7 +49,7 @@ class FetchRequestWithLegacyMessageFormatTest extends BaseFetchRequestTest {
     val maxPartitionBytes = 200
     // Fetch v2 down-converts if the message format is >= 0.11 and we want to avoid
     // that as it affects the size of the returned buffer
-    val topicConfig = Map(LogConfig.MessageFormatVersionProp -> IBP_0_10_2_IV0.ibpVersion)
+    val topicConfig = Map(LogConfig.MessageFormatVersionProp -> IBP_0_10_2_IV0.version)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, topicConfig).head
     val topicIds = getTopicIds().asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava

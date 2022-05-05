@@ -179,12 +179,12 @@ class LogLoaderTest {
 
   @Test
   def testProducerSnapshotsRecoveryAfterUncleanShutdownV1(): Unit = {
-    testProducerSnapshotsRecoveryAfterUncleanShutdown(MetadataVersion.minSupportedFor(RecordVersion.V1).ibpVersion)
+    testProducerSnapshotsRecoveryAfterUncleanShutdown(MetadataVersion.minSupportedFor(RecordVersion.V1).version)
   }
 
   @Test
   def testProducerSnapshotsRecoveryAfterUncleanShutdownCurrentMessageFormat(): Unit = {
-    testProducerSnapshotsRecoveryAfterUncleanShutdown(MetadataVersion.latest.ibpVersion)
+    testProducerSnapshotsRecoveryAfterUncleanShutdown(MetadataVersion.latest.version)
   }
 
   private def createLog(dir: File,

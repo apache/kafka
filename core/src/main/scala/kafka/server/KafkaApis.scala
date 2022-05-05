@@ -2380,7 +2380,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def ensureInterBrokerVersion(version: MetadataVersion): Unit = {
     if (config.interBrokerProtocolVersion.isLessThan(version))
-      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.ibpVersion} is less than the required version: ${version.ibpVersion}")
+      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
   }
 
   def handleAddPartitionToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {

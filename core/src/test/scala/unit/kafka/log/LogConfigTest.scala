@@ -66,7 +66,7 @@ class LogConfigTest {
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
     // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
-    assertEquals(IBP_3_0_IV1.ibpVersion, logProps.get(LogConfig.MessageFormatVersionProp))
+    assertEquals(IBP_3_0_IV1.version, logProps.get(LogConfig.MessageFormatVersionProp))
   }
 
   @Test

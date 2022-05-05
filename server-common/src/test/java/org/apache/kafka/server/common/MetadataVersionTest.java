@@ -45,7 +45,7 @@ class MetadataVersionTest {
 
     @Test
     public void testFeatureLevel() {
-        MetadataVersion[] metadataVersions = MetadataVersion.METADATA_VERSIONS;
+        MetadataVersion[] metadataVersions = MetadataVersion.VALUES;
         int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(IBP_3_0_IV0);
         for (int i = 0; i < firstFeatureLevelIndex; i++) {
             assertTrue(metadataVersions[i].featureLevel() < 0);
@@ -178,72 +178,72 @@ class MetadataVersionTest {
 
     @Test
     public void testShortVersion() {
-        assertEquals("0.8.0", IBP_0_8_0.release());
-        assertEquals("0.10.0", IBP_0_10_0_IV0.release());
-        assertEquals("0.10.0", IBP_0_10_0_IV1.release());
-        assertEquals("0.11.0", IBP_0_11_0_IV0.release());
-        assertEquals("0.11.0", IBP_0_11_0_IV1.release());
-        assertEquals("0.11.0", IBP_0_11_0_IV2.release());
-        assertEquals("1.0", IBP_1_0_IV0.release());
-        assertEquals("1.1", IBP_1_1_IV0.release());
-        assertEquals("2.0", IBP_2_0_IV0.release());
-        assertEquals("2.0", IBP_2_0_IV1.release());
-        assertEquals("2.1", IBP_2_1_IV0.release());
-        assertEquals("2.1", IBP_2_1_IV1.release());
-        assertEquals("2.1", IBP_2_1_IV2.release());
-        assertEquals("2.2", IBP_2_2_IV0.release());
-        assertEquals("2.2", IBP_2_2_IV1.release());
-        assertEquals("2.3", IBP_2_3_IV0.release());
-        assertEquals("2.3", IBP_2_3_IV1.release());
-        assertEquals("2.4", IBP_2_4_IV0.release());
-        assertEquals("2.5", IBP_2_5_IV0.release());
-        assertEquals("2.6", IBP_2_6_IV0.release());
-        assertEquals("2.7", IBP_2_7_IV2.release());
-        assertEquals("2.8", IBP_2_8_IV0.release());
-        assertEquals("2.8", IBP_2_8_IV1.release());
-        assertEquals("3.0", IBP_3_0_IV0.release());
-        assertEquals("3.0", IBP_3_0_IV1.release());
-        assertEquals("3.1", IBP_3_1_IV0.release());
-        assertEquals("3.2", IBP_3_2_IV0.release());
+        assertEquals("0.8.0", IBP_0_8_0.shortVersion());
+        assertEquals("0.10.0", IBP_0_10_0_IV0.shortVersion());
+        assertEquals("0.10.0", IBP_0_10_0_IV1.shortVersion());
+        assertEquals("0.11.0", IBP_0_11_0_IV0.shortVersion());
+        assertEquals("0.11.0", IBP_0_11_0_IV1.shortVersion());
+        assertEquals("0.11.0", IBP_0_11_0_IV2.shortVersion());
+        assertEquals("1.0", IBP_1_0_IV0.shortVersion());
+        assertEquals("1.1", IBP_1_1_IV0.shortVersion());
+        assertEquals("2.0", IBP_2_0_IV0.shortVersion());
+        assertEquals("2.0", IBP_2_0_IV1.shortVersion());
+        assertEquals("2.1", IBP_2_1_IV0.shortVersion());
+        assertEquals("2.1", IBP_2_1_IV1.shortVersion());
+        assertEquals("2.1", IBP_2_1_IV2.shortVersion());
+        assertEquals("2.2", IBP_2_2_IV0.shortVersion());
+        assertEquals("2.2", IBP_2_2_IV1.shortVersion());
+        assertEquals("2.3", IBP_2_3_IV0.shortVersion());
+        assertEquals("2.3", IBP_2_3_IV1.shortVersion());
+        assertEquals("2.4", IBP_2_4_IV0.shortVersion());
+        assertEquals("2.5", IBP_2_5_IV0.shortVersion());
+        assertEquals("2.6", IBP_2_6_IV0.shortVersion());
+        assertEquals("2.7", IBP_2_7_IV2.shortVersion());
+        assertEquals("2.8", IBP_2_8_IV0.shortVersion());
+        assertEquals("2.8", IBP_2_8_IV1.shortVersion());
+        assertEquals("3.0", IBP_3_0_IV0.shortVersion());
+        assertEquals("3.0", IBP_3_0_IV1.shortVersion());
+        assertEquals("3.1", IBP_3_1_IV0.shortVersion());
+        assertEquals("3.2", IBP_3_2_IV0.shortVersion());
     }
 
     @Test
     public void testVersion() {
-        assertEquals("0.8.0", IBP_0_8_0.ibpVersion());
-        assertEquals("0.8.2", IBP_0_8_2.ibpVersion());
-        assertEquals("0.10.0-IV0", IBP_0_10_0_IV0.ibpVersion());
-        assertEquals("0.10.0-IV1", IBP_0_10_0_IV1.ibpVersion());
-        assertEquals("0.11.0-IV0", IBP_0_11_0_IV0.ibpVersion());
-        assertEquals("0.11.0-IV1", IBP_0_11_0_IV1.ibpVersion());
-        assertEquals("0.11.0-IV2", IBP_0_11_0_IV2.ibpVersion());
-        assertEquals("1.0-IV0", IBP_1_0_IV0.ibpVersion());
-        assertEquals("1.1-IV0", IBP_1_1_IV0.ibpVersion());
-        assertEquals("2.0-IV0", IBP_2_0_IV0.ibpVersion());
-        assertEquals("2.0-IV1", IBP_2_0_IV1.ibpVersion());
-        assertEquals("2.1-IV0", IBP_2_1_IV0.ibpVersion());
-        assertEquals("2.1-IV1", IBP_2_1_IV1.ibpVersion());
-        assertEquals("2.1-IV2", IBP_2_1_IV2.ibpVersion());
-        assertEquals("2.2-IV0", IBP_2_2_IV0.ibpVersion());
-        assertEquals("2.2-IV1", IBP_2_2_IV1.ibpVersion());
-        assertEquals("2.3-IV0", IBP_2_3_IV0.ibpVersion());
-        assertEquals("2.3-IV1", IBP_2_3_IV1.ibpVersion());
-        assertEquals("2.4-IV0", IBP_2_4_IV0.ibpVersion());
-        assertEquals("2.5-IV0", IBP_2_5_IV0.ibpVersion());
-        assertEquals("2.6-IV0", IBP_2_6_IV0.ibpVersion());
-        assertEquals("2.7-IV2", IBP_2_7_IV2.ibpVersion());
-        assertEquals("2.8-IV0", IBP_2_8_IV0.ibpVersion());
-        assertEquals("2.8-IV1", IBP_2_8_IV1.ibpVersion());
-        assertEquals("3.0-IV0", IBP_3_0_IV0.ibpVersion());
-        assertEquals("3.0-IV1", IBP_3_0_IV1.ibpVersion());
-        assertEquals("3.1-IV0", IBP_3_1_IV0.ibpVersion());
-        assertEquals("3.2-IV0", IBP_3_2_IV0.ibpVersion());
+        assertEquals("0.8.0", IBP_0_8_0.version());
+        assertEquals("0.8.2", IBP_0_8_2.version());
+        assertEquals("0.10.0-IV0", IBP_0_10_0_IV0.version());
+        assertEquals("0.10.0-IV1", IBP_0_10_0_IV1.version());
+        assertEquals("0.11.0-IV0", IBP_0_11_0_IV0.version());
+        assertEquals("0.11.0-IV1", IBP_0_11_0_IV1.version());
+        assertEquals("0.11.0-IV2", IBP_0_11_0_IV2.version());
+        assertEquals("1.0-IV0", IBP_1_0_IV0.version());
+        assertEquals("1.1-IV0", IBP_1_1_IV0.version());
+        assertEquals("2.0-IV0", IBP_2_0_IV0.version());
+        assertEquals("2.0-IV1", IBP_2_0_IV1.version());
+        assertEquals("2.1-IV0", IBP_2_1_IV0.version());
+        assertEquals("2.1-IV1", IBP_2_1_IV1.version());
+        assertEquals("2.1-IV2", IBP_2_1_IV2.version());
+        assertEquals("2.2-IV0", IBP_2_2_IV0.version());
+        assertEquals("2.2-IV1", IBP_2_2_IV1.version());
+        assertEquals("2.3-IV0", IBP_2_3_IV0.version());
+        assertEquals("2.3-IV1", IBP_2_3_IV1.version());
+        assertEquals("2.4-IV0", IBP_2_4_IV0.version());
+        assertEquals("2.5-IV0", IBP_2_5_IV0.version());
+        assertEquals("2.6-IV0", IBP_2_6_IV0.version());
+        assertEquals("2.7-IV2", IBP_2_7_IV2.version());
+        assertEquals("2.8-IV0", IBP_2_8_IV0.version());
+        assertEquals("2.8-IV1", IBP_2_8_IV1.version());
+        assertEquals("3.0-IV0", IBP_3_0_IV0.version());
+        assertEquals("3.0-IV1", IBP_3_0_IV1.version());
+        assertEquals("3.1-IV0", IBP_3_1_IV0.version());
+        assertEquals("3.2-IV0", IBP_3_2_IV0.version());
     }
 
     @Test
     public void testMetadataVersionValidator() {
         String str = new MetadataVersionValidator().toString();
         String[] apiVersions = str.substring(1).split(",");
-        assertEquals(MetadataVersion.METADATA_VERSIONS.length, apiVersions.length);
+        assertEquals(MetadataVersion.VALUES.length, apiVersions.length);
     }
 
     @Test

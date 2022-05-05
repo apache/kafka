@@ -143,7 +143,7 @@ object Defaults {
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
   @deprecated("3.0")
-  val LogMessageFormatVersion = IBP_3_0_IV1.ibpVersion
+  val LogMessageFormatVersion = IBP_3_0_IV1.version
 
   val LogMessageTimestampType = "CreateTime"
   val LogMessageTimestampDifferenceMaxMs = Long.MaxValue
@@ -174,7 +174,7 @@ object Defaults {
   val LeaderImbalanceCheckIntervalSeconds = 300
   val UncleanLeaderElectionEnable = false
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
-  val InterBrokerProtocolVersion = MetadataVersion.latest.ibpVersion
+  val InterBrokerProtocolVersion = MetadataVersion.latest.version
 
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetries = 3
@@ -2162,12 +2162,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     val recordVersion = logMessageFormatVersion.highestSupportedRecordVersion
     require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= recordVersion.value,
       s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
-      s"is set to version ${MetadataVersion.minSupportedFor(recordVersion).release} or higher")
+      s"is set to version ${MetadataVersion.minSupportedFor(recordVersion).shortVersion} or higher")
 
     if (offsetsTopicCompressionCodec == ZStdCompressionCodec)
       require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= IBP_2_1_IV0.highestSupportedRecordVersion().value,
         "offsets.topic.compression.codec zstd can only be used when inter.broker.protocol.version " +
-        s"is set to version ${IBP_2_1_IV0.release} or higher")
+        s"is set to version ${IBP_2_1_IV0.shortVersion} or higher")
 
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,

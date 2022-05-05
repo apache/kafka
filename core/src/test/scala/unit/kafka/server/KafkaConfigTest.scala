@@ -693,13 +693,13 @@ class KafkaConfigTest {
   def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
     def buildConfig(interBrokerProtocol: MetadataVersion, messageFormat: MetadataVersion): KafkaConfig = {
       val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-      props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.ibpVersion)
-      props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.ibpVersion)
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
+      props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
       KafkaConfig.fromProps(props)
     }
 
-    MetadataVersion.METADATA_VERSIONS.foreach { interBrokerVersion =>
-      MetadataVersion.METADATA_VERSIONS.foreach { messageFormatVersion =>
+    MetadataVersion.VALUES.foreach { interBrokerVersion =>
+      MetadataVersion.VALUES.foreach { messageFormatVersion =>
         if (interBrokerVersion.highestSupportedRecordVersion.value >= messageFormatVersion.highestSupportedRecordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)

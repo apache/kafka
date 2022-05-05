@@ -67,7 +67,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     // the `AlterIsr` API. In this case, the controller will register individual
     // watches for each reassigning partition so that the reassignment can be
     // completed as soon as the ISR is expanded.
-    val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.ibpVersion)
+    val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.version)
     cluster = new ReassignPartitionsTestCluster(zkConnect, configOverrides = configOverrides)
     cluster.setup()
     executeAndVerifyReassignment()
@@ -90,7 +90,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
       maxDelayMs = 500
     )
 
-    val oldIbpConfig = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.ibpVersion)
+    val oldIbpConfig = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.version)
     val brokerConfigOverrides = Map(1 -> oldIbpConfig, 2 -> oldIbpConfig, 3 -> oldIbpConfig)
 
     cluster = new ReassignPartitionsTestCluster(zkConnect, brokerConfigOverrides = brokerConfigOverrides)
