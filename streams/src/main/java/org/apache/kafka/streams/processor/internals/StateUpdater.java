@@ -22,6 +22,16 @@ import java.util.Set;
 
 public interface StateUpdater {
 
+    class ExceptionAndTasks {
+        public final Set<Task> tasks;
+        public final RuntimeException exception;
+
+        public ExceptionAndTasks(final Set<Task> tasks, final RuntimeException exception) {
+            this.tasks = tasks;
+            this.exception = exception;
+        }
+    }
+
     /**
      * Adds a task (active or standby) to the state updater.
      *
@@ -41,17 +51,16 @@ public interface StateUpdater {
      *
      * @param timeout duration how long the calling thread should wait for restored active tasks
      *
-     * @return list of active tasks with up-to-date states
+     * @return set of active tasks with up-to-date states
      */
     Set<StreamTask> getRestoredActiveTasks(final Duration timeout);
 
     /**
-     * Gets a list of exceptions thrown during restoration.
+     * Gets failed tasks and the corresponding exceptions
      *
-     * @return exceptions
+     * @return list of failed tasks and the corresponding exceptions
      */
-    List<RuntimeException> getExceptions();
-
+    List<ExceptionAndTasks> getFailedTasksAndExceptions();
 
     /**
      * Get all tasks (active and standby) that are managed by the state updater.
