@@ -24,9 +24,9 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.controller.QuorumController.Builder;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +69,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(i));
-                builder.setInitialMetadataVersion(metadataVersion);
+                builder.setBootstrapMetadataVersion(metadataVersion);
                 builder.setQuorumFeatures(new QuorumFeatures(i, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
                 sessionTimeoutMillis.ifPresent(timeout -> {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));

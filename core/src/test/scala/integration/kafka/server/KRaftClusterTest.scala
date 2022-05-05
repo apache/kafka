@@ -30,13 +30,14 @@ import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, Descr
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
+
 import java.util
 import java.util.{Arrays, Collections, Optional}
-
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.server.common.MetadataVersion
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
@@ -296,7 +297,7 @@ class KRaftClusterTest {
   def testCreateClusterInvalidMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setInitialMetadataVersion(-1).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {

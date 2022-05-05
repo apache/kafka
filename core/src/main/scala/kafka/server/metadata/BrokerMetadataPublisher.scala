@@ -31,7 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.metadata.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.collection.mutable
 
@@ -130,7 +130,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
 
       val metadataVersion: Option[Short] = Option(newImage.features().metadataVersion())
         .filterNot(mv => mv.equals(MetadataVersion.UNINITIALIZED))
-        .map(_.version)
+        .map(_.featureLevel())
 
       if (_firstPublish) {
         info(s"Publishing initial metadata at offset $highestOffsetAndEpoch  with metadata.version $metadataVersion.")

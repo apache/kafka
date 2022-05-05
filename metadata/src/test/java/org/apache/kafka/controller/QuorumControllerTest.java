@@ -80,12 +80,12 @@ import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceCheck
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -483,9 +483,9 @@ public class QuorumControllerTest {
     private BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
         features.add(new BrokerRegistrationRequestData.Feature()
-            .setName("metadata.version")
-            .setMinSupportedVersion((short) 0)
-            .setMaxSupportedVersion((short) 2));
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV0.featureLevel())
+            .setMaxSupportedVersion(MetadataVersion.latest().featureLevel()));
         return features;
     }
 
@@ -685,7 +685,7 @@ public class QuorumControllerTest {
         return Arrays.asList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(MetadataVersion.latest().version()), (short) 0),
+                setFeatureLevel(MetadataVersion.latest().featureLevel()), (short) 0),
             new ApiMessageAndVersion(new TopicRecord().
                 setName("foo").setTopicId(fooId), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).

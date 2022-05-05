@@ -16,7 +16,6 @@ import java.io.File
 import java.util.Properties
 
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -90,8 +89,7 @@ class BrokerMetadataCheckpointTest {
   private def confirmValidForMetaProperties(clusterId: String) = {
     val meta = MetaProperties(
       clusterId = clusterId,
-      nodeId = 5,
-      MetadataVersion.latest().version()
+      nodeId = 5
     )
     val properties = new RawMetaProperties(meta.toProperties)
     val meta2 = MetaProperties.parse(properties)

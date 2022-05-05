@@ -14,25 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.common;
 
-package org.apache.kafka.metadata;
+import java.util.Arrays;
+import java.util.stream.Collectors;
+import org.apache.kafka.common.config.ConfigDef.Validator;
+import org.apache.kafka.common.config.ConfigException;
 
-import org.apache.kafka.common.metadata.MetadataRecordType;
+public class MetadataVersionValidator implements Validator {
 
-/**
- * This functional interface is used by {@link MetadataVersion} to provide a mechanism to determine the appropriate
- * record version for a given metadata version.
- *
- * For example,
- *
- * <pre>
- *
- *     MetadataVersion.V1.recordVersion(MetadataRecordType.FEATURE_LEVEL_RECORD);
- * </pre>
- *
- * returns the version of FeatureLevelRecord to use at metadata.version 1.
- */
-@FunctionalInterface
-public interface MetadataRecordVersionResolver {
-    short recordVersion(MetadataRecordType type);
+    @Override
+    public void ensureValid(String name, Object value) {
+        try {
+            MetadataVersion.fromVersionString(value.toString());
+        } catch (IllegalArgumentException e) {
+            throw new ConfigException(name, value.toString(), e.getMessage());
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "[" + Arrays.stream(MetadataVersion.values()).distinct().map(MetadataVersion::ibpVersion).collect(
+             Collectors.joining(", ")) + "]";
+    }
 }

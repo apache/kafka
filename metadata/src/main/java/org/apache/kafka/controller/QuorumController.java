@@ -78,7 +78,6 @@ import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -90,6 +89,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -167,7 +167,7 @@ public final class QuorumController implements Controller {
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
         private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
-        private MetadataVersion initialMetadataVersion = null;
+        private MetadataVersion bootstrapMetadataVersion = null;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -244,8 +244,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setInitialMetadataVersion(MetadataVersion metadataVersion) {
-            this.initialMetadataVersion = metadataVersion;
+        public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
+            this.bootstrapMetadataVersion = metadataVersion;
             return this;
         }
 
@@ -279,7 +279,7 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
-            if (initialMetadataVersion == null || initialMetadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
+            if (bootstrapMetadataVersion == null || bootstrapMetadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
                 throw new RuntimeException("You must set an initial metadata.version in meta.properties");
             }
             if (quorumFeatures == null) {
@@ -304,7 +304,7 @@ public final class QuorumController implements Controller {
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
                     createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
-                    staticConfig, initialMetadataVersion);
+                    staticConfig, bootstrapMetadataVersion);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -904,10 +904,7 @@ public final class QuorumController implements Controller {
                             newEpoch + ", but we never renounced controller epoch " +
                             curEpoch);
                     }
-                    log.info(
-                        "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
-                        newEpoch, lastCommittedOffset, lastCommittedEpoch, featureControl.metadataVersion()
-                    );
+
 
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
@@ -917,22 +914,23 @@ public final class QuorumController implements Controller {
                     // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
                     // write any records to the log since we need the metadata.version to determine the correct
                     // record version
-
-                    if (featureControl.metadataVersion() == MetadataVersion.UNINITIALIZED) {
+                    final MetadataVersion metadataVersion;
+                    if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
                         final CompletableFuture<Map<String, ApiError>> future;
-                        if (initialMetadataVersion == MetadataVersion.UNINITIALIZED) {
+                        if (bootstrapMetadataVersion.featureLevel() < 1) {
+                            metadataVersion = MetadataVersion.UNINITIALIZED;
                             future = new CompletableFuture<>();
                             future.completeExceptionally(
-                                new IllegalStateException("Cannot become leader without an initial metadata.version to use."));
-                        } else if (initialMetadataVersion == MetadataVersion.V1) {
-                            future = appendWriteEvent("initializeMetadataVersion", OptionalLong.empty(), () -> {
-                                log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
-                                return featureControl.initializeMetadataVersion(MetadataVersion.V1.version());
-                            });
+                                    new IllegalStateException("Cannot become leader without a valid initial metadata.version to use. Got " + bootstrapMetadataVersion.ibpVersion()));
                         } else {
+                            metadataVersion = bootstrapMetadataVersion;
                             future = appendWriteEvent("initializeMetadataVersion", OptionalLong.empty(), () -> {
-                                log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
-                                return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
+                                if (bootstrapMetadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
+                                    log.info("Initializing metadata.version to {}", bootstrapMetadataVersion.featureLevel());
+                                } else {
+                                    log.info("Upgrading from KRaft preview. Initializing metadata.version to {}", bootstrapMetadataVersion.featureLevel());
+                                }
+                                return featureControl.initializeMetadataVersion(bootstrapMetadataVersion.featureLevel());
                             });
                         }
                         future.whenComplete((result, exception) -> {
@@ -946,7 +944,14 @@ public final class QuorumController implements Controller {
                                 });
                             }
                         });
+                    } else {
+                        metadataVersion = featureControl.metadataVersion();
                     }
+
+                    log.info(
+                            "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
+                            newEpoch, lastCommittedOffset, lastCommittedEpoch, metadataVersion.featureLevel()
+                    );
 
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is
                     // required because the active controller assumes that there is always an in-memory snapshot at the
@@ -1397,7 +1402,7 @@ public final class QuorumController implements Controller {
      */
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
-    private final MetadataVersion initialMetadataVersion;
+    private final MetadataVersion bootstrapMetadataVersion;
 
     private QuorumController(LogContext logContext,
                              int nodeId,
@@ -1420,7 +1425,7 @@ public final class QuorumController implements Controller {
                              ConfigurationValidator configurationValidator,
                              Optional<ClusterMetadataAuthorizer> authorizer,
                              Map<String, Object> staticConfig,
-                             MetadataVersion initialMetadataVersion) {
+                             MetadataVersion bootstrapMetadataVersion) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1472,7 +1477,7 @@ public final class QuorumController implements Controller {
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
         this.raftClient = raftClient;
-        this.initialMetadataVersion = initialMetadataVersion;
+        this.bootstrapMetadataVersion = bootstrapMetadataVersion;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.writeOffset = -1L;

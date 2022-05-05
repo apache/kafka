@@ -690,10 +690,9 @@ class StaticMemberTestService(StreamsTestBaseService):
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.NUM_THREADS: self.NUM_THREADS,
                       consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
-                      consumer_property.SESSION_TIMEOUT_MS: 60000,
+                      consumer_property.SESSION_TIMEOUT_MS: 60000, # set longer session timeout for static member test
                       'input.topic': self.INPUT_TOPIC,
-                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
-                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      "acceptable.recovery.lag": "9223372036854775807" # enable a one-shot assignment
                       }
 
 

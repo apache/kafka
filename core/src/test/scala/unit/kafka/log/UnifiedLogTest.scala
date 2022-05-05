@@ -3325,6 +3325,91 @@ class UnifiedLogTest {
     assertEquals(1, log.numberOfSegments)
   }
 
+  @Test
+  def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = 512,
+      segmentIndexBytes = 1000,
+      retentionMs = 999
+    )
+    val log = createLog(logDir, logConfig)
+
+    val expiredTimestamp = mockTime.milliseconds() - 1000
+    for (i <- 0 until 100) {
+      val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
+      log.appendAsLeader(records, leaderEpoch = 0)
+    }
+
+    val initialHighWatermark = log.updateHighWatermark(25L)
+    assertEquals(25L, initialHighWatermark)
+
+    val initialNumSegments = log.numberOfSegments
+    log.deleteOldSegments()
+    assertTrue(log.numberOfSegments < initialNumSegments)
+    assertTrue(log.logStartOffset <= initialHighWatermark)
+  }
+
+  @Test
+  def testCannotDeleteSegmentsAtOrAboveHighWatermark(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = 512,
+      segmentIndexBytes = 1000,
+      retentionMs = 999
+    )
+    val log = createLog(logDir, logConfig)
+
+    val expiredTimestamp = mockTime.milliseconds() - 1000
+    for (i <- 0 until 100) {
+      val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
+      log.appendAsLeader(records, leaderEpoch = 0)
+    }
+
+    // ensure we have at least a few segments so the test case is not trivial
+    assertTrue(log.numberOfSegments > 5)
+    assertEquals(0L, log.highWatermark)
+    assertEquals(0L, log.logStartOffset)
+    assertEquals(100L, log.logEndOffset)
+
+    for (hw <- 0 to 100) {
+      log.updateHighWatermark(hw)
+      assertEquals(hw, log.highWatermark)
+      log.deleteOldSegments()
+      assertTrue(log.logStartOffset <= hw)
+
+      // verify that all segments up to the high watermark have been deleted
+      log.logSegments.headOption.foreach { segment =>
+        assertTrue(segment.baseOffset <= hw)
+        assertTrue(segment.baseOffset >= log.logStartOffset)
+      }
+      log.logSegments.tail.foreach { segment =>
+        assertTrue(segment.baseOffset > hw)
+        assertTrue(segment.baseOffset >= log.logStartOffset)
+      }
+    }
+
+    assertEquals(100L, log.logStartOffset)
+    assertEquals(1, log.numberOfSegments)
+    assertEquals(0, log.activeSegment.size)
+  }
+
+  @Test
+  def testCannotIncrementLogStartOffsetPastHighWatermark(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = 512,
+      segmentIndexBytes = 1000,
+      retentionMs = 999
+    )
+    val log = createLog(logDir, logConfig)
+
+    for (i <- 0 until 100) {
+      val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
+      log.appendAsLeader(records, leaderEpoch = 0)
+    }
+
+    log.updateHighWatermark(25L)
+    assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion))
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,

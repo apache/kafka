@@ -35,9 +35,9 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Iterator;
 import java.util.List;
@@ -149,7 +149,7 @@ public final class MetadataDelta {
         if (featuresDelta == null) {
             return Optional.empty();
         } else {
-            return featuresDelta.metadataVersionChange().map(MetadataVersion::fromValue);
+            return featuresDelta.metadataVersionChange().map(MetadataVersion::fromFeatureLevel);
         }
     }
 

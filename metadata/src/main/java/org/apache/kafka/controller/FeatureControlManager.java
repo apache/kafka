@@ -36,9 +36,9 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FeatureLevelListener;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineObject;
@@ -81,10 +81,11 @@ public class FeatureControlManager {
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
-            Map<String, Short> updates,
-            Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
-            Map<Integer, Map<String, VersionRange>> brokerFeatures,
-            boolean validateOnly) {
+        Map<String, Short> updates,
+        Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
+        Map<Integer, Map<String, VersionRange>> brokerFeatures,
+        boolean validateOnly
+    ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (Entry<String, Short> entry : updates.entrySet()) {
@@ -100,7 +101,7 @@ public class FeatureControlManager {
     }
 
     ControllerResult<Map<String, ApiError>> initializeMetadataVersion(short initVersion) {
-        if (finalizedVersions.containsKey(MetadataVersion.FEATURE_NAME)) {
+        if (!metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
             return ControllerResult.atomicOf(
                 Collections.emptyList(),
                 Collections.singletonMap(
@@ -110,7 +111,7 @@ public class FeatureControlManager {
             ));
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        ApiError result = updateMetadataVersion(initVersion, records::add);
+        ApiError result = updateMetadataVersion(initVersion, false, records::add);
         return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersion.FEATURE_NAME, result));
     }
 
@@ -133,52 +134,58 @@ public class FeatureControlManager {
         return metadataVersion.get();
     }
 
-    private ApiError updateFeature(String featureName,
-                                   short newVersion,
-                                   FeatureUpdate.UpgradeType upgradeType,
-                                   Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
-                                   List<ApiMessageAndVersion> records) {
+    private ApiError updateFeature(
+        String featureName,
+        short newVersion,
+        FeatureUpdate.UpgradeType upgradeType,
+        Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
+        List<ApiMessageAndVersion> records
+    ) {
         if (!featureExists(featureName)) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "The controller does not support the given feature.");
+            return invalidUpdateVersion(featureName, newVersion,
+                "The controller does not support the given feature.");
         }
 
         if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "The controller does not support the given upgrade type.");
+            return invalidUpdateVersion(featureName, newVersion,
+                "The controller does not support the given upgrade type.");
         }
 
         final Short currentVersion = finalizedVersions.get(featureName);
 
         if (newVersion <= 0) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The upper value for the new range cannot be less than 1.");
+            return invalidUpdateVersion(featureName, newVersion,
+                "A feature version cannot be less than 1.");
         }
 
         if (!canSupportVersion(featureName, newVersion)) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The controller does not support the given feature range.");
+            return invalidUpdateVersion(featureName, newVersion,
+                "The controller does not support the given feature version.");
         }
 
         for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokersAndFeatures.entrySet()) {
             VersionRange brokerRange = brokerEntry.getValue().get(featureName);
-            if (brokerRange == null || !brokerRange.contains(newVersion)) {
-                return new ApiError(Errors.INVALID_UPDATE_VERSION,
+            if (brokerRange == null) {
+                return invalidUpdateVersion(featureName, newVersion,
+                    "Broker " + brokerEntry.getKey() + " does not support this feature.");
+            } else if (!brokerRange.contains(newVersion)) {
+                return invalidUpdateVersion(featureName, newVersion,
                     "Broker " + brokerEntry.getKey() + " does not support the given " +
-                        "feature range.");
+                    "version. It supports " + brokerRange.min() + " to " + brokerRange.max() + ".");
             }
         }
 
         if (currentVersion != null && newVersion < currentVersion) {
             if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
-                return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Can't downgrade the maximum version of this feature without setting the upgrade type to safe or unsafe downgrade.");
+                return invalidUpdateVersion(featureName, newVersion,
+                    "Can't downgrade the version of this feature without setting the " +
+                    "upgrade type to either safe or unsafe downgrade.");
             }
         }
 
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             // Perform additional checks if we're updating metadata.version
-            return updateMetadataVersion(newVersion, records::add);
+            return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
         } else {
             records.add(new ApiMessageAndVersion(
                 new FeatureLevelRecord()
@@ -189,47 +196,69 @@ public class FeatureControlManager {
         }
     }
 
+    private ApiError invalidUpdateVersion(String feature, short version, String message) {
+        String errorMessage = String.format("Invalid update version %d for feature %s. %s", version, feature, message);
+        log.debug(errorMessage);
+        return new ApiError(Errors.INVALID_UPDATE_VERSION, errorMessage);
+    }
+
     /**
      * Perform some additional validation for metadata.version updates.
      */
-    private ApiError updateMetadataVersion(short newVersion,
-                                           Consumer<ApiMessageAndVersion> recordConsumer) {
+    private ApiError updateMetadataVersion(
+        short newVersionLevel,
+        boolean allowUnsafeDowngrade,
+        Consumer<ApiMessageAndVersion> recordConsumer
+    ) {
         Optional<VersionRange> quorumSupported = quorumFeatures.quorumSupportedFeature(MetadataVersion.FEATURE_NAME);
         if (!quorumSupported.isPresent()) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The quorum can not support metadata.version!");
+            return invalidMetadataVersion(newVersionLevel, "The quorum does not support metadata.version.");
         }
 
-        if (newVersion <= 0) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION, "metadata.version cannot be less than 1");
+        if (newVersionLevel <= 0) {
+            return invalidMetadataVersion(newVersionLevel, "metadata.version cannot be less than 1.");
         }
 
-        if (!quorumSupported.get().contains(newVersion)) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The controller quorum cannot support the given metadata.version " + newVersion);
+        if (!quorumSupported.get().contains(newVersionLevel)) {
+            return invalidMetadataVersion(newVersionLevel, "The controller quorum does support this version.");
         }
 
-        Short currentVersion = finalizedVersions.get(MetadataVersion.FEATURE_NAME);
-        if (currentVersion != null && currentVersion > newVersion) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION, "Downgrading metadata.version is not yet supported.");
-        }
-
+        MetadataVersion currentVersion = metadataVersion();
+        final MetadataVersion newVersion;
         try {
-            MetadataVersion.fromValue(newVersion);
+            newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
         } catch (IllegalArgumentException e) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION, "Unknown metadata.version " + newVersion);
+            return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version.");
+        }
+
+        if (!currentVersion.equals(MetadataVersion.UNINITIALIZED) && newVersion.isLessThan(currentVersion)) {
+            // This is a downgrade
+            boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);
+            if (!metadataChanged) {
+                log.info("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
+            } else {
+                return invalidMetadataVersion(newVersionLevel, "Unsafe metadata.version downgrades are not supported.");
+            }
         }
 
         recordConsumer.accept(new ApiMessageAndVersion(
             new FeatureLevelRecord()
                 .setName(MetadataVersion.FEATURE_NAME)
-                .setFeatureLevel(newVersion), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+                .setFeatureLevel(newVersionLevel), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
         return ApiError.NONE;
+    }
+
+    private ApiError invalidMetadataVersion(short version, String message) {
+        String errorMessage = String.format("Invalid metadata.version %d. %s", version, message);
+        log.error(errorMessage);
+        return new ApiError(Errors.INVALID_UPDATE_VERSION, errorMessage);
     }
 
     FinalizedControllerFeatures finalizedFeatures(long epoch) {
         Map<String, Short> features = new HashMap<>();
-        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).version());
+        if (!metadataVersion.get(epoch).equals(MetadataVersion.UNINITIALIZED)) {
+            features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).featureLevel());
+        }
         for (Entry<String, Short> entry : finalizedVersions.entrySet(epoch)) {
             features.put(entry.getKey(), entry.getValue());
         }
@@ -239,7 +268,7 @@ public class FeatureControlManager {
     public void replay(FeatureLevelRecord record) {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             log.info("Setting metadata.version to {}", record.featureLevel());
-            metadataVersion.set(MetadataVersion.fromValue(record.featureLevel()));
+            metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
         } else {
             log.info("Setting feature {} to {}", record.name(), record.featureLevel());
             finalizedVersions.put(record.name(), record.featureLevel());
@@ -278,7 +307,7 @@ public class FeatureControlManager {
                 wroteVersion = true;
                 return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
                     .setName(MetadataVersion.FEATURE_NAME)
-                    .setFeatureLevel(metadataVersion.version()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+                    .setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
             }
             // Then write the rest of the features
             if (!hasNext()) throw new NoSuchElementException();

@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-
 import kafka.common.InconsistentNodeIdException
 import kafka.log.{LogConfig, UnifiedLog}
 import kafka.metrics.KafkaMetricsReporter
@@ -29,11 +28,13 @@ import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.controller.BootstrapMetadata
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
+import java.nio.file.Paths
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -55,7 +56,7 @@ class KafkaRaftServer(
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
-  private val (metaProps, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
+  private val (metaProps, bootstrapMetadata, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
 
   private val metrics = Server.initializeMetrics(
     config,
@@ -105,7 +106,8 @@ class KafkaRaftServer(
       threadNamePrefix,
       controllerQuorumVotersFuture,
       KafkaRaftServer.configSchema,
-      raftApiVersions
+      raftApiVersions,
+      Some(bootstrapMetadata)
     ))
   } else {
     None
@@ -153,7 +155,7 @@ object KafkaRaftServer {
    * @return A tuple containing the loaded meta properties (which are guaranteed to
    *         be consistent across all log dirs) and the offline directories
    */
-  def initializeLogDirs(config: KafkaConfig): (MetaProperties, Seq[String]) = {
+  def initializeLogDirs(config: KafkaConfig): (MetaProperties, BootstrapMetadata, Seq[String]) = {
     val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
@@ -181,7 +183,9 @@ object KafkaRaftServer {
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }
 
-    (metaProperties, offlineDirs.toSeq)
+    val bootstrapMetadata = BootstrapMetadata.load(Paths.get(config.metadataLogDir))
+
+    (metaProperties, bootstrapMetadata, offlineDirs.toSeq)
   }
 
   val configSchema = new KafkaConfigSchema(Map(

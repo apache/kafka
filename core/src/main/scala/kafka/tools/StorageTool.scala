@@ -26,7 +26,8 @@ import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.MetadataVersion
+import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.collection.mutable
 
@@ -47,13 +48,16 @@ object StorageTool extends Logging {
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = getMetadataVersion(namespace)
-          val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion.version)
+          if (metadataVersion.isLessThan(MetadataVersion.IBP_3_0_IV0)) {
+            throw new TerseFailure(s"Cannot specify a metadata version less than ${MetadataVersion.IBP_3_0_IV0.featureLevel()}.")
+          }
+          val metaProperties = buildMetadataProperties(clusterId, config.get)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
               "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
           }
-          Exit.exit(formatCommand(System.out, directories, metaProperties, ignoreFormatted ))
+          Exit.exit(formatCommand(System.out, directories, metaProperties, metadataVersion, ignoreFormatted))
 
         case "random-uuid" =>
           System.out.println(Uuid.randomUuid)
@@ -95,7 +99,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--metadata-version", "-v").
       action(store()).
-      help(s"The initial metadata.version to use. Default is (${MetadataVersion.stable().version()}).")
+      help(s"The initial metadata.version to use. Default is (${MetadataVersion.latest().featureLevel()}).")
 
     parser.parseArgsOrFail(args)
   }
@@ -111,8 +115,8 @@ object StorageTool extends Logging {
 
   def getMetadataVersion(namespace: Namespace): MetadataVersion = {
     Option(namespace.getString("metadata_version")).
-      map(mv => MetadataVersion.fromValue(mv.toShort)).
-      getOrElse(MetadataVersion.stable())
+      map(mv => MetadataVersion.fromFeatureLevel(mv.toShort)).
+      getOrElse(MetadataVersion.latest())
   }
 
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
@@ -204,7 +208,6 @@ object StorageTool extends Logging {
   def buildMetadataProperties(
     clusterIdStr: String,
     config: KafkaConfig,
-    metadataVersion: Short
   ): MetaProperties = {
     val effectiveClusterId = try {
       Uuid.fromString(clusterIdStr)
@@ -215,15 +218,13 @@ object StorageTool extends Logging {
     if (config.nodeId < 0) {
       throw new TerseFailure(s"The node.id must be set to a non-negative integer. We saw ${config.nodeId}")
     }
-    if (metadataVersion < 1) {
-      throw new TerseFailure("The initial metadata.version must be greater than zero.")
-    }
-    new MetaProperties(effectiveClusterId.toString, config.nodeId, metadataVersion)
+    new MetaProperties(effectiveClusterId.toString, config.nodeId)
   }
 
   def formatCommand(stream: PrintStream,
                     directories: Seq[String],
                     metaProperties: MetaProperties,
+                    metadataVersion: MetadataVersion,
                     ignoreFormatted: Boolean): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
@@ -251,6 +252,10 @@ object StorageTool extends Logging {
       val metaPropertiesPath = Paths.get(directory, "meta.properties")
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
       checkpoint.write(metaProperties.toProperties)
+
+      val bootstrapMetadata = BootstrapMetadata.create(metadataVersion)
+      BootstrapMetadata.write(bootstrapMetadata, Paths.get(directory))
+
       stream.println(s"Formatting ${directory}")
     })
     0

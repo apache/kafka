@@ -16,10 +16,10 @@
  */
 package kafka.server
 
-import kafka.api.ApiVersion
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -37,7 +37,7 @@ class ApiVersionManagerTest {
   def testApiScope(apiScope: ListenerType): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache
@@ -61,7 +61,7 @@ class ApiVersionManagerTest {
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -82,7 +82,7 @@ class ApiVersionManagerTest {
     for (forwardingManagerOpt <- Seq(Some(forwardingManager), None)) {
       val versionManager = new DefaultApiVersionManager(
         listenerType = ListenerType.BROKER,
-        interBrokerProtocolVersion = ApiVersion.latestVersion,
+        interBrokerProtocolVersion = MetadataVersion.latest,
         forwardingManager = forwardingManagerOpt,
         features = brokerFeatures,
         featureCache = featureCache
@@ -104,7 +104,7 @@ class ApiVersionManagerTest {
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -123,7 +123,7 @@ class ApiVersionManagerTest {
   def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache

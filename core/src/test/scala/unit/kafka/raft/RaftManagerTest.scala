@@ -26,7 +26,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metadata.MetadataVersion
 import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.test.TestUtils
@@ -67,8 +66,7 @@ class RaftManagerTest {
     val topicId = new Uuid(0L, 2L)
     val metaProperties = MetaProperties(
       clusterId = Uuid.randomUuid.toString,
-      nodeId = config.nodeId,
-      MetadataVersion.latest().version()
+      nodeId = config.nodeId
     )
 
     new KafkaRaftManager[Array[Byte]](

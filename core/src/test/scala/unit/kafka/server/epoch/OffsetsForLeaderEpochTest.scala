@@ -72,7 +72,7 @@ class OffsetsForLeaderEpochTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
     val partition = replicaManager.createPartition(tp)
     partition.setLog(mockLog, isFutureLog = false)
     partition.leaderReplicaIdOpt = Some(config.brokerId)
@@ -101,7 +101,7 @@ class OffsetsForLeaderEpochTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
     replicaManager.createPartition(tp)
 
     //Given
@@ -132,7 +132,7 @@ class OffsetsForLeaderEpochTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
 
     //Given
     val epochRequested: Integer = 5

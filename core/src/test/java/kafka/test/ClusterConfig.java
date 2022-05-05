@@ -19,7 +19,7 @@ package kafka.test;
 
 import kafka.test.annotation.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.metadata.MetadataVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
 import java.util.HashMap;

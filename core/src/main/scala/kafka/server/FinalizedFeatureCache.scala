@@ -22,7 +22,7 @@ import java.util.Collections
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.image.FeaturesDelta
-import org.apache.kafka.metadata.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.concurrent.TimeoutException
 import scala.math.max

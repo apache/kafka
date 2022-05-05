@@ -17,15 +17,14 @@
 
 package kafka.admin
 
-import kafka.api.KAFKA_2_7_IV0
 import kafka.server.{BaseRequestTest, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.utils.Utils
-
 import java.util.Properties
 
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -33,7 +32,7 @@ class FeatureCommandTest extends BaseRequestTest {
   override def brokerCount: Int = 3
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
   }
 
   private val defaultSupportedFeatures: Features[SupportedVersionRange] =

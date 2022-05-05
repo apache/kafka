@@ -22,7 +22,6 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CompletableFuture
-
 import javax.security.auth.login.Configuration
 import kafka.raft.KafkaRaftManager
 import kafka.tools.StorageTool
@@ -34,9 +33,9 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
-import org.apache.kafka.metadata.{MetadataRecordSerde, MetadataVersion}
+import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
@@ -80,7 +79,7 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
                             time: Time,
                             startup: Boolean): KafkaBroker = {
     val broker = new BrokerServer(config = config,
-      metaProps = new MetaProperties(clusterId, config.nodeId, MetadataVersion.latest().version()),
+      metaProps = new MetaProperties(clusterId, config.nodeId),
       raftManager = raftManager,
       time = time,
       metrics = new Metrics(),
@@ -228,7 +227,7 @@ abstract class QuorumTestHarness extends Logging {
     var out: PrintStream = null
     try {
       out = new PrintStream(stream)
-      if (StorageTool.formatCommand(out, directories, metaProperties, false) != 0) {
+      if (StorageTool.formatCommand(out, directories, metaProperties, MetadataVersion.latest(), ignoreFormatted = false) != 0) {
         throw new RuntimeException(stream.toString())
       }
       debug(s"Formatted storage directory(ies) ${directories}")
@@ -250,7 +249,7 @@ abstract class QuorumTestHarness extends Logging {
     }
     val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
     val metadataDir = TestUtils.tempDir()
-    val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId, MetadataVersion.latest().version())
+    val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
     formatDirectories(immutable.Seq(metadataDir.getAbsolutePath()), metaProperties)
     val controllerMetrics = new Metrics()
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath())
@@ -285,7 +284,8 @@ abstract class QuorumTestHarness extends Logging {
         threadNamePrefix = Option(threadNamePrefix),
         controllerQuorumVotersFuture = controllerQuorumVotersFuture,
         configSchema = KafkaRaftServer.configSchema,
-        raftApiVersions = apiVersions
+        raftApiVersions = apiVersions,
+        bootstrapMetadata = None,
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {

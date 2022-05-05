@@ -19,8 +19,8 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -60,7 +60,7 @@ public class QuorumFeatures {
 
     public static Map<String, VersionRange> defaultFeatureMap() {
         Map<String, VersionRange> features = new HashMap<>(1);
-        features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(MetadataVersion.V1.version(), MetadataVersion.latest().version()));
+        features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.latest().featureLevel()));
         return features;
     }
 

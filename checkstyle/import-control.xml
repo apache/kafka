@@ -348,6 +348,7 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>
+    <allow pkg="org.apache.kafka.controller.util"/>
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />

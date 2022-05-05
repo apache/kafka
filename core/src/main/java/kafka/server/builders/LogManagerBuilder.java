@@ -17,7 +17,6 @@
 
 package kafka.server.builders;
 
-import kafka.api.ApiVersion;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
@@ -26,6 +25,7 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.metadata.ConfigRepository;
 import kafka.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.MetadataVersion;
 import scala.collection.JavaConverters;
 
 import java.io.File;
@@ -46,7 +46,7 @@ public class LogManagerBuilder {
     private long retentionCheckMs = 1000L;
     private int maxTransactionTimeoutMs = 15 * 60 * 1000;
     private int maxPidExpirationMs = 60000;
-    private ApiVersion interBrokerProtocolVersion = ApiVersion.latestVersion();
+    private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latest();
     private Scheduler scheduler = null;
     private BrokerTopicStats brokerTopicStats = null;
     private LogDirFailureChannel logDirFailureChannel = null;
@@ -113,7 +113,7 @@ public class LogManagerBuilder {
         return this;
     }
 
-    public LogManagerBuilder setInterBrokerProtocolVersion(ApiVersion interBrokerProtocolVersion) {
+    public LogManagerBuilder setInterBrokerProtocolVersion(MetadataVersion interBrokerProtocolVersion) {
         this.interBrokerProtocolVersion = interBrokerProtocolVersion;
         return this;
     }

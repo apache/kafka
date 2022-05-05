@@ -18,8 +18,8 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -71,7 +71,7 @@ public final class FeaturesImage {
         if (!metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
             batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(metadataVersion.version()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+                setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
         }
         for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
             if (entry.getKey().equals(MetadataVersion.FEATURE_NAME)) {
