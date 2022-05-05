@@ -52,6 +52,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, ProducerIdsImage, TopicsDelta, TopicsImage}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.raft.{OffsetAndEpoch => RaftOffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.junit.jupiter.api.Assertions._
@@ -3621,7 +3622,118 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumped(): Unit = {
+  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumpedWithZkPath(): Unit = {
+    val localId = 0
+    val topicPartition = new TopicPartition("foo", 0)
+
+    val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      brokerId = localId,
+      aliveBrokerIds = Seq(localId, localId + 1, localId + 2),
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+    )
+
+    try {
+      when(mockReplicaFetcherManager.removeFetcherForPartitions(
+        Set(topicPartition))
+      ).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
+
+      // Make the local replica the follower.
+      var request = makeLeaderAndIsrRequest(
+        topicId = FOO_UUID,
+        topicPartition = topicPartition,
+        replicas = Seq(localId, localId + 1),
+        leaderAndIsr = LeaderAndIsr(
+          leader = localId + 1,
+          leaderEpoch = 0,
+          isr = List(localId, localId + 1),
+          leaderRecoveryState = LeaderRecoveryState.RECOVERED,
+          partitionEpoch = 0
+        )
+      )
+
+      replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
+
+      // Check the state of that partition.
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+      assertEquals(0, followerPartition.getPartitionEpoch)
+
+      // Verify that the partition was removed and added back.
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
+      verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
+        topicId = Some(FOO_UUID),
+        leader = BrokerEndPoint(localId + 1, s"host${localId + 1}", localId + 1),
+        currentLeaderEpoch = 0,
+        initOffset = 0
+      )))
+
+      reset(mockReplicaFetcherManager)
+
+      // Apply changes that bumps the partition epoch.
+      request = makeLeaderAndIsrRequest(
+        topicId = FOO_UUID,
+        topicPartition = topicPartition,
+        replicas = Seq(localId, localId + 1, localId + 2),
+        leaderAndIsr = LeaderAndIsr(
+          leader = localId + 1,
+          leaderEpoch = 0,
+          isr = List(localId, localId + 1),
+          leaderRecoveryState = LeaderRecoveryState.RECOVERED,
+          partitionEpoch = 1
+        )
+      )
+
+      replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
+
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+      // Partition updates is fenced based on the leader epoch on the ZK path.
+      assertEquals(0, followerPartition.getPartitionEpoch)
+
+      // As the update is fenced based on the leader epoch, removeFetcherForPartitions and
+      // addFetcherForPartitions are not called at all.
+      reset(mockReplicaFetcherManager)
+
+      // Apply changes that bumps the leader epoch.
+      request = makeLeaderAndIsrRequest(
+        topicId = FOO_UUID,
+        topicPartition = topicPartition,
+        replicas = Seq(localId, localId + 1, localId + 2),
+        leaderAndIsr = LeaderAndIsr(
+          leader = localId + 2,
+          leaderEpoch = 1,
+          isr = List(localId, localId + 1, localId + 2),
+          leaderRecoveryState = LeaderRecoveryState.RECOVERED,
+          partitionEpoch = 2
+        )
+      )
+
+      replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
+
+      assertFalse(followerPartition.isLeader)
+      assertEquals(1, followerPartition.getLeaderEpoch)
+      assertEquals(2, followerPartition.getPartitionEpoch)
+
+      // Verify that the partition was removed and added back.
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
+      verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
+        topicId = Some(FOO_UUID),
+        leader = BrokerEndPoint(localId + 2, s"host${localId + 2}", localId + 2),
+        currentLeaderEpoch = 1,
+        initOffset = 0
+      )))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumpedWithKRaftPath(): Unit = {
     val localId = 0
     val topicPartition = new TopicPartition("foo", 0)
 
@@ -3687,7 +3799,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getPartitionEpoch)
 
       // Verify that partition's fetcher was not impacted.
-      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set())
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set.empty)
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map.empty)
 
       reset(mockReplicaFetcherManager)

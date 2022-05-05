@@ -257,7 +257,7 @@ class Partition(val topicPartition: TopicPartition,
   @volatile private var leaderEpoch: Int = LeaderAndIsr.InitialLeaderEpoch - 1
   // start offset for 'leaderEpoch' above (leader epoch of the current leader for this partition),
   // defined when this broker is leader for partition
-  @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
+  @volatile private[cluster] var leaderEpochStartOffsetOpt: Option[Long] = None
   // Replica ID of the leader, defined when this broker is leader or follower for the partition.
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile private[cluster] var partitionState: PartitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
