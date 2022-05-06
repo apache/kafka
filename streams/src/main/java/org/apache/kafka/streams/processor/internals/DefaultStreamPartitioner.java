@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
-
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -25,12 +23,15 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
 
     private final Cluster cluster;
     private final Serializer<K> keySerializer;
-    private final DefaultPartitioner defaultPartitioner;
 
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.clients.producer.internals.DefaultPartitioner defaultPartitioner;
+
+    @SuppressWarnings("deprecation")
     public DefaultStreamPartitioner(final Serializer<K> keySerializer, final Cluster cluster) {
         this.cluster = cluster;
         this.keySerializer = keySerializer;
-        this.defaultPartitioner = new DefaultPartitioner();
+        this.defaultPartitioner = new org.apache.kafka.clients.producer.internals.DefaultPartitioner();
     }
 
     @Override
