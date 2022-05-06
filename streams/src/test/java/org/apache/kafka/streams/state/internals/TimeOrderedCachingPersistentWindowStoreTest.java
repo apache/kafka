@@ -32,11 +32,12 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
-import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -100,13 +101,13 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     private final static String TOPIC = "topic";
     private static final String CACHE_NAMESPACE = "0_0-store-name";
 
+    private ThreadCache cache;
     private InternalMockProcessorContext context;
-    private RocksDBTimeOrderedSegmentedBytesStore bytesStore;
+    private TimeFirstWindowKeySchema baseKeySchema;
     private WindowStore<Bytes, byte[]> underlyingStore;
     private TimeOrderedCachingWindowStore cachingStore;
+    private RocksDBTimeOrderedWindowSegmentedBytesStore bytesStore;
     private CacheFlushListenerStub<Windowed<String>, String> cacheListener;
-    private ThreadCache cache;
-    private TimeFirstWindowKeySchema baseKeySchema;
 
     @Parameter
     public boolean hasIndex;
@@ -122,7 +123,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     @Before
     public void setUp() {
         baseKeySchema = new TimeFirstWindowKeySchema();
-        bytesStore = new RocksDBTimeOrderedSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
+        bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
         underlyingStore = new RocksDBTimeOrderedWindowStore(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
@@ -150,10 +151,10 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
         EasyMock.reset(inner);
         EasyMock.expect(inner.name()).andStubReturn("store");
-        inner.init((ProcessorContext) context, outer);
+        inner.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
         EasyMock.expectLastCall();
         EasyMock.replay(inner);
-        outer.init((ProcessorContext) context, outer);
+        outer.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
         EasyMock.verify(inner);
     }
 
@@ -204,15 +205,12 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
         builder.stream(TOPIC,
             Consumed.with(Serdes.String(), Serdes.String()))
-            .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
-                private WindowStore<String, ValueAndTimestamp<String>> store;
+            .process(() -> new Processor<String, String, String, String>() {
                 private int numRecordsProcessed;
-                private ProcessorContext context;
+                private WindowStore<String, ValueAndTimestamp<String>> store;
 
-                @SuppressWarnings("unchecked")
                 @Override
-                public void init(final ProcessorContext processorContext) {
-                    this.context = processorContext;
+                public void init(final ProcessorContext<String, String> processorContext) {
                     this.store = processorContext.getStateStore("store-name");
                     int count = 0;
 
@@ -227,7 +225,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 }
 
                 @Override
-                public KeyValue<String, String> transform(final String key, final String value) {
+                public void process(final Record<String, String> record) {
                     int count = 0;
 
                     try (final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> all = store.all()) {
@@ -239,16 +237,11 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
                     assertThat(count, equalTo(numRecordsProcessed));
 
-                    store.put(value, ValueAndTimestamp.make(value, context.timestamp()), context.timestamp());
+                    store.put(record.value(), ValueAndTimestamp.make(record.value(), record.timestamp()), record.timestamp());
 
                     numRecordsProcessed++;
-
-                    return new KeyValue<>(key, value);
                 }
 
-                @Override
-                public void close() {
-                }
             }, "store-name");
 
         final Properties streamsConfiguration = new Properties();
@@ -889,7 +882,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     public void shouldSkipNonExistBaseKeyInCache() {
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
 
-        final SegmentedCacheFunction baseCacheFunction = new SegmentedCacheFunction(new TimeFirstWindowKeySchema(), SEGMENT_INTERVAL);
         final SegmentedCacheFunction indexCacheFunction = new SegmentedCacheFunction(new KeyFirstWindowKeySchema(), SEGMENT_INTERVAL);
 
         final Bytes key = bytesKey("a");
