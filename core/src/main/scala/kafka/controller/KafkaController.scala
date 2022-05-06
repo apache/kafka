@@ -693,14 +693,13 @@ class KafkaController(val config: KafkaConfig,
     // trigger OnlinePartition state changes for offline or new partitions
     partitionStateMachine.triggerOnlinePartitionStateChange()
     // trigger OfflineReplica state change for those newly offline replicas
-    replicaStateMachine.handleStateChanges(newOfflineReplicasNotForDeletion.toSeq, OfflineReplica)
+    replicaStateMachine.handleStateChanges(newOfflineReplicas.toSeq, OfflineReplica)
 
-    // fail deletion of topics that are affected by the offline replicas
     if (newOfflineReplicasForDeletion.nonEmpty) {
-      // it is required to mark the respective replicas in TopicDeletionFailed state since the replica cannot be
-      // deleted when its log directory is offline. This will prevent the replica from being in TopicDeletionStarted state indefinitely
-      // since topic deletion cannot be retried until at least one replica is in TopicDeletionStarted state
-      topicDeletionManager.failReplicaDeletion(newOfflineReplicasForDeletion)
+      info(s"Some replicas ${newOfflineReplicasForDeletion.mkString(",")} for topics scheduled for deletion " +
+        s"${controllerContext.topicsToBeDeleted.mkString(",")} have become offline. " +
+        "Signaling restart of topic deletion for these topics")
+      topicDeletionManager.resumeDeletionForTopics(newOfflineReplicasForDeletion.map(_.topic))
     }
 
     // If replica failure did not require leader re-election, inform brokers of the offline brokers

@@ -180,7 +180,7 @@ class TopicDeletionManager(config: KafkaConfig,
       val replicasThatFailedToDelete = replicas.filter(r => isTopicQueuedUpForDeletion(r.topic))
       if (replicasThatFailedToDelete.nonEmpty) {
         val topics = replicasThatFailedToDelete.map(_.topic)
-        debug(s"Deletion failed for replicas ${replicasThatFailedToDelete.mkString(",")}. Halting deletion for topics $topics")
+        info(s"Deletion failed for replicas ${replicasThatFailedToDelete.mkString(",")}. Halting deletion for topics $topics")
         replicaStateMachine.handleStateChanges(replicasThatFailedToDelete.toSeq, ReplicaDeletionIneligible)
         markTopicIneligibleForDeletion(topics, reason = "replica deletion failure")
         resumeDeletions()
@@ -269,7 +269,7 @@ class TopicDeletionManager(config: KafkaConfig,
     // deregister partition change listener on the deleted topic. This is to prevent the partition change listener
     // firing before the new topic listener when a deleted topic gets auto created
     client.mutePartitionModifications(topic)
-    val replicasForDeletedTopic = controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
+    val replicasForDeletedTopic = controllerContext.replicasInStates(topic, Set(ReplicaDeletionSuccessful, OfflineReplica))
     // controller will remove this replica from the state machine as well as its partition assignment cache
     replicaStateMachine.handleStateChanges(replicasForDeletedTopic.toSeq, NonExistentReplica)
     client.deleteTopic(topic, controllerContext.epochZkVersion)
@@ -340,8 +340,6 @@ class TopicDeletionManager(config: KafkaConfig,
       }
     }
 
-    // move dead replicas directly to deletion successful state
-    replicaStateMachine.handleStateChanges(allDeadReplicas, ReplicaDeletionSuccessful)
     // send stop replica to all followers that are not in the OfflineReplica state so they stop sending fetch requests to the leader
     replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, OfflineReplica)
     replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, ReplicaDeletionStarted)
@@ -357,7 +355,7 @@ class TopicDeletionManager(config: KafkaConfig,
 
     topicsQueuedForDeletion.foreach { topic =>
       // if all replicas are marked as deleted successfully, then topic deletion is done
-      if (controllerContext.areAllReplicasInState(topic, ReplicaDeletionSuccessful)) {
+      if (controllerContext.areAllReplicasInStates(topic, Set(ReplicaDeletionSuccessful, OfflineReplica))) {
         // clear up all state for this topic from controller cache and zookeeper
         completeDeleteTopic(topic)
         info(s"Deletion of topic $topic successfully completed")
