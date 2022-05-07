@@ -1727,7 +1727,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     alterResult.all.get
 
     if (isKRaftTest()) {
-      TestUtils.waitForKRaftBrokerMetadataCatchupController(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
+      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
     }
 
     // Verify that topics were updated correctly
@@ -1763,7 +1763,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     alterResult.all.get
 
     if (isKRaftTest()) {
-      TestUtils.waitForKRaftBrokerMetadataCatchupController(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
+      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
     }
 
     // Verify that topics were updated correctly
@@ -1844,7 +1844,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     subtractResult.all.get
 
     if (isKRaftTest()) {
-      TestUtils.waitForKRaftBrokerMetadataCatchupController(brokers, controllerServer)
+      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer)
     }
 
     // Verify that topics were updated correctly

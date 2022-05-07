@@ -28,17 +28,17 @@ import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
-import com.yammer.metrics.core.{Gauge, Meter}
 
+import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{AlterPartitionListener, Broker, EndPoint}
+import kafka.cluster.{Broker, EndPoint, AlterPartitionListener}
 import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
 import kafka.log._
 import kafka.network.RequestChannel
-import kafka.server.{ControllerServer, _}
+import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository}
+import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1128,18 +1128,20 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Wait until the kraft broker metadata have caught up to the controller
+   * Wait until the kraft broker metadata have caught up to the controller, before calling this, we should make sure
+   * the related metadata message has already been committed to the controller metadata log.
    */
-  def waitForKRaftBrokerMetadataCatchupController(
+  def ensureConsistentKRaftMetadata(
       brokers: Seq[KafkaBroker],
       controllerServer: ControllerServer,
       msg: String = "Timeout waiting for controller metadata propagating to brokers"
   ): Unit = {
+    val controllerOffset = controllerServer.raftManager.replicatedLog.endOffset().offset - 1
     TestUtils.waitUntilTrue(
       () => {
         brokers.forall { broker =>
-          val metadataOffset = broker.metadataCache.asInstanceOf[KRaftMetadataCache].currentImage().highestOffsetAndEpoch().offset
-          metadataOffset >= controllerServer.raftManager.replicatedLog.endOffset().offset - 1
+          val metadataOffset = broker.asInstanceOf[BrokerServer].metadataPublisher.publishedOffset
+          metadataOffset >= controllerOffset
         }
       }, msg)
   }

@@ -118,6 +118,11 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    */
   var _firstPublish = true
 
+  /**
+   * This is updated after all components (e.g. LogManager) has finished publishing the new metadata delta
+   */
+  var publishedOffset: Long = -1
+
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
 
@@ -249,6 +254,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
       }
+      publishedOffset = newImage.highestOffsetAndEpoch().offset
     } catch {
       case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
         throw t
