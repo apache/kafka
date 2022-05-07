@@ -363,7 +363,7 @@ public final class Utils {
         for (int i = 0; i < first.length; ++i) {
             int j = i < second.length ? i : 0;
             if (first[i] != second[j]) {
-                matches = false;
+                return false;
             }
         }
         return matches;
