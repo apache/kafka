@@ -63,7 +63,6 @@ public class CommonClientConfigsTest {
                     SaslConfigs.DEFAULT_SASL_MECHANISM,
                     ConfigDef.Importance.MEDIUM,
                     SaslConfigs.SASL_MECHANISM_DOC);
-
         }
 
         @Override
@@ -112,10 +111,6 @@ public class CommonClientConfigsTest {
         assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
 
         configs.put(SaslConfigs.SASL_MECHANISM, "");
-        ce = assertThrows(ConfigException.class, () -> new TestConfig(configs));
-        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
-
-        configs.put(SaslConfigs.SASL_MECHANISM, " ");
         ce = assertThrows(ConfigException.class, () -> new TestConfig(configs));
         assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
     }
