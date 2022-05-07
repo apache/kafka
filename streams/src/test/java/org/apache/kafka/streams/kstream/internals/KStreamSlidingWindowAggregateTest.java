@@ -135,7 +135,7 @@ public class KStreamSlidingWindowAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
-        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier();
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
         final KTable<Windowed<String>, String> table = builder
@@ -230,7 +230,7 @@ public class KStreamSlidingWindowAggregateTest {
     public void testReduceSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier();
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
         final KTable<Windowed<String>, String> table = builder
@@ -297,7 +297,7 @@ public class KStreamSlidingWindowAggregateTest {
         final String topic1 = "topic1";
         final long grace = emitFinal ? 10L : 50L;
 
-        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier();
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
         final KTable<Windowed<String>, String> table2 = builder
@@ -515,8 +515,8 @@ public class KStreamSlidingWindowAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
-        final WindowBytesStoreSupplier storeSupplier1 = setupWindowBytesStoreSupplier();
-        final WindowBytesStoreSupplier storeSupplier2 = setupWindowBytesStoreSupplier();
+        final WindowBytesStoreSupplier storeSupplier1 = setupWindowBytesStoreSupplier(1);
+        final WindowBytesStoreSupplier storeSupplier2 = setupWindowBytesStoreSupplier(2);
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized1 = setupMaterialized(emitFinal ? Materialized.as("store-name1") : Materialized.as(storeSupplier1));
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized2 = setupMaterialized(emitFinal ? Materialized.as("store-name2") : Materialized.as(storeSupplier2));
 
@@ -866,7 +866,7 @@ public class KStreamSlidingWindowAggregateTest {
     public void testEarlyRecordsLargeInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier();
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
         final long grace = emitFinal ? 1L : 50L;
@@ -1481,7 +1481,7 @@ public class KStreamSlidingWindowAggregateTest {
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier();
+        final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = setupMaterialized(emitFinal ? Materialized.as("store-name") : Materialized.as(storeSupplier));
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
@@ -1762,10 +1762,10 @@ public class KStreamSlidingWindowAggregateTest {
         assertThat(driver.metrics().get(latenessAvgMetric).metricValue(), avgLateness);
     }
 
-    private WindowBytesStoreSupplier setupWindowBytesStoreSupplier() {
+    private WindowBytesStoreSupplier setupWindowBytesStoreSupplier(final int index) {
         return inOrderIterator
-                ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false)
-                : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000L), Duration.ofMillis(10L), false);
+                ? new InOrderMemoryWindowStoreSupplier("InOrder" + index, 50000L, 10L, false)
+                : Stores.inMemoryWindowStore("Reverse" + index, Duration.ofMillis(50000L), Duration.ofMillis(10L), false);
     }
 
     private Materialized<String, String, WindowStore<Bytes, byte[]>> setupMaterialized(final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized) {
