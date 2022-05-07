@@ -39,11 +39,11 @@ public interface EmitStrategy {
         private final short code;
         private final EmitStrategy strategy;
 
-        public short code() {
+        private short code() {
             return this.code;
         }
 
-        public EmitStrategy strategy() {
+        private EmitStrategy strategy() {
             return this.strategy;
         }
 

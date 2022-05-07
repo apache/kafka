@@ -40,12 +40,9 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg> extends ContextualProcessor<KIn, VIn, Windowed<KIn>, Change<VAgg>> {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
     private final Time time = Time.SYSTEM;
     private final String storeName;
     private final EmitStrategy emitStrategy;
@@ -82,22 +79,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         windowStore = context.getStateStore(storeName);
 
         if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
-            // Don't set flush lister which emit cache results
-            tupleForwarder = new TimestampedTupleForwarder<>(
-                windowStore,
-                context,
-                sendOldValues);
-        } else {
-            tupleForwarder = new TimestampedTupleForwarder<>(
-                windowStore,
-                context,
-                new TimestampedCacheFlushListener<>(context),
-                sendOldValues);
-        }
-
-        log.info("EmitStrategy=" + emitStrategy.type());
-        // Restore last emit close time for ON_WINDOW_CLOSE strategy
-        if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+            // Restore last emit close time for ON_WINDOW_CLOSE strategy
             final Long lastEmitTime = internalProcessorContext.processorMetadataForKey(storeName);
             if (lastEmitTime != null) {
                 lastEmitWindowCloseTime = lastEmitTime;
@@ -108,6 +90,12 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                 1000L
             );
             timeTracker.setEmitInterval(emitInterval);
+        } else {
+            tupleForwarder = new TimestampedTupleForwarder<>(
+                windowStore,
+                context,
+                new TimestampedCacheFlushListener<>(context),
+                sendOldValues);
         }
     }
 
@@ -116,8 +104,10 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                                       final VAgg oldAgg,
                                       final VAgg newAgg,
                                       final long newTimestamp) {
-        if (emitStrategy.type() != StrategyType.ON_WINDOW_UPDATE) {
+        if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
             return;
+        } else if (tupleForwarder == null) {
+            throw new IllegalStateException("Emit strategy type is " + emitStrategy.type() + " but flush listener is not initialized.");
         }
 
         tupleForwarder.maybeForward(
@@ -138,11 +128,11 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         }
 
         // Schedule next emit time based on now to avoid the case that if system time jumps a lot,
-        // this can be triggered everytime
+        // this can be triggered every time
         timeTracker.nextTimeToEmit = now;
         timeTracker.advanceNextTimeToEmit();
 
-        // Close time does not progress
+        // Only EMIT if the window close time does progress
         return lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP || lastEmitWindowCloseTime < closeTime;
     }
 
@@ -152,7 +142,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                                 final long emitRangeUpperBoundInclusive) {
         final long startMs = time.milliseconds();
 
-        final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit =  windowStore
+        final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit = windowStore
             .fetchAll(emitRangeLowerBoundInclusive, emitRangeUpperBoundInclusive);
 
         int emittedCount = 0;
@@ -172,9 +162,9 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         internalProcessorContext.addProcessorMetadataKeyValue(storeName, closeTime);
     }
 
-    abstract protected void maybeForwardFinalResult(final Record<KIn, VIn> record, final long closeTime);
+    abstract protected void maybeForwardFinalResult(final Record<KIn, VIn> record, final long windowCloseTime);
 
-    protected void maybeMeasureEmitFinalLatency(final Record<KIn, VIn> record, final long closeTime) {
-        maybeMeasureLatency(() -> maybeForwardFinalResult(record, closeTime), time, emitFinalLatencySensor);
+    protected void maybeMeasureEmitFinalLatency(final Record<KIn, VIn> record, final long windowCloseTime) {
+        maybeMeasureLatency(() -> maybeForwardFinalResult(record, windowCloseTime), time, emitFinalLatencySensor);
     }
 }
