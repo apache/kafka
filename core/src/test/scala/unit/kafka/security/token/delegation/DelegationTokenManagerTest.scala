@@ -331,7 +331,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
       }
       def authorizeRequester(owner: KafkaPrincipal): Boolean = {
         val requestContext = AuthorizerUtils.sessionToRequestContext(hostSession)
-        val action = new Action(AclOperation.DESCRIBE,
+        val action = new Action(AclOperation.DESCRIBE_TOKENS,
           new ResourcePattern(USER, owner.toString, LITERAL), 1, true, true)
         aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
       }
