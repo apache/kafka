@@ -121,7 +121,7 @@ public class TaskExecutor {
             throw e;
         } catch (final StreamsException e) {
             log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
-            e.setTaskId(task.id());
+            e.addTaskId(task.id());
             throw e;
         } catch (final RuntimeException e) {
             log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
@@ -289,7 +289,7 @@ public class TaskExecutor {
                 throw e;
             } catch (final StreamsException e) {
                 log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);
-                e.setTaskId(task.id());
+                e.addTaskId(task.id());
                 throw e;
             } catch (final KafkaException e) {
                 log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);

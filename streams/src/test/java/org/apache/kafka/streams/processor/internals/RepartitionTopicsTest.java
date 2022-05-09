@@ -182,8 +182,8 @@ public class RepartitionTopicsTest {
         );
         final StreamsException exception = repartitionTopics.missingSourceTopicExceptions().poll();
         assertThat(exception, notNullValue());
-        assertThat(exception.taskId().isPresent(), is(true));
-        assertThat(exception.taskId().get(), equalTo(new TaskId(0, 0)));
+        assertThat(exception.taskIds().isEmpty(), is(false));
+        assertThat(exception.taskIds(), equalTo(mkSet(new TaskId(0, 0))));
     }
 
     @Test

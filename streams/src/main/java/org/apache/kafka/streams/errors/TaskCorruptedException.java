@@ -31,20 +31,16 @@ import java.util.Set;
  */
 public class TaskCorruptedException extends StreamsException {
 
-    private final Set<TaskId> corruptedTasks;
-
     public TaskCorruptedException(final Set<TaskId> corruptedTasks) {
-        super("Tasks " + corruptedTasks + " are corrupted and hence needs to be re-initialized");
-        this.corruptedTasks = corruptedTasks;
+        super("Tasks " + corruptedTasks + " are corrupted and hence needs to be re-initialized", corruptedTasks);
     }
 
     public TaskCorruptedException(final Set<TaskId> corruptedTasks,
                                   final InvalidOffsetException e) {
-        super("Tasks " + corruptedTasks + " are corrupted and hence needs to be re-initialized", e);
-        this.corruptedTasks = corruptedTasks;
+        super("Tasks " + corruptedTasks + " are corrupted and hence needs to be re-initialized", e, corruptedTasks);
     }
 
     public Set<TaskId> corruptedTasks() {
-        return corruptedTasks;
+        return taskIds();
     }
 }

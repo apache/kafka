@@ -59,6 +59,7 @@ import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -952,8 +953,8 @@ public class NamedTopologyIntegrationTest {
         @Override
         public synchronized StreamThreadExceptionResponse handle(final Throwable exception) {
             final String topologyName =
-                exception instanceof StreamsException && ((StreamsException) exception).taskId().isPresent() ?
-                    ((StreamsException) exception).taskId().get().topologyName()
+                exception instanceof StreamsException && !((StreamsException) exception).taskIds().isEmpty() ?
+                    new ArrayList<>(((StreamsException) exception).taskIds()).get(0).topologyName()
                     : null;
 
             newErrorsByTopology.computeIfAbsent(topologyName, t -> new LinkedList<>()).add(exception);

@@ -146,7 +146,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void handleStreamsException(final StreamsException streamsException) {
             final ExceptionAndTasks exceptionAndTasks;
-            if (streamsException.taskId().isPresent()) {
+            if (!streamsException.taskIds().isEmpty()) {
                 exceptionAndTasks = handleStreamsExceptionWithTask(streamsException);
             } else {
                 exceptionAndTasks = handleStreamsExceptionWithoutTask(streamsException);
@@ -155,13 +155,14 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private ExceptionAndTasks handleStreamsExceptionWithTask(final StreamsException streamsException) {
-            final TaskId failedTaskId = streamsException.taskId().get();
-            if (!updatingTasks.containsKey(failedTaskId)) {
-                throw new IllegalStateException("Task " + failedTaskId + " failed but is not updating. " + BUG_ERROR_MESSAGE);
-            }
+            final Set<TaskId> failedTaskIds = streamsException.taskIds();
             final Set<Task> failedTask = new HashSet<>();
-            failedTask.add(updatingTasks.get(failedTaskId));
-            updatingTasks.remove(failedTaskId);
+            for (final TaskId taskId : failedTaskIds) {
+                if (!updatingTasks.containsKey(taskId)) {
+                    throw new IllegalStateException("Task " + failedTaskIds + " failed but is not updating. " + BUG_ERROR_MESSAGE);
+                }
+                failedTask.add(updatingTasks.remove(taskId));
+            }
             return new ExceptionAndTasks(failedTask, streamsException);
         }
 
