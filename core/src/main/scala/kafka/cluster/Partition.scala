@@ -552,6 +552,7 @@ class Partition(val topicPartition: TopicPartition,
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionState.controllerEpoch
 
+      val replicas = partitionState.replicas.asScala.map(_.toInt)
       val isr = partitionState.isr.asScala.map(_.toInt).toSet
       val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
@@ -564,7 +565,8 @@ class Partition(val topicPartition: TopicPartition,
       }
 
       updateAssignmentAndIsr(
-        assignment = partitionState.replicas.asScala.map(_.toInt),
+        assignment = replicas,
+        followers = replicas.filter(_ != localBrokerId),
         isr = isr,
         addingReplicas = addingReplicas,
         removingReplicas = removingReplicas,
@@ -645,7 +647,8 @@ class Partition(val topicPartition: TopicPartition,
 
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
-        isr = Set.empty[Int],
+        followers = Seq.empty,
+        isr = Set.empty,
         addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt),
         LeaderRecoveryState.of(partitionState.leaderRecoveryState)
@@ -743,6 +746,7 @@ class Partition(val topicPartition: TopicPartition,
    *
    * @param assignment An ordered sequence of all the broker ids that were assigned to this
    *                   topic partition
+   * @param followers An ordered sequence of all the followers (remote replicas)
    * @param isr The set of broker ids that are known to be insync with the leader
    * @param addingReplicas An ordered sequence of all broker ids that will be added to the
     *                       assignment
@@ -750,16 +754,16 @@ class Partition(val topicPartition: TopicPartition,
     *                         the assignment
    */
   def updateAssignmentAndIsr(assignment: Seq[Int],
+                             followers: Seq[Int],
                              isr: Set[Int],
                              addingReplicas: Seq[Int],
                              removingReplicas: Seq[Int],
                              leaderRecoveryState: LeaderRecoveryState): Unit = {
-    val newRemoteReplicas = assignment.filter(_ != localBrokerId)
-    val removedReplicas = remoteReplicasMap.keys.filter(!newRemoteReplicas.contains(_))
+    val removedReplicas = remoteReplicasMap.keys.filter(!followers.contains(_))
 
     // due to code paths accessing remoteReplicasMap without a lock,
     // first add the new replicas and then remove the old ones
-    newRemoteReplicas.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
+    followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
     remoteReplicasMap.removeAll(removedReplicas)
 
     if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)

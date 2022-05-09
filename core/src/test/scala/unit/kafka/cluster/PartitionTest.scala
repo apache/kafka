@@ -1968,29 +1968,61 @@ class PartitionTest extends AbstractPartitionTest {
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterPartitionManager]))
 
     val replicas = Seq(0, 1, 2, 3)
+    val followers = Seq(1, 2, 3)
     val isr = Set(0, 1, 2, 3)
     val adding = Seq(4, 5)
     val removing = Seq(1, 2)
 
     // Test with ongoing reassignment
-    partition.updateAssignmentAndIsr(replicas, isr, adding, removing, LeaderRecoveryState.RECOVERED)
+    partition.updateAssignmentAndIsr(
+      replicas,
+      followers,
+      isr,
+      adding,
+      removing,
+      LeaderRecoveryState.RECOVERED
+    )
 
     assertTrue(partition.assignmentState.isInstanceOf[OngoingReassignmentState], "The assignmentState is not OngoingReassignmentState")
     assertEquals(replicas, partition.assignmentState.replicas)
     assertEquals(isr, partition.partitionState.isr)
     assertEquals(adding, partition.assignmentState.asInstanceOf[OngoingReassignmentState].addingReplicas)
     assertEquals(removing, partition.assignmentState.asInstanceOf[OngoingReassignmentState].removingReplicas)
-    assertEquals(Seq(1, 2, 3), partition.remoteReplicas.map(_.brokerId))
+    assertEquals(followers, partition.remoteReplicas.map(_.brokerId))
 
     // Test with simple assignment
     val replicas2 = Seq(0, 3, 4, 5)
+    val followers2 = Seq(3, 4, 5)
     val isr2 = Set(0, 3, 4, 5)
-    partition.updateAssignmentAndIsr(replicas2, isr2, Seq.empty, Seq.empty, LeaderRecoveryState.RECOVERED)
+    partition.updateAssignmentAndIsr(
+      replicas2,
+      followers2,
+      isr2,
+      Seq.empty,
+      Seq.empty,
+      LeaderRecoveryState.RECOVERED
+    )
 
     assertTrue(partition.assignmentState.isInstanceOf[SimpleAssignmentState], "The assignmentState is not SimpleAssignmentState")
     assertEquals(replicas2, partition.assignmentState.replicas)
     assertEquals(isr2, partition.partitionState.isr)
-    assertEquals(Seq(3, 4, 5), partition.remoteReplicas.map(_.brokerId))
+    assertEquals(followers2, partition.remoteReplicas.map(_.brokerId))
+
+    // Test with no followers
+    val replicas3 = Seq(1, 2, 3, 4)
+    partition.updateAssignmentAndIsr(
+      replicas3,
+      Seq.empty,
+      Set.empty,
+      Seq.empty,
+      Seq.empty,
+      LeaderRecoveryState.RECOVERED
+    )
+
+    assertTrue(partition.assignmentState.isInstanceOf[SimpleAssignmentState], "The assignmentState is not SimpleAssignmentState")
+    assertEquals(replicas3, partition.assignmentState.replicas)
+    assertEquals(Set.empty, partition.partitionState.isr)
+    assertEquals(Seq.empty, partition.remoteReplicas.map(_.brokerId))
   }
 
   /**
@@ -2103,6 +2135,52 @@ class PartitionTest extends AbstractPartitionTest {
     // We should get configs twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
     verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
+  }
+
+  @Test
+  def testFollowerShouldNotHaveAnyRemoveReplicaStates(): Unit = {
+    val controllerEpoch = 3
+    val localReplica = brokerId
+    val remoteReplica1 = brokerId + 1
+    val remoteReplica2 = brokerId + 2
+    val replicas = List(localReplica, remoteReplica1, remoteReplica2)
+    val topicId = Uuid.randomUuid()
+
+    // The local replica is the leader.
+    val initialLeaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(localReplica)
+      .setLeaderEpoch(1)
+      .setIsr(replicas.map(Int.box).asJava)
+      .setPartitionEpoch(1)
+      .setReplicas(replicas.map(Int.box).asJava)
+      .setIsNew(true)
+
+    assertTrue(partition.makeLeader(initialLeaderState, offsetCheckpoints, Some(topicId)))
+    assertEquals(1, partition.getPartitionEpoch)
+    assertEquals(1, partition.getLeaderEpoch)
+    assertEquals(Some(localReplica), partition.leaderReplicaIdOpt)
+    assertEquals(replicas.toSet, partition.partitionState.isr)
+    assertEquals(Seq(remoteReplica1, remoteReplica2), partition.remoteReplicas.map(_.brokerId).toSeq)
+    assertEquals(replicas, partition.assignmentState.replicas)
+
+    // The local replica becomes a follower.
+    val updatedLeaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(remoteReplica1)
+      .setLeaderEpoch(2)
+      .setIsr(replicas.map(Int.box).asJava)
+      .setPartitionEpoch(2)
+      .setReplicas(replicas.map(Int.box).asJava)
+      .setIsNew(false)
+
+    assertTrue(partition.makeFollower(updatedLeaderState, offsetCheckpoints, Some(topicId)))
+    assertEquals(2, partition.getPartitionEpoch)
+    assertEquals(2, partition.getLeaderEpoch)
+    assertEquals(Some(remoteReplica1), partition.leaderReplicaIdOpt)
+    assertEquals(Set.empty, partition.partitionState.isr)
+    assertEquals(Seq.empty, partition.remoteReplicas.map(_.brokerId).toSeq)
+    assertEquals(replicas, partition.assignmentState.replicas)
   }
 
   private def makeLeader(
