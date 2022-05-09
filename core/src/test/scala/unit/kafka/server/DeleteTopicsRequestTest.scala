@@ -212,17 +212,22 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   @ParameterizedTest()
   @MethodSource(Array("compatibilityMatrix"))
   def testDeleteTopicsVersions(quorum: String, version: Short): Unit = {
+    // This test assumes that the current valid versions are 0-6 please adjust the test if there are changes.
+    assertEquals(0, DeleteTopicsRequestData.LOWEST_SUPPORTED_VERSION)
+    assertEquals(6, DeleteTopicsRequestData.HIGHEST_SUPPORTED_VERSION)
+
     val timeout = 10000
     val topicName = "topic-1"
 
     createTopic(topicName, 1, 1)
-    val data = if (version < 6) {
-      new DeleteTopicsRequestData().setTopicNames(Arrays.asList(topicName))
+    val data = new DeleteTopicsRequestData()
+      .setTimeoutMs(timeout)
+
+    if (version < 6) {
+      data.setTopicNames(Arrays.asList(topicName))
     } else {
-      new DeleteTopicsRequestData()
-        .setTopics(Arrays.asList(new DeleteTopicState().setName(topicName)))
+      data.setTopics(Arrays.asList(new DeleteTopicState().setName(topicName)))
     }
-    data.setTimeoutMs(timeout)
 
     validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(data).build(version))
   }
@@ -231,8 +236,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 object DeleteTopicsRequestTest {
   def compatibilityMatrix(): JStream[Arguments] = {
     JStream.of("zk", "kraft").flatMap { quorum =>
-      IntStream.iterate(0, _ + 1).limit(7).mapToObj { version =>
-        Arguments.of(quorum, version.toShort)
+      IntStream.iterate(0, _ + 1).limit(DeleteTopicsRequestData.SCHEMAS.size).mapToObj { version =>
+        Arguments.of(quorum, Short.box(version.toShort))
       }
     }
   }
