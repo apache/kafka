@@ -19,6 +19,10 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -26,7 +30,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CommonClientConfigsTest {
     private static class TestConfig extends AbstractConfig {
@@ -44,11 +51,23 @@ public class CommonClientConfigsTest {
                     1000L,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
-                    "");
+                    "")
+                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                    ConfigDef.Type.STRING,
+                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    in(Utils.enumOptions(SecurityProtocol.class)),
+                    ConfigDef.Importance.MEDIUM,
+                    CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .define(SaslConfigs.SASL_MECHANISM,
+                    ConfigDef.Type.STRING,
+                    SaslConfigs.DEFAULT_SASL_MECHANISM,
+                    ConfigDef.Importance.MEDIUM,
+                    SaslConfigs.SASL_MECHANISM_DOC);
         }
 
         @Override
         protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+            CommonClientConfigs.postValidateSaslMechanismConfig(this);
             return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         }
 
@@ -81,5 +100,18 @@ public class CommonClientConfigsTest {
                 reconnectBackoffSetConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
         assertEquals(Long.valueOf(123L),
                 reconnectBackoffSetConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG));
+    }
+
+    @Test
+    public void testInvalidSaslMechanism() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
+        configs.put(SaslConfigs.SASL_MECHANISM, null);
+        ConfigException ce = assertThrows(ConfigException.class, () -> new TestConfig(configs));
+        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
+
+        configs.put(SaslConfigs.SASL_MECHANISM, "");
+        ce = assertThrows(ConfigException.class, () -> new TestConfig(configs));
+        assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
     }
 }
