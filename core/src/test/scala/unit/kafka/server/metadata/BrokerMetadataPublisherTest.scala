@@ -55,6 +55,8 @@ class BrokerMetadataPublisherTest {
 
   @AfterEach
   def tearDown(): Unit = {
+    Exit.resetExitProcedure();
+    Exit.resetHaltProcedure();
     val exception = exitException.get()
     if (exception != null) {
       throw exception
