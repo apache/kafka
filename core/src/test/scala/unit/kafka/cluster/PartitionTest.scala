@@ -2153,7 +2153,8 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     // makeLeader is called again with the same leader epoch but with
-    // a newer partition epoch.
+    // a newer partition epoch. This can happen in KRaft when a partition
+    // is reassigned. The leader epoch is not bumped when we add replicas.
     val updatedLeaderState = new LeaderAndIsrPartitionState()
       .setControllerEpoch(controllerEpoch)
       .setLeader(leaderId)
@@ -2229,7 +2230,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testIgnoreLeaderPartitionStateChangeWithOlderEpoch(): Unit = {
+  def testIgnoreLeaderPartitionStateChangeWithOlderPartitionEpoch(): Unit = {
     val controllerEpoch = 3
     val leaderId = brokerId
     val replicas = List(leaderId)
@@ -2266,7 +2267,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testIgnoreFollowerPartitionStateChangeWithOlderEpoch(): Unit = {
+  def testIgnoreFollowerPartitionStateChangeWithOlderPartitionEpoch(): Unit = {
     val controllerEpoch = 3
     val leaderId = brokerId
     val followerId = brokerId + 1

@@ -549,7 +549,7 @@ class Partition(val topicPartition: TopicPartition,
                  topicId: Option[Uuid]): Boolean = {
     val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
       // Partition state changes are expected to have an partition epoch larger or equal
-      // to the current partition epoch. The later is allowed because the partition epoch
+      // to the current partition epoch. The latter is allowed because the partition epoch
       // is also updated by the AlterPartition response so the new epoch might be known
       // before a LeaderAndIsr request is received or before an update is received via
       // the metadata log.
@@ -571,8 +571,8 @@ class Partition(val topicPartition: TopicPartition,
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
 
       if (partitionState.leaderRecoveryState == LeaderRecoveryState.RECOVERING.value) {
-        stateChangeLogger.info(s"The topic partition $topicPartition was marked as RECOVERING. Leader log recovery " +
-          "is not implemented. Marking the topic partition as RECOVERED.")
+        stateChangeLogger.info(s"The topic partition $topicPartition was marked as RECOVERING. " +
+          "Marking the topic partition as RECOVERED.")
       }
 
       // Updating the assignment and ISR state is safe if the partition epoch is
@@ -600,10 +600,11 @@ class Partition(val topicPartition: TopicPartition,
       // has changed.
       if (isNewLeaderEpoch) {
         val leaderEpochStartOffset = leaderLog.logEndOffset
-        stateChangeLogger.info(s"Leader $topicPartition with topic id $topicId starts at leader epoch ${partitionState.leaderEpoch} from " +
-          s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark} " +
-          s"ISR ${isr.mkString("[", ",", "]")} addingReplicas ${addingReplicas.mkString("[", ",", "]")} " +
-          s"removingReplicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
+        stateChangeLogger.info(s"Leader $topicPartition with topic id $topicId starts at " +
+          s"leader epoch ${partitionState.leaderEpoch} from offset $leaderEpochStartOffset " +
+          s"with partition epoch ${partitionState.partitionEpoch}, high watermark ${leaderLog.highWatermark}, " +
+          s"ISR ${isr.mkString("[", ",", "]")}, adding replicas ${addingReplicas.mkString("[", ",", "]")} and " +
+          s"removing replicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
 
         // In the case of successive leader elections in a short time period, a follower may have
         // entries in its log from a later epoch than any entry in the new leader's log. In order
@@ -629,7 +630,10 @@ class Partition(val topicPartition: TopicPartition,
         leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
       } else {
         stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId " +
-          s"and partition state $partitionState since it is already the leader with leader epoch $leaderEpoch.")
+          s"and partition state $partitionState since it is already the leader with leader epoch $leaderEpoch. " +
+          s"Current high watermark ${leaderLog.highWatermark}, ISR ${isr.mkString("[", ",", "]")}, " +
+          s"adding replicas ${addingReplicas.mkString("[", ",", "]")} and " +
+          s"removing replicas ${removingReplicas.mkString("[", ",", "]")}.")
       }
 
       partitionEpoch = partitionState.partitionEpoch
@@ -690,8 +694,8 @@ class Partition(val topicPartition: TopicPartition,
       if (isNewLeaderEpoch) {
         val leaderEpochEndOffset = followerLog.logEndOffset
         stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
-          s"offset $leaderEpochEndOffset with high watermark ${followerLog.highWatermark}. " +
-          s"Previous leader epoch was $leaderEpoch.")
+          s"offset $leaderEpochEndOffset with partition epoch ${partitionState.partitionEpoch} and " +
+          s"high watermark ${followerLog.highWatermark}. Previous leader epoch was $leaderEpoch.")
       } else {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
           s"and partition state $partitionState since it is already a follower with leader epoch $leaderEpoch.")
