@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -92,6 +91,26 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "for this partition, we will 'linger' for the <code>linger.ms</code> time waiting for more records to show up. "
                                                  + "This <code>linger.ms</code> setting defaults to 0, which means we'll immediately send out a record even the accumulated "
                                                  + "batch size is under this <code>batch.size</code> setting.";
+
+    /** <code>partitioner.adaptive.partitioning.enable</code> */
+    public static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG = "partitioner.adaptive.partitioning.enable";
+    private static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC =
+            "When set to 'true', the producer will try to adapt to broker performance and produce more messages to partitions hosted on faster brokers. "
+            + "If 'false', producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used";
+
+    /** <code>partitioner.availability.timeout.ms</code> */
+    public static final String PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG = "partitioner.availability.timeout.ms";
+    private static final String PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC =
+            "If a broker cannot process produce requests from a partition for <code>" + PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG + "</code> time, "
+            + "the partitioner treats that partition as not available.  If the value is 0, this logic is disabled. "
+            + "Note: this setting has no effect if a custom partitioner is used or <code>" + PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG
+            + "<code/> is set to 'false'";
+
+    /** <code>partitioner.ignore.keys</code> */
+    public static final String PARTITIONER_IGNORE_KEYS_CONFIG = "partitioner.ignore.keys";
+    private static final String PARTITIONER_IGNORE_KEYS_DOC = "When set to 'true' the producer won't use record keys to choose a partition. "
+            + "If 'false', producer would choose a partition based on a hash of the key when a key is present. "
+            + "Note: this setting has no effect if a custom partitioner is used.";
 
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
@@ -259,20 +278,17 @@ public class ProducerConfig extends AbstractConfig {
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
     private static final String PARTITIONER_CLASS_DOC = "A class to use to determine which partition to be send to when produce the records. Available options are:" +
         "<ul>" +
-            "<li><code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>: The default partitioner. " +
-        "This strategy will try sticking to a partition until the batch is full, or <code>linger.ms</code> is up. It works with the strategy:" +
+            "<li>If not set, the default partitioning logic is used. " +
+        "This strategy will try sticking to a partition until " + BATCH_SIZE_CONFIG + " bytes is produced to the partition. It works with the strategy:" +
                 "<ul>" +
                     "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key</li>" +
-                    "<li>If no partition or key is present, choose the sticky partition that changes when the batch is full, or <code>linger.ms</code> is up.</li>" +
+                    "<li>If no partition or key is present, choose the sticky partition that changes when " + BATCH_SIZE_CONFIG + " bytes are produced to the partition.</li>" +
                 "</ul>" +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: This partitioning strategy is that " +
         "each record in a series of consecutive records will be sent to a different partition(no matter if the 'key' is provided or not), " +
         "until we run out of partitions and start over again. Note: There's a known issue that will cause uneven distribution when new batch is created. " +
         "Please check KAFKA-9965 for more detail." +
-            "</li>" +
-            "<li><code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code>: This partitioning strategy will " +
-        "try sticking to a partition(no matter if the 'key' is provided or not) until the batch is full, or <code>linger.ms</code> is up." +
             "</li>" +
         "</ul>" +
         "<p>Implementing the <code>org.apache.kafka.clients.producer.Partitioner</code> interface allows you to plug in a custom partitioner.";
@@ -334,6 +350,9 @@ public class ProducerConfig extends AbstractConfig {
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, CompressionType.NONE.name, in(Utils.enumOptions(CompressionType.class)), Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
+                                .define(PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG, Type.BOOLEAN, true, Importance.LOW, PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC)
+                                .define(PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.LOW, PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC)
+                                .define(PARTITIONER_IGNORE_KEYS_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM, PARTITIONER_IGNORE_KEYS_DOC)
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, 120 * 1000, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
@@ -418,7 +437,7 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(PARTITIONER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        DefaultPartitioner.class,
+                                        null,
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,

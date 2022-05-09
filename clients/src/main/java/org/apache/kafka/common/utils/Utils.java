@@ -1038,7 +1038,7 @@ public final class Utils {
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
-     * in producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}
+     * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
      *
      * @param number a given number
      * @return a positive number.

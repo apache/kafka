@@ -68,17 +68,14 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
     }
 
     @Parameter
-    public String name;
-
-    @Parameter(1)
     public StoreType storeType;
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> getKeySchema() {
         return asList(new Object[][] {
-            {"RocksDBWindowStore", StoreType.RocksDBWindowStore},
-            {"RocksDBTimeOrderedWindowStoreWithIndex", StoreType.RocksDBTimeOrderedWindowStoreWithIndex},
-            {"RocksDBTimeOrderedWindowStoreWithoutIndex", StoreType.RocksDBTimeOrderedWindowStoreWithoutIndex}
+            {StoreType.RocksDBWindowStore},
+            {StoreType.RocksDBTimeOrderedWindowStoreWithIndex},
+            {StoreType.RocksDBTimeOrderedWindowStoreWithoutIndex}
         });
     }
 
@@ -88,32 +85,41 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                                               final boolean retainDuplicates,
                                               final Serde<K> keySerde,
                                               final Serde<V> valueSerde) {
-        if (storeType == StoreType.RocksDBWindowStore) {
-            return Stores.windowStoreBuilder(
-                    Stores.persistentWindowStore(
-                        STORE_NAME,
-                        ofMillis(retentionPeriod),
-                        ofMillis(windowSize),
-                        retainDuplicates),
+
+        switch (storeType) {
+            case RocksDBWindowStore: {
+                return Stores.windowStoreBuilder(
+                        Stores.persistentWindowStore(
+                            STORE_NAME,
+                            ofMillis(retentionPeriod),
+                            ofMillis(windowSize),
+                            retainDuplicates),
+                        keySerde,
+                        valueSerde)
+                    .build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        true),
                     keySerde,
-                    valueSerde)
-                .build();
-        } else if (storeType == StoreType.RocksDBTimeOrderedWindowStoreWithIndex) {
-            final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
-            return Stores.windowStoreBuilder(
-                new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
-                    retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates, true),
-                keySerde,
-                valueSerde
-            ).build();
-        } else {
-            final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
-            return Stores.windowStoreBuilder(
-                new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
-                    retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates, false),
-                keySerde,
-                valueSerde
-            ).build();
+                    valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithoutIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        false),
+                    keySerde,
+                    valueSerde
+                ).build();
+            }
+            default:
+                throw new IllegalStateException("Unknown StoreType: " + storeType);
         }
     }
 
