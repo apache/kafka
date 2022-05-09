@@ -170,7 +170,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public ClusterType clusterType() {
-            return ClusterType.RAFT;
+            return ClusterType.KRAFT;
         }
 
         @Override

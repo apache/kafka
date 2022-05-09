@@ -52,7 +52,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
-import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -94,9 +93,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.close() // double close has no effect
   }
 
-  @Test
-  def testListNodes(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListNodes(quorum: String): Unit = {
     client = Admin.create(createConfig)
+
     val brokerStrs = bootstrapServers().split(",").toList.sorted
     var nodeStrs: List[String] = null
     do {
@@ -106,8 +107,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
   }
 
-  @Test
-  def testAdminClientHandlingBadIPWithoutTimeout(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAdminClientHandlingBadIPWithoutTimeout(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
     val returnBadAddressFirst = new HostResolver {
@@ -120,8 +122,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.describeCluster().nodes().get()
   }
 
-  @Test
-  def testCreateExistingTopicsThrowTopicExistsException(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateExistingTopicsThrowTopicExistsException(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val topic = "mytopic"
     val topics = Seq(topic)
@@ -130,14 +133,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, topics, List())
 
-    val newTopicsWithInvalidRF = Seq(new NewTopic(topic, 1, (servers.size + 1).toShort))
+    val newTopicsWithInvalidRF = Seq(new NewTopic(topic, 1, (brokers.size + 1).toShort))
     val e = assertThrows(classOf[ExecutionException],
       () => client.createTopics(newTopicsWithInvalidRF.asJava, new CreateTopicsOptions().validateOnly(true)).all.get())
     assertTrue(e.getCause.isInstanceOf[TopicExistsException])
   }
 
-  @Test
-  def testDeleteTopicsWithIds(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteTopicsWithIds(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
@@ -154,26 +158,30 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForTopics(client, List(), topics)
   }
 
-  @Test
-  def testMetadataRefresh(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testMetadataRefresh(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val topics = Seq("mytopic")
     val newTopics = Seq(new NewTopic("mytopic", 3, 3.toShort))
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, expectedPresent = topics, expectedMissing = List())
 
-    val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
-    controller.shutdown()
-    controller.awaitShutdown()
-    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
-    assertEquals(topics.toSet, topicDesc.keySet.asScala)
+    if (!isKRaftTest()) {
+      val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
+      controller.shutdown()
+      controller.awaitShutdown()
+      val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
+      assertEquals(topics.toSet, topicDesc.keySet.asScala)
+    }
   }
 
   /**
     * describe should not auto create topics
     */
-  @Test
-  def testDescribeNonExistingTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeNonExistingTopic(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     val existingTopic = "existing-topic"
@@ -184,18 +192,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).topicNameValues()
     assertEquals(existingTopic, results.get(existingTopic).get.name)
     assertThrows(classOf[ExecutionException], () => results.get(nonExistingTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException]
-    assertEquals(None, zkClient.getTopicPartitionCount(nonExistingTopic))
+
+    if (!isKRaftTest()) {
+      assertEquals(None, zkClient.getTopicPartitionCount(nonExistingTopic))
+    }
   }
 
-  @Test
-  def testDescribeTopicsWithIds(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeTopicsWithIds(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     val existingTopic = "existing-topic"
     client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
     waitForTopics(client, Seq(existingTopic), List())
-    val existingTopicId = zkClient.getTopicIdsForTopics(Set(existingTopic)).values.head
-
+    val existingTopicId = TestUtils.describeTopicByName(client, existingTopic).topicId
     val nonExistingTopicId = Uuid.randomUuid()
 
     val results = client.describeTopics(TopicCollection.ofTopicIds(Seq(existingTopicId, nonExistingTopicId).asJava)).topicIdValues()
@@ -203,21 +214,30 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertThrows(classOf[ExecutionException], () => results.get(nonExistingTopicId).get).getCause.isInstanceOf[UnknownTopicIdException]
   }
 
-  @Test
-  def testDescribeCluster(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeCluster(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val result = client.describeCluster
     val nodes = result.nodes.get()
     val clusterId = result.clusterId().get()
-    assertEquals(servers.head.dataPlaneRequestProcessor.clusterId, clusterId)
+    assertEquals(brokers.head.dataPlaneRequestProcessor.clusterId, clusterId)
     val controller = result.controller().get()
-    assertEquals(servers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
-      getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
-    val brokers = bootstrapServers().split(",")
-    assertEquals(brokers.size, nodes.size)
+
+    if (isKRaftTest()) {
+      // In KRaft, we return a random brokerId as the current controller.
+      val brokerIds = brokers.map(_.config.brokerId).toSet
+      assertTrue(brokerIds.contains(controller.id))
+    } else {
+      assertEquals(brokers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
+        getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id)
+    }
+
+    val brokerEndpoints = bootstrapServers().split(",")
+    assertEquals(brokerEndpoints.size, nodes.size)
     for (node <- nodes.asScala) {
       val hostStr = s"${node.host}:${node.port}"
-      assertTrue(brokers.contains(hostStr), s"Unknown host:port pair $hostStr in brokerVersionInfos")
+      assertTrue(brokerEndpoints.contains(hostStr), s"Unknown host:port pair $hostStr in brokerVersionInfos")
     }
   }
 
@@ -697,8 +717,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @Test
-  def testSeekAfterDeleteRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSeekAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
     client = Admin.create(createConfig)
@@ -726,8 +747,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(10L, consumer.position(topicPartition))
   }
 
-  @Test
-  def testLogStartOffsetCheckpoint(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testLogStartOffsetCheckpoint(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
     client = Admin.create(createConfig)
@@ -765,8 +787,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }, s"Expected low watermark of the partition to be 5 but got ${lowWatermark.getOrElse("no response within the timeout")}")
   }
 
-  @Test
-  def testLogStartOffsetAfterDeleteRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testLogStartOffsetAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
     client = Admin.create(createConfig)
@@ -782,25 +805,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(3L, lowWatermark)
 
     for (i <- 0 until brokerCount)
-      assertEquals(3, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
+      assertEquals(3, brokers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
   }
 
-  @Test
-  def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(quorum: String): Unit = {
     val leaders = createTopic(topic, replicationFactor = brokerCount)
-    val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
+    val followerIndex = if (leaders(0) != brokers(0).config.brokerId) 0 else 1
 
     def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
-      TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.localLog(topicPartition) != None,
+      TestUtils.waitUntilTrue(() => brokers(followerIndex).replicaManager.localLog(topicPartition) != None,
                               "Expected follower to create replica for partition")
 
       // wait until the follower discovers that log start offset moved beyond its HW
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.localLog(topicPartition).get.logStartOffset == expectedStartOffset
+        brokers(followerIndex).replicaManager.localLog(topicPartition).get.logStartOffset == expectedStartOffset
       }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.localLog(topicPartition).get.logEndOffset == expectedEndOffset
+        brokers(followerIndex).replicaManager.localLog(topicPartition).get.logEndOffset == expectedEndOffset
       }, s"Expected follower to catch up to log end offset $expectedEndOffset")
     }
 
@@ -821,7 +845,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until brokerCount)
-      assertEquals(3, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
+      assertEquals(3, brokers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
 
     // kill the same follower again, produce more records, and delete records beyond follower's LOE
     killBroker(followerIndex)
@@ -864,8 +888,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(expectedLEO, servers.head.replicaManager.localLog(topicPartition).get.logEndOffset)
   }
 
-  @Test
-  def testOffsetsForTimesAfterDeleteRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testOffsetsForTimesAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
     client = Admin.create(createConfig)
@@ -886,8 +911,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertNull(consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition))
   }
 
-  @Test
-  def testConsumeAfterDeleteRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsumeAfterDeleteRecords(quorum: String): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -909,8 +935,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.consumeRecords(consumer, 2)
   }
 
-  @Test
-  def testDeleteRecordsWithException(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteRecordsWithException(quorum: String): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -934,8 +961,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(classOf[LeaderNotAvailableException], cause.getClass)
   }
 
-  @Test
-  def testDescribeConfigsForTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeConfigsForTopic(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
     client = Admin.create(createConfig)
 
@@ -982,8 +1010,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Also see [[kafka.api.SaslSslAdminIntegrationTest.testAclOperations()]] for tests of ACL operations
    * when the authorizer is enabled.
    */
-  @Test
-  def testAclOperations(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAclOperations(quorum: String): Unit = {
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
     client = Admin.create(createConfig)
@@ -998,8 +1027,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
     * since they can be done within the timeout.  New calls should receive timeouts.
     */
-  @Test
-  def testDelayedClose(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDelayedClose(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val topics = Seq("mytopic", "mytopic2")
     val newTopics = topics.map(new NewTopic(_, 1, 1.toShort))
@@ -1015,8 +1045,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
     * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
     */
-  @Test
-  def testForceClose(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testForceClose(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     client = Admin.create(config)
@@ -1032,8 +1063,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
     * even when the default request timeout is shorter.
     */
-  @Test
-  def testMinimumRequestTimeouts(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testMinimumRequestTimeouts(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
@@ -1049,8 +1081,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   /**
     * Test injecting timeouts for calls that are in flight.
     */
-  @Test
-  def testCallInFlightTimeouts(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCallInFlightTimeouts(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000")
     config.put(AdminClientConfig.RETRIES_CONFIG, "0")
@@ -1068,8 +1101,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   /**
    * Test the consumer group APIs.
    */
-  @Test
-  def testConsumerGroups(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsumerGroups(quorum: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
     try {
@@ -1287,8 +1321,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @Test
-  def testDeleteConsumerGroupOffsets(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteConsumerGroupOffsets(quorum: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
     try {
@@ -1359,8 +1394,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @Test
-  def testElectPreferredLeaders(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectPreferredLeaders(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     val prefer0 = Seq(0, 1, 2)
@@ -1368,10 +1404,20 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val prefer2 = Seq(2, 0, 1)
 
     val partition1 = new TopicPartition("elect-preferred-leaders-topic-1", 0)
-    TestUtils.createTopic(zkClient, partition1.topic, Map[Int, Seq[Int]](partition1.partition -> prefer0), servers)
+    TestUtils.createTopicWithAdmin(
+      client,
+      partition1.topic,
+      brokers,
+      replicaAssignment = Map[Int, Seq[Int]](partition1.partition -> prefer0)
+    )
 
     val partition2 = new TopicPartition("elect-preferred-leaders-topic-2", 0)
-    TestUtils.createTopic(zkClient, partition2.topic, Map[Int, Seq[Int]](partition2.partition -> prefer0), servers)
+    TestUtils.createTopicWithAdmin(
+      client,
+      partition2.topic,
+      brokers,
+      replicaAssignment = Map[Int, Seq[Int]](partition2.partition -> prefer0)
+    )
 
     def preferredLeader(topicPartition: TopicPartition): Int = {
       val partitionMetadata = getTopicMetadata(client, topicPartition.topic).partitions.get(topicPartition.partition)
@@ -1380,19 +1426,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
 
     /** Changes the <i>preferred</i> leader without changing the <i>current</i> leader. */
-    def changePreferredLeader(newAssignment: Seq[Int]) = {
+    def changePreferredLeader(newAssignment: Seq[Int]): Unit = {
       val preferred = newAssignment.head
-      val prior1 = zkClient.getLeaderForPartition(partition1).get
-      val prior2 = zkClient.getLeaderForPartition(partition2).get
+      val prior1 = TestUtils.findCurrentLeader(client, partition1).get
+      val prior2 = TestUtils.findCurrentLeader(client, partition2).get
 
-      var m = Map.empty[TopicPartition, Seq[Int]]
-
+      var m = Map.empty[TopicPartition, Optional[NewPartitionReassignment]]
       if (prior1 != preferred)
-        m += partition1 -> newAssignment
+        m += partition1 -> Optional.of(new NewPartitionReassignment(newAssignment.map(Int.box).asJava))
       if (prior2 != preferred)
-        m += partition2 -> newAssignment
+        m += partition2 -> Optional.of(new NewPartitionReassignment(newAssignment.map(Int.box).asJava))
+      client.alterPartitionReassignments(m.asJava).all().get()
 
-      zkClient.createPartitionReassignment(m)
       TestUtils.waitUntilTrue(
         () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
         s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
@@ -1408,7 +1453,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Noop election
     var electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
-    var exception = electResult.partitions.get.get(partition1).get
+    val exception = electResult.partitions.get.get(partition1).get
     assertEquals(classOf[ElectionNotNeededException], exception.getClass)
     TestUtils.assertLeader(client, partition1, 0)
 
@@ -1437,13 +1482,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 1)
 
+    def assertUnknownTopicOrPartition(
+      topicPartition: TopicPartition,
+      result: ElectLeadersResult
+    ): Unit = {
+      val exception = result.partitions.get.get(topicPartition).get
+      assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
+      if (isKRaftTest()) {
+        assertEquals("No such topic as topic-does-not-exist", exception.getMessage)
+      } else {
+        assertEquals("The partition does not exist.", exception.getMessage)
+      }
+    }
+
     // unknown topic
     val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(unknownPartition).asJava)
     assertEquals(Set(unknownPartition).asJava, electResult.partitions.get.keySet)
-    exception = electResult.partitions.get.get(unknownPartition).get
-    assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
-    assertEquals("The partition does not exist.", exception.getMessage)
+    assertUnknownTopicOrPartition(unknownPartition, electResult)
     TestUtils.assertLeader(client, partition1, 1)
     TestUtils.assertLeader(client, partition2, 1)
 
@@ -1455,9 +1511,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get.keySet)
     TestUtils.assertLeader(client, partition1, 2)
     TestUtils.assertLeader(client, partition2, 1)
-    exception = electResult.partitions.get.get(unknownPartition).get
-    assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
-    assertEquals("The partition does not exist.", exception.getMessage)
+    assertUnknownTopicOrPartition(unknownPartition, electResult)
 
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
@@ -1468,41 +1522,48 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Now change the preferred leader to 1
     changePreferredLeader(prefer1)
     // but shut it down...
-    servers(1).shutdown()
+    brokers(1).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
+
+    def assertPreferredLeaderNotAvailable(
+      topicPartition: TopicPartition,
+      result: ElectLeadersResult
+    ): Unit = {
+      val exception = result.partitions.get.get(topicPartition).get
+      assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
+      if (isKRaftTest()) {
+        assertTrue(exception.getMessage.contains(
+          "The preferred leader was not available."),
+          s"Unexpected message: ${exception.getMessage}")
+      } else {
+        assertTrue(exception.getMessage.contains(
+          s"Failed to elect leader for partition $topicPartition under strategy PreferredReplicaPartitionLeaderElectionStrategy"),
+          s"Unexpected message: ${exception.getMessage}")
+      }
+    }
 
     // ... now what happens if we try to elect the preferred leader and it's down?
     val shortTimeout = new ElectLeadersOptions().timeoutMs(10000)
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava, shortTimeout)
     assertEquals(Set(partition1).asJava, electResult.partitions.get.keySet)
-    exception = electResult.partitions.get.get(partition1).get
-    assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
-    assertTrue(exception.getMessage.contains(
-      "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"),
-      s"Wrong message ${exception.getMessage}")
+
+    assertPreferredLeaderNotAvailable(partition1, electResult)
     TestUtils.assertLeader(client, partition1, 2)
 
     // preferred leader unavailable with null argument
     electResult = client.electLeaders(ElectionType.PREFERRED, null, shortTimeout)
+    assertTrue(Set(partition1, partition2).subsetOf(electResult.partitions.get.keySet.asScala))
 
-    exception = electResult.partitions.get.get(partition1).get
-    assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
-    assertTrue(exception.getMessage.contains(
-      "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"),
-      s"Wrong message ${exception.getMessage}")
-
-    exception = electResult.partitions.get.get(partition2).get
-    assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
-    assertTrue(exception.getMessage.contains(
-      "Failed to elect leader for partition elect-preferred-leaders-topic-2-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"),
-      s"Wrong message ${exception.getMessage}")
-
+    assertPreferredLeaderNotAvailable(partition1, electResult)
     TestUtils.assertLeader(client, partition1, 2)
+
+    assertPreferredLeaderNotAvailable(partition2, electResult)
     TestUtils.assertLeader(client, partition2, 2)
   }
 
-  @Test
-  def testElectUncleanLeadersForOnePartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectUncleanLeadersForOnePartition(quorum: String): Unit = {
     // Case: unclean leader election with one topic partition
     client = Admin.create(createConfig)
 
@@ -1511,23 +1572,28 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val assignment1 = Seq(broker1, broker2)
 
     val partition1 = new TopicPartition("unclean-test-topic-1", 0)
-    TestUtils.createTopic(zkClient, partition1.topic, Map[Int, Seq[Int]](partition1.partition -> assignment1), servers)
+    TestUtils.createTopicWithAdmin(client,
+      partition1.topic,
+      brokers,
+      replicaAssignment = Map[Int, Seq[Int]](partition1.partition -> assignment1)
+    )
 
     TestUtils.assertLeader(client, partition1, broker1)
 
-    servers(broker2).shutdown()
+    brokers(broker2).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    servers(broker1).shutdown()
+    brokers(broker1).shutdown()
     TestUtils.assertNoLeader(client, partition1)
-    servers(broker2).startup()
+    brokers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
     TestUtils.assertLeader(client, partition1, broker2)
   }
 
-  @Test
-  def testElectUncleanLeadersForManyPartitions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectUncleanLeadersForManyPartitions(quorum: String): Unit = {
     // Case: unclean leader election with many topic partitions
     client = Admin.create(createConfig)
 
@@ -1540,22 +1606,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val partition1 = new TopicPartition(topic, 0)
     val partition2 = new TopicPartition(topic, 1)
 
-    TestUtils.createTopic(
-      zkClient,
+    TestUtils.createTopicWithAdmin(
+      client,
       topic,
-      Map(partition1.partition -> assignment1, partition2.partition -> assignment2),
-      servers
+      brokers,
+      replicaAssignment = Map(partition1.partition -> assignment1, partition2.partition -> assignment2)
     )
 
     TestUtils.assertLeader(client, partition1, broker1)
     TestUtils.assertLeader(client, partition2, broker1)
 
-    servers(broker2).shutdown()
+    brokers(broker2).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(broker2))
-    servers(broker1).shutdown()
+    brokers(broker1).shutdown()
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertNoLeader(client, partition2)
-    servers(broker2).startup()
+    brokers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1, partition2).asJava)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
@@ -1564,8 +1630,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, broker2)
   }
 
-  @Test
-  def testElectUncleanLeadersForAllPartitions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectUncleanLeadersForAllPartitions(quorum: String): Unit = {
     // Case: noop unclean leader election and valid unclean leader election for all partitions
     client = Admin.create(createConfig)
 
@@ -1579,22 +1646,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val partition1 = new TopicPartition(topic, 0)
     val partition2 = new TopicPartition(topic, 1)
 
-    TestUtils.createTopic(
-      zkClient,
+    TestUtils.createTopicWithAdmin(
+      client,
       topic,
-      Map(partition1.partition -> assignment1, partition2.partition -> assignment2),
-      servers
+      brokers,
+      replicaAssignment = Map(partition1.partition -> assignment1, partition2.partition -> assignment2)
     )
 
     TestUtils.assertLeader(client, partition1, broker1)
     TestUtils.assertLeader(client, partition2, broker1)
 
-    servers(broker2).shutdown()
+    brokers(broker2).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    servers(broker1).shutdown()
+    brokers(broker1).shutdown()
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertLeader(client, partition2, broker3)
-    servers(broker2).startup()
+    brokers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, null)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
@@ -1603,8 +1670,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, broker3)
   }
 
-  @Test
-  def testElectUncleanLeadersForUnknownPartitions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectUncleanLeadersForUnknownPartitions(quorum: String): Unit = {
     // Case: unclean leader election for unknown topic
     client = Admin.create(createConfig)
 
@@ -1616,11 +1684,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val unknownPartition = new TopicPartition(topic, 1)
     val unknownTopic = new TopicPartition("unknown-topic", 0)
 
-    TestUtils.createTopic(
-      zkClient,
+    TestUtils.createTopicWithAdmin(
+      client,
       topic,
-      Map(0 -> assignment1),
-      servers
+      brokers,
+      replicaAssignment = Map(0 -> assignment1),
     )
 
     TestUtils.assertLeader(client, new TopicPartition(topic, 0), broker1)
@@ -1630,8 +1698,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(electResult.partitions.get.get(unknownTopic).get.isInstanceOf[UnknownTopicOrPartitionException])
   }
 
-  @Test
-  def testElectUncleanLeadersWhenNoLiveBrokers(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectUncleanLeadersWhenNoLiveBrokers(quorum: String): Unit = {
     // Case: unclean leader election with no live brokers
     client = Admin.create(createConfig)
 
@@ -1642,26 +1711,27 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val topic = "unclean-test-topic-1"
     val partition1 = new TopicPartition(topic, 0)
 
-    TestUtils.createTopic(
-      zkClient,
+    TestUtils.createTopicWithAdmin(
+      client,
       topic,
-      Map(partition1.partition -> assignment1),
-      servers
+      brokers,
+      replicaAssignment = Map(partition1.partition -> assignment1)
     )
 
     TestUtils.assertLeader(client, partition1, broker1)
 
-    servers(broker2).shutdown()
+    brokers(broker2).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    servers(broker1).shutdown()
+    brokers(broker1).shutdown()
     TestUtils.assertNoLeader(client, partition1)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
     assertTrue(electResult.partitions.get.get(partition1).get.isInstanceOf[EligibleLeadersNotAvailableException])
   }
 
-  @Test
-  def testElectUncleanLeadersNoop(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectUncleanLeadersNoop(quorum: String): Unit = {
     // Case: noop unclean leader election with explicit topic partitions
     client = Admin.create(createConfig)
 
@@ -1672,25 +1742,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val topic = "unclean-test-topic-1"
     val partition1 = new TopicPartition(topic, 0)
 
-    TestUtils.createTopic(
-      zkClient,
+    TestUtils.createTopicWithAdmin(
+      client,
       topic,
-      Map(partition1.partition -> assignment1),
-      servers
+      brokers,
+      replicaAssignment = Map(partition1.partition -> assignment1)
     )
 
     TestUtils.assertLeader(client, partition1, broker1)
 
-    servers(broker1).shutdown()
+    brokers(broker1).shutdown()
     TestUtils.assertLeader(client, partition1, broker2)
-    servers(broker1).startup()
+    brokers(broker1).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
     assertTrue(electResult.partitions.get.get(partition1).get.isInstanceOf[ElectionNotNeededException])
   }
 
-  @Test
-  def testElectUncleanLeadersAndNoop(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testElectUncleanLeadersAndNoop(quorum: String): Unit = {
     // Case: one noop unclean leader election and one valid unclean leader election
     client = Admin.create(createConfig)
 
@@ -1704,22 +1775,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val partition1 = new TopicPartition(topic, 0)
     val partition2 = new TopicPartition(topic, 1)
 
-    TestUtils.createTopic(
-      zkClient,
+    TestUtils.createTopicWithAdmin(
+      client,
       topic,
-      Map(partition1.partition -> assignment1, partition2.partition -> assignment2),
-      servers
+      brokers,
+      replicaAssignment = Map(partition1.partition -> assignment1, partition2.partition -> assignment2)
     )
 
     TestUtils.assertLeader(client, partition1, broker1)
     TestUtils.assertLeader(client, partition2, broker1)
 
-    servers(broker2).shutdown()
+    brokers(broker2).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    servers(broker1).shutdown()
+    brokers(broker1).shutdown()
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertLeader(client, partition2, broker3)
-    servers(broker2).startup()
+    brokers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1, partition2).asJava)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
@@ -1728,8 +1799,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, broker3)
   }
 
-  @Test
-  def testListReassignmentsDoesNotShowNonReassigningPartitions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListReassignmentsDoesNotShowNonReassigningPartitions(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     // Create topics
@@ -1744,8 +1816,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(0, allReassignmentsMap.size())
   }
 
-  @Test
-  def testListReassignmentsDoesNotShowDeletedPartitions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListReassignmentsDoesNotShowDeletedPartitions(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     val topic = "list-reassignments-no-reassignments"
@@ -2085,8 +2158,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Some("Invalid config value for resource"))
   }
 
-  @Test
-  def testInvalidAlterPartitionReassignments(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testInvalidAlterPartitionReassignments(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val topic = "alter-reassignments-topic-1"
     val tp1 = new TopicPartition(topic, 0)
@@ -2124,8 +2198,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp3), classOf[InvalidReplicaAssignmentException])
   }
 
-  @Test
-  def testLongTopicNames(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testLongTopicNames(quorum: String): Unit = {
     val client = Admin.create(createConfig)
     val longTopicName = String.join("", Collections.nCopies(249, "x"));
     val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
@@ -2137,7 +2212,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(results.containsKey(invalidTopicName))
     assertFutureExceptionTypeEquals(results.get(invalidTopicName), classOf[InvalidTopicException])
     assertFutureExceptionTypeEquals(client.alterReplicaLogDirs(
-      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> servers(0).config.logDirs(0)).asJava).all(),
+      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs(0)).asJava).all(),
       classOf[InvalidTopicException])
     client.close()
   }
@@ -2182,8 +2257,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     validateLogConfig(compressionType = "producer")
   }
 
-  @Test
-  def testDescribeConfigsForLog4jLogLevels(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeConfigsForLog4jLogLevels(quorum: String): Unit = {
     client = Admin.create(createConfig)
     LoggerFactory.getLogger("kafka.cluster.Replica").trace("Message to create the logger")
     val loggerConfig = describeBrokerLoggers()

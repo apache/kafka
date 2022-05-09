@@ -30,7 +30,7 @@ public interface ClusterInstance {
 
     enum ClusterType {
         ZK,
-        RAFT
+        KRAFT
     }
 
     /**
@@ -39,7 +39,7 @@ public interface ClusterInstance {
     ClusterType clusterType();
 
     default boolean isKRaftTest() {
-        return clusterType() == ClusterType.RAFT;
+        return clusterType() == ClusterType.KRAFT;
     }
 
     /**

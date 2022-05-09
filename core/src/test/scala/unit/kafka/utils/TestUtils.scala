@@ -432,13 +432,21 @@ object TestUtils extends Logging {
     }.toMap
   }
 
+  def describeTopicByName(
+    admin: Admin,
+    topic: String
+  ): TopicDescription = {
+    admin.describeTopics(Collections.singleton(topic))
+      .allTopicNames()
+      .get()
+      .get(topic)
+  }
+
   def topicHasSameNumPartitionsAndReplicationFactor(adminClient: Admin,
                                                     topic: String,
                                                     numPartitions: Int,
                                                     replicationFactor: Int): Boolean = {
-    val describedTopics = adminClient.describeTopics(Collections.
-      singleton(topic)).allTopicNames().get()
-    val description = describedTopics.get(topic)
+    val description = describeTopicByName(adminClient, topic)
     (description != null &&
       description.partitions().size() == numPartitions &&
       description.partitions().iterator().next().replicas().size() == replicationFactor)
@@ -1820,20 +1828,26 @@ object TestUtils extends Logging {
     }, s"Timed out waiting for brokerId $brokerId to come online")
   }
 
+  def findCurrentLeader(
+    admin: Admin,
+    topicPartition: TopicPartition
+  ): Option[Int] = {
+    val topicDescription = admin.describeTopics(
+      List(topicPartition.topic).asJava
+    ).allTopicNames.get.get(topicPartition.topic)
+    topicDescription.partitions.asScala
+      .find(_.partition == topicPartition.partition)
+      .flatMap(partitionState => Option(partitionState.leader))
+      .map(_.id)
+  }
+
   def waitForLeaderToBecome(
     client: Admin,
     topicPartition: TopicPartition,
     expectedLeaderOpt: Option[Int]
   ): Unit = {
-    val topic = topicPartition.topic
-    val partitionId = topicPartition.partition
-
     def currentLeader: Try[Option[Int]] = Try {
-      val topicDescription = client.describeTopics(List(topic).asJava).allTopicNames.get.get(topic)
-      topicDescription.partitions.asScala
-        .find(_.partition == partitionId)
-        .flatMap(partitionState => Option(partitionState.leader))
-        .map(_.id)
+      findCurrentLeader(client, topicPartition)
     }
 
     val (lastLeaderCheck, isLeaderElected) = computeUntilTrue(currentLeader) {

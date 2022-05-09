@@ -95,7 +95,7 @@ public class ClusterTestExtensionsTest {
         if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "bar");
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggs");
-        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
+        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.KRAFT)) {
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "baz");
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggz");
         } else {
