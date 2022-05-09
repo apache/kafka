@@ -310,7 +310,7 @@ class KafkaServer(
         socketServer.startup(startProcessingRequests = false)
 
         // Start alter partition manager based on the IBP version
-        alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
+        alterIsrManager = if (config.interBrokerProtocolVersion.isAlterPartitionSupported) {
           AlterPartitionManager(
             config = config,
             metadataCache = metadataCache,
@@ -325,7 +325,7 @@ class KafkaServer(
         }
         alterIsrManager.start()
 
-        /* start replica manager */
+        // Start replica manager
         _replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 

@@ -17,24 +17,32 @@
 
 package kafka.server
 
-import java.util.{Arrays, Collections}
-
+import java.util.Arrays
+import java.util.Collections
+import java.util.stream.IntStream
+import java.util.stream.{Stream => JStream}
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.requests.DeleteTopicsRequest
+import org.apache.kafka.common.requests.DeleteTopicsResponse
+import org.apache.kafka.common.requests.MetadataRequest
+import org.apache.kafka.common.requests.MetadataResponse
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
-
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.Arguments
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest {
 
-  @Test
-  def testValidDeleteTopicRequests(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testValidDeleteTopicRequests(quorum: String): Unit = {
     val timeout = 10000
     // Single topic
     createTopic("topic-1", 1, 1)
@@ -80,8 +88,12 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testErrorDeleteTopicRequests(): Unit = {
+  /*
+   * Only run this test against ZK cluster. The KRaft controller doesn't perform operations that have timed out.
+   */
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testErrorDeleteTopicRequests(quorum: String): Unit = {
     val timeout = 30000
     val timeoutTopic = "invalid-timeout"
 
@@ -103,14 +115,14 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
         "partial-invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION
       )
     )
-    
+
     // Topic IDs
     createTopic("topic-id-1", 1, 1)
     val validId = getTopicIds()("topic-id-1")
     val invalidId = Uuid.randomUuid
     validateErrorDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
       new DeleteTopicsRequestData()
-        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(invalidId), 
+        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(invalidId),
             new DeleteTopicState().setTopicId(validId)))
         .setTimeoutMs(timeout)).build(),
       Map(
@@ -128,7 +140,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
           .setTimeoutMs(0)).build(),
       Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
     // The topic should still get deleted eventually
-    TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
+    TestUtils.waitUntilTrue(() => !brokers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
     validateTopicIsDeleted(timeoutTopic)
   }
 
@@ -166,8 +178,13 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testNotController(): Unit = {
+  /*
+   * Only run this test against ZK clusters. KRaft doesn't have this behavior of returning NOT_CONTROLLER.
+   * Instead, the request is forwarded.
+   */
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testNotController(quorum: String): Unit = {
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
           .setTopicNames(Collections.singletonList("not-controller"))
@@ -185,8 +202,38 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
       s"The topic $topic should not exist")
   }
 
-  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
+  private def sendDeleteTopicsRequest(
+    request: DeleteTopicsRequest,
+    socketServer: SocketServer = adminSocketServer
+  ): DeleteTopicsResponse = {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
+  @ParameterizedTest()
+  @MethodSource(Array("compatibilityMatrix"))
+  def testDeleteTopicsVersions(quorum: String, version: Short): Unit = {
+    val timeout = 10000
+    val topicName = "topic-1"
+
+    createTopic(topicName, 1, 1)
+    val data = if (version < 6) {
+      new DeleteTopicsRequestData().setTopicNames(Arrays.asList(topicName))
+    } else {
+      new DeleteTopicsRequestData()
+        .setTopics(Arrays.asList(new DeleteTopicState().setName(topicName)))
+    }
+    data.setTimeoutMs(timeout)
+
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(data).build(version))
+  }
+}
+
+object DeleteTopicsRequestTest {
+  def compatibilityMatrix(): JStream[Arguments] = {
+    JStream.of("zk", "kraft").flatMap { quorum =>
+      IntStream.iterate(0, _ + 1).limit(7).mapToObj { version =>
+        Arguments.of(quorum, version.toShort)
+      }
+    }
+  }
 }
