@@ -38,7 +38,7 @@ public class StreamsException extends KafkaException {
     private final Set<TaskId> taskIds = new HashSet<>();
 
     public StreamsException(final String message) {
-        this(message, (TaskId) null);
+        super(message);
     }
 
     public StreamsException(final String message, final TaskId taskId) {
@@ -80,7 +80,7 @@ public class StreamsException extends KafkaException {
      *          guarantee that the exception wasn't directly related to a specific task.
      */
     public Optional<TaskId> taskId() {
-        return taskIds.isEmpty() ? Optional.empty() : Optional.of(new ArrayList<>(taskIds).get(0));
+        return taskIds.isEmpty() ? Optional.empty() : Optional.ofNullable(new ArrayList<>(taskIds).get(0));
     }
 
     public void setTaskId(final TaskId taskId) {

@@ -285,7 +285,7 @@ class DefaultStateUpdaterTest {
         assertTrue(actualFailedTasks1.exception instanceof StreamsException);
         final StreamsException actualException1 = (StreamsException) actualFailedTasks1.exception;
         assertTrue(actualException1.taskId().isPresent());
-        assertEquals(task1.id(), actualException1.taskId());
+        assertEquals(task1.id(), actualException1.taskId().get());
         assertEquals(expectedMessage, actualException1.getMessage());
         final ExceptionAndTasks actualFailedTasks2 = failedTasks.get(1);
         assertEquals(1, actualFailedTasks2.tasks.size());
@@ -293,7 +293,7 @@ class DefaultStateUpdaterTest {
         assertTrue(actualFailedTasks2.exception instanceof StreamsException);
         final StreamsException actualException2 = (StreamsException) actualFailedTasks2.exception;
         assertTrue(actualException2.taskId().isPresent());
-        assertEquals(task3.id(), actualException2.taskId());
+        assertEquals(task3.id(), actualException2.taskId().get());
         assertEquals(expectedMessage, actualException2.getMessage());
         assertEquals(1, stateUpdater.getAllTasks().size());
         assertTrue(stateUpdater.getAllTasks().contains(task2));
