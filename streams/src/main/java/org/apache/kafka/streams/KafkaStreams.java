@@ -1533,18 +1533,42 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        if (options.leaveGroup) {
+        final long startMs = time.milliseconds();
+
+        final boolean closeStatus = close(timeoutMs);
+
+        final Optional<String> groupInstanceId = clientSupplier
+                .getConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId))
+                .groupMetadata()
+                .groupInstanceId();
+
+        final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
+
+        if (options.leaveGroup && groupInstanceId.isPresent()) {
             log.debug("Sending leave group trigger to removing instance from consumer group");
             //removing instance from consumer group
-            adminClient.removeMembersFromConsumerGroup(
-                    applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                    new RemoveMembersFromConsumerGroupOptions()
-            );
+
+            final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
+
+            final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
+
+            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
+                    .removeMembersFromConsumerGroup(
+                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+                        new RemoveMembersFromConsumerGroupOptions(membersToRemove)
+                    );
+
+            try {
+                removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(remainingTimeMs, TimeUnit.MILLISECONDS);
+            } catch (final Exception e) {
+                log.error("Could not remove static member {} from consumer group {} due to a: {}", groupInstanceId.get(),
+                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+            }
         }
 
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
 
-        return close(timeoutMs);
+        return closeStatus;
     }
 
     /**
