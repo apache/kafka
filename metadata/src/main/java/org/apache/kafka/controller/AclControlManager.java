@@ -41,11 +41,13 @@ import org.apache.kafka.timeline.TimelineHashSet;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 /**
@@ -152,7 +154,11 @@ public class AclControlManager {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }
         }
-        return ControllerResult.atomicOf(records, results);
+        return ControllerResult.atomicOf(dedupeApiMessageAndVersion(records), results);
+    }
+
+    private List<ApiMessageAndVersion> dedupeApiMessageAndVersion(List<ApiMessageAndVersion> messages) {
+        return new HashSet<>(messages).stream().collect(Collectors.toList());
     }
 
     AclDeleteResult deleteAclsForFilter(AclBindingFilter filter,
