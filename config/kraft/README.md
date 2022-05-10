@@ -114,9 +114,7 @@ We don't support any kind of upgrade right now, either to or from KRaft mode.  T
 
 Finally, the following Kafka features have not yet been fully implemented:
 
-* Support for certain security features: configuring a KRaft-based Authorizer, setting up SCRAM, delegation tokens, and so forth
-  (although note that you can use authorizers such as `kafka.security.authorizer.AclAuthorizer` with KRaft clusters, even
-  if they are ZooKeeper-based: simply define `authorizer.class.name` and configure the authorizer as you normally would).
+* Support for certain security features: setting up SCRAM, delegation tokens, and so forth.
 * Support for some configurations, like enabling unclean leader election by default or dynamically changing broker endpoints
 * Support for KIP-112 "JBOD" modes
 
