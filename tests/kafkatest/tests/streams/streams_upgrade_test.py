@@ -193,8 +193,8 @@ class StreamsUpgradeTest(Test):
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
     @cluster(num_nodes=6)
-    #@matrix(from_version=metadata_1_versions, to_version=[str(DEV_VERSION)])
-    #@matrix(from_version=metadata_2_versions, to_version=[str(DEV_VERSION)])
+    @matrix(from_version=metadata_1_versions, to_version=[str(DEV_VERSION)])
+    @matrix(from_version=metadata_2_versions, to_version=[str(DEV_VERSION)])
     @matrix(from_version=fk_join_versions, to_version=[str(DEV_VERSION)])
     def test_rolling_upgrade_with_2_bounces(self, from_version, to_version):
         """
