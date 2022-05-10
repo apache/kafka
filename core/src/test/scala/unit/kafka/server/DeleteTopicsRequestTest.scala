@@ -19,8 +19,6 @@ package kafka.server
 
 import java.util.Arrays
 import java.util.Collections
-import java.util.stream.IntStream
-import java.util.stream.{Stream => JStream}
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.Uuid
@@ -33,12 +31,10 @@ import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.requests.MetadataResponse
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
-import org.junit.jupiter.params.provider.Arguments
 import scala.jdk.CollectionConverters._
 
-class DeleteTopicsRequestTest extends BaseRequestTest {
+class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -209,36 +205,29 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
-  @ParameterizedTest()
-  @MethodSource(Array("compatibilityMatrix"))
-  def testDeleteTopicsVersions(quorum: String, version: Short): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testDeleteTopicsVersions(quorum: String): Unit = {
     // This test assumes that the current valid versions are 0-6 please adjust the test if there are changes.
     assertEquals(0, DeleteTopicsRequestData.LOWEST_SUPPORTED_VERSION)
     assertEquals(6, DeleteTopicsRequestData.HIGHEST_SUPPORTED_VERSION)
 
     val timeout = 10000
-    val topicName = "topic-1"
+    (0 until DeleteTopicsRequestData.SCHEMAS.size).foreach { version =>
+      info(s"Creating and deleting tests for version $version")
 
-    createTopic(topicName, 1, 1)
-    val data = new DeleteTopicsRequestData()
-      .setTimeoutMs(timeout)
+      val topicName = s"topic-$version"
 
-    if (version < 6) {
-      data.setTopicNames(Arrays.asList(topicName))
-    } else {
-      data.setTopics(Arrays.asList(new DeleteTopicState().setName(topicName)))
-    }
+      createTopic(topicName, 1, 1)
+      val data = new DeleteTopicsRequestData().setTimeoutMs(timeout)
 
-    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(data).build(version))
-  }
-}
-
-object DeleteTopicsRequestTest {
-  def compatibilityMatrix(): JStream[Arguments] = {
-    JStream.of("zk", "kraft").flatMap { quorum =>
-      IntStream.iterate(0, _ + 1).limit(DeleteTopicsRequestData.SCHEMAS.size).mapToObj { version =>
-        Arguments.of(quorum, Short.box(version.toShort))
+      if (version < 6) {
+        data.setTopicNames(Arrays.asList(topicName))
+      } else {
+        data.setTopics(Arrays.asList(new DeleteTopicState().setName(topicName)))
       }
+
+      validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(data).build(version.toShort))
     }
   }
 }
