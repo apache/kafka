@@ -39,7 +39,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 
 /**
@@ -59,6 +61,26 @@ public class BootstrapMetadata {
 
     public MetadataVersion metadataVersion() {
         return this.metadataVersion;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BootstrapMetadata metadata = (BootstrapMetadata) o;
+        return metadataVersion == metadata.metadataVersion;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(metadataVersion);
+    }
+
+    @Override
+    public String toString() {
+        return "BootstrapMetadata{" +
+            "metadataVersion=" + metadataVersion +
+            '}';
     }
 
     /**
@@ -128,7 +150,11 @@ public class BootstrapMetadata {
         BootstrapListener listener = new BootstrapListener();
         SnapshotFileReader reader = new SnapshotFileReader(bootstrapPath.toString(), listener);
         reader.startup();
-        reader.caughtUpFuture().get();
+        try {
+            reader.caughtUpFuture().get();
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Failed to load snapshot", e.getCause());
+        }
 
         List<ApiMessage> featureRecords = listener.messages.getOrDefault(MetadataRecordType.FEATURE_LEVEL_RECORD, Collections.emptyList());
         Optional<FeatureLevelRecord> metadataVersionRecord = featureRecords.stream()
