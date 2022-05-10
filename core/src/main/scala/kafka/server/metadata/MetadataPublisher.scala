@@ -32,7 +32,7 @@ trait MetadataPublisher {
   def publish(delta: MetadataDelta, newImage: MetadataImage): Unit
 
   /**
-   * The offset of metadata topic which has been published
+   * The highest offset of metadata topic which has been published
    */
   def publishedOffset: Long
 }
