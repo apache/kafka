@@ -299,30 +299,4 @@ public class ApiVersionsResponse extends AbstractResponse {
             .setMinVersion(apiKey.oldestVersion())
             .setMaxVersion(apiKey.latestVersion());
     }
-
-    public static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        RecordVersion minRecordVersion,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
-        long finalizedFeaturesEpoch,
-        NodeApiVersions controllerApiVersions,
-        ListenerType listenerType
-    ) {
-        ApiVersionCollection apiKeys;
-        if (controllerApiVersions != null) {
-            apiKeys = ApiVersionsResponse.intersectForwardableApis(
-                listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
-        } else {
-            apiKeys = ApiVersionsResponse.filterApis(minRecordVersion, listenerType);
-        }
-
-        return ApiVersionsResponse.createApiVersionsResponse(
-            throttleTimeMs,
-            apiKeys,
-            latestSupportedFeatures,
-            finalizedFeatures,
-            finalizedFeaturesEpoch
-        );
-    }
 }

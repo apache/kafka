@@ -35,7 +35,6 @@ object RawMetaProperties {
   val BrokerIdKey = "broker.id"
   val NodeIdKey = "node.id"
   val VersionKey = "version"
-  val InitialMetadataVersion = "init.metadata.version"
 }
 
 class RawMetaProperties(val props: Properties = new Properties()) {
