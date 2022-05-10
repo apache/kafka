@@ -45,6 +45,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
+
 public class DefaultStateUpdater implements StateUpdater {
 
     private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
@@ -146,7 +148,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void handleStreamsException(final StreamsException streamsException) {
             final ExceptionAndTasks exceptionAndTasks;
-            if (!streamsException.taskIds().isEmpty()) {
+            if (streamsException.taskId().isPresent()) {
                 exceptionAndTasks = handleStreamsExceptionWithTask(streamsException);
             } else {
                 exceptionAndTasks = handleStreamsExceptionWithoutTask(streamsException);
@@ -155,15 +157,11 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private ExceptionAndTasks handleStreamsExceptionWithTask(final StreamsException streamsException) {
-            final Set<TaskId> failedTaskIds = streamsException.taskIds();
-            final Set<Task> failedTask = new HashSet<>();
-            for (final TaskId taskId : failedTaskIds) {
-                if (!updatingTasks.containsKey(taskId)) {
-                    throw new IllegalStateException("Task " + failedTaskIds + " failed but is not updating. " + BUG_ERROR_MESSAGE);
-                }
-                failedTask.add(updatingTasks.remove(taskId));
+            final TaskId failedTaskId = streamsException.taskId().get();
+            if (!updatingTasks.containsKey(failedTaskId)) {
+                throw new IllegalStateException("Task " + failedTaskId + " failed but is not updating. " + BUG_ERROR_MESSAGE);
             }
-            return new ExceptionAndTasks(failedTask, streamsException);
+            return new ExceptionAndTasks(mkSet(updatingTasks.remove(failedTaskId)), streamsException);
         }
 
         private ExceptionAndTasks handleStreamsExceptionWithoutTask(final StreamsException streamsException) {

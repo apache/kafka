@@ -324,7 +324,7 @@ public class TaskManager {
                     final TaskId taskId = entry.getKey();
                     final RuntimeException exception = entry.getValue();
                     if (exception instanceof StreamsException) {
-                        ((StreamsException) exception).addTaskId(taskId);
+                        ((StreamsException) exception).setTaskId(taskId);
                         throw exception;
                     } else if (exception instanceof KafkaException) {
                         throw new StreamsException(exception, taskId);
@@ -628,7 +628,7 @@ public class TaskManager {
                     consumedOffsetsPerTask.put(task, committableOffsets);
                 }
             } catch (final StreamsException e) {
-                e.addTaskId(task.id());
+                e.setTaskId(task.id());
                 throw e;
             } catch (final Exception e) {
                 throw new StreamsException(e, task.id());
@@ -901,7 +901,7 @@ public class TaskManager {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
             } catch (final StreamsException e) {
-                e.addTaskId(task.id());
+                e.setTaskId(task.id());
                 firstException.compareAndSet(null, e);
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
@@ -960,7 +960,7 @@ public class TaskManager {
                 completeTaskCloseClean(task);
             } catch (final StreamsException e) {
                 log.error("Exception caught while clean-closing task " + task.id(), e);
-                e.addTaskId(task.id());
+                e.setTaskId(task.id());
                 firstException.compareAndSet(null, e);
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
@@ -1278,7 +1278,7 @@ public class TaskManager {
                                                final RuntimeException exception,
                                                final TaskId taskId) {
         if (exception instanceof StreamsException) {
-            ((StreamsException) exception).addTaskId(taskId);
+            ((StreamsException) exception).setTaskId(taskId);
             firstException.compareAndSet(null, exception);
         } else {
             firstException.compareAndSet(null, new StreamsException(exception, taskId));

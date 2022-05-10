@@ -2658,8 +2658,8 @@ public class TaskManagerTest {
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
         final StreamsException exception = assertThrows(StreamsException.class, () -> taskManager.process(1, time));
-        assertThat(exception.taskIds().isEmpty(), is(false));
-        assertThat(exception.taskIds(), is(mkSet(taskId00)));
+        assertThat(exception.taskId().isPresent(), is(true));
+        assertThat(exception.taskId().get(), is(taskId00));
         assertThat(exception.getCause().getMessage(), is("oops"));
     }
 
@@ -2882,8 +2882,8 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
 
-        assertThat(thrown.taskIds().isEmpty(), is(false));
-        assertThat(thrown.taskIds(), is(mkSet(taskId02)));
+        assertThat(thrown.taskId().isPresent(), is(true));
+        assertThat(thrown.taskId().get(), is(taskId02));
 
         // Expecting the original Kafka exception wrapped in the StreamsException.
         assertThat(thrown.getCause().getMessage(), equalTo("Kaboom for t2!"));
