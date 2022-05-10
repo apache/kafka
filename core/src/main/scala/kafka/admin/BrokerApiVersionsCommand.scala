@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -231,6 +232,7 @@ object BrokerApiVersionsCommand {
           CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
           ConfigDef.Type.STRING,
           CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+          in(Utils.enumOptions(classOf[SecurityProtocol]):_*),
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .define(

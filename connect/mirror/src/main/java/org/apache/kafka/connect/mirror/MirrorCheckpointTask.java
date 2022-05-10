@@ -105,7 +105,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     @Override
-    public void commit() throws InterruptedException {
+    public void commit() {
         // nop
     }
 

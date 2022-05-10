@@ -1517,6 +1517,23 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInvalidAuthorizerClassName(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val configs = new util.HashMap[Object, Object](props)
+    configs.put(KafkaConfig.AuthorizerClassNameProp, null)
+    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
+    assertTrue(ce.getMessage.contains(KafkaConfig.AuthorizerClassNameProp))
+  }
+
+  @Test
+  def testInvalidSecurityInterBrokerProtocol(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, "abc")
+    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+    assertTrue(ce.getMessage.contains(KafkaConfig.InterBrokerSecurityProtocolProp))
+  }
+
+  @Test
   def testEarlyStartListenersDefault(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())
