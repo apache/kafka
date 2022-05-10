@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -47,6 +48,15 @@ public class BootstrapMetadataTest {
         Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         BootstrapMetadata metadata = BootstrapMetadata.load(tmpDir);
         assertEquals(MetadataVersion.IBP_3_0_IV0, metadata.metadataVersion());
+    }
+
+    @Test
+    public void testExistingBootstrapFile() throws Exception {
+        Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
+        BootstrapMetadata.write(BootstrapMetadata.create(MetadataVersion.IBP_3_0_IV0), tmpDir);
+        assertThrows(IOException.class, () -> {
+            BootstrapMetadata.write(BootstrapMetadata.create(MetadataVersion.IBP_3_1_IV0), tmpDir);
+        });
     }
 
     @Test

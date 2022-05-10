@@ -138,7 +138,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * results of the operation have been made durable to the metadata log.
  *
  * The QuorumController uses the "metadata.version" feature flag as a mechanism to control
- * the usage of new log record schemas. Starting with 3.2, this version must be set before
+ * the usage of new log record schemas. Starting with 3.3, this version must be set before
  * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
@@ -280,7 +280,7 @@ public final class QuorumController implements Controller {
                 throw new RuntimeException("You must set a raft client.");
             }
             if (bootstrapMetadataVersion == null || bootstrapMetadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
-                throw new RuntimeException("You must set an initial metadata.version in meta.properties");
+                throw new RuntimeException("You must specify an initial metadata.version using the kafka-storage tool.");
             }
             if (quorumFeatures == null) {
                 throw new RuntimeException("You must specify the quorum features");
@@ -767,13 +767,6 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
-    private <T> CompletableFuture<T> prependWriteEvent(String name,
-                                                       ControllerWriteOperation<T> op) {
-        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
-        queue.prepend(event);
-        return event.future();
-    }
-
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
 
         @Override
@@ -917,7 +910,7 @@ public final class QuorumController implements Controller {
                     final MetadataVersion metadataVersion;
                     if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
                         final CompletableFuture<Map<String, ApiError>> future;
-                        if (bootstrapMetadataVersion.featureLevel() < 1) {
+                        if (bootstrapMetadataVersion.isKRaftSupported()) {
                             metadataVersion = MetadataVersion.UNINITIALIZED;
                             future = new CompletableFuture<>();
                             future.completeExceptionally(
@@ -949,8 +942,8 @@ public final class QuorumController implements Controller {
                     }
 
                     log.info(
-                            "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
-                            newEpoch, lastCommittedOffset, lastCommittedEpoch, metadataVersion.featureLevel()
+                        "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
+                        newEpoch, lastCommittedOffset, lastCommittedEpoch, metadataVersion.featureLevel()
                     );
 
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is

@@ -159,7 +159,7 @@ public enum MetadataVersion {
 
     public static final MetadataVersion[] VALUES;
 
-    private final Optional<Short> featureLevel;
+    private final short featureLevel;
     private final String release;
     private final String ibpVersion;
     private final boolean didMetadataChange;
@@ -169,11 +169,7 @@ public enum MetadataVersion {
     }
 
     MetadataVersion(int featureLevel, String release, String subVersion, boolean didMetadataChange) {
-        if (featureLevel > 0) {
-            this.featureLevel = Optional.of((short) featureLevel);
-        } else {
-            this.featureLevel = Optional.empty();
-        }
+        this.featureLevel = (short) featureLevel;
         this.release = release;
         if (subVersion.isEmpty()) {
             this.ibpVersion = release;
@@ -183,9 +179,8 @@ public enum MetadataVersion {
         this.didMetadataChange = didMetadataChange;
     }
 
-
     public short featureLevel() {
-        return featureLevel.orElse((short) -1);
+        return featureLevel;
     }
 
     public boolean isSaslInterBrokerHandshakeRequestEnabled() {
@@ -216,6 +211,9 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_0_IV0);
     }
 
+    public boolean isKRaftSupported() {
+        return this.featureLevel > 0;
+    }
 
     public RecordVersion highestSupportedRecordVersion() {
         if (this.isLessThan(IBP_0_10_0_IV0)) {
@@ -250,6 +248,19 @@ public enum MetadataVersion {
 
     public String version() {
         return ibpVersion;
+    }
+
+    public boolean didMetadataChange() {
+        return didMetadataChange;
+    }
+
+    private Optional<MetadataVersion> previous() {
+        int idx = this.ordinal();
+        if (idx > 2) {
+            return Optional.of(VALUES[idx - 2]);
+        } else {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -301,15 +312,6 @@ public enum MetadataVersion {
         return VALUES[VALUES.length - 1];
     }
 
-    public Optional<MetadataVersion> previous() {
-        int idx = this.ordinal();
-        if (idx > 2) {
-            return Optional.of(MetadataVersion.values()[idx - 1]);
-        } else {
-            return Optional.empty();
-        }
-    }
-
     public static boolean checkIfMetadataChanged(MetadataVersion sourceVersion, MetadataVersion targetVersion) {
         if (sourceVersion == targetVersion) {
             return false;
@@ -323,6 +325,10 @@ public enum MetadataVersion {
             highVersion = sourceVersion;
             lowVersion = targetVersion;
         }
+        return checkIfMetadataChangedOrdered(highVersion, lowVersion);
+    }
+
+    private static boolean checkIfMetadataChangedOrdered(MetadataVersion highVersion, MetadataVersion lowVersion) {
         MetadataVersion version = highVersion;
         while (!version.didMetadataChange() && version != lowVersion) {
             Optional<MetadataVersion> prev = version.previous();
@@ -332,7 +338,7 @@ public enum MetadataVersion {
                 break;
             }
         }
-        return version != targetVersion;
+        return version != lowVersion;
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {
@@ -341,10 +347,6 @@ public enum MetadataVersion {
 
     public boolean isLessThan(MetadataVersion otherVersion) {
         return this.compareTo(otherVersion) < 0;
-    }
-
-    public boolean didMetadataChange() {
-        return didMetadataChange;
     }
 
     @Override

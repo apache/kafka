@@ -129,6 +129,9 @@ public class BootstrapMetadata {
     }
 
     public static BootstrapMetadata create(MetadataVersion metadataVersion) {
+        if (!metadataVersion.isKRaftSupported()) {
+            throw new IllegalArgumentException("Cannot create BootstrapMetadata with a non-KRaft metadata version.");
+        }
         return new BootstrapMetadata(metadataVersion);
     }
 
@@ -177,6 +180,10 @@ public class BootstrapMetadata {
      */
     public static void write(BootstrapMetadata metadata, Path bootstrapDir) throws IOException {
         final Path bootstrapPath = bootstrapDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE);
+        if (Files.exists(bootstrapPath)) {
+            throw new IOException("Cannot write metadata bootstrap file " + bootstrapPath +
+                ". File already already exists.");
+        }
         SnapshotFileWriter bootstrapWriter = SnapshotFileWriter.open(bootstrapPath);
         bootstrapWriter.append(
             new ApiMessageAndVersion(

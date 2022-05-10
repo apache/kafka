@@ -60,6 +60,7 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_1_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -262,4 +263,35 @@ class MetadataVersionTest {
         assertEquals("3.2-IV0", IBP_3_2_IV0.version());
     }
 
+    @Test
+    public void testMetadataChanged() {
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_2_IV0));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_1_IV0));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV1));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_2_8_IV1));
+
+        // Check that argument order doesn't matter
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_0_IV0, IBP_3_2_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_2_8_IV1, IBP_3_2_IV0));
+    }
+
+    @Test
+    public void testKRaftVersions() {
+        for (MetadataVersion metadataVersion : MetadataVersion.VALUES) {
+            if (metadataVersion.isKRaftSupported()) {
+                assertTrue(metadataVersion.featureLevel() > 0);
+            } else {
+                assertEquals(-1, metadataVersion.featureLevel());
+            }
+        }
+
+        for (MetadataVersion metadataVersion : MetadataVersion.VALUES) {
+            if (metadataVersion.isAtLeast(IBP_3_0_IV0)) {
+                assertTrue(metadataVersion.isKRaftSupported());
+            } else {
+                assertFalse(metadataVersion.isKRaftSupported());
+            }
+        }
+    }
 }

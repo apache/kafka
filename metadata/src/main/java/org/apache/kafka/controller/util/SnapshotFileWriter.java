@@ -74,8 +74,7 @@ public class SnapshotFileWriter implements AutoCloseable {
             CompressionType.NONE,
             new MetadataRecordSerde());
 
-        FileChannel channel = FileChannel.open(snapshotPath,
-            StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        FileChannel channel = FileChannel.open(snapshotPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
 
         return new SnapshotFileWriter(channel, batchAccumulator);
     }
