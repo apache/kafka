@@ -76,7 +76,7 @@ class DelayedFetch(delayMs: Long,
    * Case B: The replica is no longer available on this broker
    * Case C: This broker does not know of some partitions it tries to fetch
    * Case D: The partition is in an offline log directory on this broker
-   * Case E: This broker is the leader, but the requested epoch is now fenced
+   * Case E: The requested epoch is now fenced
    * Case F: The fetch offset locates not on the last segment of the log
    * Case G: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
    * Case H: A diverging epoch was found, return response to trigger truncation
@@ -148,8 +148,8 @@ class DelayedFetch(delayMs: Long,
             debug(s"Partition $topicIdPartition is in an offline log directory, satisfy $fetchMetadata immediately")
             return forceComplete()
           case _: FencedLeaderEpochException => // Case E
-            debug(s"Broker is the leader of partition $topicIdPartition, but the requested epoch " +
-              s"$fetchLeaderEpoch is fenced by the latest leader epoch, satisfy $fetchMetadata immediately")
+            debug(s"The requested epoch $fetchLeaderEpoch of partition $topicIdPartition" +
+              s"is fenced by the latest leader epoch, satisfy $fetchMetadata immediately")
             return forceComplete()
         }
     }
