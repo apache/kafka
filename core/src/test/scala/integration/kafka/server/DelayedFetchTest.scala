@@ -73,7 +73,7 @@ class DelayedFetchTest {
         .thenThrow(new FencedLeaderEpochException("Requested epoch has been fenced"))
     when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
 
-    expectReadFromReplica(replicaId, topicIdPartition, fetchStatus.fetchInfo, Errors.FENCED_LEADER_EPOCH)
+    expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.FENCED_LEADER_EPOCH)
 
     assertTrue(delayedFetch.tryComplete())
     assertTrue(delayedFetch.isCompleted)
@@ -111,7 +111,7 @@ class DelayedFetchTest {
 
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition))
       .thenThrow(new NotLeaderOrFollowerException(s"Replica for $topicIdPartition not available"))
-    expectReadFromReplica(replicaId, topicIdPartition, fetchStatus.fetchInfo, Errors.NOT_LEADER_OR_FOLLOWER)
+    expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.NOT_LEADER_OR_FOLLOWER)
     when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
 
     assertTrue(delayedFetch.tryComplete())
@@ -160,7 +160,7 @@ class DelayedFetchTest {
         .setLeaderEpoch(lastFetchedEpoch.get)
         .setEndOffset(fetchOffset - 1))
     when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
-    expectReadFromReplica(replicaId, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE)
+    expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE)
 
     assertTrue(delayedFetch.tryComplete())
     assertTrue(delayedFetch.isCompleted)
@@ -182,20 +182,18 @@ class DelayedFetchTest {
     )
   }
 
-  private def expectReadFromReplica(replicaId: Int,
-                                    topicIdPartition: TopicIdPartition,
-                                    fetchPartitionData: FetchRequest.PartitionData,
-                                    error: Errors): Unit = {
+  private def expectReadFromReplica(
+    fetchParams: FetchParams,
+    topicIdPartition: TopicIdPartition,
+    fetchPartitionData: FetchRequest.PartitionData,
+    error: Errors
+  ): Unit = {
     when(replicaManager.readFromLocalLog(
-      replicaId = replicaId,
-      fetchOnlyFromLeader = true,
-      fetchIsolation = FetchLogEnd,
-      fetchMaxBytes = maxBytes,
-      hardMaxBytesLimit = false,
+      fetchParams,
       readPartitionInfo = Seq((topicIdPartition, fetchPartitionData)),
-      clientMetadata = None,
-      quota = replicaQuota))
-      .thenReturn(Seq((topicIdPartition, buildReadResult(error))))
+      quota = replicaQuota,
+      readFromPurgatory = true
+    )).thenReturn(Seq((topicIdPartition, buildReadResult(error))))
   }
 
   private def buildReadResult(error: Errors): LogReadResult = {

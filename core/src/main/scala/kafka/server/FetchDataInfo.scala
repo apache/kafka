@@ -20,7 +20,7 @@ package kafka.server
 import kafka.api.Request
 import org.apache.kafka.common.IsolationLevel
 import org.apache.kafka.common.message.FetchResponseData
-import org.apache.kafka.common.record.Records
+import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest
 
@@ -72,6 +72,17 @@ case class FetchParams(
       s", isolation=$isolation" +
       s", clientMetadata= $clientMetadata" +
       ")"
+  }
+}
+
+object FetchDataInfo {
+  def empty(fetchOffset: Long): FetchDataInfo = {
+    FetchDataInfo(
+      fetchOffsetMetadata = LogOffsetMetadata(fetchOffset),
+      records = MemoryRecords.EMPTY,
+      firstEntryIncomplete = false,
+      abortedTransactions = None
+    )
   }
 }
 

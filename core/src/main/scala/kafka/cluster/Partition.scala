@@ -716,55 +716,51 @@ class Partition(val topicPartition: TopicPartition,
    * Update the follower's state in the leader based on the last fetch request. See
    * [[Replica.updateFetchState()]] for details.
    *
-   * @return true if the follower's fetch state was updated, false if the followerId is not recognized
+   * This method is visible for performance testing (see `UpdateFollowerFetchStateBenchmark`)
    */
-  def updateFollowerFetchState(followerId: Int,
-                               followerFetchOffsetMetadata: LogOffsetMetadata,
-                               followerStartOffset: Long,
-                               followerFetchTimeMs: Long,
-                               leaderEndOffset: Long): Boolean = {
-    getReplica(followerId) match {
-      case Some(followerReplica) =>
-        // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
-        val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
-        val prevFollowerEndOffset = followerReplica.stateSnapshot.logEndOffset
-        followerReplica.updateFetchState(
-          followerFetchOffsetMetadata,
-          followerStartOffset,
-          followerFetchTimeMs,
-          leaderEndOffset)
+  def updateFollowerFetchState(
+    replica: Replica,
+    followerFetchOffsetMetadata: LogOffsetMetadata,
+    followerStartOffset: Long,
+    followerFetchTimeMs: Long,
+    leaderEndOffset: Long
+  ): Unit = {
+    // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
+    val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
+    val prevFollowerEndOffset = replica.stateSnapshot.logEndOffset
+    replica.updateFetchState(
+      followerFetchOffsetMetadata,
+      followerStartOffset,
+      followerFetchTimeMs,
+      leaderEndOffset
+    )
 
-        val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
-        // check if the LW of the partition has incremented
-        // since the replica's logStartOffset may have incremented
-        val leaderLWIncremented = newLeaderLW > oldLeaderLW
+    val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
+    // check if the LW of the partition has incremented
+    // since the replica's logStartOffset may have incremented
+    val leaderLWIncremented = newLeaderLW > oldLeaderLW
 
-        // Check if this in-sync replica needs to be added to the ISR.
-        maybeExpandIsr(followerReplica)
+    // Check if this in-sync replica needs to be added to the ISR.
+    maybeExpandIsr(replica)
 
-        // check if the HW of the partition can now be incremented
-        // since the replica may already be in the ISR and its LEO has just incremented
-        val leaderHWIncremented = if (prevFollowerEndOffset != followerReplica.stateSnapshot.logEndOffset) {
-          // the leader log may be updated by ReplicaAlterLogDirsThread so the following method must be in lock of
-          // leaderIsrUpdateLock to prevent adding new hw to invalid log.
-          inReadLock(leaderIsrUpdateLock) {
-            leaderLogIfLocal.exists(leaderLog => maybeIncrementLeaderHW(leaderLog, followerFetchTimeMs))
-          }
-        } else {
-          false
-        }
-
-        // some delayed operations may be unblocked after HW or LW changed
-        if (leaderLWIncremented || leaderHWIncremented)
-          tryCompleteDelayedRequests()
-
-        debug(s"Recorded replica $followerId log end offset (LEO) position " +
-          s"${followerFetchOffsetMetadata.messageOffset} and log start offset $followerStartOffset.")
-        true
-
-      case None =>
-        false
+    // check if the HW of the partition can now be incremented
+    // since the replica may already be in the ISR and its LEO has just incremented
+    val leaderHWIncremented = if (prevFollowerEndOffset != replica.stateSnapshot.logEndOffset) {
+      // the leader log may be updated by ReplicaAlterLogDirsThread so the following method must be in lock of
+      // leaderIsrUpdateLock to prevent adding new hw to invalid log.
+      inReadLock(leaderIsrUpdateLock) {
+        leaderLogIfLocal.exists(leaderLog => maybeIncrementLeaderHW(leaderLog, followerFetchTimeMs))
+      }
+    } else {
+      false
     }
+
+    // some delayed operations may be unblocked after HW or LW changed
+    if (leaderLWIncremented || leaderHWIncremented)
+      tryCompleteDelayedRequests()
+
+    debug(s"Recorded replica ${replica.brokerId} log end offset (LEO) position " +
+      s"${followerFetchOffsetMetadata.messageOffset} and log start offset $followerStartOffset.")
   }
 
   /**
@@ -1133,16 +1129,94 @@ class Partition(val topicPartition: TopicPartition,
     info.copy(leaderHwChange = if (leaderHWIncremented) LeaderHwChange.Increased else LeaderHwChange.Same)
   }
 
-  def readRecords(lastFetchedEpoch: Optional[Integer],
-                  fetchOffset: Long,
-                  currentLeaderEpoch: Optional[Integer],
-                  maxBytes: Int,
-                  fetchIsolation: FetchIsolation,
-                  fetchOnlyFromLeader: Boolean,
-                  minOneMessage: Boolean): LogReadInfo = inReadLock(leaderIsrUpdateLock) {
-    // decide whether to only fetch from leader
-    val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
+  def fetchRecords(
+    fetchParams: FetchParams,
+    fetchPartitionData: FetchRequest.PartitionData,
+    fetchTimeMs: Long,
+    maxBytes: Int,
+    minOneMessage: Boolean,
+    updateFetchState: Boolean
+  ): LogReadInfo = {
+    def doReadRecords(log: UnifiedLog): LogReadInfo = {
+      readRecords(
+        log,
+        fetchPartitionData.lastFetchedEpoch,
+        fetchPartitionData.fetchOffset,
+        fetchPartitionData.currentLeaderEpoch,
+        maxBytes,
+        fetchParams.isolation,
+        minOneMessage
+      )
+    }
 
+    if (fetchParams.isFromFollower) {
+      var replica: Replica = null
+
+      val logReadInfo = inReadLock(leaderIsrUpdateLock) {
+        val localLog = localLogWithEpochOrException(fetchPartitionData.currentLeaderEpoch, fetchParams.fetchOnlyLeader)
+        replica = followerReplicaOrThrow(fetchParams.replicaId, fetchPartitionData)
+        doReadRecords(localLog)
+      }
+
+      if (updateFetchState && logReadInfo.divergingEpoch.isEmpty) {
+        updateFollowerFetchState(
+          replica,
+          followerFetchOffsetMetadata = logReadInfo.fetchedData.fetchOffsetMetadata,
+          followerStartOffset = fetchPartitionData.logStartOffset,
+          followerFetchTimeMs = fetchTimeMs,
+          leaderEndOffset = logReadInfo.logEndOffset
+        )
+      }
+
+      logReadInfo
+    } else {
+      inReadLock(leaderIsrUpdateLock) {
+        val localLog = localLogWithEpochOrException(fetchPartitionData.currentLeaderEpoch, fetchParams.fetchOnlyLeader)
+        doReadRecords(localLog)
+      }
+    }
+  }
+
+  private def followerReplicaOrThrow(
+    replicaId: Int,
+    fetchPartitionData: FetchRequest.PartitionData
+  ): Replica = {
+    getReplica(replicaId).getOrElse {
+      debug(s"Leader $localBrokerId failed to record follower $replicaId's position " +
+        s"${fetchPartitionData.fetchOffset}, and last sent high watermark since the replica is " +
+        s"not recognized to be one of the assigned replicas ${assignmentState.replicas.mkString(",")} " +
+        s"for partition $topicPartition with topicId $topicId in partition epoch $partitionEpoch")
+
+      val error = if (fetchPartitionData.currentLeaderEpoch.isPresent) {
+        // The leader epoch is present in the request and matches the local epoch, but
+        // the replica is not in the replica set. This case is possible in KRaft,
+        // for example, when new replicas are added as part of a reassignment.
+        // We return UNKNOWN_LEADER_EPOCH to signify that the tuple (replicaId, leaderEpoch)
+        // is not yet recognized as valid, which causes the follower to retry.
+        Errors.UNKNOWN_LEADER_EPOCH
+      } else {
+        // The request has no leader epoch, which means it is an older version. We cannot
+        // say if the follower's state is stale or the local state is. In this case, we
+        // return `NOT_LEADER_OR_FOLLOWER` for lack of a better error so that the follower
+        // will retry.
+        Errors.NOT_LEADER_OR_FOLLOWER
+      }
+
+      throw error.exception(s"Replica $replicaId is not recognized as a " +
+        s"valid replica of $topicPartition in leader epoch $leaderEpoch with " +
+        s"partition epoch $partitionEpoch")
+    }
+  }
+
+  private def readRecords(
+    localLog: UnifiedLog,
+    lastFetchedEpoch: Optional[Integer],
+    fetchOffset: Long,
+    currentLeaderEpoch: Optional[Integer],
+    maxBytes: Int,
+    fetchIsolation: FetchIsolation,
+    minOneMessage: Boolean
+  ): LogReadInfo = {
     // Note we use the log end offset prior to the read. This ensures that any appends following
     // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark
@@ -1169,18 +1243,12 @@ class Partition(val topicPartition: TopicPartition,
       }
 
       if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchOffset) {
-        val emptyFetchData = FetchDataInfo(
-          fetchOffsetMetadata = LogOffsetMetadata(fetchOffset),
-          records = MemoryRecords.EMPTY,
-          abortedTransactions = None
-        )
-
         val divergingEpoch = new FetchResponseData.EpochEndOffset()
           .setEpoch(epochEndOffset.leaderEpoch)
           .setEndOffset(epochEndOffset.endOffset)
 
         return LogReadInfo(
-          fetchedData = emptyFetchData,
+          fetchedData = FetchDataInfo.empty(fetchOffset),
           divergingEpoch = Some(divergingEpoch),
           highWatermark = initialHighWatermark,
           logStartOffset = initialLogStartOffset,
@@ -1189,14 +1257,21 @@ class Partition(val topicPartition: TopicPartition,
       }
     }
 
-    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
+    val fetchedData = localLog.read(
+      fetchOffset,
+      maxBytes,
+      fetchIsolation,
+      minOneMessage
+    )
+
     LogReadInfo(
       fetchedData = fetchedData,
       divergingEpoch = None,
       highWatermark = initialHighWatermark,
       logStartOffset = initialLogStartOffset,
       logEndOffset = initialLogEndOffset,
-      lastStableOffset = initialLastStableOffset)
+      lastStableOffset = initialLastStableOffset
+    )
   }
 
   def fetchOffsetForTimestamp(timestamp: Long,

@@ -1354,13 +1354,14 @@ class ReplicaManagerTest {
       ).toMap)
 
       // Make this replica the leader
+      val leaderEpoch = 1
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(topic)
           .setPartitionIndex(0)
           .setControllerEpoch(0)
           .setLeader(0)
-          .setLeaderEpoch(1)
+          .setLeaderEpoch(leaderEpoch)
           .setIsr(brokerList)
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
@@ -1368,15 +1369,22 @@ class ReplicaManagerTest {
         Collections.singletonMap(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
-      // Avoid the replica selector ignore the follower replica if it not have the data that need to fetch
-      replicaManager.getPartitionOrException(tp0).updateFollowerFetchState(followerBrokerId, new LogOffsetMetadata(0), 0, 0, 0)
+
+      // The leader must record the follower's fetch offset to make it eligible for follower fetch selection
+      val followerFetchData = new PartitionData(topicId, 0L, 0L, Int.MaxValue, Optional.of(Int.box(leaderEpoch)), Optional.empty[Integer])
+      fetchPartitionAsFollower(
+        replicaManager,
+        tidp0,
+        followerFetchData,
+        replicaId = followerBrokerId
+      )
 
       val metadata = new DefaultClientMetadata("rack-b", "client-id",
         InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS, "default")
 
       // If a preferred read replica is selected, the fetch response returns immediately, even if min bytes and timeout conditions are not met.
       val consumerResult = fetchPartitionAsConsumer(replicaManager, tidp0,
-        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
+        new PartitionData(topicId, 0, 0, 100000, Optional.empty()),
         minBytes = 1, clientMetadata = Some(metadata), maxWaitMs = 5000)
 
       // Fetch from leader succeeds

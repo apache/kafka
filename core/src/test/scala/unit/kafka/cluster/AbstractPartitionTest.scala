@@ -43,6 +43,7 @@ object AbstractPartitionTest {
 class AbstractPartitionTest {
 
   val brokerId = AbstractPartitionTest.brokerId
+  val remoteReplicaId = brokerId + 1
   val topicPartition = new TopicPartition("test-topic", 0)
   val time = new MockTime()
   var tmpDir: File = _
@@ -115,7 +116,7 @@ class AbstractPartitionTest {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
-    val replicas = List[Integer](brokerId, brokerId + 1).asJava
+    val replicas = List[Integer](brokerId, remoteReplicaId).asJava
     val isr = replicas
 
     if (isLeader) {
@@ -131,7 +132,7 @@ class AbstractPartitionTest {
     } else {
       assertTrue(partition.makeFollower(new LeaderAndIsrPartitionState()
         .setControllerEpoch(controllerEpoch)
-        .setLeader(brokerId + 1)
+        .setLeader(remoteReplicaId)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)
         .setPartitionEpoch(1)
