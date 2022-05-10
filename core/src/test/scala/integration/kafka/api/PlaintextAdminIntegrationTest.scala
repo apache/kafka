@@ -1755,8 +1755,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(0, allReassignmentsMap.size())
   }
 
-  @Test
-  def testValidIncrementalAlterConfigs(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testValidIncrementalAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     // Create topics
@@ -1793,6 +1794,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
 
+    if (isKRaftTest()) {
+      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
+    }
+
     // Verify that topics were updated correctly
     var describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
     var configs = describeResult.all.get
@@ -1807,7 +1812,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals("lz4", configs.get(topic2Resource).get(LogConfig.CompressionTypeProp).value)
     assertEquals("delete,compact", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value)
 
-    //verify subtract operation, including from an empty property
+    // verify subtract operation, including from an empty property
     topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT),
       new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, "0"), AlterConfigOp.OpType.SUBTRACT)
@@ -1824,6 +1829,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ).asJava)
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
+
+    if (isKRaftTest()) {
+      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
+    }
 
     // Verify that topics were updated correctly
     describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
@@ -1852,7 +1861,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
 
-    //Alter topics with validateOnly=true with invalid configs
+    // Alter topics with validateOnly=true with invalid configs
     topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "zip"), AlterConfigOp.OpType.SET)
     ).asJava
@@ -1861,8 +1870,56 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topic1Resource -> topic1AlterConfigs
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
-      Some("Invalid config value for resource"))
+    if (isKRaftTest()) {
+      assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
+        Some("Invalid value zip for configuration compression.type"))
+    } else {
+      assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
+        Some("Invalid config value for resource"))
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAppendAlreadyExistsConfigsAndSubtractNotExistsConfigs(quorum: String): Unit = {
+    client = Admin.create(createConfig)
+
+    // Create topics
+    val topic = "incremental-alter-configs-topic"
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+
+    val appendValues = s"0:${brokers.head.config.brokerId}"
+    val subtractValues = brokers.tail.map(broker => s"0:${broker.config.brokerId}").mkString(",")
+    assertNotEquals("", subtractValues)
+
+    val topicCreateConfigs = new Properties
+    topicCreateConfigs.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, appendValues)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, topicCreateConfigs)
+
+    // Append value that is already present
+    val topicAppendConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, appendValues), AlterConfigOp.OpType.APPEND),
+    ).asJavaCollection
+
+    val appendResult = client.incrementalAlterConfigs(Map(topicResource -> topicAppendConfigs).asJava)
+    appendResult.all.get
+
+    // Subtract values that are not present
+    val topicSubtractConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, subtractValues), AlterConfigOp.OpType.SUBTRACT)
+    ).asJavaCollection
+    val subtractResult = client.incrementalAlterConfigs(Map(topicResource -> topicSubtractConfigs).asJava)
+    subtractResult.all.get
+
+    if (isKRaftTest()) {
+      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer)
+    }
+
+    // Verify that topics were updated correctly
+    val describeResult = client.describeConfigs(Seq(topicResource).asJava)
+    val configs = describeResult.all.get
+
+    assertEquals(appendValues, configs.get(topicResource).get(LogConfig.LeaderReplicationThrottledReplicasProp).value)
   }
 
   @Test
@@ -2352,7 +2409,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Note: this test requires some custom static broker and controller configurations, which are set up in
    * BaseAdminIntegrationTest.modifyConfigs and BaseAdminIntegrationTest.kraftControllerConfigs.
    */
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateTopicsReturnsConfigs(quorum: String): Unit = {
     client = Admin.create(super.createConfig)

@@ -18,6 +18,7 @@
 package kafka.server.metadata
 
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicLong
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -117,6 +118,11 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    * True if this is the first time we have published metadata.
    */
   var _firstPublish = true
+
+  /**
+   * This is updated after all components (e.g. LogManager) has finished publishing the new metadata delta
+   */
+  val publishedOffsetAtomic = new AtomicLong(-1)
 
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
@@ -249,6 +255,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
       }
+      publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
       case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
         throw t
@@ -256,6 +263,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       _firstPublish = false
     }
   }
+
+  override def publishedOffset: Long = publishedOffsetAtomic.get()
 
   def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
     conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
