@@ -58,7 +58,7 @@ public class StreamsUpgradeTest {
         if (runFkJoin) {
             try {
                 final KTable dataTable = builder.table("data", Consumed.with(stringSerde, intSerde));
-                final KTable fkTable = builder.table("fk-result", Consumed.with(intSerde, stringSerde));
+                final KTable fkTable = builder.table("fk", Consumed.with(intSerde, stringSerde));
                 buildFKTable(dataTable, fkTable);
             } catch (final Exception e) {
                 System.err.println("Caught " + e.getMessage());
@@ -81,7 +81,7 @@ public class StreamsUpgradeTest {
     }
 
     private static void buildFKTable(final KTable<String, Integer> primaryTable,
-        final KTable<Integer, String> otherTable) {
+                                     final KTable<Integer, String> otherTable) {
         final KStream<String, String> kStream = primaryTable
             .join(otherTable, v -> v, (k0, v0) -> v0)
             .toStream();
@@ -95,7 +95,7 @@ public class StreamsUpgradeTest {
 
             @Override
             public void init(final ProcessorContext context) {
-                System.out.println("[2.4] initializing processor: topic=data taskId=" + context.taskId());
+                System.out.println("[2.4] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 

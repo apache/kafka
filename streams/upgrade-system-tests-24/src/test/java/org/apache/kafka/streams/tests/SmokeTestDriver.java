@@ -152,9 +152,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     public static Map<String, Set<Integer>> generate(final String kafka,
-        final int numKeys,
-        final int maxRecordsPerKey,
-        final Duration timeToSpend) {
+                                                     final int numKeys,
+                                                     final int maxRecordsPerKey,
+                                                     final Duration timeToSpend) {
         final Properties producerProps = generatorProperties(kafka);
 
         int numRecordsProduced = 0;
@@ -190,7 +190,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             stringSerde.serializer().serialize("", key),
                             intSerde.serializer().serialize("", value)
                         );
-
                     producer.send(record, new TestCallback(record, dataNeedRetry));
 
                     final ProducerRecord<byte[], byte[]> fkRecord =
@@ -199,7 +198,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             intSerde.serializer().serialize("", value),
                             stringSerde.serializer().serialize("", key)
                         );
-
                     producer.send(fkRecord, new TestCallback(fkRecord, fkNeedRetry));
 
                     numRecordsProduced++;

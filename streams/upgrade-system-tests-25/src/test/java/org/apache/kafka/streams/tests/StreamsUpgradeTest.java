@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.streams.tests;
 
+import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
+
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -43,8 +49,21 @@ public class StreamsUpgradeTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream dataStream = builder.stream("data");
-        dataStream.process(printProcessorSupplier());
+        dataStream.process(printProcessorSupplier("data"));
         dataStream.to("echo");
+
+        final boolean runFkJoin = Boolean.parseBoolean(streamsProperties.getProperty(
+            "test.run_fk_join",
+            "false"));
+        if (runFkJoin) {
+            try {
+                final KTable dataTable = builder.table("data", Consumed.with(stringSerde, intSerde));
+                final KTable fkTable = builder.table("fk", Consumed.with(intSerde, stringSerde));
+                buildFKTable(dataTable, fkTable);
+            } catch (final Exception e) {
+                System.err.println("Caught " + e.getMessage());
+            }
+        }
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
@@ -61,13 +80,22 @@ public class StreamsUpgradeTest {
         }));
     }
 
-    private static <K, V> ProcessorSupplier<K, V> printProcessorSupplier() {
+    private static void buildFKTable(final KTable<String, Integer> primaryTable,
+                                     final KTable<Integer, String> otherTable) {
+        final KStream<String, String> kStream = primaryTable
+            .join(otherTable, v -> v, (k0, v0) -> v0)
+            .toStream();
+        kStream.process(printProcessorSupplier("fk"));
+        kStream.to("fk-result", Produced.with(stringSerde, stringSerde));
+    }
+
+    private static <K, V> ProcessorSupplier<K, V> printProcessorSupplier(final String topic) {
         return () -> new AbstractProcessor<K, V>() {
             private int numRecordsProcessed = 0;
 
             @Override
             public void init(final ProcessorContext context) {
-                System.out.println("[2.5] initializing processor: topic=data taskId=" + context.taskId());
+                System.out.println("[2.5] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 
@@ -75,7 +103,7 @@ public class StreamsUpgradeTest {
             public void process(final K key, final V value) {
                 numRecordsProcessed++;
                 if (numRecordsProcessed % 100 == 0) {
-                    System.out.println("processed " + numRecordsProcessed + " records from topic=data");
+                    System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                 }
             }
 
