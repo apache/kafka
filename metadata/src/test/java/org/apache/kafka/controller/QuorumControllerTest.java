@@ -1101,10 +1101,11 @@ public class QuorumControllerTest {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setAuthorizer(authorizers.get(b.nodeId()));
             })) {
+                assertInitialLoadFuturesNotComplete(authorizers);
+                logEnv.logManagers().get(0).setMaxReadOffset(Long.MAX_VALUE);
                 QuorumController active = controlEnv.activeController();
-                assertInitialLoadFuturesNotComplete(authorizers);
                 active.unregisterBroker(ANONYMOUS_CONTEXT, 3).get();
-                assertInitialLoadFuturesNotComplete(authorizers);
+                assertInitialLoadFuturesNotComplete(authorizers.stream().skip(1).collect(Collectors.toList()));
                 logEnv.logManagers().forEach(m -> m.setMaxReadOffset(Long.MAX_VALUE));
                 TestUtils.waitForCondition(() -> {
                     return authorizers.stream().allMatch(a -> a.initialLoadFuture().isDone());
