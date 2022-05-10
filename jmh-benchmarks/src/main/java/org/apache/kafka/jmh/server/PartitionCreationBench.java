@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.jmh.server;
 
-import kafka.api.ApiVersion;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
@@ -44,6 +43,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -94,7 +94,7 @@ public class PartitionCreationBench {
     private KafkaZkClient zkClient;
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
-    private AlterIsrManager alterIsrManager;
+    private AlterPartitionManager alterPartitionManager;
     private List<TopicPartition> topicPartitions;
 
     @SuppressWarnings("deprecation")
@@ -134,7 +134,7 @@ public class PartitionCreationBench {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setMaxPidExpirationMs(60000).
-            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(failureChannel).
@@ -149,7 +149,7 @@ public class PartitionCreationBench {
                 return new Properties();
             }
         };
-        this.alterIsrManager = TestUtils.createAlterIsrManager();
+        this.alterPartitionManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManagerBuilder().
             setConfig(brokerProperties).
             setMetrics(metrics).
@@ -161,7 +161,7 @@ public class PartitionCreationBench {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(new ZkMetadataCache(this.brokerProperties.brokerId())).
             setLogDirFailureChannel(failureChannel).
-            setAlterIsrManager(alterIsrManager).
+            setAlterPartitionManager(alterPartitionManager).
             build();
         replicaManager.startup();
         replicaManager.checkpointHighWatermarks();
@@ -222,7 +222,7 @@ public class PartitionCreationBench {
                     .setLeader(0)
                     .setLeaderEpoch(0)
                     .setIsr(inSync)
-                    .setZkVersion(1)
+                    .setPartitionEpoch(1)
                     .setReplicas(replicas)
                     .setIsNew(true);
 

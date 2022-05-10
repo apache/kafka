@@ -25,6 +25,8 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 import java.util.Set;
@@ -212,6 +214,7 @@ public class AdminClientConfig extends AbstractConfig {
                                 .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_SECURITY_PROTOCOL,
+                                        in(Utils.enumOptions(SecurityProtocol.class)),
                                         Importance.MEDIUM,
                                         SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
@@ -220,6 +223,7 @@ public class AdminClientConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        CommonClientConfigs.postValidateSaslMechanismConfig(this);
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 

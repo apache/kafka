@@ -22,8 +22,8 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.util.{Collections, UUID}
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
+
 import kafka.Kafka
-import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
@@ -42,6 +42,8 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_0_IV0, IBP_2_0_IV1}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -714,7 +716,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   @Test
   def testThrowsOnAddPrefixedAclIfInterBrokerProtocolVersionTooLow(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV0))
     val e = assertThrows(classOf[ApiException],
       () => addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED)))
     assertTrue(e.getCause.isInstanceOf[UnsupportedVersionException], s"Unexpected exception $e")
@@ -736,7 +738,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   @Test
   def testWritesExtendedAclChangeEventWhenInterBrokerProtocolAtLeastKafkaV2(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV1))
     val resource = new ResourcePattern(TOPIC, "z_other", PREFIXED)
     val expected = new String(ZkAclStore(PREFIXED).changeStore
       .createChangeNode(resource).bytes, UTF_8)
@@ -750,7 +752,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   @Test
   def testWritesLiteralWritesLiteralAclChangeEventWhenInterBrokerProtocolLessThanKafkaV2eralAclChangesForOlderProtocolVersions(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV0))
     val resource = new ResourcePattern(TOPIC, "z_other", LITERAL)
     val expected = new String(ZkAclStore(LITERAL).changeStore
       .createChangeNode(resource).bytes, UTF_8)
@@ -764,7 +766,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   @Test
   def testWritesLiteralAclChangeEventWhenInterBrokerProtocolIsKafkaV2(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV1))
     val resource = new ResourcePattern(TOPIC, "z_other", LITERAL)
     val expected = new String(ZkAclStore(LITERAL).changeStore
       .createChangeNode(resource).bytes, UTF_8)
@@ -994,7 +996,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     }
   }
 
-  private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
+  private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[MetadataVersion]): Unit = {
     aclAuthorizer.close()
 
     val props = TestUtils.createBrokerConfig(0, zkConnect)

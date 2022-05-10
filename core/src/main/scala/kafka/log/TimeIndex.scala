@@ -159,7 +159,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     }
   }
 
-  override def truncate() = truncateToEntries(0)
+  override def truncate(): Unit = truncateToEntries(0)
 
   /**
    * Remove all entries from the index which have an offset greater than or equal to the given offset.

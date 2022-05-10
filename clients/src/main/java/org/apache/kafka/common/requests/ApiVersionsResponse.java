@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiMessageType.ListenerType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
@@ -118,6 +120,32 @@ public class ApiVersionsResponse extends AbstractResponse {
             Features.emptySupportedFeatures(),
             Features.emptyFinalizedFeatures(),
             UNKNOWN_FINALIZED_FEATURES_EPOCH
+        );
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        RecordVersion minRecordVersion,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Features<FinalizedVersionRange> finalizedFeatures,
+        long finalizedFeaturesEpoch,
+        NodeApiVersions controllerApiVersions,
+        ListenerType listenerType
+    ) {
+        ApiVersionCollection apiKeys;
+        if (controllerApiVersions != null) {
+            apiKeys = intersectForwardableApis(
+                listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
+        } else {
+            apiKeys = filterApis(minRecordVersion, listenerType);
+        }
+
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            apiKeys,
+            latestSupportedFeatures,
+            finalizedFeatures,
+            finalizedFeaturesEpoch
         );
     }
 

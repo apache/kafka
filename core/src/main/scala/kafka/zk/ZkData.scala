@@ -19,9 +19,10 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
+
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
@@ -40,7 +41,8 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.common.ProducerIdsBlock
+import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
@@ -84,9 +86,9 @@ object BrokerIdsZNode {
 object BrokerInfo {
 
   /**
-   * - Create a broker info with v5 json format if the apiVersion is 2.7.x or above.
+   * - Create a broker info with v5 json format if the metadataVersion is 2.7.x or above.
    * - Create a broker info with v4 json format (which includes multiple endpoints and rack) if
-   *   the apiVersion is 0.10.0.X or above but lesser than 2.7.x.
+   *   the metadataVersion is 0.10.0.X or above but lesser than 2.7.x.
    * - Register the broker with v2 json format otherwise.
    *
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
@@ -95,11 +97,11 @@ object BrokerInfo {
    * without having to upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in
    * any case).
    */
-  def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
+  def apply(broker: Broker, metadataVersion: MetadataVersion, jmxPort: Int): BrokerInfo = {
     val version = {
-      if (apiVersion >= KAFKA_2_7_IV0)
+      if (metadataVersion.isAtLeast(IBP_2_7_IV0))
         5
-      else if (apiVersion >= KAFKA_0_10_0_IV1)
+      else if (metadataVersion.isAtLeast(IBP_0_10_0_IV1))
         4
       else
         2
@@ -846,12 +848,12 @@ object DelegationTokenInfoZNode {
  * Enabled  -> This status means the feature versioning system (KIP-584) is enabled, and, the
  *             finalized features stored in the FeatureZNode are active. This status is written by
  *             the controller to the FeatureZNode only when the broker IBP config is greater than
- *             or equal to KAFKA_2_7_IV0.
+ *             or equal to IBP_2_7_IV0.
  *
  * Disabled -> This status means the feature versioning system (KIP-584) is disabled, and, the
  *             the finalized features stored in the FeatureZNode is not relevant. This status is
  *             written by the controller to the FeatureZNode only when the broker IBP config
- *             is less than KAFKA_2_7_IV0.
+ *             is less than IBP_2_7_IV0.
  */
 sealed trait FeatureZNodeStatus {
   def id: Int

@@ -46,6 +46,8 @@ public interface ChangelogReader extends ChangelogRegister {
      */
     Set<TopicPartition> completedChangelogs();
 
+    boolean allChangelogsCompleted();
+
     /**
      * Clear all partitions
      */

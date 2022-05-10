@@ -44,7 +44,7 @@ public class ApiKeysTest {
     }
 
     @Test
-    public void testAlterIsrIsClusterAction() {
+    public void testAlterPartitionIsClusterAction() {
         assertTrue(ApiKeys.ALTER_PARTITION.clusterAction);
     }
 

@@ -112,7 +112,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     } catch {
       case e: FatalExitError => throw e
       case e: Throwable => {
-        val t = if (e.isInstanceOf[ExecutionException]) e.getCause() else e
+        val t = if (e.isInstanceOf[ExecutionException]) e.getCause else e
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", t)
         requestHelper.handleError(request, t)
@@ -767,7 +767,7 @@ class ControllerApis(val requestChannel: RequestChannel,
           setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
       }
     }
-    controller.createPartitions(context, topics).thenApply { results =>
+    controller.createPartitions(context, topics, request.validateOnly).thenApply { results =>
       results.forEach(response => responses.add(response))
       responses
     }

@@ -31,7 +31,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
@@ -498,8 +500,8 @@ public class StreamsConfig extends AbstractConfig {
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
-    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the \" +\n" +
-        "        \"<code>org.apache.kafka.common.serialization.Serde</code> interface.. Note that setting this config in KafkaStreams application would result " +
+    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface. Note that setting this config in KafkaStreams application would result " +
         "in an error as it is meant to be used only from Plain consumer client.";
 
     /** {@code default key.serde} */
@@ -843,6 +845,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    in(Utils.enumOptions(SecurityProtocol.class)),
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .define(TASK_TIMEOUT_MS_CONFIG,
@@ -1089,6 +1092,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
         public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
+
+        // Private API used to control the emit latency for windowed aggregation results for ON_WINDOW_CLOSE emit strategy
+        public static final String EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION = "__emit.interval.ms.kstreams.windowed.aggregation__";
 
         // Private API used to control the usage of consistency offset vectors
         public static final String IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED = "__iq.consistency.offset"

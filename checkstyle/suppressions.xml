@@ -301,6 +301,8 @@
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
     <suppress checks="BooleanExpressionComplexity"
               files="(MetadataImage).java"/>
+    <suppress checks="ImportControl"
+              files="ApiVersionsResponse.java"/>
 
     <!-- Storage -->
     <suppress checks="(CyclomaticComplexity|ParameterNumber)"

@@ -23,6 +23,9 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Map;
 
 /**
+ * NOTE this partitioner is deprecated and shouldn't be used.  To use default partitioning logic
+ * remove partitioner.class configuration setting.  See KIP-794 for more info.
+ *
  * The default partitioning strategy:
  * <ul>
  * <li>If a partition is specified in the record, use it
@@ -31,6 +34,7 @@ import java.util.Map;
  * 
  * See KIP-480 for details about sticky partitioning.
  */
+@Deprecated
 public class DefaultPartitioner implements Partitioner {
 
     private final StickyPartitionCache stickyPartitionCache = new StickyPartitionCache();
@@ -77,6 +81,7 @@ public class DefaultPartitioner implements Partitioner {
      * If a batch completed for the current sticky partition, change the sticky partition. 
      * Alternately, if no sticky partition has been determined, set one.
      */
+    @SuppressWarnings("deprecation")
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         stickyPartitionCache.nextPartition(topic, cluster, prevPartition);
     }

@@ -790,7 +790,7 @@ class FetchManager(private val time: Time,
         new FullFetchContext(time, cache, reqMetadata, fetchData, reqVersion >= 13, isFollower)
       }
       debug(s"Created a new full FetchContext with ${partitionsToLogString(fetchData.keySet)}."+
-        s"${removedFetchSessionStr}${suffix}")
+        s"$removedFetchSessionStr$suffix")
       context
     } else {
       cache.synchronized {

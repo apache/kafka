@@ -1664,13 +1664,23 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
         ControllerRequestContext context,
-        List<CreatePartitionsTopic> topics
+        List<CreatePartitionsTopic> topics,
+        boolean validateOnly
     ) {
         if (topics.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyList());
         }
-        return appendWriteEvent("createPartitions", context.deadlineNs(),
-            () -> replicationControl.createPartitions(topics));
+
+        return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
+            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(topics);
+            if (validateOnly) {
+                log.debug("Validate-only CreatePartitions result(s): {}", result.response());
+                return result.withoutRecords();
+            } else {
+                log.debug("CreatePartitions result(s): {}", result.response());
+                return result;
+            }
+        });
     }
 
     @Override

@@ -1383,7 +1383,7 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             Above examples add acls to a topic by specifying --topic [topic-name] as the resource pattern option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].
             You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0"
             You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options:
-            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic '*'</code></pre>
             You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name starts with 'Test-' from any host".
             You can do that by executing the CLI with following options:
             <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed</code></pre>
@@ -1400,7 +1400,7 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</code></pre>
             However, this will only return the acls that have been added to this exact resource pattern. Other acls can exist that affect access to the topic,
             e.g. any acls on the topic wildcard '*', or any acls on prefixed resource patterns. Acls on the wildcard resource pattern can be queried explicitly:
-            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic *</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic '*'</code></pre>
             However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known.
             We can list <i>all</i> acls affecting Test-topic by using '--resource-pattern-type match', e.g.
             <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type match</code></pre>
