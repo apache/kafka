@@ -115,7 +115,7 @@ class ControllerServer(
       }
 
       val javaListeners = config.controllerListeners.map(_.toJava).asJava
-      authorizer = config.createNewAuthorizer
+      authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
       val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {

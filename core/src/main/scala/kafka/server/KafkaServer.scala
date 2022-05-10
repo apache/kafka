@@ -380,7 +380,7 @@ class KafkaServer(
         )
 
         /* Get the authorizer and initialize it if one is specified.*/
-        authorizer = config.createNewAuthorizer
+        authorizer = config.createNewAuthorizer()
         authorizer.foreach(_.configure(config.originals))
         val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
           case Some(authZ) =>

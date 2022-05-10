@@ -730,7 +730,8 @@ object KafkaConfig {
     " interface, which is used by the broker for authorization."
   val EarlyStartListenersDoc = "A comma-separated list of listener names which should be started before any non-early start listeners. " +
     "This is useful in cases where the startup process requires some listeners to be open before other listeners can be brought up. " +
-    "In general, a listener should not appear in this list if it accepts external traffic."
+    "In general, a listener should not appear in this list if it accepts external traffic. If not set, this defaults to be the " +
+    "controller listeners."
 
   /** ********* Socket Server Configuration ***********/
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
@@ -1660,7 +1661,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val metadataSnapshotMaxNewRecordBytes = getLong(KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp)
 
   /************* Authorizer Configuration ***********/
-  val createNewAuthorizer: Option[Authorizer] = {
+  def createNewAuthorizer(): Option[Authorizer] = {
     val className = getString(KafkaConfig.AuthorizerClassNameProp)
     if (className == null || className.isEmpty)
       None

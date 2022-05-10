@@ -1486,16 +1486,19 @@ class KafkaConfigTest {
     assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
   }
 
-  val kraftProps = new Properties()
-  kraftProps.setProperty(KafkaConfig.ProcessRolesProp, "broker")
-  kraftProps.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-  kraftProps.setProperty(KafkaConfig.NodeIdProp, "3")
-  kraftProps.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+  def kraftProps() = {
+    val props = new Properties()
+    props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.setProperty(KafkaConfig.NodeIdProp, "3")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+    props
+  }
 
   @Test
   def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
-    val props = new Properties(kraftProps)
-    props.putAll(kraftProps)
+    val props = new Properties(kraftProps())
+    props.putAll(kraftProps())
     val config = KafkaConfig.fromProps(props)
     assertEquals(3, config.brokerId)
     assertEquals(3, config.nodeId)
@@ -1514,9 +1517,17 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testEarlyStartListenersDefault(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    val config = new KafkaConfig(props)
+    assertEquals(Set("CONTROLLER"), config.earlyStartListeners.map(_.value()))
+  }
+
+  @Test
   def testEarlyStartListeners(): Unit = {
     val props = new Properties()
-    props.putAll(kraftProps)
+    props.putAll(kraftProps())
     props.setProperty(KafkaConfig.EarlyStartListenersProp, "INTERNAL,INTERNAL2")
     props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp,
@@ -1531,7 +1542,7 @@ class KafkaConfigTest {
   @Test
   def testEarlyStartListenersMustBeListeners(): Unit = {
     val props = new Properties()
-    props.putAll(kraftProps)
+    props.putAll(kraftProps())
     props.setProperty(KafkaConfig.EarlyStartListenersProp, "INTERNAL")
     assertEquals("early.start.listeners contains listener INTERNAL, but this is not " +
       "contained in listeners or controller.listener.names",

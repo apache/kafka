@@ -272,10 +272,9 @@ public class StandardAuthorizerData {
         // Superusers are authorized to do anything.
         if (superUsers.contains(principal.toString())) {
             rule = SuperUserRule.INSTANCE;
+        } else if (!loadingComplete) {
+            throw new AuthorizerNotReadyException();
         } else {
-            if (!loadingComplete) {
-                throw new AuthorizerNotReadyException();
-            }
             MatchingAclRule aclRule = findAclRule(
                 matchingPrincipals(requestContext),
                 requestContext.clientAddress().getHostAddress(),

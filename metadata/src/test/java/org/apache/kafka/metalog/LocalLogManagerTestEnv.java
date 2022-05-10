@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 public class LocalLogManagerTestEnv implements AutoCloseable {
     private static final Logger log =
@@ -81,10 +82,15 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return testEnv;
     }
 
-    public LocalLogManagerTestEnv(int numManagers, Optional<RawSnapshotReader> snapshot) throws Exception {
+    public LocalLogManagerTestEnv(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot,
+        Consumer<SharedLogData> dataSetup
+    ) throws Exception {
         clusterId = Uuid.randomUuid().toString();
         dir = TestUtils.tempDirectory();
         shared = new SharedLogData(snapshot);
+        dataSetup.accept(shared);
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
             for (int nodeId = 0; nodeId < numManagers; nodeId++) {
@@ -106,6 +112,13 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         this.logManagers = newLogManagers;
     }
 
+    public LocalLogManagerTestEnv(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot
+    ) throws Exception {
+        this(numManagers, snapshot, __ -> { });
+    }
+
     /**
      * Append some records to the log. This method is meant to be called before the
      * controllers are started, to simulate a pre-existing metadata log.
@@ -113,10 +126,12 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
      * @param records   The records to be appended. Will be added in a single batch.
      */
     public void appendInitialRecords(List<ApiMessageAndVersion> records) {
-        int initialLeaderEpoch = 0;
+        int initialLeaderEpoch = 1;
         shared.append(new LeaderChangeBatch(
-            new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch)));
-        shared.append(new LocalRecordBatch(initialLeaderEpoch, 0, records));
+            new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
+        shared.append(new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
+        shared.append(new LeaderChangeBatch(
+            new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
     }
 
     public String clusterId() {

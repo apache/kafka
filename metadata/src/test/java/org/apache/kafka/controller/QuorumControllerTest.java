@@ -35,7 +35,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
@@ -1090,7 +1089,13 @@ public class QuorumControllerTest {
             authorizer.configure(Collections.emptyMap());
             authorizers.add(authorizer);
         }
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(numControllers, Optional.empty())) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(
+            numControllers,
+            Optional.empty(),
+            shared -> {
+                shared.setInitialMaxReadOffset(2);
+            }
+        )) {
             logEnv.appendInitialRecords(expectedSnapshotContent(FOO_ID, ALL_ZERO_BROKER_EPOCHS));
             logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2));
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {

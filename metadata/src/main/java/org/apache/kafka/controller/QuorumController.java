@@ -940,7 +940,7 @@ public final class QuorumController implements Controller {
         OptionalLong highWatermark = raftClient.highWatermark();
         if (highWatermark.isPresent()) {
             if (lastCommittedOffset + 1 >= highWatermark.getAsLong()) {
-                log.debug("maybeCompleteAuthorizerInitialLoad: completing authorizer " +
+                log.info("maybeCompleteAuthorizerInitialLoad: completing authorizer " +
                     "initial load at last committed offset {}.", lastCommittedOffset);
                 authorizer.get().completeInitialLoad();
                 needToCompleteAuthorizerLoad = false;

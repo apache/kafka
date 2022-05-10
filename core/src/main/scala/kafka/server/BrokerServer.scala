@@ -373,7 +373,7 @@ class BrokerServer(
         config.earlyStartListeners.map(_.value()).asJava)
 
       // Create and initialize an authorizer if one is configured.
-      authorizer = config.createNewAuthorizer
+      authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
       val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
         case Some(authZ) =>
