@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
 
+import java.util.Random;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -48,7 +49,9 @@ public class StreamsUpgradeTest {
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream dataStream = builder.stream("data");
+        final KTable<String, Integer> dataTable = builder.table(
+            "data", Consumed.with(stringSerde, intSerde));
+        final KStream<String, Integer> dataStream = dataTable.toStream();
         dataStream.process(printProcessorSupplier("data"));
         dataStream.to("echo");
 
@@ -57,8 +60,8 @@ public class StreamsUpgradeTest {
             "false"));
         if (runFkJoin) {
             try {
-                final KTable dataTable = builder.table("data", Consumed.with(stringSerde, intSerde));
-                final KTable fkTable = builder.table("fk", Consumed.with(intSerde, stringSerde));
+                final KTable<Integer, String> fkTable = builder.table(
+                    "fk", Consumed.with(intSerde, stringSerde));
                 buildFKTable(dataTable, fkTable);
             } catch (final Exception e) {
                 System.err.println("Caught " + e.getMessage());
@@ -66,7 +69,9 @@ public class StreamsUpgradeTest {
         }
 
         final Properties config = new Properties();
-        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
+        config.setProperty(
+            StreamsConfig.APPLICATION_ID_CONFIG,
+            "StreamsUpgradeTest-" + new Random().nextLong());
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         config.putAll(streamsProperties);
 

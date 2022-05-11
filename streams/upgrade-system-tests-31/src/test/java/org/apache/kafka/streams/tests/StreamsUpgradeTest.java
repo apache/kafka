@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
 
+import java.util.Random;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -50,7 +51,9 @@ public class StreamsUpgradeTest {
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream dataStream = builder.stream("data", Consumed.with(stringSerde, intSerde));
+        final KTable<String, Integer> dataTable = builder.table(
+            "data", Consumed.with(stringSerde, intSerde));
+        final KStream<String, Integer> dataStream = dataTable.toStream();
         dataStream.process(printProcessorSupplier("data"));
         dataStream.to("echo");
 
@@ -59,14 +62,18 @@ public class StreamsUpgradeTest {
             "false"));
         if (runFkJoin) {
             try {
-                buildFKTable(dataStream, builder.table("fk", Consumed.with(intSerde, stringSerde)));
+                final KTable<Integer, String> fkTable = builder.table(
+                    "fk", Consumed.with(intSerde, stringSerde));
+                buildFKTable(dataStream, fkTable);
             } catch (final Exception e) {
                 System.err.println("Caught " + e.getMessage());
             }
         }
 
         final Properties config = new Properties();
-        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
+        config.setProperty(
+            StreamsConfig.APPLICATION_ID_CONFIG,
+            "StreamsUpgradeTest-" + new Random().nextLong());
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         config.putAll(streamsProperties);
 
@@ -81,7 +88,7 @@ public class StreamsUpgradeTest {
     }
 
     private static void buildFKTable(final KStream<String, Integer> primaryTable,
-        final KTable<Integer, String> otherTable) {
+                                     final KTable<Integer, String> otherTable) {
         final KStream<String, String> kStream = primaryTable.toTable()
             .join(otherTable, v -> v, (k0, v0) -> v0)
             .toStream();

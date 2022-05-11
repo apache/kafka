@@ -139,8 +139,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         stringSerde.serializer().serialize("", key),
                         intSerde.serializer().serialize("", value)
                     );
-
                 producer.send(record);
+
+                final ProducerRecord<byte[], byte[]> fkRecord =
+                    new ProducerRecord<>(
+                        "fk",
+                        intSerde.serializer().serialize("", value),
+                        stringSerde.serializer().serialize("", key)
+                    );
+                producer.send(fkRecord);
 
                 numRecordsProduced++;
                 if (numRecordsProduced % 100 == 0) {
