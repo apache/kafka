@@ -114,9 +114,12 @@ We don't support any kind of upgrade right now, either to or from KRaft mode.  T
 
 Finally, the following Kafka features have not yet been fully implemented:
 
-* Support for certain security features: setting up SCRAM, delegation tokens, and so forth.
+* Configuring SCRAM users via the administrative API
+* Supporting JBOD configurations with multiple storage directories
+* Modifying certain dynamic configurations on the standalone KRaft controller
 * Support for some configurations, like enabling unclean leader election by default or dynamically changing broker endpoints
-* Support for KIP-112 "JBOD" modes
+* Delegation tokens
+* Upgrade from ZooKeeper mode
 
 We've tried to make it clear when a feature is not supported in the preview release, but you may encounter some rough edges. We will cover these feature gaps incrementally in the `trunk` branch.
 
