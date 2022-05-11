@@ -1284,7 +1284,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1337,7 +1337,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1393,7 +1393,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1416,7 +1416,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 2,
+      partitionEpoch = 2,
       isNew = false
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1451,7 +1451,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1518,7 +1518,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1569,7 +1569,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1645,7 +1645,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(10L, partition.localLogOrException.highWatermark)
@@ -1700,7 +1700,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1770,7 +1770,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEpoch = leaderEpoch,
       isr = isr,
       replicas = replicas,
-      zkVersion = 1,
+      partitionEpoch = 1,
       isNew = true
     ))
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -2310,7 +2310,7 @@ class PartitionTest extends AbstractPartitionTest {
     leaderEpoch: Int,
     isr: Seq[Int],
     replicas: Seq[Int],
-    zkVersion: Int,
+    partitionEpoch: Int,
     isNew: Boolean,
     partition: Partition = partition
   ): Boolean = {
@@ -2326,7 +2326,7 @@ class PartitionTest extends AbstractPartitionTest {
         .setLeader(brokerId)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr.map(Int.box).asJava)
-        .setPartitionEpoch(zkVersion)
+        .setPartitionEpoch(partitionEpoch)
         .setReplicas(replicas.map(Int.box).asJava)
         .setIsNew(isNew),
       offsetCheckpoints,
@@ -2338,7 +2338,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
     assertEquals(isr.toSet, partition.partitionState.isr)
     assertEquals(isr.toSet, partition.partitionState.maximalIsr)
-    assertEquals(zkVersion, partition.getPartitionEpoch)
+    assertEquals(partitionEpoch, partition.getPartitionEpoch)
     newLeader
   }
 
