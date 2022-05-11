@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTop
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -733,15 +734,19 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       killBroker(0)
       val aliveServers = brokers.filterNot(_.config.brokerId == 0)
 
-      TestUtils.waitUntilTrue(
-        () => aliveServers.forall(
-          broker =>
-            broker.metadataCache.getPartitionInfo(underMinIsrTopic, 0).get.isr().size() < 6
-              && broker.metadataCache.getPartitionInfo(offlineTopic, 0).isEmpty),
-        "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
-      )
-
-      val output = TestUtils.grabConsoleOutput(topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
+      if (isKRaftTest()) {
+        TestUtils.ensureConsistentKRaftMetadata(aliveServers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
+      } else {
+        TestUtils.waitUntilTrue(
+          () => aliveServers.forall(
+            broker =>
+              broker.metadataCache.getPartitionInfo(underMinIsrTopic, 0).get.isr().size() < 6 &&
+                broker.metadataCache.getPartitionInfo(offlineTopic, 0).get.leader() == MetadataResponse.NO_LEADER_ID),
+          "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
+        )
+      }
+      val output = TestUtils.grabConsoleOutput(
+        topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $underMinIsrTopic"))
       assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"))
