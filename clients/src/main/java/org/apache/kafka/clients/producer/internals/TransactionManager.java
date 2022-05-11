@@ -339,7 +339,7 @@ public class TransactionManager {
                 return;
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
-                txnPartitionMap.getOrCreatePartition(topicPartition);
+                txnPartitionMap.getOrCreate(topicPartition);
                 newPartitionsInTransaction.add(topicPartition);
             }
         }
@@ -508,27 +508,27 @@ public class TransactionManager {
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        return txnPartitionMap.getOrCreatePartition(topicPartition).nextSequence;
+        return txnPartitionMap.getOrCreate(topicPartition).nextSequence;
     }
 
     /**
      * Returns the current producer id/epoch of the given TopicPartition.
      */
     synchronized ProducerIdAndEpoch producerIdAndEpoch(TopicPartition topicPartition) {
-        return txnPartitionMap.getOrCreatePartition(topicPartition).producerIdAndEpoch;
+        return txnPartitionMap.getOrCreate(topicPartition).producerIdAndEpoch;
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
         Integer currentSequence = sequenceNumber(topicPartition);
 
         currentSequence = DefaultRecordBatch.incrementSequence(currentSequence, increment);
-        txnPartitionMap.getPartition(topicPartition).nextSequence = currentSequence;
+        txnPartitionMap.get(topicPartition).nextSequence = currentSequence;
     }
 
     synchronized void addInFlightBatch(ProducerBatch batch) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
-        txnPartitionMap.getPartition(batch.topicPartition).inflightBatchesBySequence.add(batch);
+        txnPartitionMap.get(batch.topicPartition).inflightBatchesBySequence.add(batch);
     }
 
     /**
@@ -542,7 +542,7 @@ public class TransactionManager {
         if (!hasInflightBatches(topicPartition))
             return RecordBatch.NO_SEQUENCE;
 
-        SortedSet<ProducerBatch> inflightBatches = txnPartitionMap.getPartition(topicPartition).inflightBatchesBySequence;
+        SortedSet<ProducerBatch> inflightBatches = txnPartitionMap.get(topicPartition).inflightBatchesBySequence;
         if (inflightBatches.isEmpty())
             return RecordBatch.NO_SEQUENCE;
         else
@@ -550,20 +550,20 @@ public class TransactionManager {
     }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
-        SortedSet<ProducerBatch> queue = txnPartitionMap.getPartition(topicPartition).inflightBatchesBySequence;
+        SortedSet<ProducerBatch> queue = txnPartitionMap.get(topicPartition).inflightBatchesBySequence;
         return queue.isEmpty() ? null : queue.first();
     }
 
     synchronized void removeInFlightBatch(ProducerBatch batch) {
         if (hasInflightBatches(batch.topicPartition)) {
-            txnPartitionMap.getPartition(batch.topicPartition).inflightBatchesBySequence.remove(batch);
+            txnPartitionMap.get(batch.topicPartition).inflightBatchesBySequence.remove(batch);
         }
     }
 
     private int maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
         int lastAckedSequence = lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER);
         if (sequence > lastAckedSequence) {
-            txnPartitionMap.getPartition(topicPartition).lastAckedSequence = sequence;
+            txnPartitionMap.get(topicPartition).lastAckedSequence = sequence;
             return sequence;
         }
 
@@ -587,10 +587,10 @@ public class TransactionManager {
         // response for this. This can happen only if the producer is only idempotent (not transactional) and in
         // this case there will be no tracked bookkeeper entry about it, so we have to insert one.
         if (!lastAckedOffset.isPresent() && !isTransactional()) {
-            txnPartitionMap.getOrCreatePartition(batch.topicPartition);
+            txnPartitionMap.getOrCreate(batch.topicPartition);
         }
         if (lastOffset > lastAckedOffset.orElse(ProduceResponse.INVALID_OFFSET)) {
-            txnPartitionMap.getPartition(batch.topicPartition).lastAckedOffset = lastOffset;
+            txnPartitionMap.get(batch.topicPartition).lastAckedOffset = lastOffset;
         } else {
             log.trace("Partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
         }
@@ -676,7 +676,7 @@ public class TransactionManager {
 
         setNextSequence(batch.topicPartition, currentSequence);
 
-        txnPartitionMap.getPartition(batch.topicPartition).resetSequenceNumbers(inFlightBatch -> {
+        txnPartitionMap.get(batch.topicPartition).resetSequenceNumbers(inFlightBatch -> {
             if (inFlightBatch.baseSequence() < batch.baseSequence())
                 return;
 
@@ -690,11 +690,11 @@ public class TransactionManager {
     }
 
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
-        return !txnPartitionMap.getOrCreatePartition(topicPartition).inflightBatchesBySequence.isEmpty();
+        return !txnPartitionMap.getOrCreate(topicPartition).inflightBatchesBySequence.isEmpty();
     }
 
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
-        return !producerIdAndEpoch.equals(txnPartitionMap.getOrCreatePartition(topicPartition).producerIdAndEpoch);
+        return !producerIdAndEpoch.equals(txnPartitionMap.getOrCreate(topicPartition).producerIdAndEpoch);
     }
 
     synchronized boolean hasUnresolvedSequences() {
@@ -759,7 +759,7 @@ public class TransactionManager {
     }
 
     private void setNextSequence(TopicPartition topicPartition, int sequence) {
-        txnPartitionMap.getPartition(topicPartition).nextSequence = sequence;
+        txnPartitionMap.get(topicPartition).nextSequence = sequence;
     }
 
     private boolean isNextSequenceForUnresolvedPartition(TopicPartition topicPartition, int sequence) {

@@ -30,7 +30,7 @@ class TxnPartitionMap {
 
     final Map<TopicPartition, TxnPartitionEntry> topicPartitions = new HashMap<>();
 
-    TxnPartitionEntry getPartition(TopicPartition topicPartition) {
+    TxnPartitionEntry get(TopicPartition topicPartition) {
         TxnPartitionEntry ent = topicPartitions.get(topicPartition);
         if (ent == null) {
             throw new IllegalStateException("Trying to get the sequence number for " + topicPartition +
@@ -39,7 +39,7 @@ class TxnPartitionMap {
         return ent;
     }
 
-    TxnPartitionEntry getOrCreatePartition(TopicPartition topicPartition) {
+    TxnPartitionEntry getOrCreate(TopicPartition topicPartition) {
         return topicPartitions.computeIfAbsent(topicPartition, tp -> new TxnPartitionEntry());
     }
 
@@ -71,7 +71,7 @@ class TxnPartitionMap {
 
     void startSequencesAtBeginning(TopicPartition topicPartition, ProducerIdAndEpoch newProducerIdAndEpoch) {
         final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
-        TxnPartitionEntry topicPartitionEntry = getPartition(topicPartition);
+        TxnPartitionEntry topicPartitionEntry = get(topicPartition);
         topicPartitionEntry.resetSequenceNumbers(inFlightBatch -> {
             inFlightBatch.resetProducerState(newProducerIdAndEpoch, sequence.value, inFlightBatch.isTransactional());
             sequence.value += inFlightBatch.recordCount;
