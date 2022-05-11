@@ -972,7 +972,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
             try (final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(
                 Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 1, 2000)) {
 
-                List<KeyValue<Windowed<String>, Long>> expected;
+                final List<KeyValue<Windowed<String>, Long>> expected;
 
                 // actual from: observedStreamTime - retention + 1
                 if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
@@ -1011,7 +1011,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         // retention = 1000
         try (final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999)) {
 
-            List<KeyValue<Windowed<String>, Long>> expected;
+            final List<KeyValue<Windowed<String>, Long>> expected;
 
             // actual from: observedStreamTime - retention + 1
             if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {

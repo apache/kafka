@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import java.util.Collection;
 import java.util.Optional;
+import java.util.ArrayList;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -195,23 +196,25 @@ public class TimeWindowedKStreamIntegrationTest {
 
         startStreams();
 
+        // on window close
+        // observedStreamTime : 10, retentionPeriod: 10, actualFrom: 1, timeTo: 0
+        // observedStreamTime : 10, retentionPeriod: 10, actualFrom: 1, timeTo: 0
+        // observedStreamTime : 15, retentionPeriod: 10, actualFrom: 6, timeTo: 5
+        // observedStreamTime : 15, retentionPeriod: 10, actualFrom: 6, timeTo: 5
+        // observedStreamTime : 25, retentionPeriod: 10, actualFrom: 16, timeTo: 15
+        // observedStreamTime : 25, retentionPeriod: 10, actualFrom: 16, timeTo: 15.
+        // Since to < actualFrom, no records would be emitted.
         final List<KeyValueTimestamp<Windowed<String>, String>> windowedMessages = receiveMessagesWithTimestamp(
             new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
             new StringDeserializer(),
             10L,
             String.class,
-            emitFinal ? 6 : 12);
+            emitFinal ? 0 : 12);
 
         final List<KeyValueTimestamp<Windowed<String>, String>> expectResult;
         if (emitFinal) {
-            expectResult = asList(
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)), "0+1+2", 5),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5L, 15L)), "0+2+3", 10),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5L, 15L)), "0+4+5", 11),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(10L, 20L)), "0+3", 10),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(10L, 20L)), "0+5+6", 15),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(15L, 25L)), "0+6", 15)
-            );
+            // all records are expired due to the comment above
+            expectResult = new ArrayList<>();
         } else {
             expectResult = asList(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)), "0+1", 0),
@@ -242,7 +245,8 @@ public class TimeWindowedKStreamIntegrationTest {
             new KeyValueTimestamp<>("B", "4", 6),
             new KeyValueTimestamp<>("B", "5", 11),
             new KeyValueTimestamp<>("B", "6", 15), // close [0, 10), output A, B [0, 10)
-            new KeyValueTimestamp<>("C", "7", 25)  // close [5, 15), [10, 20)
+            new KeyValueTimestamp<>("C", "7", 25),  // close [5, 15), [10, 20)
+            new KeyValueTimestamp<>("D", "8", 47)
         );
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);
@@ -260,23 +264,17 @@ public class TimeWindowedKStreamIntegrationTest {
 
         startStreams();
 
+        // For WINDOW_CLOSE, all records get expired as to < actualFrom
         final List<KeyValueTimestamp<Windowed<String>, String>> windowedMessages = receiveMessagesWithTimestamp(
             new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
             new StringDeserializer(),
             10L,
             String.class,
-            emitFinal ? 6 : 13);
+            emitFinal ? 0 : 13);
 
         final List<KeyValueTimestamp<Windowed<String>, String>> expectResult;
         if (emitFinal) {
-            expectResult = asList(
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)), "0+1+2", 5),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0L, 10L)), "0+4", 6),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5L, 15L)), "0+2+3", 10),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5L, 15L)), "0+4+5", 11),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(10L, 20L)), "0+3", 10),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(10L, 20L)), "0+5+6", 15)
-            );
+            expectResult = new ArrayList<>();
         } else {
             expectResult = asList(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)), "0+1", 0),
@@ -342,27 +340,17 @@ public class TimeWindowedKStreamIntegrationTest {
 
         startStreams();
 
+        // ON_WINDOW_CLOSE expires all records.
         List<KeyValueTimestamp<Windowed<String>, String>> windowedMessages = receiveMessagesWithTimestamp(
             new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
             new StringDeserializer(),
             10L,
             String.class,
-            emitFinal ? 5 : 9);
+            emitFinal ? 0 : 9);
 
         List<KeyValueTimestamp<Windowed<String>, String>> expectResult;
         if (emitFinal) {
-            expectResult = asList(
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)),
-                    "0+L1,R1+L1,R1", 5),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5L, 15L)), "0+L1,R1",
-                    5),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5L, 15L)), "0+L2,R2",
-                    11),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(10L, 20L)),
-                    "0+L2,R2+L2,R2", 15),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(15L, 25L)),
-                    "0+L2,R2", 15)
-            );
+            expectResult = new ArrayList<>();
         } else {
             expectResult = asList(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)), "0+L1,R1",
@@ -408,16 +396,11 @@ public class TimeWindowedKStreamIntegrationTest {
             new StringDeserializer(),
             10L,
             String.class,
-            2);
+            emitFinal? 0: 2);
 
         if (emitFinal) {
             // Output just new closed window for C
-            expectResult = asList(
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(20L, 30L)),
-                    "0+L3,R3", 25),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(25L, 35L)),
-                    "0+L3,R3", 25)
-            );
+            expectResult = new ArrayList<>();
         } else {
             expectResult = asList(
                 new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(30L, 40L)),
