@@ -27,7 +27,7 @@ public class MetadataVersionValidatorTest {
     public void testMetadataVersionValidator() {
         String str = new MetadataVersionValidator().toString();
         String[] apiVersions = str.substring(1).split(",");
-        assertEquals(MetadataVersion.VALUES.length, apiVersions.length);
+        assertEquals(MetadataVersion.VERSIONS.length, apiVersions.length);
     }
 
 }

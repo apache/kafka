@@ -157,7 +157,7 @@ public enum MetadataVersion {
 
     public static final String FEATURE_NAME = "metadata.version";
 
-    public static final MetadataVersion[] VALUES;
+    public static final MetadataVersion[] VERSIONS;
 
     private final short featureLevel;
     private final String release;
@@ -230,11 +230,11 @@ public enum MetadataVersion {
         {
             // Make a copy of values() and omit UNINITIALIZED
             MetadataVersion[] enumValues = MetadataVersion.values();
-            VALUES = Arrays.copyOfRange(enumValues, 1, enumValues.length);
+            VERSIONS = Arrays.copyOfRange(enumValues, 1, enumValues.length);
 
             IBP_VERSIONS = new HashMap<>();
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
-            for (MetadataVersion metadataVersion : VALUES) {
+            for (MetadataVersion metadataVersion : VERSIONS) {
                 maxInterVersion.put(metadataVersion.release, metadataVersion);
                 IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
             }
@@ -254,10 +254,10 @@ public enum MetadataVersion {
         return didMetadataChange;
     }
 
-    private Optional<MetadataVersion> previous() {
+    Optional<MetadataVersion> previous() {
         int idx = this.ordinal();
-        if (idx > 2) {
-            return Optional.of(VALUES[idx - 2]);
+        if (idx > 1) {
+            return Optional.of(VERSIONS[idx - 2]);
         } else {
             return Optional.empty();
         }
@@ -309,7 +309,7 @@ public enum MetadataVersion {
     }
 
     public static MetadataVersion latest() {
-        return VALUES[VALUES.length - 1];
+        return VERSIONS[VERSIONS.length - 1];
     }
 
     public static boolean checkIfMetadataChanged(MetadataVersion sourceVersion, MetadataVersion targetVersion) {

@@ -910,7 +910,7 @@ public final class QuorumController implements Controller {
                     final MetadataVersion metadataVersion;
                     if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
                         final CompletableFuture<Map<String, ApiError>> future;
-                        if (bootstrapMetadataVersion.isKRaftSupported()) {
+                        if (!bootstrapMetadataVersion.isKRaftSupported()) {
                             metadataVersion = MetadataVersion.UNINITIALIZED;
                             future = new CompletableFuture<>();
                             future.completeExceptionally(

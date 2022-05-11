@@ -69,7 +69,7 @@ class MetadataVersionTest {
 
     @Test
     public void testFeatureLevel() {
-        MetadataVersion[] metadataVersions = MetadataVersion.VALUES;
+        MetadataVersion[] metadataVersions = MetadataVersion.VERSIONS;
         int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(IBP_3_0_IV0);
         for (int i = 0; i < firstFeatureLevelIndex; i++) {
             assertTrue(metadataVersions[i].featureLevel() < 0);
@@ -264,6 +264,15 @@ class MetadataVersionTest {
     }
 
     @Test
+    public void testPrevious() {
+        for (int i = 1; i < MetadataVersion.VERSIONS.length - 2; i++) {
+            MetadataVersion version = MetadataVersion.VERSIONS[i];
+            assertTrue(version.previous().isPresent());
+            assertEquals(MetadataVersion.VERSIONS[i - 1], version.previous().get());
+        }
+    }
+
+    @Test
     public void testMetadataChanged() {
         assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_2_IV0));
         assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_1_IV0));
@@ -278,7 +287,7 @@ class MetadataVersionTest {
 
     @Test
     public void testKRaftVersions() {
-        for (MetadataVersion metadataVersion : MetadataVersion.VALUES) {
+        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
             if (metadataVersion.isKRaftSupported()) {
                 assertTrue(metadataVersion.featureLevel() > 0);
             } else {
@@ -286,7 +295,7 @@ class MetadataVersionTest {
             }
         }
 
-        for (MetadataVersion metadataVersion : MetadataVersion.VALUES) {
+        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
             if (metadataVersion.isAtLeast(IBP_3_0_IV0)) {
                 assertTrue(metadataVersion.isKRaftSupported());
             } else {
