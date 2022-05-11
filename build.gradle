@@ -1996,15 +1996,14 @@ project(':tools:tools-api') {
 project(':tools') {
   archivesBaseName = "kafka-tools"
   dependencies {
+    compileOnly libs.slf4jlog4j
     implementation project(':clients')
     implementation project(':storage')
     implementation project(':server-common')
     implementation project(':connect:runtime')
-    implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
     implementation libs.slf4jApi
-    implementation libs.log4j
     implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2027,6 +2026,7 @@ project(':tools') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
+    testImplementation libs.log4j
     testRuntimeOnly libs.slf4jlog4j
   }
 
@@ -2056,12 +2056,10 @@ project(':trogdor') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':log4j-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.log4j
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -2113,7 +2111,6 @@ project(':shell') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':core')
-    implementation project(':log4j-appender')
     implementation project(':metadata')
     implementation project(':raft')
 
