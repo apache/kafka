@@ -30,9 +30,9 @@ import java.time.Duration;
 
 /** Used internally by MirrorMaker. Stores offset syncs and performs offset translation. */
 class OffsetSyncStore implements AutoCloseable {
-    private KafkaConsumer<byte[], byte[]> consumer;
-    private Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
-    private TopicPartition offsetSyncTopicPartition;
+    private final KafkaConsumer<byte[], byte[]> consumer;
+    private final Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
+    private final TopicPartition offsetSyncTopicPartition;
 
     OffsetSyncStore(MirrorConnectorConfig config) {
         consumer = new KafkaConsumer<>(config.offsetSyncsTopicConsumerConfig(),

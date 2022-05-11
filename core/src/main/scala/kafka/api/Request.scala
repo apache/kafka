@@ -25,6 +25,10 @@ object Request {
   // Broker ids are non-negative int.
   def isValidBrokerId(brokerId: Int): Boolean = brokerId >= 0
 
+  def isConsumer(replicaId: Int): Boolean = {
+    replicaId < 0 && replicaId != FutureLocalReplicaId
+  }
+
   def describeReplicaId(replicaId: Int): String = {
     replicaId match {
       case OrdinaryConsumerId => "consumer"

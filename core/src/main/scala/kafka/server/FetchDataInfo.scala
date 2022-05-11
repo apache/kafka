@@ -17,15 +17,67 @@
 
 package kafka.server
 
+import kafka.api.Request
+import org.apache.kafka.common.IsolationLevel
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.Records
+import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.common.requests.FetchRequest
 
 sealed trait FetchIsolation
 case object FetchLogEnd extends FetchIsolation
 case object FetchHighWatermark extends FetchIsolation
 case object FetchTxnCommitted extends FetchIsolation
 
-case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
-                         records: Records,
-                         firstEntryIncomplete: Boolean = false,
-                         abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]] = None)
+object FetchIsolation {
+  def apply(
+    request: FetchRequest
+  ): FetchIsolation = {
+    apply(request.replicaId, request.isolationLevel)
+  }
+
+  def apply(
+    replicaId: Int,
+    isolationLevel: IsolationLevel
+  ): FetchIsolation = {
+    if (!Request.isConsumer(replicaId))
+      FetchLogEnd
+    else if (isolationLevel == IsolationLevel.READ_COMMITTED)
+      FetchTxnCommitted
+    else
+      FetchHighWatermark
+  }
+}
+
+case class FetchParams(
+  requestVersion: Short,
+  replicaId: Int,
+  maxWaitMs: Long,
+  minBytes: Int,
+  maxBytes: Int,
+  isolation: FetchIsolation,
+  clientMetadata: Option[ClientMetadata]
+) {
+  def isFromFollower: Boolean = Request.isValidBrokerId(replicaId)
+  def isFromConsumer: Boolean = Request.isConsumer(replicaId)
+  def fetchOnlyLeader: Boolean = isFromFollower || (isFromConsumer && clientMetadata.isEmpty)
+  def hardMaxBytesLimit: Boolean = requestVersion <= 2
+
+  override def toString: String = {
+    s"FetchParams(requestVersion=$requestVersion" +
+      s", replicaId=$replicaId" +
+      s", maxWaitMs=$maxWaitMs" +
+      s", minBytes=$minBytes" +
+      s", maxBytes=$maxBytes" +
+      s", isolation=$isolation" +
+      s", clientMetadata= $clientMetadata" +
+      ")"
+  }
+}
+
+case class FetchDataInfo(
+  fetchOffsetMetadata: LogOffsetMetadata,
+  records: Records,
+  firstEntryIncomplete: Boolean = false,
+  abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]] = None
+)

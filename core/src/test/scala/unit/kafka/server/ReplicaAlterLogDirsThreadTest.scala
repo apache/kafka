@@ -31,10 +31,10 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
-import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
+import org.mockito.ArgumentMatchers.{any, anyBoolean}
 import org.mockito.Mockito.{doNothing, mock, never, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
@@ -271,18 +271,26 @@ class ReplicaAlterLogDirsThreadTest {
                                       responseData: FetchPartitionData): Unit = {
     val callbackCaptor: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] =
       ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
+
+    val expectedFetchParams = FetchParams(
+      requestVersion = ApiKeys.FETCH.latestVersion,
+      replicaId = Request.FutureLocalReplicaId,
+      maxWaitMs = 0L,
+      minBytes = 0,
+      maxBytes = config.replicaFetchResponseMaxBytes,
+      isolation = FetchLogEnd,
+      clientMetadata = None
+    )
+
+    println(expectedFetchParams)
+
     when(replicaManager.fetchMessages(
-      timeout = ArgumentMatchers.eq(0L),
-      replicaId = ArgumentMatchers.eq(Request.FutureLocalReplicaId),
-      fetchMinBytes = ArgumentMatchers.eq(0),
-      fetchMaxBytes = ArgumentMatchers.eq(config.replicaFetchResponseMaxBytes),
-      hardMaxBytesLimit = ArgumentMatchers.eq(false),
+      params = ArgumentMatchers.eq(expectedFetchParams),
       fetchInfos = ArgumentMatchers.eq(Seq(topicIdPartition -> requestData)),
       quota = ArgumentMatchers.eq(UnboundedQuota),
       responseCallback = callbackCaptor.capture(),
-      isolationLevel = ArgumentMatchers.eq(IsolationLevel.READ_UNCOMMITTED),
-      clientMetadata = ArgumentMatchers.eq(None)
     )).thenAnswer(_ => {
+      println("Did we get the callback?")
       callbackCaptor.getValue.apply(Seq((topicIdPartition, responseData)))
     })
   }
@@ -701,16 +709,10 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(replicaManager.logManager).thenReturn(logManager)
     when(replicaManager.fetchMessages(
-      anyLong(),
-      anyInt(),
-      anyInt(),
-      anyInt(),
-      any(),
-      any(),
-      any(),
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
       responseCallback.capture(),
-      any(),
-      any(),
     )).thenAnswer(_ => responseCallback.getValue.apply(Seq.empty[(TopicIdPartition, FetchPartitionData)]))
 
     //Create the thread
@@ -939,16 +941,10 @@ class ReplicaAlterLogDirsThreadTest {
                             responseCallback: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]): Unit = {
     stub(logT1p0, logT1p1, futureLog, partition, replicaManager)
     when(replicaManager.fetchMessages(
-      anyLong(),
-      anyInt(),
-      anyInt(),
-      anyInt(),
-      any(),
-      any(),
-      any(),
-      responseCallback.capture(),
-      any(),
-      any())
-    ).thenAnswer(_ => responseCallback.getValue.apply(Seq.empty[(TopicIdPartition, FetchPartitionData)]))
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
+      responseCallback.capture()
+    )).thenAnswer(_ => responseCallback.getValue.apply(Seq.empty[(TopicIdPartition, FetchPartitionData)]))
   }
 }
