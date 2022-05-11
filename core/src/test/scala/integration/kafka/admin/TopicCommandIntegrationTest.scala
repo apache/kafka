@@ -588,7 +588,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       val aliveServers = brokers.filterNot(_.config.brokerId == 0)
 
       if (isKRaftTest()) {
-        TestUtils.waitForKRaftBrokerMetadataCatchupController(
+        TestUtils.ensureConsistentKRaftMetadata(
           aliveServers,
           controllerServer,
           "Timeout waiting for partition metadata propagating to brokers"
