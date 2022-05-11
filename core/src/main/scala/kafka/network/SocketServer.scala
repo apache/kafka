@@ -739,7 +739,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     } catch {
       case e: TooManyConnectionsException =>
         info(s"Rejected connection from ${e.ip}, address already has the configured maximum of ${e.count} connections.")
-        connectionQuotas.closeChannel(endPoint.listenerName, socketChannel)
+        connectionQuotas.closeChannel(this, endPoint.listenerName, socketChannel)
         None
       case e: ConnectionThrottledException =>
         val ip = socketChannel.socket.getInetAddress
@@ -749,7 +749,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         None
       case e: IOException =>
         error(s"Encountered an error while configuring the connection, closing it.", e)
-        connectionQuotas.closeChannel(endPoint.listenerName, socketChannel)
+        connectionQuotas.closeChannel(this, endPoint.listenerName, socketChannel)
         None
     }
   }
@@ -1236,7 +1236,7 @@ private[kafka] class Processor(
         case e: Throwable =>
           val remoteAddress = channel.socket.getRemoteSocketAddress
           // need to close the channel here to avoid a socket leak.
-          connectionQuotas.closeChannel(listenerName, channel)
+          connectionQuotas.closeChannel(this, listenerName, channel)
           processException(s"Processor $id closed connection from $remoteAddress", e)
       }
     }
@@ -1791,11 +1791,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   /**
    * Close `channel` and decrement the connection count.
    */
-  def closeChannel(listenerName: ListenerName, channel: SocketChannel): Unit = {
+  def closeChannel(log: Logging, listenerName: ListenerName, channel: SocketChannel): Unit = {
     if (channel != null) {
-      debug(s"Closing connection from ${channel.socket.getRemoteSocketAddress}")
+      log.debug(s"Closing connection from ${channel.socket.getRemoteSocketAddress}")
       dec(listenerName, channel.socket.getInetAddress)
-      closeSocket(channel, this)
+      closeSocket(channel, log)
     }
   }
 
