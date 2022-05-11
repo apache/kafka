@@ -26,7 +26,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 
-class TxnPartitionBookkeeper {
+class TxnPartitionMap {
 
     final Map<TopicPartition, TxnPartitionEntry> topicPartitions = new HashMap<>();
 

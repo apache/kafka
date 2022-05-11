@@ -97,7 +97,7 @@ public class TransactionManager {
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
 
-    private final TxnPartitionBookkeeper topicPartitionBookkeeper;
+    private final TxnPartitionMap txnPartitionMap;
 
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
 
@@ -215,7 +215,7 @@ public class TransactionManager {
         this.partitionsWithUnresolvedSequences = new HashMap<>();
         this.partitionsToRewriteSequences = new HashSet<>();
         this.retryBackoffMs = retryBackoffMs;
-        this.topicPartitionBookkeeper = new TxnPartitionBookkeeper();
+        this.txnPartitionMap = new TxnPartitionMap();
         this.apiVersions = apiVersions;
     }
 
@@ -339,7 +339,7 @@ public class TransactionManager {
                 return;
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
-                topicPartitionBookkeeper.getOrCreatePartition(topicPartition);
+                txnPartitionMap.getOrCreatePartition(topicPartition);
                 newPartitionsInTransaction.add(topicPartition);
             }
         }
@@ -427,7 +427,7 @@ public class TransactionManager {
         if (hasStaleProducerIdAndEpoch(topicPartition) && !hasInflightBatches(topicPartition)) {
             // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
             // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
-            topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
+            txnPartitionMap.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
             log.debug("ProducerId of partition {} set to {} with epoch {}. Reinitialize sequence at beginning.",
                       topicPartition, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         }
@@ -456,12 +456,12 @@ public class TransactionManager {
     }
 
     private void resetSequenceForPartition(TopicPartition topicPartition) {
-        topicPartitionBookkeeper.topicPartitions.remove(topicPartition);
+        txnPartitionMap.topicPartitions.remove(topicPartition);
         this.partitionsWithUnresolvedSequences.remove(topicPartition);
     }
 
     private void resetSequenceNumbers() {
-        topicPartitionBookkeeper.reset();
+        txnPartitionMap.reset();
         this.partitionsWithUnresolvedSequences.clear();
     }
 
@@ -480,7 +480,7 @@ public class TransactionManager {
 
         // When the epoch is bumped, rewrite all in-flight sequences for the partition(s) that triggered the epoch bump
         for (TopicPartition topicPartition : this.partitionsToRewriteSequences) {
-            this.topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
+            this.txnPartitionMap.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
             this.partitionsWithUnresolvedSequences.remove(topicPartition);
         }
         this.partitionsToRewriteSequences.clear();
@@ -508,27 +508,27 @@ public class TransactionManager {
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.getOrCreatePartition(topicPartition).nextSequence;
+        return txnPartitionMap.getOrCreatePartition(topicPartition).nextSequence;
     }
 
     /**
      * Returns the current producer id/epoch of the given TopicPartition.
      */
     synchronized ProducerIdAndEpoch producerIdAndEpoch(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.getOrCreatePartition(topicPartition).producerIdAndEpoch;
+        return txnPartitionMap.getOrCreatePartition(topicPartition).producerIdAndEpoch;
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
         Integer currentSequence = sequenceNumber(topicPartition);
 
         currentSequence = DefaultRecordBatch.incrementSequence(currentSequence, increment);
-        topicPartitionBookkeeper.getPartition(topicPartition).nextSequence = currentSequence;
+        txnPartitionMap.getPartition(topicPartition).nextSequence = currentSequence;
     }
 
     synchronized void addInFlightBatch(ProducerBatch batch) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
-        topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.add(batch);
+        txnPartitionMap.getPartition(batch.topicPartition).inflightBatchesBySequence.add(batch);
     }
 
     /**
@@ -542,7 +542,7 @@ public class TransactionManager {
         if (!hasInflightBatches(topicPartition))
             return RecordBatch.NO_SEQUENCE;
 
-        SortedSet<ProducerBatch> inflightBatches = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
+        SortedSet<ProducerBatch> inflightBatches = txnPartitionMap.getPartition(topicPartition).inflightBatchesBySequence;
         if (inflightBatches.isEmpty())
             return RecordBatch.NO_SEQUENCE;
         else
@@ -550,20 +550,20 @@ public class TransactionManager {
     }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
-        SortedSet<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
+        SortedSet<ProducerBatch> queue = txnPartitionMap.getPartition(topicPartition).inflightBatchesBySequence;
         return queue.isEmpty() ? null : queue.first();
     }
 
     synchronized void removeInFlightBatch(ProducerBatch batch) {
         if (hasInflightBatches(batch.topicPartition)) {
-            topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.remove(batch);
+            txnPartitionMap.getPartition(batch.topicPartition).inflightBatchesBySequence.remove(batch);
         }
     }
 
     private int maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
         int lastAckedSequence = lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER);
         if (sequence > lastAckedSequence) {
-            topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = sequence;
+            txnPartitionMap.getPartition(topicPartition).lastAckedSequence = sequence;
             return sequence;
         }
 
@@ -571,11 +571,11 @@ public class TransactionManager {
     }
 
     synchronized OptionalInt lastAckedSequence(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.lastAckedSequence(topicPartition);
+        return txnPartitionMap.lastAckedSequence(topicPartition);
     }
 
     synchronized OptionalLong lastAckedOffset(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.lastAckedOffset(topicPartition);
+        return txnPartitionMap.lastAckedOffset(topicPartition);
     }
 
     private void updateLastAckedOffset(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
@@ -587,10 +587,10 @@ public class TransactionManager {
         // response for this. This can happen only if the producer is only idempotent (not transactional) and in
         // this case there will be no tracked bookkeeper entry about it, so we have to insert one.
         if (!lastAckedOffset.isPresent() && !isTransactional()) {
-            topicPartitionBookkeeper.getOrCreatePartition(batch.topicPartition);
+            txnPartitionMap.getOrCreatePartition(batch.topicPartition);
         }
         if (lastOffset > lastAckedOffset.orElse(ProduceResponse.INVALID_OFFSET)) {
-            topicPartitionBookkeeper.getPartition(batch.topicPartition).lastAckedOffset = lastOffset;
+            txnPartitionMap.getPartition(batch.topicPartition).lastAckedOffset = lastOffset;
         } else {
             log.trace("Partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
         }
@@ -663,7 +663,7 @@ public class TransactionManager {
     // This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
     // ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
     private void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
-        if (!topicPartitionBookkeeper.contains(batch.topicPartition))
+        if (!txnPartitionMap.contains(batch.topicPartition))
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
@@ -676,7 +676,7 @@ public class TransactionManager {
 
         setNextSequence(batch.topicPartition, currentSequence);
 
-        topicPartitionBookkeeper.getPartition(batch.topicPartition).resetSequenceNumbers(inFlightBatch -> {
+        txnPartitionMap.getPartition(batch.topicPartition).resetSequenceNumbers(inFlightBatch -> {
             if (inFlightBatch.baseSequence() < batch.baseSequence())
                 return;
 
@@ -690,11 +690,11 @@ public class TransactionManager {
     }
 
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
-        return !topicPartitionBookkeeper.getOrCreatePartition(topicPartition).inflightBatchesBySequence.isEmpty();
+        return !txnPartitionMap.getOrCreatePartition(topicPartition).inflightBatchesBySequence.isEmpty();
     }
 
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
-        return !producerIdAndEpoch.equals(topicPartitionBookkeeper.getOrCreatePartition(topicPartition).producerIdAndEpoch);
+        return !producerIdAndEpoch.equals(txnPartitionMap.getOrCreatePartition(topicPartition).producerIdAndEpoch);
     }
 
     synchronized boolean hasUnresolvedSequences() {
@@ -759,7 +759,7 @@ public class TransactionManager {
     }
 
     private void setNextSequence(TopicPartition topicPartition, int sequence) {
-        topicPartitionBookkeeper.getPartition(topicPartition).nextSequence = sequence;
+        txnPartitionMap.getPartition(topicPartition).nextSequence = sequence;
     }
 
     private boolean isNextSequenceForUnresolvedPartition(TopicPartition topicPartition, int sequence) {
@@ -911,7 +911,7 @@ public class TransactionManager {
                 // inflight batches to be from the beginning and retry them, so that the transaction does not need to
                 // be aborted. For the idempotent producer, bump the epoch to avoid reusing (sequence, epoch) pairs
                 if (isTransactional()) {
-                    topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
+                    txnPartitionMap.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
                 } else {
                     requestEpochBumpForPartition(batch.topicPartition);
                 }
