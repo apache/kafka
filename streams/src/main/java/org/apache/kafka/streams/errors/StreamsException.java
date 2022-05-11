@@ -84,7 +84,8 @@ public class StreamsException extends KafkaException {
     }
 
     public void setTaskId(final TaskId taskId) {
-        this.taskIds.add(taskId);
+        taskIds.clear();
+        taskIds.add(taskId);
     }
 
     Set<TaskId> taskIds() {
