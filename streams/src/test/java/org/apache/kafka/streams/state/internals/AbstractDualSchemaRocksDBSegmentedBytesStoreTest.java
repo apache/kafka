@@ -972,10 +972,26 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
             try (final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(
                 Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 1, 2000)) {
 
-                final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                    KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
-                    KeyValue.pair(new Windowed<>(keyB, windows[2]), 20L)
-                );
+                List<KeyValue<Windowed<String>, Long>> expected;
+
+                // actual from: observedStreamTime - retention + 1
+                if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
+                    // For windowkeyschema, actual from is 1
+                    // observed stream time = 1000. Retention Period = 1000.
+                    // actual from = (1000 - 1000 + 1)
+                    // and search happens in the range 1-2000
+                    expected = asList(
+                            KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
+                            KeyValue.pair(new Windowed<>(keyB, windows[2]), 20L)
+                    );
+                } else {
+                    // For session key schema, actual from is 501
+                    // observed stream time = 1500. Retention Period = 1000.
+                    // actual from = (1500 - 1000 + 1)
+                    // and search happens in the range 501-2000
+                    expected = Collections.singletonList(KeyValue.pair(new Windowed<>(keyB, windows[2]), 20L));
+                }
+
                 assertEquals(expected, toList(results));
             }
 
@@ -991,11 +1007,27 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
+        // actual from: observedStreamTime - retention + 1
+        // retention = 1000
         try (final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999)) {
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-                KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
-            );
+
+            List<KeyValue<Windowed<String>, Long>> expected;
+
+            // actual from: observedStreamTime - retention + 1
+            if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
+                // For windowkeyschema, actual from is 1
+                // observed stream time = 1000. actual from = (1000 - 1000 + 1)
+                // and search happens in the range 1-2000
+                expected = asList(
+                        KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                        KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+                );
+            } else {
+                // For session key schema, actual from is 501
+                // observed stream time = 1500. actual from = (1500 - 1000 + 1)
+                // and search happens in the range 501-2000 deeming first record as expired.
+                expected = Collections.singletonList(KeyValue.pair(new Windowed<>(key, windows[1]), 50L));
+            }
 
             assertEquals(expected, toList(results));
         }
@@ -1401,7 +1433,15 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         assertEquals(1, bytesStore.getSegments().size());
         final String key = "a";
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
-        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
+
+        // actual from = observedStreamTime - retention + 1.
+        // retention = 1000
+        if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
+            // For window stores, observedSteam = 1000 => actualFrom = 1
+            // For session stores, observedSteam = 1500 => actualFrom = 501 which deems
+            // the below record as expired.
+            expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
+        }
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
