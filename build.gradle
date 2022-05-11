@@ -916,7 +916,7 @@ project(':core') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -1641,7 +1641,7 @@ project(':tools') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -1691,7 +1691,7 @@ project(':trogdor') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2000,7 +2000,10 @@ project(':streams:upgrade-system-tests-0100') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
 
   dependencies {
-    testImplementation libs.kafkaStreams_0100
+    testImplementation(libs.kafkaStreams_0100) {
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'log4j', module: 'log4j'
+    }
     testRuntimeOnly libs.junitJupiter
   }
 
@@ -2013,7 +2016,10 @@ project(':streams:upgrade-system-tests-0101') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0101"
 
   dependencies {
-    testImplementation libs.kafkaStreams_0101
+    testImplementation(libs.kafkaStreams_0101) {
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'log4j', module: 'log4j'
+    }
     testRuntimeOnly libs.junitJupiter
   }
 
@@ -2319,7 +2325,7 @@ project(':connect:api') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2356,7 +2362,7 @@ project(':connect:transforms') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2396,7 +2402,7 @@ project(':connect:json') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2462,8 +2468,8 @@ project(':connect:runtime') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
+      // No need to copy log4j since the module has an explicit dependency on that
       include('slf4j-log4j12*')
-      include('log4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2542,7 +2548,7 @@ project(':connect:file') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2581,7 +2587,7 @@ project(':connect:basic-auth-extension') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2628,7 +2634,7 @@ project(':connect:mirror') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2663,7 +2669,7 @@ project(':connect:mirror-client') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
