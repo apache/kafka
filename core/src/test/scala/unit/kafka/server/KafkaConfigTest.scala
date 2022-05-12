@@ -1486,7 +1486,7 @@ class KafkaConfigTest {
     assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
   }
 
-  def kraftProps() = {
+  def kraftProps(): Properties = {
     val props = new Properties()
     props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
@@ -1536,7 +1536,11 @@ class KafkaConfigTest {
   @Test
   def testEarlyStartListenersDefault(): Unit = {
     val props = new Properties()
-    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.setProperty(KafkaConfig.ListenersProp, "CONTROLLER://:8092")
+    props.setProperty(KafkaConfig.NodeIdProp, "1")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
     val config = new KafkaConfig(props)
     assertEquals(Set("CONTROLLER"), config.earlyStartListeners.map(_.value()))
   }

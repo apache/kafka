@@ -728,10 +728,10 @@ object KafkaConfig {
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements <code>${classOf[Authorizer].getName}</code>" +
     " interface, which is used by the broker for authorization."
-  val EarlyStartListenersDoc = "A comma-separated list of listener names which should be started before any non-early start listeners. " +
-    "This is useful in cases where the startup process requires some listeners to be open before other listeners can be brought up. " +
-    "In general, a listener should not appear in this list if it accepts external traffic. If not set, this defaults to be the " +
-    "controller listeners."
+  val EarlyStartListenersDoc = "A comma-separated list of listener names which may be started before the authorizer has finished " +
+   "initialization. This is useful when the authorizer is dependent on the cluster itself for bootstrapping, as is the case for " +
+   "the StandardAuthorizer (which stores ACLs in the metadata log.) By default, all listeners included in controller.listener.names " +
+   "will also be early start listeners. A listener should not appear in this list if it accepts external traffic."
 
   /** ********* Socket Server Configuration ***********/
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
