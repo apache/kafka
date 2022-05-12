@@ -51,6 +51,7 @@ class RaftManagerTest {
           props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
         } else { // broker-only
           val voterId = (nodeId.toInt + 1)
+          props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
           props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
         }
       } else if (processRoles.contains("controller")) { // controller-only

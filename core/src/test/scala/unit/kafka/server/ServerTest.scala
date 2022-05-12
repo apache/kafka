@@ -37,6 +37,7 @@ class ServerTest {
     props.put(KafkaConfig.NodeIdProp, nodeId.toString)
     props.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9093")
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     val config = KafkaConfig.fromProps(props)
 
     val context = Server.createKafkaMetricsContext(config, clusterId)

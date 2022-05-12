@@ -64,6 +64,7 @@ final class KafkaMetadataLogTest {
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(MetadataLogSegmentBytesProp, Int.box(10240))
     props.put(MetadataLogSegmentMillisProp, Int.box(10 * 1024))
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     assertThrows(classOf[InvalidConfigurationException], () => {
       val kafkaConfig = KafkaConfig.fromProps(props)
       val metadataConfig = MetadataLogConfig.apply(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)

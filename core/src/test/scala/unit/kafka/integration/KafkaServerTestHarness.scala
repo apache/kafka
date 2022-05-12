@@ -120,7 +120,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
     createBrokers(startup = true)
 
-
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityAfterServersStart()
   }

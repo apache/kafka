@@ -36,6 +36,7 @@ class StorageToolTest {
     val properties = new Properties()
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    properties.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9093")
     properties.setProperty(KafkaConfig.NodeIdProp, "2")
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9092")
     properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")

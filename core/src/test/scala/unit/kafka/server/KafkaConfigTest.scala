@@ -291,6 +291,7 @@ class KafkaConfigTest {
   def testControllerListenerDefinedForKRaftBroker(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     props.put(KafkaConfig.NodeIdProp, "1")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
 
@@ -357,6 +358,7 @@ class KafkaConfigTest {
   def testControllerListenerNameMapsToPlaintextByDefaultForKRaft(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     props.put(KafkaConfig.NodeIdProp, "1")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
@@ -371,7 +373,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     props.put(KafkaConfig.ListenersProp, "SSL://localhost:9092")
     assertBadConfigContainingMessage(props, controllerNotFoundInMapMessage)
-    props.remove(KafkaConfig.ListenersProp)
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     // ensure we don't map it to PLAINTEXT when it is explicitly mapped otherwise
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
     assertEquals(Some(SecurityProtocol.SSL),
@@ -529,7 +531,7 @@ class KafkaConfigTest {
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
-  def testListenerDefaults(): Unit = {
+  def testListenerDefaultsInZkMode(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
@@ -539,6 +541,54 @@ class KafkaConfigTest {
     assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
     assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
     assertEquals(conf.effectiveAdvertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
+  }
+
+  @Test
+  def testListenerShouldBeSetForKRaftBrokerNode(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.put(KafkaConfig.NodeIdProp, "2")
+    props.put(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+
+    assertFalse(isValidKafkaConfig(props))
+    assertBadConfigContainingMessage(props,
+      s"${KafkaConfig.ListenersProp} must be explicit set for all kraft nodes, for example, PLAINTEXT://:9092 for broker nodes(${KafkaConfig.ProcessRolesProp}=broker)")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
+    KafkaConfig.fromProps(props)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testListenerShouldBeSetForKRaftControllerNode(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "controller")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.put(KafkaConfig.NodeIdProp, "2")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+
+    assertFalse(isValidKafkaConfig(props))
+    assertBadConfigContainingMessage(props,
+      s"${KafkaConfig.ListenersProp} must be explicit set for all kraft nodes, for example, PLAINTEXT://:9093 for controller nodes(${KafkaConfig.ProcessRolesProp}=controller)")
+    props.put(KafkaConfig.ListenersProp, "CONTROLLER://:9093")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testListenerShouldBeSetForKRaftCombinedNode(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.put(KafkaConfig.NodeIdProp, "2")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+
+    assertFalse(isValidKafkaConfig(props))
+    // This is a little different from the previous 2 cases.
+    assertBadConfigContainingMessage(props,
+      s"${KafkaConfig.ListenersProp} must be explicit set for all kraft nodes, for example, PLAINTEXT://:9092,CONTROLLER://:9093 for combined nodes(${KafkaConfig.ProcessRolesProp}=broker,controller)")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092,CONTROLLER://:9093")
+    KafkaConfig.fromProps(props)
+    assertTrue(isValidKafkaConfig(props))
   }
 
   @nowarn("cat=deprecation")
@@ -1397,6 +1447,7 @@ class KafkaConfigTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.MetadataLogDirProp, metadataDir)
     props.put(KafkaConfig.LogDirProp, dataDir)
@@ -1416,6 +1467,7 @@ class KafkaConfigTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.LogDirProp, s"$dataDir1,$dataDir2")
     props.put(KafkaConfig.NodeIdProp, "1")
@@ -1475,6 +1527,7 @@ class KafkaConfigTest {
   def testNodeIdIsInferredByBrokerIdWithKraft(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.setProperty(KafkaConfig.BrokerIdProp, "3")
     props.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
@@ -1490,6 +1543,7 @@ class KafkaConfigTest {
   def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092")
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.setProperty(KafkaConfig.NodeIdProp, "3")
     props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
