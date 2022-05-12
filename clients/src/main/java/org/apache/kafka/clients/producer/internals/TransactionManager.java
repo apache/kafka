@@ -572,7 +572,7 @@ public class TransactionManager {
     /**
      * Returns the next sequence number to be written to the given TopicPartition.
      */
-    synchronized Integer sequenceNumber(TopicPartition topicPartition) {
+    synchronized int sequenceNumber(TopicPartition topicPartition) {
         return txnPartitionMap.getOrCreate(topicPartition).nextSequence;
     }
 
