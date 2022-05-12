@@ -87,7 +87,7 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch
 
-  private val isAlterIsrEnabled = config.interBrokerProtocolVersion.isAlterIsrSupported
+  private val isAlterPartitionEnabled = config.interBrokerProtocolVersion.isAlterPartitionSupported
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
   var controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
@@ -802,7 +802,7 @@ class KafkaController(val config: KafkaConfig,
         stopRemovedReplicasOfReassignedPartition(topicPartition, unneededReplicas)
     }
 
-    if (!isAlterIsrEnabled) {
+    if (!isAlterPartitionEnabled) {
       val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
       zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
     }
@@ -1110,7 +1110,7 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def unregisterPartitionReassignmentIsrChangeHandlers(): Unit = {
-    if (!isAlterIsrEnabled) {
+    if (!isAlterPartitionEnabled) {
       controllerContext.partitionsBeingReassigned.foreach { tp =>
         val path = TopicPartitionStateZNode.path(tp)
         zkClient.unregisterZNodeChangeHandler(path)
@@ -1121,7 +1121,7 @@ class KafkaController(val config: KafkaConfig,
   private def removePartitionFromReassigningPartitions(topicPartition: TopicPartition,
                                                        assignment: ReplicaAssignment): Unit = {
     if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      if (!isAlterIsrEnabled) {
+      if (!isAlterPartitionEnabled) {
         val path = TopicPartitionStateZNode.path(topicPartition)
         zkClient.unregisterZNodeChangeHandler(path)
       }
