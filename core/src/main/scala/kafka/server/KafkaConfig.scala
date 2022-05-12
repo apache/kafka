@@ -894,7 +894,7 @@ object KafkaConfig {
     "record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
     "<code>max.message.bytes</code> (topic config)."
   val NumReplicaFetchersDoc = "Number of fetcher threads used to replicate messages from a source broker. " +
-  "Increasing this value can increase the degree of I/O parallelism in the follower broker."
+  "Increasing this value can increase the degree of I/O parallelism in the follower and leader broker at the cost of higher CPU utilization."
   val ReplicaFetchBackoffMsDoc = "The amount of time to sleep when fetch partition error occurs."
   val ReplicaHighWatermarkCheckpointIntervalMsDoc = "The frequency with which the high watermark is saved out to disk"
   val FetchPurgatoryPurgeIntervalRequestsDoc = "The purge interval (in number of requests) of the fetch request purgatory"
