@@ -914,14 +914,16 @@ public final class QuorumController implements Controller {
                             metadataVersion = MetadataVersion.UNINITIALIZED;
                             future = new CompletableFuture<>();
                             future.completeExceptionally(
-                                    new IllegalStateException("Cannot become leader without a valid initial metadata.version to use. Got " + bootstrapMetadataVersion.version()));
+                                new IllegalStateException("Cannot become leader without an initial metadata.version of " +
+                                    "at least 1. Got " + bootstrapMetadataVersion.featureLevel()));
                         } else {
                             metadataVersion = bootstrapMetadataVersion;
                             future = appendWriteEvent("initializeMetadataVersion", OptionalLong.empty(), () -> {
                                 if (bootstrapMetadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
                                     log.info("Initializing metadata.version to {}", bootstrapMetadataVersion.featureLevel());
                                 } else {
-                                    log.info("Upgrading from KRaft preview. Initializing metadata.version to {}", bootstrapMetadataVersion.featureLevel());
+                                    log.info("Upgrading from KRaft preview. Initializing metadata.version to {}",
+                                        bootstrapMetadataVersion.featureLevel());
                                 }
                                 return featureControl.initializeMetadataVersion(bootstrapMetadataVersion.featureLevel());
                             });
@@ -1450,7 +1452,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setControllerMetrics(controllerMetrics).
             build();
-        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
+        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry, featureListener);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
@@ -1478,7 +1480,6 @@ public final class QuorumController implements Controller {
         resetState();
 
         this.raftClient.register(metaLogListener);
-        this.featureControl.registerFeatureListener("quorumController", featureListener);
     }
 
     @Override

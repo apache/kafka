@@ -48,8 +48,8 @@ object StorageTool extends Logging {
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = getMetadataVersion(namespace)
-          if (metadataVersion.isLessThan(MetadataVersion.IBP_3_0_IV0)) {
-            throw new TerseFailure(s"Cannot specify a metadata version less than ${MetadataVersion.IBP_3_0_IV0.featureLevel()}.")
+          if (!metadataVersion.isKRaftSupported) {
+            throw new TerseFailure(s"Must specify a metadata version of at least 1.")
           }
           val metaProperties = buildMetadataProperties(clusterId, config.get)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
@@ -207,7 +207,7 @@ object StorageTool extends Logging {
 
   def buildMetadataProperties(
     clusterIdStr: String,
-    config: KafkaConfig,
+    config: KafkaConfig
   ): MetaProperties = {
     val effectiveClusterId = try {
       Uuid.fromString(clusterIdStr)

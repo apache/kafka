@@ -66,7 +66,11 @@ public final class FeaturesDelta {
     }
 
     public void replay(RemoveFeatureLevelRecord record) {
-        changes.put(record.name(), Optional.empty());
+        if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
+            metadataVersionChange = null;
+        } else {
+            changes.put(record.name(), Optional.empty());
+        }
     }
 
     public FeaturesImage apply() {

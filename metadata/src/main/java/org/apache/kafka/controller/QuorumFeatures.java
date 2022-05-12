@@ -86,7 +86,6 @@ public class QuorumFeatures {
         }
     }
 
-
     Optional<VersionRange> localSupportedFeature(String featureName) {
         return Optional.ofNullable(supportedFeatures.get(featureName));
     }

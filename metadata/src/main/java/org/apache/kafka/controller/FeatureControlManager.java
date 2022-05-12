@@ -68,16 +68,17 @@ public class FeatureControlManager {
     /**
      * Collection of listeners for when features change
      */
-    private final Map<String, FeatureLevelListener> listeners;
+    private final FeatureLevelListener featureListener;
 
     FeatureControlManager(LogContext logContext,
                           QuorumFeatures quorumFeatures,
-                          SnapshotRegistry snapshotRegistry) {
+                          SnapshotRegistry snapshotRegistry,
+                          FeatureLevelListener featureListener) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, MetadataVersion.UNINITIALIZED);
-        this.listeners = new HashMap<>();
+        this.featureListener = featureListener;
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -90,7 +91,7 @@ public class FeatureControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
-                    upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), brokerFeatures, records));
+                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), brokerFeatures, records));
         }
 
         if (validateOnly) {
@@ -107,16 +108,13 @@ public class FeatureControlManager {
                 Collections.singletonMap(
                     MetadataVersion.FEATURE_NAME,
                     new ApiError(Errors.INVALID_UPDATE_VERSION,
-                        "Cannot initialize metadata.version since it has already been initialized.")
+                        "Cannot initialize metadata.version to " + initVersion + " since it has already been " +
+                            "initialized to " + metadataVersion().featureLevel() + ".")
             ));
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ApiError result = updateMetadataVersion(initVersion, false, records::add);
         return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersion.FEATURE_NAME, result));
-    }
-
-    void registerFeatureListener(String listenerName, FeatureLevelListener listener) {
-        this.listeners.putIfAbsent(listenerName, listener);
     }
 
     boolean canSupportVersion(String featureName, short versionRange) {
@@ -151,7 +149,12 @@ public class FeatureControlManager {
                 "The controller does not support the given upgrade type.");
         }
 
-        final Short currentVersion = finalizedVersions.get(featureName);
+        final Short currentVersion;
+        if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
+            currentVersion = metadataVersion.get().featureLevel();
+        } else {
+            currentVersion = finalizedVersions.get(featureName);
+        }
 
         if (newVersion <= 0) {
             return invalidUpdateVersion(featureName, newVersion,
@@ -273,12 +276,11 @@ public class FeatureControlManager {
             log.info("Setting feature {} to {}", record.name(), record.featureLevel());
             finalizedVersions.put(record.name(), record.featureLevel());
         }
-        for (Entry<String, FeatureLevelListener> listenerEntry : listeners.entrySet()) {
-            try {
-                listenerEntry.getValue().handle(record.name(), record.featureLevel());
-            } catch (Throwable t) {
-                log.error("Failure calling feature listener " + listenerEntry.getKey(), t);
-            }
+
+        try {
+            featureListener.handle(record.name(), record.featureLevel());
+        } catch (Throwable t) {
+            log.error("Failure calling feature change listener.", t);
         }
     }
 

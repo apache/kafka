@@ -18,7 +18,7 @@
 package integration.kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterTest, Type}
+import kafka.test.annotation.{ClusterTest, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
@@ -31,21 +31,25 @@ import scala.jdk.CollectionConverters._
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class MetadataVersionIntegrationTest {
-  @ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_0_IV0)
+  @ClusterTests(value = Array(
+      new ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_0_IV0),
+      new ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_1_IV0),
+      new ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_2_IV0)
+  ))
   def testBasicMetadataVersionUpgrade(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.createAdminClient()
     val describeResult = admin.describeFeatures()
     val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
-    assertEquals(ff.minVersionLevel(), 1)
-    assertEquals(ff.maxVersionLevel(), 1)
+    assertEquals(ff.minVersionLevel(), clusterInstance.config().metadataVersion().get().featureLevel())
+    assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().get().featureLevel())
 
-    // Update to V2
+    // Update to new version
     val updateVersion = MetadataVersion.IBP_3_3_IV0.featureLevel.shortValue
     val updateResult = admin.updateFeatures(
       Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
     updateResult.all().get()
 
-    // Verify that V2 is visible on broker
+    // Verify that new version is visible on broker
     TestUtils.waitUntilTrue(() => {
       val describeResult2 = admin.describeFeatures()
       val ff2 = describeResult2.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
@@ -53,8 +57,17 @@ class MetadataVersionIntegrationTest {
     }, "Never saw metadata.version increase on broker")
   }
 
+  @ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_3_IV0)
+  def testUpgradeSameVersion(clusterInstance: ClusterInstance): Unit = {
+    val admin = clusterInstance.createAdminClient()
+    val updateVersion = MetadataVersion.IBP_3_3_IV0.featureLevel.shortValue
+    val updateResult = admin.updateFeatures(
+      Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
+    updateResult.all().get()
+  }
+
   @ClusterTest(clusterType = Type.KRAFT)
-  def testBootstrapLatestVersion(clusterInstance: ClusterInstance): Unit = {
+  def testDefaultIsLatestVersion(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.createAdminClient()
     val describeResult = admin.describeFeatures()
     val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)

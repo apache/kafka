@@ -128,18 +128,19 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
-      val metadataVersion: Option[Short] = Option(newImage.features().metadataVersion())
-        .filterNot(mv => mv.equals(MetadataVersion.UNINITIALIZED))
-        .map(_.featureLevel())
+      val metadataVersionLogMsg = newImage.features().metadataVersion() match {
+        case MetadataVersion.UNINITIALIZED => "un-initialized metadata.version."
+        case mv: MetadataVersion => s"metadata.version ${mv.featureLevel()}"
+      }
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch  with metadata.version $metadataVersion.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with metadata.version $metadataVersion.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
       }
 
       // Apply feature deltas.

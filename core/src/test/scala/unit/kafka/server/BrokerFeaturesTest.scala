@@ -25,6 +25,10 @@ import scala.jdk.CollectionConverters._
 
 class BrokerFeaturesTest {
 
+  @Test
+  def testEmpty(): Unit = {
+    assertTrue(BrokerFeatures.createEmpty().supportedFeatures.empty)
+  }
 
   @Test
   def testIncompatibilitiesDueToAbsentFeature(): Unit = {
