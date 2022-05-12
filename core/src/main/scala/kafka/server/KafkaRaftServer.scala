@@ -107,7 +107,7 @@ class KafkaRaftServer(
       controllerQuorumVotersFuture,
       KafkaRaftServer.configSchema,
       raftApiVersions,
-      Some(bootstrapMetadata)
+      bootstrapMetadata
     ))
   } else {
     None

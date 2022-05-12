@@ -167,7 +167,7 @@ public final class QuorumController implements Controller {
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
         private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
-        private MetadataVersion bootstrapMetadataVersion = null;
+        private BootstrapMetadata bootstrapMetadata = null;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -244,8 +244,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
-            this.bootstrapMetadataVersion = metadataVersion;
+        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
             return this;
         }
 
@@ -279,7 +279,7 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
-            if (bootstrapMetadataVersion == null || bootstrapMetadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
+            if (bootstrapMetadata == null || bootstrapMetadata.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
                 throw new RuntimeException("You must specify an initial metadata.version using the kafka-storage tool.");
             }
             if (quorumFeatures == null) {
@@ -304,7 +304,7 @@ public final class QuorumController implements Controller {
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
                     createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
-                    staticConfig, bootstrapMetadataVersion);
+                    staticConfig, bootstrapMetadata);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -904,36 +904,36 @@ public final class QuorumController implements Controller {
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
 
-                    // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
-                    // write any records to the log since we need the metadata.version to determine the correct
+                    // Check if we need to bootstrap metadata into the log. This must happen before we can
+                    // write any other records to the log since we need the metadata.version to determine the correct
                     // record version
                     final MetadataVersion metadataVersion;
                     if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
                         final CompletableFuture<Map<String, ApiError>> future;
-                        if (!bootstrapMetadataVersion.isKRaftSupported()) {
+                        if (!bootstrapMetadata.metadataVersion().isKRaftSupported()) {
                             metadataVersion = MetadataVersion.UNINITIALIZED;
                             future = new CompletableFuture<>();
                             future.completeExceptionally(
                                 new IllegalStateException("Cannot become leader without an initial metadata.version of " +
-                                    "at least 1. Got " + bootstrapMetadataVersion.featureLevel()));
+                                    "at least 1. Got " + bootstrapMetadata.metadataVersion().featureLevel()));
                         } else {
-                            metadataVersion = bootstrapMetadataVersion;
-                            future = appendWriteEvent("initializeMetadataVersion", OptionalLong.empty(), () -> {
-                                if (bootstrapMetadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
-                                    log.info("Initializing metadata.version to {}", bootstrapMetadataVersion.featureLevel());
+                            metadataVersion = bootstrapMetadata.metadataVersion();
+                            future = appendWriteEvent("bootstrapMetadata", OptionalLong.empty(), () -> {
+                                if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
+                                    log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
                                 } else {
                                     log.info("Upgrading from KRaft preview. Initializing metadata.version to {}",
-                                        bootstrapMetadataVersion.featureLevel());
+                                        metadataVersion.featureLevel());
                                 }
-                                return featureControl.initializeMetadataVersion(bootstrapMetadataVersion.featureLevel());
+                                return ControllerResult.atomicOf(bootstrapMetadata.records(), null);
                             });
                         }
                         future.whenComplete((result, exception) -> {
                             if (exception != null) {
-                                log.error("Failed to initialize metadata.version", exception);
-                                appendRaftEvent("metadataVersionFailure[" + curClaimEpoch + "]", () -> {
-                                    log.warn("Renouncing the leadership at oldEpoch {} since we could not bootstrap" +
-                                             "a metadata.version. Reverting to last committed offset {}.",
+                                log.error("Failed to bootstrap metadata.", exception);
+                                appendRaftEvent("bootstrapMetadata[" + curClaimEpoch + "]", () -> {
+                                    log.warn("Renouncing the leadership at oldEpoch {} since we could not bootstrap " +
+                                             "metadata. Reverting to last committed offset {}.",
                                         curClaimEpoch, lastCommittedOffset);
                                     renounce();
                                 });
@@ -942,6 +942,7 @@ public final class QuorumController implements Controller {
                     } else {
                         metadataVersion = featureControl.metadataVersion();
                     }
+
 
                     log.info(
                         "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
@@ -1395,7 +1396,7 @@ public final class QuorumController implements Controller {
      */
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
-    private final MetadataVersion bootstrapMetadataVersion;
+    private final BootstrapMetadata bootstrapMetadata;
 
     private QuorumController(LogContext logContext,
                              int nodeId,
@@ -1418,7 +1419,7 @@ public final class QuorumController implements Controller {
                              ConfigurationValidator configurationValidator,
                              Optional<ClusterMetadataAuthorizer> authorizer,
                              Map<String, Object> staticConfig,
-                             MetadataVersion bootstrapMetadataVersion) {
+                             BootstrapMetadata bootstrapMetadata) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1470,7 +1471,7 @@ public final class QuorumController implements Controller {
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
         this.raftClient = raftClient;
-        this.bootstrapMetadataVersion = bootstrapMetadataVersion;
+        this.bootstrapMetadata = bootstrapMetadata;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.writeOffset = -1L;

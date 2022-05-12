@@ -42,7 +42,7 @@ import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
@@ -65,7 +65,7 @@ class ControllerServer(
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val configSchema: KafkaConfigSchema,
   val raftApiVersions: ApiVersions,
-  val bootstrapMetadata: Option[BootstrapMetadata] = None
+  val bootstrapMetadata: BootstrapMetadata
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -191,7 +191,7 @@ class ControllerServer(
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).
           setStaticConfig(config.originals).
-          setBootstrapMetadataVersion(bootstrapMetadata.map(_.metadataVersion()).getOrElse(MetadataVersion.latest()))
+          setBootstrapMetadata(bootstrapMetadata)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)

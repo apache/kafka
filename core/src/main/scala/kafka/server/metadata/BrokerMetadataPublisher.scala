@@ -129,7 +129,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       metadataCache.setImage(newImage)
 
       val metadataVersionLogMsg = newImage.features().metadataVersion() match {
-        case MetadataVersion.UNINITIALIZED => "un-initialized metadata.version."
+        case MetadataVersion.UNINITIALIZED => "un-initialized metadata.version"
         case mv: MetadataVersion => s"metadata.version ${mv.featureLevel()}"
       }
 

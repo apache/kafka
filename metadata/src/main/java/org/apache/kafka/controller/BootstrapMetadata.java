@@ -19,7 +19,6 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.controller.util.SnapshotFileReader;
 import org.apache.kafka.controller.util.SnapshotFileWriter;
 import org.apache.kafka.raft.Batch;
@@ -36,9 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -55,12 +52,19 @@ public class BootstrapMetadata {
 
     private final MetadataVersion metadataVersion;
 
-    BootstrapMetadata(MetadataVersion metadataVersion) {
+    private final List<ApiMessageAndVersion> records;
+
+    BootstrapMetadata(MetadataVersion metadataVersion, List<ApiMessageAndVersion> records) {
         this.metadataVersion = metadataVersion;
+        this.records = Collections.unmodifiableList(records);
     }
 
     public MetadataVersion metadataVersion() {
         return this.metadataVersion;
+    }
+
+    public List<ApiMessageAndVersion> records() {
+        return records;
     }
 
     @Override
@@ -88,16 +92,14 @@ public class BootstrapMetadata {
      * metadata record type to list of records.
      */
     private static class BootstrapListener implements RaftClient.Listener<ApiMessageAndVersion> {
-        private final Map<MetadataRecordType, List<ApiMessage>> messages = new LinkedHashMap<>();
+        private final List<ApiMessageAndVersion> records = new ArrayList<>();
 
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             try {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
-                    for (ApiMessageAndVersion messageAndVersion : batch.records()) {
-                        handleMessage(messageAndVersion.message());
-                    }
+                    records.addAll(batch.records());
                 }
             } finally {
                 reader.close();
@@ -110,29 +112,30 @@ public class BootstrapMetadata {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
                     for (ApiMessageAndVersion messageAndVersion : batch) {
-                        handleMessage(messageAndVersion.message());
+                        records.add(messageAndVersion);
                     }
                 }
             } finally {
                 reader.close();
             }
         }
-
-        void handleMessage(ApiMessage message) {
-            try {
-                MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
-                messages.computeIfAbsent(type, __ -> new ArrayList<>()).add(message);
-            } catch (Exception e) {
-                log.error("Error processing record of type " + message.apiKey(), e);
-            }
-        }
     }
 
     public static BootstrapMetadata create(MetadataVersion metadataVersion) {
+        return create(metadataVersion, new ArrayList<>());
+    }
+
+    public static BootstrapMetadata create(MetadataVersion metadataVersion, List<ApiMessageAndVersion> records) {
         if (!metadataVersion.isKRaftSupported()) {
             throw new IllegalArgumentException("Cannot create BootstrapMetadata with a non-KRaft metadata version.");
         }
-        return new BootstrapMetadata(metadataVersion);
+        records.add(new ApiMessageAndVersion(
+            new FeatureLevelRecord()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setFeatureLevel(metadataVersion.featureLevel()),
+            FeatureLevelRecord.LOWEST_SUPPORTED_VERSION));
+
+        return new BootstrapMetadata(metadataVersion, records);
     }
 
     /**
@@ -147,7 +150,7 @@ public class BootstrapMetadata {
 
         if (!Files.exists(bootstrapPath)) {
             log.debug("Missing bootstrap file, this appears to be a KRaft preview cluster.");
-            return new BootstrapMetadata(MetadataVersion.IBP_3_0_IV0);
+            return BootstrapMetadata.create(MetadataVersion.IBP_3_0_IV0);
         }
 
         BootstrapListener listener = new BootstrapListener();
@@ -159,13 +162,17 @@ public class BootstrapMetadata {
             throw new RuntimeException("Failed to load snapshot", e.getCause());
         }
 
-        List<ApiMessage> featureRecords = listener.messages.getOrDefault(MetadataRecordType.FEATURE_LEVEL_RECORD, Collections.emptyList());
-        Optional<FeatureLevelRecord> metadataVersionRecord = featureRecords.stream()
-                .map(apiMessage -> (FeatureLevelRecord) apiMessage)
-                .filter(featureLevelRecord -> featureLevelRecord.name().equals(MetadataVersion.FEATURE_NAME))
-                .findFirst();
+        Optional<FeatureLevelRecord> metadataVersionRecord = listener.records.stream()
+            .filter(message -> {
+                MetadataRecordType type = MetadataRecordType.fromId(message.message().apiKey());
+                return type.equals(MetadataRecordType.FEATURE_LEVEL_RECORD);
+            })
+            .map(message -> (FeatureLevelRecord) message.message())
+            .filter(record -> record.name().equals(MetadataVersion.FEATURE_NAME))
+            .findFirst();
+
         if (metadataVersionRecord.isPresent()) {
-            return new BootstrapMetadata(MetadataVersion.fromFeatureLevel(metadataVersionRecord.get().featureLevel()));
+            return new BootstrapMetadata(MetadataVersion.fromFeatureLevel(metadataVersionRecord.get().featureLevel()), listener.records);
         } else {
             throw new RuntimeException("Expected a metadata.version to exist in the snapshot " + bootstrapPath + ", but none was found");
         }
@@ -185,12 +192,7 @@ public class BootstrapMetadata {
                 ". File already already exists.");
         }
         SnapshotFileWriter bootstrapWriter = SnapshotFileWriter.open(bootstrapPath);
-        bootstrapWriter.append(
-            new ApiMessageAndVersion(
-                new FeatureLevelRecord()
-                    .setName(MetadataVersion.FEATURE_NAME)
-                    .setFeatureLevel(metadata.metadataVersion.featureLevel()),
-                FeatureLevelRecord.LOWEST_SUPPORTED_VERSION));
+        bootstrapWriter.append(metadata.records());
         bootstrapWriter.close();
     }
 }

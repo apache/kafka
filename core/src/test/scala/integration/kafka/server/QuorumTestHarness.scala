@@ -33,6 +33,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.controller.BootstrapMetadata
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -41,7 +42,9 @@ import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
+import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
   def createBroker(config: KafkaConfig,
@@ -113,6 +116,10 @@ abstract class QuorumTestHarness extends Logging {
   protected def kraftControllerConfigs(): Seq[Properties] = {
     Seq(new Properties())
   }
+
+  protected def metadataVersion: MetadataVersion = MetadataVersion.latest()
+
+  val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
 
   private var implementation: QuorumImplementation = null
 
@@ -227,7 +234,7 @@ abstract class QuorumTestHarness extends Logging {
     var out: PrintStream = null
     try {
       out = new PrintStream(stream)
-      if (StorageTool.formatCommand(out, directories, metaProperties, MetadataVersion.latest(), ignoreFormatted = false) != 0) {
+      if (StorageTool.formatCommand(out, directories, metaProperties, metadataVersion, ignoreFormatted = false) != 0) {
         throw new RuntimeException(stream.toString())
       }
       debug(s"Formatted storage directory(ies) ${directories}")
@@ -285,7 +292,7 @@ abstract class QuorumTestHarness extends Logging {
         controllerQuorumVotersFuture = controllerQuorumVotersFuture,
         configSchema = KafkaRaftServer.configSchema,
         raftApiVersions = apiVersions,
-        bootstrapMetadata = None,
+        bootstrapMetadata = BootstrapMetadata.create(metadataVersion, bootstrapRecords.asJava),
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
