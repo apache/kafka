@@ -973,13 +973,14 @@ class ReplicaManagerTest {
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](0, 2).asJava
       val topicIds = Map(tp0.topic -> topicId, tp1.topic -> topicId).asJava
+      val leaderEpoch = 0
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(
           new LeaderAndIsrPartitionState()
             .setTopicName(tp0.topic)
             .setPartitionIndex(tp0.partition)
             .setControllerEpoch(0)
-            .setLeader(0)
+            .setLeader(leaderEpoch)
             .setLeaderEpoch(0)
             .setIsr(partition0Replicas)
             .setPartitionEpoch(0)
@@ -990,7 +991,7 @@ class ReplicaManagerTest {
             .setPartitionIndex(tp1.partition)
             .setControllerEpoch(0)
             .setLeader(0)
-            .setLeaderEpoch(0)
+            .setLeaderEpoch(leaderEpoch)
             .setIsr(partition1Replicas)
             .setPartitionEpoch(0)
             .setReplicas(partition1Replicas)
@@ -1024,20 +1025,17 @@ class ReplicaManagerTest {
         assertEquals(Errors.NONE, tp0Status.get.error)
         assertTrue(tp0Status.get.records.batches.iterator.hasNext)
 
+        // Replica 1 is not a valid replica for partition 1
         val tp1Status = responseStatusMap.get(tidp1)
-        assertTrue(tp1Status.isDefined)
-        assertEquals(0, tp1Status.get.highWatermark)
-        assertEquals(Some(0), tp0Status.get.lastStableOffset)
-        assertEquals(Errors.NONE, tp1Status.get.error)
-        assertFalse(tp1Status.get.records.batches.iterator.hasNext)
+        assertEquals(Errors.UNKNOWN_LEADER_EPOCH, tp1Status.get.error)
       }
 
       fetchPartitions(
         replicaManager,
         replicaId = 1,
         fetchInfos = Seq(
-          tidp0 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty()),
-          tidp1 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty())
+          tidp0 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.of[Integer](leaderEpoch)),
+          tidp1 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.of[Integer](leaderEpoch))
         ),
         responseCallback = fetchCallback,
         maxWaitMs = 1000,
