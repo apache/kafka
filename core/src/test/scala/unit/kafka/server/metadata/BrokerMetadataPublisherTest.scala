@@ -19,7 +19,7 @@ package unit.kafka.server.metadata
 
 import java.util.Collections.{singleton, singletonMap}
 import java.util.Properties
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
@@ -30,12 +30,13 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
 import org.mockito.invocation.InvocationOnMock
@@ -44,6 +45,24 @@ import org.mockito.stubbing.Answer
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataPublisherTest {
+  val exitException = new AtomicReference[Throwable](null)
+
+  @BeforeEach
+  def setUp(): Unit = {
+    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit ${code}")))
+    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt ${code}")))
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    Exit.resetExitProcedure();
+    Exit.resetHaltProcedure();
+    val exception = exitException.get()
+    if (exception != null) {
+      throw exception
+    }
+  }
+
   @Test
   def testGetTopicDelta(): Unit = {
     assert(BrokerMetadataPublisher.getTopicDelta(

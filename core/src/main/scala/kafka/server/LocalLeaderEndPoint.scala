@@ -68,6 +68,7 @@ class LocalLeaderEndPoint(brokerConfig: KafkaConfig,
       topicNames.put(topic.topicId, topic.topic)
     }
 
+
     def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
@@ -85,17 +86,22 @@ class LocalLeaderEndPoint(brokerConfig: KafkaConfig,
 
     val fetchData = request.fetchData(topicNames.asJava)
 
+    val fetchParams = FetchParams(
+      requestVersion = request.version,
+      maxWaitMs = 0L, // timeout is 0 so that the callback will be executed immediately
+      replicaId = Request.FutureLocalReplicaId,
+      minBytes = request.minBytes,
+      maxBytes = request.maxBytes,
+      isolation = FetchLogEnd,
+      clientMetadata = None
+    )
+
     replicaMgr.fetchMessages(
-      0L, // timeout is 0 so that the callback will be executed immediately
-      Request.FutureLocalReplicaId,
-      request.minBytes,
-      request.maxBytes,
-      false,
-      fetchData.asScala.toSeq,
-      UnboundedQuota,
-      processResponseCallback,
-      request.isolationLevel,
-      None)
+      params = fetchParams,
+      fetchInfos = fetchData.asScala.toSeq,
+      quota = UnboundedQuota,
+      responseCallback = processResponseCallback
+    )
 
     if (partitionData == null)
       throw new IllegalStateException(s"Failed to fetch data for partitions ${fetchData.keySet().toArray.mkString(",")}")

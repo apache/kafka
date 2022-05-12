@@ -189,7 +189,7 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_2_7_IV1);
     }
 
-    public boolean isAlterIsrSupported() {
+    public boolean isAlterPartitionSupported() {
         return this.isAtLeast(IBP_2_7_IV2);
     }
 

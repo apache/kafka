@@ -50,7 +50,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     private final String name;
     protected final AbstractSegments<S> segments;
-    private final String metricScope;
     protected final KeySchema baseKeySchema;
     protected final Optional<KeySchema> indexKeySchema;
 
@@ -65,12 +64,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     private volatile boolean open;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
-                                                 final String metricScope,
                                                  final KeySchema baseKeySchema,
                                                  final Optional<KeySchema> indexKeySchema,
                                                  final AbstractSegments<S> segments) {
         this.name = name;
-        this.metricScope = metricScope;
         this.baseKeySchema = baseKeySchema;
         this.indexKeySchema = indexKeySchema;
         this.segments = segments;
