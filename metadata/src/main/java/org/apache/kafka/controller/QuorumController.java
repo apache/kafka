@@ -992,15 +992,13 @@ public final class QuorumController implements Controller {
         public void handle(String featureName, short finalizedVersion) {
             boolean isActiveController = curClaimEpoch != -1;
             boolean isFeatureSupported = featureControl.canSupportVersion(featureName, finalizedVersion);
-            if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
-                if (!isFeatureSupported) {
-                    if (isActiveController) {
-                        log.error("Active controller cannot support metadata.version {}", finalizedVersion);
-                    } else {
-                        log.error("Standby controller cannot support metadata.version {}, shutting down.", finalizedVersion);
-                    }
-                    beginShutdown();
+            if (!isFeatureSupported) {
+                if (isActiveController) {
+                    log.error("Active controller cannot support {} {}", featureName, finalizedVersion);
+                } else {
+                    log.error("Standby controller cannot support {} {}, shutting down.", featureName, finalizedVersion);
                 }
+                beginShutdown();
             }
             // In the future, handle other feature flags that are relevant to the controller here.
         }
