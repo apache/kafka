@@ -76,7 +76,7 @@ ext {
     )
 
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
-  maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacParallelism.toInteger() :
+  maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)
   userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
 
