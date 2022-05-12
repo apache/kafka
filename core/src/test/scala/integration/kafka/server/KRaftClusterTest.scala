@@ -295,20 +295,13 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterInvalidMetadataVersion(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
-        setNumBrokerNodes(1).
-        setNumControllerNodes(1).build()).build()
-    try {
-      cluster.format()
-      cluster.startup()
-      fail("Should not be able to start up with an invalid version")
-    } catch {
-      case e: ExecutionException => assertTrue(e.getCause.getMessage.contains("Unsupported"))
-    } finally {
-      cluster.close()
-    }
+    assertThrows(classOf[IllegalArgumentException], () => {
+      new KafkaClusterTestKit.Builder(
+        new TestKitNodes.Builder().
+          setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
+          setNumBrokerNodes(1).
+          setNumControllerNodes(1).build()).build()
+    })
   }
 
   private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,
