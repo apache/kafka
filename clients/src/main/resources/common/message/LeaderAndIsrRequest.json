@@ -28,7 +28,7 @@
   //
   // Version 5 adds Topic ID and Type to the TopicStates, as described in KIP-516.
   //
-  // Version 6 adds ElectionState as described in KIP-704.
+  // Version 6 adds LeaderRecoveryState as described in KIP-704.
   "validVersions": "0-6",
   "flexibleVersions": "4+",
   "fields": [

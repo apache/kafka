@@ -28,11 +28,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertTrue;
 
 public class DistributedConfigTest {
 
@@ -306,4 +309,42 @@ public class DistributedConfigTest {
                 () -> new DistributedConfig(configs));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
+
+    @Test
+    public void shouldIdentifyNeedForTransactionalLeader() {
+        Map<String, String> workerProps = configs();
+
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        assertFalse(new DistributedConfig(workerProps).transactionalLeaderEnabled());
+
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
+        assertTrue(new DistributedConfig(workerProps).transactionalLeaderEnabled());
+
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        assertTrue(new DistributedConfig(workerProps).transactionalLeaderEnabled());
+    }
+
+    @Test
+    public void shouldConstructExpectedTransactionalId() {
+        Map<String, String> workerProps = configs();
+
+        workerProps.put(GROUP_ID_CONFIG, "why did i stay up all night writing unit tests");
+        assertEquals(
+                "connect-cluster-why did i stay up all night writing unit tests",
+                new DistributedConfig(workerProps).transactionalProducerId()
+        );
+
+        workerProps.put(GROUP_ID_CONFIG, "connect-cluster");
+        assertEquals(
+                "connect-cluster-connect-cluster",
+                new DistributedConfig(workerProps).transactionalProducerId()
+        );
+
+        workerProps.put(GROUP_ID_CONFIG, "\u2603");
+        assertEquals(
+                "connect-cluster-\u2603",
+                new DistributedConfig(workerProps).transactionalProducerId()
+        );
+    }
+
 }
