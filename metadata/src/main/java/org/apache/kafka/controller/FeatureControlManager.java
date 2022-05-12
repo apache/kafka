@@ -216,7 +216,7 @@ public class FeatureControlManager {
         }
 
         if (newVersionLevel <= 0) {
-            return invalidMetadataVersion(newVersionLevel, "metadata.version cannot be less than 1.");
+            return invalidMetadataVersion(newVersionLevel, "KRaft mode/the quorum does not support metadata.version values less than 1.");
         }
 
         if (!quorumSupported.get().contains(newVersionLevel)) {
