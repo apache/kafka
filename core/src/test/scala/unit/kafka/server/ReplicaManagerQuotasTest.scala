@@ -277,6 +277,10 @@ class ReplicaManagerQuotasTest {
         MemoryRecords.EMPTY
       ))
 
+    when(log.maybeIncrementHighWatermark(
+      any[LogOffsetMetadata]
+    )).thenReturn(None)
+
     //Create log manager
     val logManager: LogManager = mock(classOf[LogManager])
 

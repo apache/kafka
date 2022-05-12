@@ -277,7 +277,7 @@ class Partition(val topicPartition: TopicPartition,
    * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
    * each partition. */
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
-  this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
+  this.logIdent = s"[Partition $topicPartition:${topicId.map(id => " topicId=" + id).getOrElse("")} broker=$localBrokerId] "
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
@@ -1185,7 +1185,7 @@ class Partition(val topicPartition: TopicPartition,
       debug(s"Leader $localBrokerId failed to record follower $replicaId's position " +
         s"${fetchPartitionData.fetchOffset}, and last sent high watermark since the replica is " +
         s"not recognized to be one of the assigned replicas ${assignmentState.replicas.mkString(",")} " +
-        s"for partition $topicPartition with topicId $topicId in partition epoch $partitionEpoch")
+        s"for leader epoch $leaderEpoch with partition epoch $partitionEpoch")
 
       val error = if (fetchPartitionData.currentLeaderEpoch.isPresent) {
         // The leader epoch is present in the request and matches the local epoch, but
