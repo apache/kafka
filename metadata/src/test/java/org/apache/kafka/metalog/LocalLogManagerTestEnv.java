@@ -20,8 +20,11 @@ package org.apache.kafka.metalog;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metalog.LocalLogManager.LeaderChangeBatch;
+import org.apache.kafka.metalog.LocalLogManager.LocalRecordBatch;
 import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
@@ -32,7 +35,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 public class LocalLogManagerTestEnv implements AutoCloseable {
     private static final Logger log =
@@ -77,10 +82,15 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return testEnv;
     }
 
-    public LocalLogManagerTestEnv(int numManagers, Optional<RawSnapshotReader> snapshot) throws Exception {
+    public LocalLogManagerTestEnv(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot,
+        Consumer<SharedLogData> dataSetup
+    ) throws Exception {
         clusterId = Uuid.randomUuid().toString();
         dir = TestUtils.tempDirectory();
         shared = new SharedLogData(snapshot);
+        dataSetup.accept(shared);
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
             for (int nodeId = 0; nodeId < numManagers; nodeId++) {
@@ -100,6 +110,28 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
             throw t;
         }
         this.logManagers = newLogManagers;
+    }
+
+    public LocalLogManagerTestEnv(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot
+    ) throws Exception {
+        this(numManagers, snapshot, __ -> { });
+    }
+
+    /**
+     * Append some records to the log. This method is meant to be called before the
+     * controllers are started, to simulate a pre-existing metadata log.
+     *
+     * @param records   The records to be appended. Will be added in a single batch.
+     */
+    public void appendInitialRecords(List<ApiMessageAndVersion> records) {
+        int initialLeaderEpoch = 1;
+        shared.append(new LeaderChangeBatch(
+            new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
+        shared.append(new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
+        shared.append(new LeaderChangeBatch(
+            new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
     }
 
     public String clusterId() {

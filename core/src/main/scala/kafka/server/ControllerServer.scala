@@ -103,7 +103,6 @@ class ControllerServer(
       info("Starting controller")
 
       maybeChangeStatus(STARTING, STARTED)
-      // TODO: initialize the log dir(s)
       this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
 
       newGauge("ClusterId", () => clusterId)
@@ -116,7 +115,7 @@ class ControllerServer(
       }
 
       val javaListeners = config.controllerListeners.map(_.toJava).asJava
-      authorizer = config.authorizer
+      authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
       val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
@@ -125,7 +124,11 @@ class ControllerServer(
           // AuthorizerServerInfo, such as the assumption that there is an inter-broker
           // listener, or that ID is named brokerId.
           val controllerAuthorizerInfo = ServerInfo(
-            new ClusterResource(clusterId), config.nodeId, javaListeners, javaListeners.get(0))
+            new ClusterResource(clusterId),
+            config.nodeId,
+            javaListeners,
+            javaListeners.get(0),
+            config.earlyStartListeners.map(_.value()).asJava)
           authZ.start(controllerAuthorizerInfo).asScala.map { case (ep, cs) =>
             ep -> cs.toCompletableFuture
           }.toMap
@@ -144,7 +147,6 @@ class ControllerServer(
         time,
         credentialProvider,
         apiVersionManager)
-      socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
 
       if (config.controllerListeners.nonEmpty) {
         socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
@@ -213,7 +215,17 @@ class ControllerServer(
         config.numIoThreads,
         s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
-      socketServer.startProcessingRequests(authorizerFutures)
+
+      /**
+       * Enable the controller endpoint(s). If we are using an authorizer which stores
+       * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
+       * accepting requests from principals included super.users right after this point,
+       * but we will not be able to process requests from non-superusers until the
+       * QuorumController declares that we have caught up to the high water mark of the
+       * metadata log. See @link{QuorumController#maybeCompleteAuthorizerInitialLoad}
+       * and KIP-801 for details.
+       */
+      socketServer.enableRequestProcessing(authorizerFutures)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
@@ -241,6 +253,7 @@ class ControllerServer(
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       if (controller != null)
         controller.close()
+      CoreUtils.swallow(authorizer.foreach(_.close()), this)
       createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))

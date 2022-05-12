@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
+
 import joptsimple.OptionException
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -74,7 +75,6 @@ class TestRaftServer(
 
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
-    socketServer.startup(startProcessingRequests = false)
 
     val metaProperties = MetaProperties(
       clusterId = Uuid.ZERO_UUID.toString,
@@ -119,7 +119,7 @@ class TestRaftServer(
 
     workloadGenerator.start()
     raftManager.startup()
-    socketServer.startProcessingRequests(Map.empty)
+    socketServer.enableRequestProcessing(Map.empty)
   }
 
   def shutdown(): Unit = {
