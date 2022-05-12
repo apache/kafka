@@ -40,7 +40,7 @@ class TxnPartitionMap {
     }
 
     TxnPartitionEntry getOrCreate(TopicPartition topicPartition) {
-        return topicPartitions.computeIfAbsent(topicPartition, tp -> new TxnPartitionEntry());
+        return topicPartitions.computeIfAbsent(topicPartition, tp -> new TxnPartitionEntry(tp));
     }
 
     boolean contains(TopicPartition topicPartition) {

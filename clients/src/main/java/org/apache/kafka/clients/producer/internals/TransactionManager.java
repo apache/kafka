@@ -48,7 +48,6 @@ import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -584,10 +583,7 @@ public class TransactionManager {
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
-        Integer currentSequence = sequenceNumber(topicPartition);
-
-        currentSequence = DefaultRecordBatch.incrementSequence(currentSequence, increment);
-        txnPartitionMap.get(topicPartition).nextSequence = currentSequence;
+        txnPartitionMap.get(topicPartition).incrementSequence(increment);
     }
 
     synchronized void addInFlightBatch(ProducerBatch batch) {
@@ -742,12 +738,8 @@ public class TransactionManager {
             return;
         log.debug("producerId: {}, send to partition {} failed fatally. Reducing future sequence numbers by {}",
                 batch.producerId(), batch.topicPartition, batch.recordCount);
-        int currentSequence = sequenceNumber(batch.topicPartition);
-        currentSequence -= batch.recordCount;
-        if (currentSequence < 0)
-            throw new IllegalStateException("Sequence number for partition " + batch.topicPartition + " is going to become negative: " + currentSequence);
 
-        setNextSequence(batch.topicPartition, currentSequence);
+        txnPartitionMap.get(batch.topicPartition).decrementSequence(batch.recordCount);
 
         txnPartitionMap.get(batch.topicPartition).resetSequenceNumbers(inFlightBatch -> {
             if (inFlightBatch.baseSequence() < batch.baseSequence())

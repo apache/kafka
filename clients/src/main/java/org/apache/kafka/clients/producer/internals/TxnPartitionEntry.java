@@ -21,10 +21,14 @@ import java.util.Comparator;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 
 class TxnPartitionEntry {
+
+    private final TopicPartition topicPartition;
 
     // The producer id/epoch being used for a given partition.
     ProducerIdAndEpoch producerIdAndEpoch;
@@ -55,7 +59,8 @@ class TxnPartitionEntry {
             .thenComparingInt(ProducerBatch::producerEpoch)
             .thenComparingInt(ProducerBatch::baseSequence);
 
-    TxnPartitionEntry() {
+    TxnPartitionEntry(TopicPartition topicPartition) {
+        this.topicPartition = topicPartition;
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.nextSequence = 0;
         this.lastAckedSequence = TransactionManager.NO_LAST_ACKED_SEQUENCE_NUMBER;
@@ -70,5 +75,21 @@ class TxnPartitionEntry {
             newInflights.add(inflightBatch);
         }
         inflightBatchesBySequence = newInflights;
+    }
+
+    void incrementSequence(int increment) {
+        this.nextSequence = DefaultRecordBatch.incrementSequence(this.nextSequence, increment);
+    }
+
+    boolean decrementSequence(int decrement) {
+        int updatedSequence = nextSequence;
+        updatedSequence -= decrement;
+        if (updatedSequence < 0) {
+            throw new IllegalStateException(
+                "Sequence number for partition " + topicPartition + " is going to become negative: "
+                    + updatedSequence);
+        }
+        this.nextSequence = updatedSequence;
+        return true;
     }
 }
