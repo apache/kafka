@@ -30,7 +30,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Collections
-import java.util.concurrent.{Future, TimeUnit}
+import java.util.concurrent.TimeUnit
 import scala.collection.Seq
 
 class DeleteRecordsRequestTest extends BaseRequestTest {
@@ -164,14 +164,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     val logForTopicPartition = brokers.flatMap(_.replicaManager.logManager.getLog(topicPartition)).headOption
     // logManager should exist for the provided partition
     assertTrue(logForTopicPartition.isDefined)
-    // assert that log start offset has been reset i.e. deleteRecords has correctly deleted the records until the
-    // provided offset.
+    // assert that log start offset is equal to the expectedStartOffset after DeleteRecords has been called.
     assertEquals(expectedStartOffset, logForTopicPartition.get.logStartOffset)
   }
-
-  def verifySendSuccess(future: Future[RecordMetadata]): Unit = {
-    val recordMetadata = future.get(30, TimeUnit.SECONDS)
-    assertTrue(recordMetadata.offset >= 0, s"Invalid offset $recordMetadata")
-  }
-
 }
