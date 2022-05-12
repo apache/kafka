@@ -73,7 +73,7 @@ class TxnPartitionMap {
         final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
         TxnPartitionEntry topicPartitionEntry = get(topicPartition);
         topicPartitionEntry.resetSequenceNumbers(inFlightBatch -> {
-            inFlightBatch.resetProducerState(newProducerIdAndEpoch, sequence.value, inFlightBatch.isTransactional());
+            inFlightBatch.resetProducerState(newProducerIdAndEpoch, sequence.value);
             sequence.value += inFlightBatch.recordCount;
         });
         topicPartitionEntry.producerIdAndEpoch = newProducerIdAndEpoch;
