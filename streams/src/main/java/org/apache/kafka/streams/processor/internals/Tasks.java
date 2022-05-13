@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -271,6 +272,12 @@ class Tasks {
 
     Collection<Task> allTasks() {
         return readOnlyTasks;
+    }
+
+    Collection<Task> notPausedTasks() {
+        return new ArrayList<>(readOnlyActiveTasks).stream().filter(t ->
+            !topologyMetadata.isPaused(t.id().topologyName())).collect(
+            Collectors.toList());
     }
 
     Set<TaskId> activeTaskIds() {

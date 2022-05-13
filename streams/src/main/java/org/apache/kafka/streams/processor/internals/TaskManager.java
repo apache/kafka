@@ -1018,6 +1018,11 @@ public class TaskManager {
         return tasks.tasksPerId();
     }
 
+    Map<TaskId, Task> notPausedTasks() {
+        return Collections.unmodifiableMap(tasks.notPausedTasks().stream()
+            .collect(Collectors.toMap(Task::id, v -> v)));
+    }
+
     Map<TaskId, Task> activeTaskMap() {
         return activeTaskStream().collect(Collectors.toMap(Task::id, t -> t));
     }

@@ -463,7 +463,10 @@ public class StoreChangelogReader implements ChangelogReader {
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                 try {
                     if (restoreChangelog(changelogs.get(partition))) {
-                        tasks.get(taskId).clearTaskTimeout();
+                        final Task task = tasks.get(taskId);
+                        if (task != null) {
+                            task.clearTaskTimeout();
+                        }
                     }
                 } catch (final TimeoutException timeoutException) {
                     tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
@@ -633,7 +636,11 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void clearTaskTimeout(final Set<Task> tasks) {
-        tasks.forEach(Task::clearTaskTimeout);
+        tasks.forEach(t -> {
+            if (t != null) {
+                t.clearTaskTimeout();
+            }
+        });
     }
 
     private void maybeInitTaskTimeoutOrThrow(final Set<Task> tasks,
