@@ -324,8 +324,7 @@ class BrokerServer(
                                                     time,
                                                     threadNamePrefix,
                                                     config.metadataSnapshotMaxNewRecordBytes,
-                                                    metadataSnapshotter
-      )
+                                                    metadataSnapshotter)
 
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>

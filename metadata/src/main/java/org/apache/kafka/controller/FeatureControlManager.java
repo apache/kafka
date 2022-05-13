@@ -34,7 +34,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.FeatureLevelListener;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -65,20 +64,14 @@ public class FeatureControlManager {
      */
     private final TimelineObject<MetadataVersion> metadataVersion;
 
-    /**
-     * Collection of listeners for when features change
-     */
-    private final FeatureLevelListener featureListener;
 
     FeatureControlManager(LogContext logContext,
                           QuorumFeatures quorumFeatures,
-                          SnapshotRegistry snapshotRegistry,
-                          FeatureLevelListener featureListener) {
+                          SnapshotRegistry snapshotRegistry) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, MetadataVersion.UNINITIALIZED);
-        this.featureListener = featureListener;
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -117,16 +110,18 @@ public class FeatureControlManager {
         return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersion.FEATURE_NAME, result));
     }
 
-    boolean canSupportVersion(String featureName, short versionRange) {
-        return quorumFeatures.localSupportedFeature(featureName)
-            .filter(localRange -> localRange.contains(versionRange))
+    /**
+     * Test if the quorum can support this feature and version
+     */
+    boolean canSupportVersion(String featureName, short version) {
+        return quorumFeatures.quorumSupportedFeature(featureName)
+            .filter(versionRange -> versionRange.contains(version))
             .isPresent();
     }
 
     boolean featureExists(String featureName) {
         return quorumFeatures.localSupportedFeature(featureName).isPresent();
     }
-
 
     MetadataVersion metadataVersion() {
         return metadataVersion.get();
@@ -163,7 +158,7 @@ public class FeatureControlManager {
 
         if (!canSupportVersion(featureName, newVersion)) {
             return invalidUpdateVersion(featureName, newVersion,
-                "The controller does not support the given feature version.");
+                "The quorum does not support the given feature version.");
         }
 
         for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokersAndFeatures.entrySet()) {
@@ -269,18 +264,17 @@ public class FeatureControlManager {
     }
 
     public void replay(FeatureLevelRecord record) {
+        if (!canSupportVersion(record.name(), record.featureLevel())) {
+            throw new RuntimeException("Controller cannot support feature " + record.name() +
+                                       " at version " + record.featureLevel());
+        }
+
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             log.info("Setting metadata.version to {}", record.featureLevel());
             metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
         } else {
             log.info("Setting feature {} to {}", record.name(), record.featureLevel());
             finalizedVersions.put(record.name(), record.featureLevel());
-        }
-
-        try {
-            featureListener.handle(record.name(), record.featureLevel());
-        } catch (Throwable t) {
-            log.error("Failure calling feature change listener.", t);
         }
     }
 

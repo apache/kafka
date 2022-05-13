@@ -102,10 +102,6 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 }
 
 object MetaProperties {
-  def apply(clusterId: String, nodeId: Int): MetaProperties = {
-    new MetaProperties(clusterId, nodeId)
-  }
-
   def parse(properties: RawMetaProperties): MetaProperties = {
     properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)

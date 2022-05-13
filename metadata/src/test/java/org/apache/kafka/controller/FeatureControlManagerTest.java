@@ -30,7 +30,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.FeatureLevelListener;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
@@ -45,8 +44,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
-
-    private static final FeatureLevelListener NO_OP_LISTENER = (feature, level) -> { };
 
     @SuppressWarnings("unchecked")
     private static Map<String, VersionRange> rangeMap(Object... args) {
@@ -92,12 +89,12 @@ public class FeatureControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(logContext,
-            features("foo", 1, 2), snapshotRegistry, NO_OP_LISTENER);
+            features("foo", 1, 2), snapshotRegistry);
         assertEquals(new FinalizedControllerFeatures(Collections.emptyMap(), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Invalid update version 3 for feature foo. The controller does not support the given feature version."))),
+                    "Invalid update version 3 for feature foo. The quorum does not support the given feature version."))),
             manager.updateFeatures(updateMap("foo", 3),
                 Collections.singletonMap("foo", FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
                 Collections.emptyMap(), false));
@@ -125,7 +122,7 @@ public class FeatureControlManagerTest {
 
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(logContext,
-            features("foo", 1, 2), snapshotRegistry, NO_OP_LISTENER);
+            features("foo", 1, 2), snapshotRegistry);
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
         assertEquals(new FinalizedControllerFeatures(versionMap("foo", 2), 123),
@@ -137,7 +134,7 @@ public class FeatureControlManagerTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         FeatureControlManager manager = new FeatureControlManager(logContext,
-            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, NO_OP_LISTENER);
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
 
         assertEquals(
             ControllerResult.atomicOf(
@@ -195,7 +192,7 @@ public class FeatureControlManagerTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         FeatureControlManager manager = new FeatureControlManager(logContext,
-            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, NO_OP_LISTENER);
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
         ControllerResult<Map<String, ApiError>> result = manager.
             updateFeatures(updateMap("foo", 5, "bar", 1),
                 Collections.emptyMap(), Collections.emptyMap(), false);
@@ -228,10 +225,25 @@ public class FeatureControlManagerTest {
         checkMetadataVersion(features, MetadataVersion.IBP_3_0_IV0, Errors.INVALID_UPDATE_VERSION);
     }
 
+    @Test
+    public void reInitializeMetadataVersion() {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        FeatureControlManager manager = new FeatureControlManager(logContext, features(), snapshotRegistry);
+        ControllerResult<Map<String, ApiError>> result = manager.initializeMetadataVersion(MetadataVersion.IBP_3_0_IV0.featureLevel());
+        Errors actual = result.response().get(MetadataVersion.FEATURE_NAME).error();
+        assertEquals(Errors.NONE, actual);
+        RecordTestUtils.replayAll(manager, result.records());
+
+        result = manager.initializeMetadataVersion(MetadataVersion.latest().featureLevel());
+        actual = result.response().get(MetadataVersion.FEATURE_NAME).error();
+        assertEquals(Errors.INVALID_UPDATE_VERSION, actual);
+    }
+
     public void checkMetadataVersion(QuorumFeatures features, MetadataVersion version, Errors expected) {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        FeatureControlManager manager = new FeatureControlManager(logContext, features, snapshotRegistry, NO_OP_LISTENER);
+        FeatureControlManager manager = new FeatureControlManager(logContext, features, snapshotRegistry);
         ControllerResult<Map<String, ApiError>> result = manager.initializeMetadataVersion(version.featureLevel());
         Errors actual = result.response().get(MetadataVersion.FEATURE_NAME).error();
         assertEquals(expected, actual);
@@ -242,7 +254,7 @@ public class FeatureControlManagerTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         QuorumFeatures features = features(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV0.featureLevel());
-        FeatureControlManager manager = new FeatureControlManager(logContext, features, snapshotRegistry, NO_OP_LISTENER);
+        FeatureControlManager manager = new FeatureControlManager(logContext, features, snapshotRegistry);
         ControllerResult<Map<String, ApiError>> result = manager.initializeMetadataVersion(MetadataVersion.IBP_3_3_IV0.featureLevel());
         RecordTestUtils.replayAll(manager, result.records());
         assertEquals(manager.metadataVersion(), MetadataVersion.latest());
@@ -268,7 +280,7 @@ public class FeatureControlManagerTest {
                 Collections.emptyMap(),
                 true);
         assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
-        assertEquals("Invalid update version 1 for feature metadata.version. The controller does not support the given feature version.",
+        assertEquals("Invalid update version 1 for feature metadata.version. The quorum does not support the given feature version.",
             result.response().get(MetadataVersion.FEATURE_NAME).message());
     }
 }

@@ -37,6 +37,10 @@ public class VersionRange {
         return new VersionRange(min, max);
     }
 
+    public static VersionRange of(int min, int max) {
+        return new VersionRange((short) min, (short) max);
+    }
+
     public short min() {
         return min;
     }

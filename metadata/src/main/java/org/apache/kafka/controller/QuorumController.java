@@ -71,7 +71,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
 import org.apache.kafka.metadata.KafkaConfigSchema;
-import org.apache.kafka.metadata.FeatureLevelListener;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
@@ -984,29 +983,6 @@ public final class QuorumController implements Controller {
         }
     }
 
-    /**
-     * A callback for changes to feature levels including metadata.version. This is called synchronously from
-     * {@link FeatureControlManager#replay(FeatureLevelRecord)} which is part of a ControllerWriteEvent. It is safe
-     * to modify controller state here. By the time this listener is called, a FeatureLevelRecord has been committed and
-     * the in-memory state of FeatureControlManager has been updated.
-     */
-    class QuorumFeatureListener implements FeatureLevelListener {
-        @Override
-        public void handle(String featureName, short finalizedVersion) {
-            boolean isActiveController = curClaimEpoch != -1;
-            boolean isFeatureSupported = featureControl.canSupportVersion(featureName, finalizedVersion);
-            if (!isFeatureSupported) {
-                if (isActiveController) {
-                    log.error("Active controller cannot support {} {}", featureName, finalizedVersion);
-                } else {
-                    log.error("Standby controller cannot support {} {}, shutting down.", featureName, finalizedVersion);
-                }
-                beginShutdown();
-            }
-            // In the future, handle other feature flags that are relevant to the controller here.
-        }
-    }
-
     private void renounce() {
         curClaimEpoch = -1;
         controllerMetrics.setActive(false);
@@ -1287,12 +1263,6 @@ public final class QuorumController implements Controller {
     private final ClusterControlManager clusterControl;
 
     /**
-     * A callback that the controller registers with the FeatureControlManager to learn when feature updates
-     * occur.
-     */
-    private final QuorumFeatureListener featureListener;
-
-    /**
      * An object which stores the controller's view of the cluster features.
      * This must be accessed only by the event queue thread.
      */
@@ -1428,7 +1398,6 @@ public final class QuorumController implements Controller {
         this.time = time;
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
-        this.featureListener = new QuorumFeatureListener();
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager.Builder().
@@ -1451,7 +1420,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setControllerMetrics(controllerMetrics).
             build();
-        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry, featureListener);
+        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;

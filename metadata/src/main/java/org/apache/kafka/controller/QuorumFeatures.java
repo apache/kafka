@@ -18,17 +18,20 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.stream.Collectors;
 
 /**
@@ -40,20 +43,24 @@ public class QuorumFeatures {
     private final Map<String, VersionRange> supportedFeatures;
     private final List<Integer> quorumNodeIds;
 
-    public QuorumFeatures(int nodeId,
-                          ApiVersions apiVersions,
-                          Map<String, VersionRange> supportedFeatures,
-                          List<Integer> quorumNodeIds) {
+    QuorumFeatures(
+        int nodeId,
+        ApiVersions apiVersions,
+        Map<String, VersionRange> supportedFeatures,
+        List<Integer> quorumNodeIds
+    ) {
         this.nodeId = nodeId;
         this.apiVersions = apiVersions;
         this.supportedFeatures = Collections.unmodifiableMap(supportedFeatures);
         this.quorumNodeIds = Collections.unmodifiableList(quorumNodeIds);
     }
 
-    public static QuorumFeatures create(int nodeId,
-                                        ApiVersions apiVersions,
-                                        Map<String, VersionRange> supportedFeatures,
-                                        Collection<Node> quorumNodes) {
+    public static QuorumFeatures create(
+        int nodeId,
+        ApiVersions apiVersions,
+        Map<String, VersionRange> supportedFeatures,
+        Collection<Node> quorumNodes
+    ) {
         List<Integer> nodeIds = quorumNodes.stream().map(Node::id).collect(Collectors.toList());
         return new QuorumFeatures(nodeId, apiVersions, supportedFeatures, nodeIds);
     }
@@ -65,24 +72,38 @@ public class QuorumFeatures {
     }
 
     Optional<VersionRange> quorumSupportedFeature(String featureName) {
-        List<VersionRange> supportedVersions = quorumNodeIds.stream()
-            .filter(node -> node != nodeId)
-            .map(node -> apiVersions.get(Integer.toString(node)))
-            .filter(Objects::nonNull)
-            .map(apiVersion -> apiVersion.supportedFeatures().get(featureName))
-            .filter(Objects::nonNull)
-            .map(supportedVersionRange -> VersionRange.of(supportedVersionRange.min(), supportedVersionRange.max()))
-            .collect(Collectors.toList());
-
+        List<VersionRange> supportedVersions = new ArrayList<>(quorumNodeIds.size());
+        for (int nodeId : quorumNodeIds) {
+            if (nodeId == this.nodeId) {
+                continue;
+            }
+            NodeApiVersions nodeVersions = apiVersions.get(Integer.toString(nodeId));
+            if (nodeVersions == null) {
+                continue;
+            }
+            SupportedVersionRange supportedRange = nodeVersions.supportedFeatures().get(featureName);
+            if (supportedRange == null) {
+                supportedVersions.add(VersionRange.of(0, 0));
+            } else {
+                supportedVersions.add(VersionRange.of(supportedRange.min(), supportedRange.max()));
+            }
+        }
         localSupportedFeature(featureName).ifPresent(supportedVersions::add);
 
         if (supportedVersions.isEmpty()) {
             return Optional.empty();
         } else {
-            return Optional.of(VersionRange.of(
-                (short) supportedVersions.stream().mapToInt(VersionRange::min).max().getAsInt(),
-                (short) supportedVersions.stream().mapToInt(VersionRange::max).min().getAsInt()
-            ));
+            OptionalInt highestMinVersion = supportedVersions.stream().mapToInt(VersionRange::min).max();
+            OptionalInt lowestMaxVersion = supportedVersions.stream().mapToInt(VersionRange::max).min();
+            if (highestMinVersion.isPresent() && lowestMaxVersion.isPresent()) {
+                if (highestMinVersion.getAsInt() <= lowestMaxVersion.getAsInt()) {
+                    return Optional.of(VersionRange.of((short) highestMinVersion.getAsInt(), (short) lowestMaxVersion.getAsInt()));
+                } else {
+                    return Optional.empty();
+                }
+            } else {
+                return Optional.empty();
+            }
         }
     }
 
