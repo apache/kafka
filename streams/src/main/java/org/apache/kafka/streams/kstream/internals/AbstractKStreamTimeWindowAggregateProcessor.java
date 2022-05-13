@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
 import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emitFinalLatencySensor;
 import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emittedRecordsSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -80,9 +79,9 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
 
         if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
             // Restore last emit close time for ON_WINDOW_CLOSE strategy
-            final Long lastEmitTime = internalProcessorContext.processorMetadataForKey(storeName);
-            if (lastEmitTime != null) {
-                lastEmitWindowCloseTime = lastEmitTime;
+            final Long lastEmitWindowCloseTime = internalProcessorContext.processorMetadataForKey(storeName);
+            if (lastEmitWindowCloseTime != null) {
+                this.lastEmitWindowCloseTime = lastEmitWindowCloseTime;
             }
             final long emitInterval = StreamsConfig.InternalConfig.getLong(
                 context.appConfigs(),
@@ -90,6 +89,8 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                 1000L
             );
             timeTracker.setEmitInterval(emitInterval);
+
+            tupleForwarder = new TimestampedTupleForwarder<>(context, sendOldValues);
         } else {
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
@@ -116,7 +117,18 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                 .withTimestamp(newTimestamp));
     }
 
-    protected boolean shouldEmitFinal(final long closeTime) {
+    protected void maybeForwardFinalResult(final Record<KIn, VIn> record, final long windowCloseTime) {
+        if (shouldEmitFinal(windowCloseTime)) {
+            final long emitRangeUpperBound = emitRangeUpperBound(windowCloseTime);
+            final long emitRangeLowerBound = emitRangeLowerBound(windowCloseTime);
+
+            if (shouldRangeFetch(emitRangeLowerBound, emitRangeUpperBound)) {
+                fetchAndEmit(record, windowCloseTime, emitRangeLowerBound, emitRangeUpperBound);
+            }
+        }
+    }
+
+    private boolean shouldEmitFinal(final long closeTime) {
         if (emitStrategy.type() != StrategyType.ON_WINDOW_CLOSE) {
             return false;
         }
@@ -136,14 +148,14 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         return lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP || lastEmitWindowCloseTime < closeTime;
     }
 
-    protected void fetchAndEmit(final Record<KIn, VIn> record,
-                                final long closeTime,
-                                final long emitRangeLowerBoundInclusive,
-                                final long emitRangeUpperBoundInclusive) {
+    private void fetchAndEmit(final Record<KIn, VIn> record,
+                              final long windowCloseTime,
+                              final long emitRangeLowerBound,
+                              final long emitRangeUpperBound) {
         final long startMs = time.milliseconds();
 
         final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit = windowStore
-            .fetchAll(emitRangeLowerBoundInclusive, emitRangeUpperBoundInclusive);
+            .fetchAll(emitRangeLowerBound, emitRangeUpperBound);
 
         int emittedCount = 0;
         while (windowToEmit.hasNext()) {
@@ -158,13 +170,14 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         emittedRecordsSensor.record(emittedCount);
         emitFinalLatencySensor.record(time.milliseconds() - startMs);
 
-        lastEmitWindowCloseTime = closeTime;
-        internalProcessorContext.addProcessorMetadataKeyValue(storeName, closeTime);
+        lastEmitWindowCloseTime = windowCloseTime;
+        internalProcessorContext.addProcessorMetadataKeyValue(storeName, windowCloseTime);
     }
 
-    abstract protected void maybeForwardFinalResult(final Record<KIn, VIn> record, final long windowCloseTime);
+    // upper and lower bound are inclusive
+    abstract protected long emitRangeLowerBound(final long windowCloseTime);
 
-    protected void maybeMeasureEmitFinalLatency(final Record<KIn, VIn> record, final long windowCloseTime) {
-        maybeMeasureLatency(() -> maybeForwardFinalResult(record, windowCloseTime), time, emitFinalLatencySensor);
-    }
+    abstract protected long emitRangeUpperBound(final long windowCloseTime);
+
+    abstract protected boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound);
 }

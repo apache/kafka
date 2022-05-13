@@ -182,43 +182,46 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 }
             }
 
-            maybeMeasureEmitFinalLatency(record, windowCloseTime);
+            maybeForwardFinalResult(record, windowCloseTime);
         }
 
         @Override
-        protected void maybeForwardFinalResult(final Record<KIn, VIn> record, final long windowCloseTime) {
-            if (!shouldEmitFinal(windowCloseTime)) {
-                return;
+        protected long emitRangeLowerBound(final long windowCloseTime) {
+            // Since time window end timestamp is exclusive, we set the inclusive lower bound plus 1;
+            // Set lower bound to 0L for the first time emit so that when we fetchAll, we fetch from 0L
+            return lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP ?
+                0L : Math.max(0L, lastEmitWindowCloseTime - windows.size()) + 1;
+        }
+
+        @Override
+        protected long emitRangeUpperBound(final long windowCloseTime) {
+            return windowCloseTime - windows.size();
+        }
+
+        @Override
+        protected boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound) {
+            if (emitRangeUpperBound < 0) {
+                // If the inclusive upper bound is smaller than 0
+                // it means no window have closed yet and hence we can skip range fetching
+                return false;
             }
 
-            final long emitRangeUpperBoundInclusive = windowCloseTime - windows.size();
-            if (emitRangeUpperBoundInclusive < 0) {
-                // If emitRangeUpperBoundInclusive is 0, it means first window closes since windowEndTime
-                // is exclusive
-                return;
-            }
-
-            // Because we only get here when emitRangeUpperBoundInclusive > 0 which means closeTime > windows.size()
-            // Since we set lastEmitCloseTime to closeTime before storing to processor metadata
-            // lastEmitCloseTime - windows.size() is always > 0
-            // Set emitRangeLowerBoundInclusive to -1L if not set so that when we fetchAll, we fetch from 0L
-            final long emitRangeLowerBoundInclusive = lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP ?
-                -1L : lastEmitWindowCloseTime - windows.size();
-
+            // Don't fetch store if the new emit window close time doesn't
+            // progress enough to cover next window;
+            // Note since window-end time is exclusive we would not count windows whose end time == lower bound, hence
+            // would minus 1 when finding matched windows
             if (lastEmitWindowCloseTime != ConsumerRecord.NO_TIMESTAMP) {
-                final Map<Long, W> matchedCloseWindows = windows.windowsFor(emitRangeUpperBoundInclusive);
-                final Map<Long, W> matchedEmitWindows = windows.windowsFor(emitRangeLowerBoundInclusive);
+                final Map<Long, W> matchedCloseWindows = windows.windowsFor(emitRangeUpperBound);
+                final Map<Long, W> matchedEmitWindows = windows.windowsFor(emitRangeLowerBound - 1);
 
-                // Don't fetch store if the new emit window close time doesn't progress enough to cover next
-                // window
                 if (matchedCloseWindows.equals(matchedEmitWindows)) {
-                    log.trace("no new windows to emit. LastEmitCloseTime={}, newCloseTime={}",
-                            lastEmitWindowCloseTime, windowCloseTime);
-                    return;
+                    log.trace("No new windows to emit. LastEmitCloseTime={}, emitRangeLowerBound={}, emitRangeUpperBound={}",
+                            lastEmitWindowCloseTime, emitRangeLowerBound, emitRangeUpperBound);
+                    return false;
                 }
             }
 
-            fetchAndEmit(record, windowCloseTime, emitRangeLowerBoundInclusive + 1, emitRangeUpperBoundInclusive);
+            return true;
         }
     }
 

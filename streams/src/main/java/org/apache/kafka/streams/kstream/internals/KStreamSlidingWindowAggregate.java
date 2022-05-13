@@ -174,7 +174,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 processInOrder(record, windowCloseTime);
             }
 
-            maybeMeasureEmitFinalLatency(record, windowCloseTime);
+            maybeForwardFinalResult(record, windowCloseTime);
         }
 
         public void processInOrder(final Record<KIn, VIn> record, final long windowCloseTime) {
@@ -460,25 +460,23 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         @Override
-        protected void maybeForwardFinalResult(final Record<KIn, VIn> record, final long windowCloseTime) {
-            if (!shouldEmitFinal(windowCloseTime)) {
-                return;
-            }
+        protected long emitRangeLowerBound(final long windowCloseTime) {
+            return lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP ?
+                0L : Math.max(0L, lastEmitWindowCloseTime - windows.timeDifferenceMs());
+        }
 
-            final long emitRangeUpperBoundExclusive = windowCloseTime - windows.timeDifferenceMs();
+        @Override
+        protected long emitRangeUpperBound(final long windowCloseTime) {
+            // Sliding window's start and end timestamps are inclusive, so
+            // we should minus 1 for the inclusive closed window-end upper bound
+            return windowCloseTime - windows.timeDifferenceMs() - 1;
+        }
 
-            if (emitRangeUpperBoundExclusive <= 0) {
-                // Sliding window's start and end timestamps are inclusive, so
-                // the window is not closed if emitRangeUpperBoundExclusive is 0,
-                // and we shouldn't emit
-                return;
-            }
-
-            final long emitRangeLowerBoundInclusive = lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP ?
-                0L : lastEmitWindowCloseTime - windows.timeDifferenceMs();
-
-            // Fetch to emitWindowStart - 1 so avoid close right boundary of window
-            fetchAndEmit(record, windowCloseTime, emitRangeLowerBoundInclusive, emitRangeUpperBoundExclusive - 1);
+        @Override
+        protected boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound) {
+            // If the inclusive upper bound is smaller than 0
+            // it means no window have closed yet and hence we can skip range fetching
+            return emitRangeUpperBound >= 0;
         }
 
         private void updateWindowAndForward(final Window window,
