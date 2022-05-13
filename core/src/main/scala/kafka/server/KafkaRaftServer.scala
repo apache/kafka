@@ -183,7 +183,9 @@ object KafkaRaftServer {
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }
 
-    val bootstrapMetadata = BootstrapMetadata.load(Paths.get(config.metadataLogDir))
+    // Load either the bootstrap metadata file, or in the case of an upgrade from KRaft preview, bootstrap the
+    // metadata.version to the version corresponding to the configured IBP.
+    val bootstrapMetadata = BootstrapMetadata.load(Paths.get(config.metadataLogDir), config.interBrokerProtocolVersion)
 
     (metaProperties, bootstrapMetadata, offlineDirs.toSeq)
   }

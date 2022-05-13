@@ -143,15 +143,17 @@ public class BootstrapMetadata {
      * Load a bootstrap snapshot into a read-only bootstrap metadata object and return it.
      *
      * @param bootstrapDir  The directory from which to read the snapshot file.
+     * @param fallbackPreviewVersion    The metadata.version to boostrap if upgrading from KRaft preview
      * @return              The read-only bootstrap metadata
      * @throws Exception
      */
-    public static BootstrapMetadata load(Path bootstrapDir) throws Exception {
+    public static BootstrapMetadata load(Path bootstrapDir, MetadataVersion fallbackPreviewVersion) throws Exception {
         final Path bootstrapPath = bootstrapDir.resolve(BOOTSTRAP_FILE);
 
         if (!Files.exists(bootstrapPath)) {
-            log.debug("Missing bootstrap file, this appears to be a KRaft preview cluster.");
-            return BootstrapMetadata.create(MetadataVersion.IBP_3_0_IV0);
+            log.debug("Missing bootstrap file, this appears to be a KRaft preview cluster. Setting metadata.version to {}.",
+                fallbackPreviewVersion.featureLevel());
+            return BootstrapMetadata.create(fallbackPreviewVersion);
         }
 
         BootstrapListener listener = new BootstrapListener();

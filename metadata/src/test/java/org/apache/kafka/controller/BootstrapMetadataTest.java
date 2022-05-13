@@ -39,15 +39,17 @@ public class BootstrapMetadataTest {
 
         assertTrue(Files.exists(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE)));
 
-        BootstrapMetadata newMetadata = BootstrapMetadata.load(tmpDir);
+        BootstrapMetadata newMetadata = BootstrapMetadata.load(tmpDir, MetadataVersion.IBP_3_0_IV0);
         assertEquals(metadata, newMetadata);
     }
 
     @Test
     public void testNoBootstrapFile() throws Exception {
         Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
-        BootstrapMetadata metadata = BootstrapMetadata.load(tmpDir);
+        BootstrapMetadata metadata = BootstrapMetadata.load(tmpDir, MetadataVersion.IBP_3_0_IV0);
         assertEquals(MetadataVersion.IBP_3_0_IV0, metadata.metadataVersion());
+        metadata = BootstrapMetadata.load(tmpDir, MetadataVersion.IBP_3_2_IV0);
+        assertEquals(MetadataVersion.IBP_3_2_IV0, metadata.metadataVersion());
     }
 
     @Test
@@ -63,7 +65,7 @@ public class BootstrapMetadataTest {
     public void testEmptyBootstrapFile() throws Exception {
         Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         Files.createFile(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE));
-        assertThrows(RuntimeException.class, () -> BootstrapMetadata.load(tmpDir),
+        assertThrows(RuntimeException.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.IBP_3_0_IV0),
             "Should fail to load if no metadata.version is set");
     }
 
@@ -75,7 +77,7 @@ public class BootstrapMetadataTest {
         byte[] data = new byte[100];
         random.nextBytes(data);
         Files.write(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE), data, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        assertThrows(RuntimeException.class, () -> BootstrapMetadata.load(tmpDir),
+        assertThrows(RuntimeException.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.IBP_3_0_IV0),
             "Should fail on invalid data");
     }
 }

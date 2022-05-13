@@ -181,7 +181,7 @@ class ControllerServer(
           setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
-          setIsLeaderRecoverySupported(config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)).
+          setIsLeaderRecoverySupported(bootstrapMetadata.metadataVersion().isAtLeast(IBP_3_2_IV0)).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
