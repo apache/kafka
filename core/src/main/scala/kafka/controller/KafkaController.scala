@@ -468,14 +468,6 @@ class KafkaController(val config: KafkaConfig,
 
     // shutdown leader rebalance scheduler
     kafkaScheduler.shutdown()
-    offlinePartitionCount = 0
-    preferredReplicaImbalanceCount = 0
-    globalTopicCount = 0
-    globalPartitionCount = 0
-    topicsToDeleteCount = 0
-    replicasToDeleteCount = 0
-    ineligibleTopicsToDeleteCount = 0
-    ineligibleReplicasToDeleteCount = 0
 
     // stop token expiry check scheduler
     if (tokenCleanScheduler.isStarted)
