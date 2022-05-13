@@ -42,7 +42,6 @@ public class ClusterConfig {
     private final SecurityProtocol securityProtocol;
     private final String listenerName;
     private final File trustStoreFile;
-    private final String ibp;
     private final MetadataVersion metadataVersion;
 
     private final Properties serverProperties = new Properties();
@@ -55,7 +54,7 @@ public class ClusterConfig {
 
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
-                  String ibp, MetadataVersion metadataVersion) {
+                  MetadataVersion metadataVersion) {
         this.type = type;
         this.brokers = brokers;
         this.controllers = controllers;
@@ -64,7 +63,6 @@ public class ClusterConfig {
         this.securityProtocol = securityProtocol;
         this.listenerName = listenerName;
         this.trustStoreFile = trustStoreFile;
-        this.ibp = ibp;
         this.metadataVersion = metadataVersion;
     }
 
@@ -124,10 +122,6 @@ public class ClusterConfig {
         return Optional.ofNullable(trustStoreFile);
     }
 
-    public Optional<String> ibp() {
-        return Optional.ofNullable(ibp);
-    }
-
     public Optional<MetadataVersion> metadataVersion() {
         return Optional.ofNullable(metadataVersion);
     }
@@ -139,7 +133,6 @@ public class ClusterConfig {
     public Map<String, String> nameTags() {
         Map<String, String> tags = new LinkedHashMap<>(4);
         name().ifPresent(name -> tags.put("Name", name));
-        ibp().ifPresent(ibp -> tags.put("IBP", ibp));
         metadataVersion().ifPresent(mv -> tags.put("MetadataVersion", mv.toString()));
         tags.put("Security", securityProtocol.name());
         listenerName().ifPresent(listener -> tags.put("Listener", listener));
@@ -147,7 +140,7 @@ public class ClusterConfig {
     }
 
     public ClusterConfig copyOf() {
-        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, ibp, metadataVersion);
+        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, metadataVersion);
         copy.serverProperties.putAll(serverProperties);
         copy.producerProperties.putAll(producerProperties);
         copy.consumerProperties.putAll(consumerProperties);
@@ -173,7 +166,6 @@ public class ClusterConfig {
         private SecurityProtocol securityProtocol;
         private String listenerName;
         private File trustStoreFile;
-        private String ibp;
         private MetadataVersion metadataVersion;
 
         Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
@@ -224,18 +216,13 @@ public class ClusterConfig {
             return this;
         }
 
-        public Builder ibp(String ibp) {
-            this.ibp = ibp;
-            return this;
-        }
-
         public Builder metadataVersion(MetadataVersion metadataVersion) {
             this.metadataVersion = metadataVersion;
             return this;
         }
 
         public ClusterConfig build() {
-            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, ibp, metadataVersion);
+            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, metadataVersion);
         }
     }
 }

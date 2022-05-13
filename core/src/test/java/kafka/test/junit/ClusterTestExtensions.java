@@ -195,10 +195,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             properties.put(property.key(), property.value());
         }
 
-        if (!annot.ibp().isEmpty()) {
-            builder.ibp(annot.ibp());
-        }
-
         if (!annot.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
             builder.metadataVersion(annot.metadataVersion());
         }
