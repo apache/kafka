@@ -1486,13 +1486,19 @@ class KafkaConfigTest {
     assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
   }
 
-  @Test
-  def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
+  def kraftProps(): Properties = {
     val props = new Properties()
     props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     props.setProperty(KafkaConfig.NodeIdProp, "3")
     props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+    props
+  }
+
+  @Test
+  def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
+    val props = new Properties(kraftProps())
+    props.putAll(kraftProps())
     val config = KafkaConfig.fromProps(props)
     assertEquals(3, config.brokerId)
     assertEquals(3, config.nodeId)
@@ -1508,5 +1514,59 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMsProp))
     assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp))
+  }
+
+  @Test
+  def testInvalidAuthorizerClassName(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val configs = new util.HashMap[Object, Object](props)
+    configs.put(KafkaConfig.AuthorizerClassNameProp, null)
+    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
+    assertTrue(ce.getMessage.contains(KafkaConfig.AuthorizerClassNameProp))
+  }
+
+  @Test
+  def testInvalidSecurityInterBrokerProtocol(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, "abc")
+    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+    assertTrue(ce.getMessage.contains(KafkaConfig.InterBrokerSecurityProtocolProp))
+  }
+
+  @Test
+  def testEarlyStartListenersDefault(): Unit = {
+    val props = new Properties()
+    props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.setProperty(KafkaConfig.ListenersProp, "CONTROLLER://:8092")
+    props.setProperty(KafkaConfig.NodeIdProp, "1")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+    val config = new KafkaConfig(props)
+    assertEquals(Set("CONTROLLER"), config.earlyStartListeners.map(_.value()))
+  }
+
+  @Test
+  def testEarlyStartListeners(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.EarlyStartListenersProp, "INTERNAL,INTERNAL2")
+    props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
+    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp,
+      "INTERNAL:PLAINTEXT,INTERNAL2:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    props.setProperty(KafkaConfig.ListenersProp,
+      "INTERNAL://127.0.0.1:9092,INTERNAL2://127.0.0.1:9093")
+    val config = new KafkaConfig(props)
+    assertEquals(Set(new ListenerName("INTERNAL"), new ListenerName("INTERNAL2")),
+      config.earlyStartListeners)
+  }
+
+  @Test
+  def testEarlyStartListenersMustBeListeners(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.EarlyStartListenersProp, "INTERNAL")
+    assertEquals("early.start.listeners contains listener INTERNAL, but this is not " +
+      "contained in listeners or controller.listener.names",
+        assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
   }
 }

@@ -54,10 +54,9 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     public final static String ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG = "allow.everyone.if.no.acl.found";
 
     /**
-     * A future which is completed once we have loaded a snapshot.
-     * TODO: KAFKA-13649: StandardAuthorizer should not finish loading until it reads up to the high water mark.
+     * A future which is completed once we have loaded up to the initial high water mark.
      */
-    private final CompletableFuture<Void> initialLoadFuture = CompletableFuture.completedFuture(null);
+    private final CompletableFuture<Void> initialLoadFuture = new CompletableFuture<>();
 
     /**
      * The current data. Can be read without a lock. Must be written while holding the object lock.
@@ -76,6 +75,24 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
             throw new NotControllerException("The current node is not the active controller.");
         }
         return aclMutator;
+    }
+
+    @Override
+    public synchronized void completeInitialLoad() {
+        data = data.copyWithNewLoadingComplete(true);
+        data.log.info("Completed initial ACL load process.");
+        initialLoadFuture.complete(null);
+    }
+
+    // Visible for testing
+    public CompletableFuture<Void> initialLoadFuture() {
+        return initialLoadFuture;
+    }
+
+    @Override
+    public void completeInitialLoad(Exception e) {
+        data.log.error("Failed to complete initial ACL load process.", e);
+        initialLoadFuture.completeExceptionally(e);
     }
 
     @Override
@@ -98,7 +115,12 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
             AuthorizerServerInfo serverInfo) {
         Map<Endpoint, CompletableFuture<Void>> result = new HashMap<>();
         for (Endpoint endpoint : serverInfo.endpoints()) {
-            result.put(endpoint, initialLoadFuture);
+            if (serverInfo.earlyStartListeners().contains(
+                    endpoint.listenerName().orElseGet(() -> ""))) {
+                result.put(endpoint, CompletableFuture.completedFuture(null));
+            } else {
+                result.put(endpoint, initialLoadFuture);
+            }
         }
         return result;
     }
@@ -131,7 +153,6 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         // Complete the initialLoadFuture, if it hasn't been completed already.
         initialLoadFuture.completeExceptionally(new TimeoutException("The authorizer was " +
             "closed before the initial load could complete."));
-        // Nothing else to do here.
     }
 
     @Override

@@ -84,6 +84,8 @@ class BrokerMetadataListenerTest {
             Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true),
             delta.clusterDelta().broker(1))
         }
+
+        override def publishedOffset: Long = -1
       }).get()
     } finally {
       listener.close()
@@ -125,6 +127,8 @@ class BrokerMetadataListenerTest {
     override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
       image = newImage
     }
+
+    override def publishedOffset: Long = -1
   }
 
   private val FOO_ID = Uuid.fromString("jj1G9utnTuCegi_gpnRgYw")

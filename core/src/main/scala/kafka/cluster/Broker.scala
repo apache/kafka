@@ -35,7 +35,8 @@ object Broker {
   private[kafka] case class ServerInfo(clusterResource: ClusterResource,
                                          brokerId: Int,
                                          endpoints: util.List[Endpoint],
-                                         interBrokerEndpoint: Endpoint) extends AuthorizerServerInfo
+                                         interBrokerEndpoint: Endpoint,
+                                         earlyStartListeners: util.Set[String]) extends AuthorizerServerInfo
 
   def apply(id: Int, endPoints: Seq[EndPoint], rack: Option[String]): Broker = {
     new Broker(id, endPoints, rack, emptySupportedFeatures)
@@ -93,6 +94,7 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], featu
     val clusterResource: ClusterResource = new ClusterResource(clusterId)
     val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName).toJava
     val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.toJava).asJava
-    Broker.ServerInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint)
+    Broker.ServerInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint,
+      config.earlyStartListeners.map(_.value()).asJava)
   }
 }

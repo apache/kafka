@@ -41,11 +41,14 @@ import org.apache.kafka.timeline.TimelineHashSet;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 
 /**
@@ -142,7 +145,7 @@ public class AclControlManager {
 
     ControllerResult<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> filters) {
         List<AclDeleteResult> results = new ArrayList<>();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        Set<ApiMessageAndVersion> records = new HashSet<>();
         for (AclBindingFilter filter : filters) {
             try {
                 validateFilter(filter);
@@ -152,11 +155,11 @@ public class AclControlManager {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }
         }
-        return ControllerResult.atomicOf(records, results);
+        return ControllerResult.atomicOf(records.stream().collect(Collectors.toList()), results);
     }
 
     AclDeleteResult deleteAclsForFilter(AclBindingFilter filter,
-                                        List<ApiMessageAndVersion> records) {
+                                        Set<ApiMessageAndVersion> records) {
         List<AclBindingDeleteResult> deleted = new ArrayList<>();
         for (Entry<Uuid, StandardAcl> entry : idToAcl.entrySet()) {
             Uuid id = entry.getKey();

@@ -416,6 +416,29 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             return allMembers.get(ownerId).url();
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof LeaderState)) return false;
+            LeaderState that = (LeaderState) o;
+            return Objects.equals(allMembers, that.allMembers)
+                    && Objects.equals(connectorOwners, that.connectorOwners)
+                    && Objects.equals(taskOwners, that.taskOwners);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(allMembers, connectorOwners, taskOwners);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderState{"
+                    + "allMembers=" + allMembers
+                    + ", connectorOwners=" + connectorOwners
+                    + ", taskOwners=" + taskOwners
+                    + '}';
+        }
     }
 
     public static class ConnectorsAndTasks {
