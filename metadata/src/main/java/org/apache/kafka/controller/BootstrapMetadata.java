@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 
 
 /**
@@ -48,7 +49,7 @@ import java.util.concurrent.ExecutionException;
 public class BootstrapMetadata {
     private static final Logger log = LoggerFactory.getLogger(BootstrapMetadata.class);
 
-    public static final String BOOTSTRAP_FILE = "bootstrap.snapshot";
+    public static final String BOOTSTRAP_FILE = "bootstrap.checkpoint";
 
     private final MetadataVersion metadataVersion;
 
@@ -154,21 +155,26 @@ public class BootstrapMetadata {
         }
 
         BootstrapListener listener = new BootstrapListener();
-        SnapshotFileReader reader = new SnapshotFileReader(bootstrapPath.toString(), listener);
-        reader.startup();
-        try {
+        try (SnapshotFileReader reader = new SnapshotFileReader(bootstrapPath.toString(), listener)) {
+            reader.startup();
             reader.caughtUpFuture().get();
         } catch (ExecutionException e) {
-            throw new RuntimeException("Failed to load snapshot", e.getCause());
+            throw new Exception("Failed to load snapshot", e.getCause());
         }
 
         Optional<FeatureLevelRecord> metadataVersionRecord = listener.records.stream()
-            .filter(message -> {
+            .flatMap(message -> {
                 MetadataRecordType type = MetadataRecordType.fromId(message.message().apiKey());
-                return type.equals(MetadataRecordType.FEATURE_LEVEL_RECORD);
+                if (!type.equals(MetadataRecordType.FEATURE_LEVEL_RECORD)) {
+                    return Stream.empty();
+                }
+                FeatureLevelRecord record = (FeatureLevelRecord) message.message();
+                if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
+                    return Stream.of(record);
+                } else {
+                    return Stream.empty();
+                }
             })
-            .map(message -> (FeatureLevelRecord) message.message())
-            .filter(record -> record.name().equals(MetadataVersion.FEATURE_NAME))
             .findFirst();
 
         if (metadataVersionRecord.isPresent()) {
@@ -191,8 +197,8 @@ public class BootstrapMetadata {
             throw new IOException("Cannot write metadata bootstrap file " + bootstrapPath +
                 ". File already already exists.");
         }
-        SnapshotFileWriter bootstrapWriter = SnapshotFileWriter.open(bootstrapPath);
-        bootstrapWriter.append(metadata.records());
-        bootstrapWriter.close();
+        try (SnapshotFileWriter bootstrapWriter = SnapshotFileWriter.open(bootstrapPath)) {
+            bootstrapWriter.append(metadata.records());
+        }
     }
 }
