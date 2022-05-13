@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
 
@@ -30,21 +36,74 @@ import java.util.zip.Checksum;
  */
 public final class Checksums {
 
+    private static final Logger log = LoggerFactory.getLogger(Checksums.class);
+    private static final MethodHandle BYTE_BUFFER_UPDATE;
+
+    static {
+        MethodHandle byteBufferUpdate = null;
+        if (Java.IS_JAVA9_COMPATIBLE) {
+            try {
+                byteBufferUpdate = MethodHandles.publicLookup().findVirtual(Checksum.class, "update", MethodType.methodType(void.class, ByteBuffer.class));
+            } catch (Throwable t) {
+                log.warn("Cannot uses java.util.zip.Checksum::update(ByteBuffer): direct ByteBuffers checksum won't use optimized platform support", t);
+            }
+        }
+        BYTE_BUFFER_UPDATE = byteBufferUpdate;
+    }
+
     private Checksums() {
     }
 
+    /**
+     * Uses {@link Checksum#update} on {@code buffer}'s content, without modifying its position and limit.<br>
+     * This is semantically equivalent to {@link #update(Checksum, ByteBuffer, int, int)} with {@code offset = 0}.
+     */
     public static void update(Checksum checksum, ByteBuffer buffer, int length) {
         update(checksum, buffer, 0, length);
     }
 
+    /**
+     * Uses {@link Checksum#update} on {@code buffer}'s content, starting from the given {@code offset}
+     * by the provided {@code length}, without modifying its position and limit.
+     */
     public static void update(Checksum checksum, ByteBuffer buffer, int offset, int length) {
         if (buffer.hasArray()) {
             checksum.update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
-        } else {
-            int start = buffer.position() + offset;
-            for (int i = start; i < start + length; i++)
-                checksum.update(buffer.get(i));
+            return;
         }
+        if (BYTE_BUFFER_UPDATE != null && buffer.isDirect()) {
+            final int oldPosition = buffer.position();
+            final int oldLimit = buffer.limit();
+            try {
+                // save a slice to be used to save an allocation in the hot-path
+                final int start = oldPosition + offset;
+                buffer.limit(start + length);
+                buffer.position(start);
+                BYTE_BUFFER_UPDATE.invokeExact(checksum, buffer);
+            } catch (Throwable t) {
+                handleUpdateThrowable(t);
+            } finally {
+                // reset buffer's offsets
+                buffer.limit(oldLimit);
+                buffer.position(oldPosition);
+            }
+        } else {
+            // slow-path
+            int start = buffer.position() + offset;
+            for (int i = start; i < start + length; i++) {
+                checksum.update(buffer.get(i));
+            }
+        }
+    }
+
+    private static void handleUpdateThrowable(Throwable t) {
+        if (t instanceof RuntimeException) {
+            throw (RuntimeException) t;
+        }
+        if (t instanceof Error) {
+            throw (Error) t;
+        }
+        throw new IllegalStateException(t);
     }
     
     public static void updateInt(Checksum checksum, int input) {
