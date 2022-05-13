@@ -16,17 +16,20 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
+
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationException}
+import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -45,7 +48,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    TestUtils.waitUntilBrokerMetadataIsPropagated(brokers)
   }
 
   @AfterEach
@@ -58,14 +61,25 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   def createConfig: util.Map[String, Object] =
     Map[String, Object](AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()).asJava
 
-  override def generateConfigs = {
-    val configs = TestUtils.createBrokerConfigs(brokerCount, zkConnect)
-    configs.foreach(props => props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[Policy]))
+  override def generateConfigs: collection.Seq[KafkaConfig] = {
+    val configs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull)
+    configs.foreach(overrideNodeConfigs)
     configs.map(KafkaConfig.fromProps)
   }
 
-  @Test
-  def testValidAlterConfigs(): Unit = {
+  override def kraftControllerConfigs(): Seq[Properties] = {
+    val props = new Properties()
+    overrideNodeConfigs(props)
+    Seq(props)
+  }
+
+  private def overrideNodeConfigs(props: Properties): Unit = {
+    props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[Policy])
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testValidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
@@ -82,15 +96,17 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, topicResource1, topicResource2)
   }
 
-  @Test
-  def testInvalidAlterConfigs(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testInvalidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
-    PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
+    PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(brokers, client)
   }
 
   @nowarn("cat=deprecation")
-  @Test
-  def testInvalidAlterConfigsDueToPolicy(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testInvalidAlterConfigsDueToPolicy(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
     // Create topics
@@ -115,7 +131,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     val topicConfigEntries3 = Seq(new ConfigEntry(LogConfig.MinInSyncReplicasProp, "-1")).asJava
 
-    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, servers.head.config.brokerId.toString)
+    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
     val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313")).asJava
 
     // Alter configs: second is valid, the others are invalid
@@ -129,7 +145,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidConfigurationException])
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that the second resource was updated and the others were not
@@ -157,7 +173,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidConfigurationException])
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that no resources are updated since validate_only = true
@@ -172,7 +188,6 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
   }
-
 
 }
 
