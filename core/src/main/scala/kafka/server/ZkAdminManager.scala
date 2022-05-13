@@ -427,6 +427,10 @@ class ZkAdminManager(val config: KafkaConfig,
   private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val topic = resource.name
+    if (topic.isEmpty()) {
+      throw new InvalidRequestException("Default topic resources are not allowed.")
+    }
+
     if (!metadataCache.contains(topic))
       throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
