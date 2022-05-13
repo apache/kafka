@@ -66,7 +66,13 @@ public final class AclsDelta {
     }
 
     public void replay(RemoveAccessControlEntryRecord record) {
-        changes.put(record.id(), Optional.empty());
+        if (image.acls().containsKey(record.id())) {
+            changes.put(record.id(), Optional.empty());
+        } else if (changes.containsKey(record.id())) {
+            changes.remove(record.id());
+        } else {
+            throw new RuntimeException("Failed to find existing ACL with ID " + record.id() + " in either image or changes");
+        }
     }
 
     public AclsImage apply() {
