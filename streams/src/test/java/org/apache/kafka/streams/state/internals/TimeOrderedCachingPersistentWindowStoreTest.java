@@ -715,7 +715,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     }
 
     @Test
-    public void shouldForwardOldValuesWhenDisabled() {
+    public void shouldNotForwardOldValuesWhenDisabled() {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);

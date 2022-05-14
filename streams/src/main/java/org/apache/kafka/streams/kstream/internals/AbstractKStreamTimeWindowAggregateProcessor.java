@@ -34,11 +34,13 @@ import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.slf4j.Logger;
 
 public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg> extends ContextualProcessor<KIn, VIn, Windowed<KIn>, Change<VAgg>> {
 
@@ -54,6 +56,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     protected Sensor emittedRecordsSensor;
     protected Sensor emitFinalLatencySensor;
     protected long lastEmitWindowCloseTime = ConsumerRecord.NO_TIMESTAMP;
+    protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     protected InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext;
 
     protected AbstractKStreamTimeWindowAggregateProcessor(final String storeName,
@@ -107,8 +110,6 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                                       final long newTimestamp) {
         if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
             return;
-        } else if (tupleForwarder == null) {
-            throw new IllegalStateException("Emit strategy type is " + emitStrategy.type() + " but flush listener is not initialized.");
         }
 
         tupleForwarder.maybeForward(
@@ -120,12 +121,58 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     protected void maybeForwardFinalResult(final Record<KIn, VIn> record, final long windowCloseTime) {
         if (shouldEmitFinal(windowCloseTime)) {
             final long emitRangeUpperBound = emitRangeUpperBound(windowCloseTime);
-            final long emitRangeLowerBound = emitRangeLowerBound(windowCloseTime);
 
-            if (shouldRangeFetch(emitRangeLowerBound, emitRangeUpperBound)) {
-                fetchAndEmit(record, windowCloseTime, emitRangeLowerBound, emitRangeUpperBound);
+            // if the upper bound is smaller than 0, then there's no window closed ever;
+            // and we can skip range fetching
+            if (emitRangeUpperBound >= 0) {
+                final long emitRangeLowerBound = emitRangeLowerBound(windowCloseTime);
+
+                if (shouldRangeFetch(emitRangeLowerBound, emitRangeUpperBound)) {
+                    fetchAndEmit(record, windowCloseTime, emitRangeLowerBound, emitRangeUpperBound);
+                }
             }
         }
+    }
+
+    protected void logSkippedRecordForExpiredWindow(final Logger log,
+                                                    final long timestamp,
+                                                    final long windowExpire,
+                                                    final String window) {
+        if (context().recordMetadata().isPresent()) {
+            final RecordMetadata recordMetadata = context().recordMetadata().get();
+            log.warn("Skipping record for expired window. " +
+                "topic=[{}] " +
+                "partition=[{}] " +
+                "offset=[{}] " +
+                "timestamp=[{}] " +
+                "window={} " +
+                "expiration=[{}] " +
+                "streamTime=[{}]",
+                recordMetadata.topic(),
+                recordMetadata.partition(),
+                recordMetadata.offset(),
+                timestamp,
+                window,
+                windowExpire,
+                observedStreamTime
+            );
+        } else {
+            log.warn("Skipping record for expired window. Topic, partition, and offset not known. " +
+                "timestamp=[{}] " +
+                "window={} " +
+                "expiration=[{}] " +
+                "streamTime=[{}]",
+                timestamp,
+                window,
+                windowExpire,
+                observedStreamTime
+            );
+        }
+        droppedRecordsSensor.record();
+    }
+
+    protected void updateObservedStreamTime(final long timestamp) {
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
     }
 
     private boolean shouldEmitFinal(final long closeTime) {
@@ -161,6 +208,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         while (windowToEmit.hasNext()) {
             emittedCount++;
             final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+
             tupleForwarder.maybeForward(
                 record.withKey(kv.key)
                     .withValue(new Change<>(kv.value.value(), null))
@@ -174,7 +222,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         internalProcessorContext.addProcessorMetadataKeyValue(storeName, windowCloseTime);
     }
 
-    // upper and lower bound are inclusive
+    // upper and lower bound are inclusive; the bounds could be negative in which case we would skip range fetching and emitting
     abstract protected long emitRangeLowerBound(final long windowCloseTime);
 
     abstract protected long emitRangeUpperBound(final long windowCloseTime);

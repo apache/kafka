@@ -98,7 +98,6 @@ public class SlidingWindowedKStreamIntegrationTest {
         CLUSTER.stop();
     }
 
-
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
@@ -115,18 +114,16 @@ public class SlidingWindowedKStreamIntegrationTest {
     @Parameter(1)
     public boolean withCache;
 
-    @Parameter(2)
-    public EmitStrategy emitStrategy;
-
+    private EmitStrategy emitStrategy;
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_{1}")
+    @Parameterized.Parameters(name = "{0}_cache:{1}")
     public static Collection<Object[]> getEmitStrategy() {
         return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_UPDATE, false, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_CLOSE, true, EmitStrategy.onWindowClose()},
-            {StrategyType.ON_WINDOW_CLOSE, false, EmitStrategy.onWindowClose()}
+            {StrategyType.ON_WINDOW_UPDATE, true},
+            {StrategyType.ON_WINDOW_UPDATE, false},
+            {StrategyType.ON_WINDOW_CLOSE, true},
+            {StrategyType.ON_WINDOW_CLOSE, false}
         });
     }
 
@@ -147,7 +144,8 @@ public class SlidingWindowedKStreamIntegrationTest {
         streamsConfiguration.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0); // Always process
         streamsConfiguration.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, Long.MAX_VALUE); // Don't expire changelog
 
-        emitFinal = emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE;
+        emitStrategy = StrategyType.forType(type);
+        emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
     }
 
     @After
@@ -233,7 +231,8 @@ public class SlidingWindowedKStreamIntegrationTest {
             new KeyValueTimestamp<>("A", "4", 6),  // Update [0, 10](0+1+2+3+4), update [1, 11](0+2+3+4], update [6, 16](0+3+4), create [7, 17](0+3)
             new KeyValueTimestamp<>("A", "5", 11), // Update [1, 11](0+2+3+4+5), update [6, 16](0+3+4+5), create [11, 21](0+5), update [7, 17](0+3+5)
             new KeyValueTimestamp<>("A", "6", 16), // close [0, 10], update [6, 16](0+3+4+5+6), update [11, 21](0+5+6), create [12, 22](0+6), update [7, 17](0+3+5+6)
-            new KeyValueTimestamp<>("A", "7", 27)  // close [1, 11], [6, 16], [11, 21], [7, 17] create [17, 27](0+7), create [17, 27](0+7)
+            new KeyValueTimestamp<>("A", "7", 27), // close [1, 11], [6, 16], [11, 21], [7, 17] create [17, 27](0+7)
+            new KeyValueTimestamp<>("A", "8", 11)  // Late and ignore
         );
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);

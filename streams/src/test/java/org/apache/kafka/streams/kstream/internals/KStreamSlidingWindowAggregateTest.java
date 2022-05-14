@@ -1530,7 +1530,7 @@ public class KStreamSlidingWindowAggregateTest {
                     // left window for k@105
                     "Skipping record for expired window. topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[95,105] expiration=[110] streamTime=[200]",
                     // left window for k@15
-                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[7] timestamp=[15] window=[5,15] expiration=[110] streamTime=[200]"
+                    "Skipping record for expired window. topic=[topic] partition=[0] offset=[7] timestamp=[15] window=[15,25] expiration=[110] streamTime=[200]"
             ));
             final TestOutputTopic<Windowed<String>, String> outputTopic =
                     driver.createOutputTopic("output", new TimeWindowedDeserializer<>(new StringDeserializer(), 10L), new StringDeserializer());

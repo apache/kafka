@@ -52,13 +52,6 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
     public KStreamSlidingWindowAggregate(final SlidingWindows windows,
                                          final String storeName,
-                                         final Initializer<VAgg> initializer,
-                                         final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
-        this(windows, storeName, EmitStrategy.onWindowUpdate(), initializer, aggregator);
-    }
-
-    public KStreamSlidingWindowAggregate(final SlidingWindows windows,
-                                         final String storeName,
                                          final EmitStrategy emitStrategy,
                                          final Initializer<VAgg> initializer,
                                          final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
@@ -85,7 +78,6 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
     private class KStreamSlidingWindowAggregateProcessor extends AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg> {
         private Boolean reverseIteratorPossible = null;
-        private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         protected KStreamSlidingWindowAggregateProcessor(final String storeName,
                                                          final EmitStrategy emitStrategy,
@@ -112,43 +104,14 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 return;
             }
 
-            observedStreamTime = Math.max(observedStreamTime, record.timestamp());
+            updateObservedStreamTime(record.timestamp());
             final long windowCloseTime = observedStreamTime - windows.gracePeriodMs();
 
-            if (record.timestamp() + 1L + windows.timeDifferenceMs() <= windowCloseTime) {
-                if (context().recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context().recordMetadata().get();
-                    log.warn(
-                        "Skipping record for expired window. " +
-                            "topic=[{}] " +
-                            "partition=[{}] " +
-                            "offset=[{}] " +
-                            "timestamp=[{}] " +
-                            "window=[{},{}] " +
-                            "expiration=[{}] " +
-                            "streamTime=[{}]",
-                        recordMetadata.topic(),
-                        recordMetadata.partition(),
-                        recordMetadata.offset(),
-                        record.timestamp(),
-                        record.timestamp() - windows.timeDifferenceMs(), record.timestamp(),
-                        windowCloseTime,
-                        observedStreamTime
-                    );
-                } else {
-                    log.warn(
-                        "Skipping record for expired window. Topic, partition, and offset not known. " +
-                            "timestamp=[{}] " +
-                            "window=[{},{}] " +
-                            "expiration=[{}] " +
-                            "streamTime=[{}]",
-                        record.timestamp(),
-                        record.timestamp() - windows.timeDifferenceMs(), record.timestamp(),
-                        windowCloseTime,
-                        observedStreamTime
-                    );
-                }
-                droppedRecordsSensor.record();
+            final long windowStart = record.timestamp();
+            final long windowEnd = record.timestamp() + windows.timeDifferenceMs();
+            if (windowEnd < windowCloseTime) {
+                final String window = "[" + windowStart + "," + windowEnd + "]";
+                logSkippedRecordForExpiredWindow(log, record.timestamp(), windowCloseTime, window);
                 return;
             }
 
@@ -474,9 +437,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
         @Override
         protected boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound) {
-            // If the inclusive upper bound is smaller than 0
-            // it means no window have closed yet and hence we can skip range fetching
-            return emitRangeUpperBound >= 0;
+            return true;
         }
 
         private void updateWindowAndForward(final Window window,
@@ -485,8 +446,9 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                                             final long windowCloseTime) {
             final long windowStart = window.start();
             final long windowEnd = window.end();
+
             if (windowEnd >= windowCloseTime) {
-                //get aggregate from existing window
+                // get aggregate from existing window
                 final VAgg oldAgg = getValueOrNull(valueAndTime);
                 final VAgg newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
@@ -497,37 +459,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     windowStart);
                 maybeForwardUpdate(record, window, oldAgg, newAgg, newTimestamp);
             } else {
-                if (context().recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context().recordMetadata().get();
-                    log.warn(
-                        "Skipping record for expired window. " +
-                            "topic=[{}] " +
-                            "partition=[{}] " +
-                            "offset=[{}] " +
-                            "timestamp=[{}] " +
-                            "window=[{},{}] " +
-                            "expiration=[{}] " +
-                            "streamTime=[{}]",
-                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset(),
-                        record.timestamp(),
-                        windowStart, windowEnd,
-                        windowCloseTime,
-                        observedStreamTime
-                    );
-                } else {
-                    log.warn(
-                        "Skipping record for expired window. Topic, partition, and offset not known. " +
-                            "timestamp=[{}] " +
-                            "window=[{},{}] " +
-                            "expiration=[{}] " +
-                            "streamTime=[{}]",
-                        record.timestamp(),
-                        windowStart, windowEnd,
-                        windowCloseTime,
-                        observedStreamTime
-                    );
-                }
-                droppedRecordsSensor.record();
+                final String windowString = "[" + windowStart + "," + windowEnd + "]";
+                logSkippedRecordForExpiredWindow(log, record.timestamp(), windowCloseTime, windowString);
             }
         }
     }

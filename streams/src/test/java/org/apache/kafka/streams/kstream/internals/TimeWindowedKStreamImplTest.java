@@ -81,24 +81,23 @@ public class TimeWindowedKStreamImplTest {
     @Parameter(1)
     public boolean withCache;
 
-    @Parameter(2)
-    public EmitStrategy emitStrategy;
-
+    private EmitStrategy emitStrategy;
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_{1}")
+    @Parameterized.Parameters(name = "{0}_cache:{1}")
     public static Collection<Object[]> getKeySchema() {
         return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_UPDATE, false, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_CLOSE, true, EmitStrategy.onWindowClose()},
-            {StrategyType.ON_WINDOW_CLOSE, false, EmitStrategy.onWindowClose()}
+            {StrategyType.ON_WINDOW_UPDATE, true},
+            {StrategyType.ON_WINDOW_UPDATE, false},
+            {StrategyType.ON_WINDOW_CLOSE, true},
+            {StrategyType.ON_WINDOW_CLOSE, false}
         });
     }
 
     @Before
     public void before() {
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
+        emitStrategy = StrategyType.forType(type);
         // Set interval to 0 so that it always tries to emit
         props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
