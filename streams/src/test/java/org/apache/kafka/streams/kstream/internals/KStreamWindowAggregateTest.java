@@ -52,8 +52,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessor;
@@ -99,41 +99,36 @@ public class KStreamWindowAggregateTest {
     @Parameter(1)
     public boolean withCache;
 
-    @Parameter(2)
     public EmitStrategy emitStrategy;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_{1}")
+    @Parameterized.Parameters(name = "{0}_cache:{1}")
     public static Collection<Object[]> getEmitStrategy() {
         return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_UPDATE, false, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_CLOSE, true, EmitStrategy.onWindowClose()},
-            {StrategyType.ON_WINDOW_CLOSE, false, EmitStrategy.onWindowClose()}
+            {StrategyType.ON_WINDOW_UPDATE, true},
+            {StrategyType.ON_WINDOW_UPDATE, false},
+            {StrategyType.ON_WINDOW_CLOSE, true},
+            {StrategyType.ON_WINDOW_CLOSE, false}
         });
     }
 
     @Before
     public void before() {
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
+        emitStrategy = StrategyType.forType(type);
         // Set interval to 0 so that it always tries to emit
         props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testAggBasic() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        // TODO: remove this cast after we add emitStrategy to public api
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
+        final KTable<Windowed<String>, String> table2 = builder.stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(100)).advanceBy(ofMillis(5)));
-
-        final KTable<Windowed<String>, String> table2 = windowedStream
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(100)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())));
 
@@ -220,7 +215,6 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -228,25 +222,20 @@ public class KStreamWindowAggregateTest {
         final String topic2 = "topic2";
         final long grace = emitFinal ? 5L : 100L;
 
-        // TODO: remove this cast after we add emitStrategy to public api
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream1 = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
+        final KTable<Windowed<String>, String> table1 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(grace)).advanceBy(ofMillis(5)));
-
-        final KTable<Windowed<String>, String> table1 = windowedStream1
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(grace)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())));
 
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream2 = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
+        final KTable<Windowed<String>, String> table2 = builder
             .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(grace)).advanceBy(ofMillis(5)));
-
-        final KTable<Windowed<String>, String> table2 = windowedStream2
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(grace)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String())));
         table2.toStream().process(supplier);
@@ -455,19 +444,14 @@ public class KStreamWindowAggregateTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldLogAndMeterWhenSkippingNullKey() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
-        // TODO: remove this cast after we add emitStrategy to public api
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10)).advanceBy(ofMillis(5)));
-
-        windowedStream
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
@@ -486,19 +470,14 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldLogAndMeterWhenSkippingExpiredWindow() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
-        // TODO: remove this cast after we add emitStrategy to public api
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(90)).advanceBy(ofMillis(5)));
-
-        windowedStream
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(90)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
             .aggregate(
                 () -> "",
@@ -575,19 +554,14 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
-        // TODO: remove this cast after we add emitStrategy to public api
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(90)).advanceBy(ofMillis(10)));
-
-        windowedStream
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(90)).advanceBy(ofMillis(10)))
             .emitStrategy(emitStrategy)
             .aggregate(
                 () -> "",

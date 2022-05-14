@@ -228,6 +228,7 @@ public class IntegrationTestUtils {
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
         return (testClass.getSimpleName() + testName.getMethodName())
+                .replace(':', '_')
                 .replace('.', '_')
                 .replace('[', '_')
                 .replace(']', '_')
