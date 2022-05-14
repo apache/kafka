@@ -621,6 +621,7 @@ public class Metrics implements Closeable {
             if (raiseIfMetricExists) {
                 throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
             } else {
+                log.info("Metric named {} already exists.", metricName);
                 return;
             }
         }
