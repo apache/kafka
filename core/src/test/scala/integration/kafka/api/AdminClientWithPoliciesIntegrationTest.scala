@@ -93,14 +93,14 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     createTopic(topic2, 1, 1)
 
-    PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, topicResource1, topicResource2)
+    PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
-    PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(brokers, client)
+    PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(this, client)
   }
 
   @nowarn("cat=deprecation")
@@ -149,6 +149,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that the second resource was updated and the others were not
+    ensureConsistentKRaftMetadata()
     var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
     var configs = describeResult.all.get
     assertEquals(4, configs.size)
@@ -177,6 +178,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that no resources are updated since validate_only = true
+    ensureConsistentKRaftMetadata()
     describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
     configs = describeResult.all.get
     assertEquals(4, configs.size)

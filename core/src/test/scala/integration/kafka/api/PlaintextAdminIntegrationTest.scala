@@ -26,9 +26,10 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 
+import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
-import kafka.server.{Defaults, DynamicConfig, KafkaBroker, KafkaConfig}
+import kafka.server.{Defaults, DynamicConfig, KafkaConfig}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
@@ -422,7 +423,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(brokers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
 
-    checkValidAlterConfigs(client, topicResource1, topicResource2)
+    checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -973,7 +974,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
-    checkInvalidAlterConfigs(brokers, client)
+    checkInvalidAlterConfigs(this, client)
   }
 
   /**
@@ -2489,7 +2490,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 object PlaintextAdminIntegrationTest {
 
   @nowarn("cat=deprecation")
-  def checkValidAlterConfigs(client: Admin, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
+  def checkValidAlterConfigs(
+    admin: Admin,
+    test: KafkaServerTestHarness,
+    topicResource1: ConfigResource,
+    topicResource2: ConfigResource
+  ): Unit = {
     // Alter topics
     var topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.FlushMsProp, "1000")
@@ -2500,7 +2506,7 @@ object PlaintextAdminIntegrationTest {
       new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
     ).asJava
 
-    var alterResult = client.alterConfigs(Map(
+    var alterResult = admin.alterConfigs(Map(
       topicResource1 -> new Config(topicConfigEntries1),
       topicResource2 -> new Config(topicConfigEntries2)
     ).asJava)
@@ -2509,7 +2515,8 @@ object PlaintextAdminIntegrationTest {
     alterResult.all.get
 
     // Verify that topics were updated correctly
-    var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
+    test.ensureConsistentKRaftMetadata()
+    var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2).asJava)
     var configs = describeResult.all.get
 
     assertEquals(2, configs.size)
@@ -2532,7 +2539,7 @@ object PlaintextAdminIntegrationTest {
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.3")
     ).asJava
 
-    alterResult = client.alterConfigs(Map(
+    alterResult = admin.alterConfigs(Map(
       topicResource1 -> new Config(topicConfigEntries1),
       topicResource2 -> new Config(topicConfigEntries2)
     ).asJava, new AlterConfigsOptions().validateOnly(true))
@@ -2541,7 +2548,8 @@ object PlaintextAdminIntegrationTest {
     alterResult.all.get
 
     // Verify that topics were not updated due to validateOnly = true
-    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
+    test.ensureConsistentKRaftMetadata()
+    describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2).asJava)
     configs = describeResult.all.get
 
     assertEquals(2, configs.size)
@@ -2552,15 +2560,18 @@ object PlaintextAdminIntegrationTest {
   }
 
   @nowarn("cat=deprecation")
-  def checkInvalidAlterConfigs(brokers: Seq[KafkaBroker], admin: Admin): Unit = {
+  def checkInvalidAlterConfigs(
+    test: KafkaServerTestHarness,
+    admin: Admin
+  ): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    createTopicWithAdmin(admin, topic1, brokers, numPartitions = 1, replicationFactor = 1)
+    createTopicWithAdmin(admin, topic1, test.brokers, numPartitions = 1, replicationFactor = 1)
 
     val topic2 = "invalid-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    createTopicWithAdmin(admin, topic2, brokers, numPartitions = 1, replicationFactor = 1)
+    createTopicWithAdmin(admin, topic2, test.brokers, numPartitions = 1, replicationFactor = 1)
 
     val topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), // this value is invalid as it's above 1.0
@@ -2569,7 +2580,7 @@ object PlaintextAdminIntegrationTest {
 
     var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy")).asJava
 
-    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
+    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, test.brokers.head.config.brokerId.toString)
     val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181")).asJava
 
     // Alter configs: first and third are invalid, second is valid
@@ -2585,6 +2596,7 @@ object PlaintextAdminIntegrationTest {
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that first and third resources were not updated and second was updated
+    test.ensureConsistentKRaftMetadata()
     var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
     var configs = describeResult.all.get
     assertEquals(3, configs.size)
@@ -2613,6 +2625,7 @@ object PlaintextAdminIntegrationTest {
     assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that no resources are updated since validate_only = true
+    test.ensureConsistentKRaftMetadata()
     describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
     configs = describeResult.all.get
     assertEquals(3, configs.size)
