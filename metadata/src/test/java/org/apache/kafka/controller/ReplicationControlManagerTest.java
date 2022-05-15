@@ -487,9 +487,9 @@ public class ReplicationControlManagerTest {
 
         ControllerResult<CreateTopicsResponseData> result2 =
             replicationControl.createTopics(request2, Collections.singleton("bar"));
-        assertEquals(Errors.INVALID_REQUEST.code(), result2.response().topics().find("bar").errorCode());
+        assertEquals(Errors.INVALID_CONFIG.code(), result2.response().topics().find("bar").errorCode());
         assertEquals(
-            "Null value not supported for topic configs : foo",
+            "Null value not supported for topic configs: foo",
             result2.response().topics().find("bar").errorMessage()
         );
     }

@@ -2233,8 +2233,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
     assertFutureExceptionTypeEquals(
       client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all,
-      classOf[InvalidRequestException],
-      Some("Null value not supported for topic configs : retention.bytes")
+      classOf[InvalidConfigurationException],
+      Some("Null value not supported for topic configs: retention.bytes")
     )
 
     val validConfigs = Map[String, String](LogConfig.CompressionTypeProp -> "producer")

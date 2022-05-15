@@ -782,8 +782,8 @@ public class ReplicationControlManager {
                 }
             }
             if (!nullConfigs.isEmpty()) {
-                topicErrors.put(topic.name(), new ApiError(Errors.INVALID_REQUEST,
-                    "Null value not supported for topic configs : " + String.join(",", nullConfigs)));
+                topicErrors.put(topic.name(), new ApiError(Errors.INVALID_CONFIG,
+                    "Null value not supported for topic configs: " + String.join(",", nullConfigs)));
             } else if (!topicConfigs.isEmpty()) {
                 configChanges.put(new ConfigResource(TOPIC, topic.name()), topicConfigs);
             }
