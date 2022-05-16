@@ -538,12 +538,11 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         // make sure the topics  are created in the backup cluster
         waitForTopicCreated(backup, remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS));
-        waitForTopicCreated(backup, remoteTopicName("test-topic-no-records", PRIMARY_CLUSTER_ALIAS));
+        waitForTopicCreated(backup, remoteTopicName("test-topic-no-checkpoints", PRIMARY_CLUSTER_ALIAS));
 
         // commit some offsets for both topics in the source cluster
         TopicPartition tp1 = new TopicPartition("test-topic-1", 0);
-        TopicPartition tp2 = new TopicPartition("test-topic-no-records", 0);
-        //Map<String, Object> consumerProps  = Collections.singletonMap("group.id", consumerGroupName);
+        TopicPartition tp2 = new TopicPartition("test-topic-no-checkpoints", 0);
         try (Consumer<byte[], byte[]> consumer = primary.kafka().createConsumer(consumerProps)) {
             Collection<TopicPartition> tps = Arrays.asList(tp1, tp2);
             Map<TopicPartition, Long> endOffsets = consumer.endOffsets(tps);
@@ -555,7 +554,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             consumer.commitSync(offsetsToCommit);
         }
 
-        // Only test-topic-1 should have translated offsets because we've not yet mirrored any records for topic-no-records
+        // Only test-topic-1 should have translated offsets because we've not yet mirrored any records for test-topic-no-checkpoints
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
         waitForCondition(() -> {
             Map<TopicPartition, OffsetAndMetadata> translatedOffsets = backupClient.remoteConsumerOffsets(
@@ -564,8 +563,8 @@ public class MirrorConnectorsIntegrationBaseTest {
                    !translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
         }, OFFSET_SYNC_DURATION_MS, "Checkpoints were not emitted correctly to backup cluster");
 
-        // Send some records to topic-no-records in the source cluster
-        produceMessages(primary, "test-topic-no-records");
+        // Send some records to test-topic-no-checkpoints in the source cluster
+        produceMessages(primary, "test-topic-no-checkpoints");
 
         waitForCondition(() -> {
             Map<TopicPartition, OffsetAndMetadata> translatedOffsets = backupClient.remoteConsumerOffsets(
@@ -774,7 +773,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig, adminClientConfig);
         primary.kafka().createTopic("backup.test-topic-1", 1, 1, emptyMap, adminClientConfig);
         primary.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
-        primary.kafka().createTopic("test-topic-no-records", 1, 1, emptyMap, adminClientConfig);
+        primary.kafka().createTopic("test-topic-no-checkpoints", 1, 1, emptyMap, adminClientConfig);
         backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, emptyMap, adminClientConfig);
         backup.kafka().createTopic("primary.test-topic-1", 1, 1, emptyMap, adminClientConfig);
         backup.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
