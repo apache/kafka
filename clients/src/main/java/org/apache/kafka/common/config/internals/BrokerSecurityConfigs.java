@@ -36,6 +36,8 @@ public class BrokerSecurityConfigs {
     public static final String SASL_SERVER_CALLBACK_HANDLER_CLASS = "sasl.server.callback.handler.class";
     public static final String SSL_PRINCIPAL_MAPPING_RULES_CONFIG = "ssl.principal.mapping.rules";
     public static final String CONNECTIONS_MAX_REAUTH_MS = "connections.max.reauth.ms";
+    public static final int DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE = 524288;
+    public static final String SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG = "sasl.server.max.receive.size";
 
     public static final String PRINCIPAL_BUILDER_CLASS_DOC = "The fully qualified name of a class that implements the " +
             "KafkaPrincipalBuilder interface, which is used to build the KafkaPrincipal object used during " +
@@ -89,4 +91,8 @@ public class BrokerSecurityConfigs {
             + "The broker will disconnect any such connection that is not re-authenticated within the session lifetime and that is then subsequently "
             + "used for any purpose other than re-authentication. Configuration names can optionally be prefixed with listener prefix and SASL "
             + "mechanism name in lower-case. For example, listener.name.sasl_ssl.oauthbearer.connections.max.reauth.ms=3600000";
+
+    public static final String SASL_SERVER_MAX_RECEIVE_SIZE_DOC = "The maximum receive size allowed before and during initial SASL authentication." +
+            " Default receive size is 512KB. GSSAPI limits requests to 64K, but we allow upto 512KB by default for custom SASL mechanisms. In practice," +
+            " PLAIN, SCRAM and OAUTH mechanisms can use much smaller limits.";
 }
