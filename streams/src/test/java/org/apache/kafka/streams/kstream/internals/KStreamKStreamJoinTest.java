@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -31,17 +32,34 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,6 +69,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.Optional;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
@@ -331,6 +350,87 @@ public class KStreamKStreamJoinTest {
 
         //Case with other stream store supplier
         runJoin(streamJoined.withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+    }
+
+    @Test
+    public void shouldThrottleEmitNonJoinedOuterRecordsEvenWhenClockDrift() {
+        /**
+         * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
+         */
+        final KStreamImplJoin.TimeTracker tracker = new KStreamImplJoin.TimeTracker();
+        final KStreamKStreamJoin<String, String, String, String> join = new KStreamKStreamJoin<>(
+                false,
+                "other",
+                new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
+                (key, v1, v2) -> v1 + v2,
+                true,
+                Optional.of("outer"),
+                tracker);
+        final Processor<String, String, String, String> joinProcessor = join.get();
+        final MockInternalNewProcessorContext<String, String> procCtx = new MockInternalNewProcessorContext<>();
+        final WindowStore<String, String> otherStore = new WindowStoreBuilder<>(
+                new InMemoryWindowBytesStoreSupplier(
+                        "other",
+                        1000L,
+                        100,
+                        false),
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime()).build();
+
+        final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore = Mockito.spy(
+                new KeyValueStoreBuilder<>(
+                    new InMemoryKeyValueBytesStoreSupplier("outer"),
+                    new TimestampedKeyAndJoinSideSerde<>(Serdes.String()),
+                    new LeftOrRightValueSerde<>(Serdes.String(), Serdes.String()),
+                    new MockTime()
+                ).build());
+
+        final GenericInMemoryKeyValueStore<String, String> rootStore = new GenericInMemoryKeyValueStore<>("root");
+
+        otherStore.init((StateStoreContext) procCtx, rootStore);
+        procCtx.addStateStore(otherStore);
+
+        outerStore.init((StateStoreContext) procCtx, rootStore);
+        procCtx.addStateStore(outerStore);
+
+        joinProcessor.init(procCtx);
+
+        final Record<String, String> record1 = new Record<>("key1", "value2", 10000L);
+        final Record<String, String> record2 = new Record<>("key2", "value2", 13000L);
+        final Record<String, String> record3 = new Record<>("key3", "value2", 15000L);
+        final Record<String, String> record4 = new Record<>("key3", "value2", 17000L);
+
+        /*
+        The whole test flow requires 4 `process(record)` invocations, we assume there is a 500ms delay between each invocation:
+
+        1. Process 1st record, there is no record in outerStore yet, so we skip the entire processing of outerStore.
+           But this help us to put record into outerStore.
+        2. Process 2nd record, we have 1st record in outerStore, so we will process outer records.
+        3. We simulate a clock drift, here we need to assume the real world has only moved 500ms, but our wall clock has moved 2000ms.
+        4. Process 3rd record, because of clock drift, no throttling happen.
+        5. Process 4th record, it should be throttled despite of clock drift in step 3.
+        * */
+        procCtx.setSystemTimeMs(1000L);
+        joinProcessor.process(record1);
+        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.never()).all()) {
+        }
+
+        procCtx.setSystemTimeMs(1500L);
+        joinProcessor.process(record2);
+        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.times(1)).all()) {
+        }
+
+        procCtx.setSystemTimeMs(3500L);
+        joinProcessor.process(record3);
+        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.times(2)).all()) {
+        }
+
+        procCtx.setSystemTimeMs(4000L);
+        joinProcessor.process(record4);
+        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.times(2)).all()) {
+        }
+
     }
 
     private void runJoin(final StreamJoined<String, Integer, Integer> streamJoined,
