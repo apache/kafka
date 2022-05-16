@@ -63,9 +63,8 @@ public abstract class SourceConnector extends Connector {
      *
      * @param connectorConfig the configuration that will be used for the connector
      * @return {@link ConnectorTransactionBoundaries#SUPPORTED} if the connector will define its own transaction boundaries,
-     * or {@link ConnectorTransactionBoundaries#UNSUPPORTED} otherwise. If this method is overridden by a
-     * connector, should not be {@code null}, but if {@code null}, it will be assumed that the connector cannot define its own
-     * transaction boundaries.
+     * or {@link ConnectorTransactionBoundaries#UNSUPPORTED} otherwise; may never be {@code null}. The default implementation
+     * returns {@link ConnectorTransactionBoundaries#UNSUPPORTED}.
      * @since 3.3
      * @see TransactionContext
      */

@@ -490,9 +490,7 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Test with PEM key store files without key password for client key store. We don't allow this
-     * with PEM files since unprotected private key on disk is not safe. We do allow with inline
-     * PEM config since key config can be encrypted or externalized similar to other password configs.
+     * Test with PEM key store files without key password for client key store.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
@@ -502,27 +500,19 @@ public class SslTransportLayerTest {
         TestSslUtils.convertToPem(args.sslClientConfigs, !useInlinePem, false);
         args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         server = createEchoServer(args, SecurityProtocol.SSL);
-        if (useInlinePem)
-            verifySslConfigs(args);
-        else
-            assertThrows(KafkaException.class, () -> createSelector(args.sslClientConfigs));
+        verifySslConfigs(args);
     }
 
     /**
      * Test with PEM key store files without key password for server key store.We don't allow this
-     * with PEM files since unprotected private key on disk is not safe. We do allow with inline
-     * PEM config since key config can be encrypted or externalized similar to other password configs.
+     * with PEM files since unprotected private key on disk is not safe.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testPemFilesWithoutServerKeyPassword(Args args) throws Exception {
         TestSslUtils.convertToPem(args.sslServerConfigs, !args.useInlinePem, false);
         TestSslUtils.convertToPem(args.sslClientConfigs, !args.useInlinePem, true);
-
-        if (args.useInlinePem)
-            verifySslConfigs(args);
-        else
-            assertThrows(KafkaException.class, () -> createEchoServer(args, SecurityProtocol.SSL));
+        verifySslConfigs(args);
     }
 
     /**
