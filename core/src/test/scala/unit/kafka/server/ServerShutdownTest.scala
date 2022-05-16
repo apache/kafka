@@ -144,15 +144,15 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
-    if (quorum == "zk") {
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
-      verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException](quorum)
-    } else {
+    if (isKRaftTest()) {
       propsToChangeUponRestart.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "1000")
       shutdownBroker()
       shutdownKRaftController()
-      verifyCleanShutdownAfterFailedStartup[CancellationException](quorum)
+      verifyCleanShutdownAfterFailedStartup[CancellationException]
+    } else {
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }
 
@@ -165,7 +165,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
-    verifyCleanShutdownAfterFailedStartup[KafkaStorageException](quorum)
+    verifyCleanShutdownAfterFailedStartup[KafkaStorageException]
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -186,7 +186,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
-  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](quorum: String)(implicit exceptionClassTag: ClassTag[E]): Unit = {
+  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](implicit exceptionClassTag: ClassTag[E]): Unit = {
     try {
       recreateBroker(startup = true)
       fail("Expected KafkaServer setup to fail and throw exception")
@@ -195,8 +195,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
-        assertTrue(exceptionClassTag.runtimeClass.isInstance(e), s"Unexpected exception $e")
-        assertEquals(if (quorum == "zk") BrokerState.NOT_RUNNING else BrokerState.SHUTTING_DOWN, brokers.head.brokerState)
+        assertTrue(exceptionClassTag.runtimeClass.isInstance(if (isKRaftTest() && e.isInstanceOf[RuntimeException]) e.getCause.getCause else e),
+          s"Unexpected exception $e")
+        assertEquals(if (isKRaftTest()) BrokerState.SHUTTING_DOWN else BrokerState.NOT_RUNNING, brokers.head.brokerState)
     } finally {
       shutdownBroker()
     }
