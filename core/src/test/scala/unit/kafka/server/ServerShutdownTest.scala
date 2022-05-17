@@ -39,7 +39,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -177,6 +177,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
+  @Disabled
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
@@ -195,12 +196,22 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
-        assertTrue(exceptionClassTag.runtimeClass.isInstance(if (isKRaftTest() && e.isInstanceOf[RuntimeException]) e.getCause.getCause else e),
-          s"Unexpected exception $e")
+        assertCause(exceptionClassTag.runtimeClass, e)
         assertEquals(if (isKRaftTest()) BrokerState.SHUTTING_DOWN else BrokerState.NOT_RUNNING, brokers.head.brokerState)
     } finally {
       shutdownBroker()
     }
+  }
+
+  private def assertCause(expectedClass: Class[_], e: Throwable): Unit = {
+    var cause = e
+    while (cause != null) {
+      if (expectedClass.isInstance(cause)) {
+        return
+      }
+      cause = cause.getCause
+    }
+    fail(s"Failed to assert cause of $e, expected cause $expectedClass")
   }
 
   private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {
