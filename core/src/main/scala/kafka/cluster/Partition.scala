@@ -580,7 +580,7 @@ class Partition(val topicPartition: TopicPartition,
       // larger or equal to the current partition epoch.
       updateAssignmentAndIsr(
         replicas = replicas,
-        followers = replicas.filter(_ != localBrokerId),
+        isLeader = true,
         isr = isr,
         addingReplicas = addingReplicas,
         removingReplicas = removingReplicas,
@@ -675,7 +675,7 @@ class Partition(val topicPartition: TopicPartition,
 
       updateAssignmentAndIsr(
         replicas = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
-        followers = Seq.empty,
+        isLeader = false,
         isr = Set.empty,
         addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt),
@@ -779,30 +779,38 @@ class Partition(val topicPartition: TopicPartition,
    *
    * @param replicas An ordered sequence of all the broker ids that were assigned to this
    *                   topic partition
-   * @param followers An ordered sequence of all the followers (remote replicas)
+   * @param isLeader True if this replica is the leader.
    * @param isr The set of broker ids that are known to be insync with the leader
    * @param addingReplicas An ordered sequence of all broker ids that will be added to the
     *                       assignment
    * @param removingReplicas An ordered sequence of all broker ids that will be removed from
     *                         the assignment
    */
-  def updateAssignmentAndIsr(replicas: Seq[Int],
-                             followers: Seq[Int],
-                             isr: Set[Int],
-                             addingReplicas: Seq[Int],
-                             removingReplicas: Seq[Int],
-                             leaderRecoveryState: LeaderRecoveryState): Unit = {
-    val removedReplicas = remoteReplicasMap.keys.filter(!followers.contains(_))
+  def updateAssignmentAndIsr(
+    replicas: Seq[Int],
+    isLeader: Boolean,
+    isr: Set[Int],
+    addingReplicas: Seq[Int],
+    removingReplicas: Seq[Int],
+    leaderRecoveryState: LeaderRecoveryState
+  ): Unit = {
+    if (isLeader) {
+      val followers = replicas.filter(_ != localBrokerId)
+      val removedReplicas = remoteReplicasMap.keys.filter(!followers.contains(_))
 
-    // due to code paths accessing remoteReplicasMap without a lock,
-    // first add the new replicas and then remove the old ones
-    followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
-    remoteReplicasMap.removeAll(removedReplicas)
+      // Due to code paths accessing remoteReplicasMap without a lock,
+      // first add the new replicas and then remove the old ones
+      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
+      remoteReplicasMap.removeAll(removedReplicas)
+    } else {
+      remoteReplicasMap.clear()
+    }
 
-    if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
-      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, replicas)
+    assignmentState = if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
+      OngoingReassignmentState(addingReplicas, removingReplicas, replicas)
     else
-      assignmentState = SimpleAssignmentState(replicas)
+      SimpleAssignmentState(replicas)
+
     partitionState = CommittedPartitionState(isr, leaderRecoveryState)
   }
 

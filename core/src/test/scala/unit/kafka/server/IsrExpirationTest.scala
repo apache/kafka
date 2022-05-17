@@ -227,7 +227,7 @@ class IsrExpirationTest {
 
     partition.updateAssignmentAndIsr(
       replicas = configs.map(_.brokerId),
-      followers = configs.tail.map(_.brokerId),
+      isLeader = true,
       isr = configs.map(_.brokerId).toSet,
       addingReplicas = Seq.empty,
       removingReplicas = Seq.empty,

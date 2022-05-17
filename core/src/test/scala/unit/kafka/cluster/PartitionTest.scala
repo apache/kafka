@@ -1977,7 +1977,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Test with ongoing reassignment
     partition.updateAssignmentAndIsr(
       replicas,
-      followers,
+      isLeader = true,
       isr,
       adding,
       removing,
@@ -1997,7 +1997,7 @@ class PartitionTest extends AbstractPartitionTest {
     val isr2 = Set(0, 3, 4, 5)
     partition.updateAssignmentAndIsr(
       replicas2,
-      followers2,
+      isLeader = true,
       isr2,
       Seq.empty,
       Seq.empty,
@@ -2013,7 +2013,7 @@ class PartitionTest extends AbstractPartitionTest {
     val replicas3 = Seq(1, 2, 3, 4)
     partition.updateAssignmentAndIsr(
       replicas3,
-      Seq.empty,
+      isLeader = false,
       Set.empty,
       Seq.empty,
       Seq.empty,
