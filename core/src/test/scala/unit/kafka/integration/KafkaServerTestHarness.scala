@@ -20,7 +20,6 @@ package kafka.integration
 import java.io.File
 import java.util
 import java.util.Arrays
-
 import kafka.server.QuorumTestHarness
 import kafka.server._
 import kafka.utils.TestUtils
@@ -30,13 +29,14 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import java.util.Properties
-
 import kafka.utils.TestUtils.{createAdminClient, resource}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT
+
+import java.util.concurrent.TimeUnit
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -248,9 +248,9 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     index
   }
 
-  def killBroker(index: Int): Unit = {
+  def killBroker(index: Int, timeoutMs: Long = TimeUnit.SECONDS.toMillis(5)): Unit = {
     if(alive(index)) {
-      _brokers(index).shutdown()
+      _brokers(index).shutdown(timeoutMs)
       _brokers(index).awaitShutdown()
       alive(index) = false
     }

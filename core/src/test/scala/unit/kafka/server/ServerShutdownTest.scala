@@ -39,7 +39,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Disabled, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -177,12 +177,12 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
-  @Disabled
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
-    shutdownBroker()
+    val shutdownTimeoutMs = 1000
+    killBroker(0, shutdownTimeoutMs)
     CoreUtils.delete(broker.config.logDirs)
     verifyNonDaemonThreadsStatus()
   }

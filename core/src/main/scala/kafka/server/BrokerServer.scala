@@ -478,9 +478,12 @@ class BrokerServer(
     }
   }
 
-  override def shutdown(): Unit = {
+  override def shutdown(): Unit = shutdown(TimeUnit.MINUTES.toMillis(5))
+
+  override def shutdown(timeoutMs: Long): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
+      val deadline = time.milliseconds() + timeoutMs;
       info("shutting down")
 
       if (config.controlledShutdownEnable) {
@@ -491,7 +494,8 @@ class BrokerServer(
         }
         lifecycleManager.beginControlledShutdown()
         try {
-          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
+          val controlledShutdownTimeoutMs = deadline - time.milliseconds()
+          lifecycleManager.controlledShutdownFuture.get(controlledShutdownTimeoutMs, TimeUnit.MILLISECONDS)
         } catch {
           case _: TimeoutException =>
             error("Timed out waiting for the controller to approve controlled shutdown")

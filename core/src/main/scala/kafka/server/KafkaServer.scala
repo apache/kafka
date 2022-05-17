@@ -693,11 +693,13 @@ class KafkaServer(
     }
   }
 
+  override def shutdown(): Unit = shutdown(TimeUnit.MINUTES.toMillis(5))
+
   /**
    * Shutdown API for shutting down a single instance of the Kafka server.
    * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
    */
-  override def shutdown(): Unit = {
+  override def shutdown(timeoutMs: Long): Unit = {
     try {
       info("shutting down")
 

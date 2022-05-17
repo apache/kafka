@@ -43,6 +43,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -287,7 +288,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 throw new IllegalStateException("Tried to restart brokers but the cluster has not been started!");
             }
             for (int i = 0; i < clusterReference.get().brokerCount(); i++) {
-                clusterReference.get().killBroker(i);
+                clusterReference.get().killBroker(i, TimeUnit.SECONDS.toMillis(5));
             }
             clusterReference.get().restartDeadBrokers(true);
         }

@@ -87,6 +87,7 @@ trait KafkaBroker extends KafkaMetricsGroup {
   def startup(): Unit
   def awaitShutdown(): Unit
   def shutdown(): Unit
+  def shutdown(timeoutMs: Long): Unit
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
 
