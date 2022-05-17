@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -72,7 +73,7 @@ public class TimeWindowedKStreamImplTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-    private TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream;
+    private TimeWindowedKStream<String, String> windowedStream;
 
     @Parameter
     public StrategyType type;
@@ -80,32 +81,28 @@ public class TimeWindowedKStreamImplTest {
     @Parameter(1)
     public boolean withCache;
 
-    @Parameter(2)
-    public EmitStrategy emitStrategy;
-
+    private EmitStrategy emitStrategy;
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_{1}")
+    @Parameterized.Parameters(name = "{0}_cache:{1}")
     public static Collection<Object[]> getKeySchema() {
         return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_UPDATE, false, EmitStrategy.onWindowUpdate()},
-            {StrategyType.ON_WINDOW_CLOSE, true, EmitStrategy.onWindowClose()},
-            {StrategyType.ON_WINDOW_CLOSE, false, EmitStrategy.onWindowClose()}
+            {StrategyType.ON_WINDOW_UPDATE, true},
+            {StrategyType.ON_WINDOW_UPDATE, false},
+            {StrategyType.ON_WINDOW_CLOSE, true},
+            {StrategyType.ON_WINDOW_CLOSE, false}
         });
     }
 
-    @SuppressWarnings("unchecked")
     @Before
     public void before() {
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
+        emitStrategy = StrategyType.forType(type);
         // Set interval to 0 so that it always tries to emit
         props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
-        // TODO: remove this cast https://issues.apache.org/jira/browse/KAFKA-13800
-        windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) (stream.
-            groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L))));
+        windowedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)));
     }
 
     @Test

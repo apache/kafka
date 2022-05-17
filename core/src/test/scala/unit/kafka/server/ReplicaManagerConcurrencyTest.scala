@@ -28,7 +28,7 @@ import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{MockTime, ShutdownableThread, TestUtils}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
@@ -224,17 +224,21 @@ class ReplicaManagerConcurrencyTest {
         }
       }
 
-      replicaManager.fetchMessages(
-        timeout = random.nextInt(100),
+      val fetchParams = FetchParams(
+        requestVersion = ApiKeys.FETCH.latestVersion,
         replicaId = replicaId,
-        fetchMinBytes = 1,
-        fetchMaxBytes = 1024 * 1024,
-        hardMaxBytesLimit = false,
+        maxWaitMs = random.nextInt(100),
+        minBytes = 1,
+        maxBytes = 1024 * 1024,
+        isolation = FetchIsolation(replicaId, IsolationLevel.READ_UNCOMMITTED),
+        clientMetadata = Some(clientMetadata)
+      )
+
+      replicaManager.fetchMessages(
+        params = fetchParams,
         fetchInfos = Seq(topicIdPartition -> partitionData),
         quota = QuotaFactory.UnboundedQuota,
         responseCallback = fetchCallback,
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        clientMetadata = Some(clientMetadata)
       )
 
       val fetchResult = future.get()

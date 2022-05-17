@@ -30,10 +30,15 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 public final class ConnectUtils {
     private static final Logger log = LoggerFactory.getLogger(ConnectUtils.class);
@@ -158,6 +163,32 @@ public final class ConnectUtils {
 
     public static boolean isSourceConnector(Connector connector) {
         return SourceConnector.class.isAssignableFrom(connector.getClass());
+    }
+
+    public static <K, I, O> Map<K, O> transformValues(Map<K, I> map, Function<I, O> transformation) {
+        return map.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey,
+                transformation.compose(Map.Entry::getValue)
+        ));
+    }
+
+    public static <I> List<I> combineCollections(Collection<Collection<I>> collections) {
+        return combineCollections(collections, Function.identity());
+    }
+
+    public static <I, T> List<T> combineCollections(Collection<I> collection, Function<I, Collection<T>> extractCollection) {
+        return combineCollections(collection, extractCollection, Collectors.toList());
+    }
+
+    public static <I, T, C> C combineCollections(
+            Collection<I> collection,
+            Function<I, Collection<T>> extractCollection,
+            Collector<T, ?, C> collector
+    ) {
+        return collection.stream()
+                .map(extractCollection)
+                .flatMap(Collection::stream)
+                .collect(collector);
     }
 
 }

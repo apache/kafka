@@ -167,6 +167,10 @@ public final class QuorumController implements Controller {
             this.clusterId = clusterId;
         }
 
+        public int nodeId() {
+            return nodeId;
+        }
+
         public Builder setTime(Time time) {
             this.time = time;
             return this;
@@ -753,11 +757,11 @@ public final class QuorumController implements Controller {
     }
 
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
-
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
+                    maybeCompleteAuthorizerInitialLoad();
                     boolean isActiveController = curClaimEpoch != -1;
                     long processedRecordsSize = 0;
                     while (reader.hasNext()) {
@@ -921,9 +925,32 @@ public final class QuorumController implements Controller {
                 if (this != metaLogListener) {
                     log.debug("Ignoring {} raft event from an old registration", name);
                 } else {
-                    runnable.run();
+                    try {
+                        runnable.run();
+                    } finally {
+                        maybeCompleteAuthorizerInitialLoad();
+                    }
                 }
             });
+        }
+    }
+
+    private void maybeCompleteAuthorizerInitialLoad() {
+        if (!needToCompleteAuthorizerLoad) return;
+        OptionalLong highWatermark = raftClient.highWatermark();
+        if (highWatermark.isPresent()) {
+            if (lastCommittedOffset + 1 >= highWatermark.getAsLong()) {
+                log.info("maybeCompleteAuthorizerInitialLoad: completing authorizer " +
+                    "initial load at last committed offset {}.", lastCommittedOffset);
+                authorizer.get().completeInitialLoad();
+                needToCompleteAuthorizerLoad = false;
+            } else {
+                log.trace("maybeCompleteAuthorizerInitialLoad: can't proceed because " +
+                    "lastCommittedOffset  = {}, but highWatermark = {}.",
+                    lastCommittedOffset, highWatermark.getAsLong());
+            }
+        } else {
+            log.trace("maybeCompleteAuthorizerInitialLoad: highWatermark not set.");
         }
     }
 
@@ -1277,6 +1304,12 @@ public final class QuorumController implements Controller {
     private long lastCommittedTimestamp = -1;
 
     /**
+     * True if we need to complete the authorizer initial load.
+     * This must be accessed only by the event queue thread.
+     */
+    private boolean needToCompleteAuthorizerLoad;
+
+    /**
      * If we have called scheduleWrite, this is the last offset we got back from it.
      */
     private long writeOffset;
@@ -1384,8 +1417,11 @@ public final class QuorumController implements Controller {
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.writeOffset = -1L;
+        this.needToCompleteAuthorizerLoad = authorizer.isPresent();
 
         resetState();
+
+        log.info("Creating new QuorumController with clusterId {}, authorizer {}.", clusterId, authorizer);
 
         this.raftClient.register(metaLogListener);
     }

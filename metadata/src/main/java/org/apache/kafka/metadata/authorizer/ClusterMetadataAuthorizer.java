@@ -57,6 +57,18 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
     AclMutator aclMutatorOrException();
 
     /**
+     * Complete the initial load of the cluster metadata authorizer, so that all
+     * principals can use it.
+     */
+    void completeInitialLoad();
+
+    /**
+     * Complete the initial load of the cluster metadata authorizer with an exception,
+     * indicating that the loading process has failed.
+     */
+    void completeInitialLoad(Exception e);
+
+    /**
      * Load the ACLs in the given map. Anything not in the map will be removed.
      * The authorizer will also wait for this initial snapshot load to complete when
      * coming up.
