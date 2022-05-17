@@ -153,7 +153,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
         featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
-          info(s"Updating metadata.version to $metadataVersion at offset $highestOffsetAndEpoch.")
+          info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
         }
       }
 

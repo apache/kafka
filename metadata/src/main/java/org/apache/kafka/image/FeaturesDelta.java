@@ -35,7 +35,7 @@ public final class FeaturesDelta {
 
     private final Map<String, Optional<Short>> changes = new HashMap<>();
 
-    private Short metadataVersionChange = null;
+    private MetadataVersion metadataVersionChange = null;
 
     public FeaturesDelta(FeaturesImage image) {
         this.image = image;
@@ -45,7 +45,7 @@ public final class FeaturesDelta {
         return changes;
     }
 
-    public Optional<Short> metadataVersionChange() {
+    public Optional<MetadataVersion> metadataVersionChange() {
         return Optional.ofNullable(metadataVersionChange);
     }
 
@@ -59,7 +59,7 @@ public final class FeaturesDelta {
 
     public void replay(FeatureLevelRecord record) {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            metadataVersionChange = record.featureLevel();
+            metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
         } else {
             changes.put(record.name(), Optional.of(record.featureLevel()));
         }
@@ -99,7 +99,7 @@ public final class FeaturesDelta {
         if (metadataVersionChange == null) {
             metadataVersion = image.metadataVersion();
         } else {
-            metadataVersion = MetadataVersion.fromFeatureLevel(metadataVersionChange);
+            metadataVersion = metadataVersionChange;
         }
         return new FeaturesImage(newFinalizedVersions, metadataVersion);
     }

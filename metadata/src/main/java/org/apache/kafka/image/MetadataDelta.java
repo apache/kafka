@@ -149,7 +149,7 @@ public final class MetadataDelta {
         if (featuresDelta == null) {
             return Optional.empty();
         } else {
-            return featuresDelta.metadataVersionChange().map(MetadataVersion::fromFeatureLevel);
+            return featuresDelta.metadataVersionChange();
         }
     }
 
@@ -263,14 +263,14 @@ public final class MetadataDelta {
 
     public void replay(FeatureLevelRecord record) {
         getOrCreateFeaturesDelta().replay(record);
-        featuresDelta.metadataVersionChange().ifPresent(__ -> {
-            // If any feature flags change, need to trigger components to possibly handle the new flags
-            getOrCreateClusterDelta();
-            getOrCreateConfigsDelta();
-            getOrCreateTopicsDelta();
-            getOrCreateClientQuotasDelta();
-            getOrCreateProducerIdsDelta();
-            getOrCreateAclsDelta();
+        featuresDelta.metadataVersionChange().ifPresent(changedMetadataVersion -> {
+            // If any feature flags change, need to immediately check if any metadata needs to be downgraded.
+            getOrCreateClusterDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateConfigsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateTopicsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateClientQuotasDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateProducerIdsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateAclsDelta().handleMetadataVersionChange(changedMetadataVersion);
         });
     }
 

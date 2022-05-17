@@ -145,7 +145,7 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
       }
     }
     featuresDelta.metadataVersionChange().ifPresent { metadataVersion =>
-      newFeatures.put(MetadataVersion.FEATURE_NAME, new FinalizedVersionRange(metadataVersion, metadataVersion))
+      newFeatures.put(MetadataVersion.FEATURE_NAME, new FinalizedVersionRange(metadataVersion.featureLevel(), metadataVersion.featureLevel()))
     }
     featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(Features.finalizedFeatures(
       Collections.unmodifiableMap(newFeatures)), highestMetadataOffset))

@@ -22,6 +22,7 @@ import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -49,6 +50,10 @@ public final class AclsDelta {
 
     void finishSnapshot() {
         this.isSnapshotDelta = true;
+    }
+
+    public void handleMetadataVersionChange(MetadataVersion newVersion) {
+        // no-op
     }
 
     public boolean isSnapshotDelta() {
