@@ -30,7 +30,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.controller.BootstrapMetadata
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.nio.file.Paths
@@ -180,9 +180,13 @@ object KafkaRaftServer {
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }
 
-    // Load either the bootstrap metadata file, or in the case of an upgrade from KRaft preview, bootstrap the
-    // metadata.version to the version corresponding to the configured IBP.
-    val bootstrapMetadata = BootstrapMetadata.load(Paths.get(config.metadataLogDir), config.interBrokerProtocolVersion)
+    // Load the bootstrap metadata file or, in the case of an upgrade from KRaft preview, bootstrap the
+    // metadata.version corresponding to a user-configured IBP.
+    val bootstrapMetadata = if (config.originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
+      BootstrapMetadata.load(Paths.get(config.metadataLogDir), config.interBrokerProtocolVersion)
+    } else {
+      BootstrapMetadata.load(Paths.get(config.metadataLogDir), MetadataVersion.IBP_3_0_IV0)
+    }
 
     (metaProperties, bootstrapMetadata, offlineDirs.toSeq)
   }
