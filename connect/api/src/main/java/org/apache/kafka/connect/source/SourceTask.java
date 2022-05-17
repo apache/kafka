@@ -22,6 +22,7 @@ import org.apache.kafka.connect.connector.Task;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
@@ -64,6 +65,7 @@ public abstract class SourceTask implements Task {
          * @throws IllegalArgumentException if there is no transaction boundary type with the given name
          */
         public static TransactionBoundary fromProperty(String property) {
+            Objects.requireNonNull(property, "Value for transaction boundary property may not be null");
             return TransactionBoundary.valueOf(property.toUpperCase(Locale.ROOT).trim());
         }
 

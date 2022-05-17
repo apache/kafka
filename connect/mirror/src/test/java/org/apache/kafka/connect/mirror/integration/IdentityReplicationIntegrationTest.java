@@ -266,7 +266,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
      * Returns expected topic name on target cluster.
      */
     @Override
-    String backupClusterTopicName(String topic) {
+    String remoteTopicName(String topic, String clusterAlias) {
         return topic;
     }
 }

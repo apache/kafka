@@ -39,8 +39,8 @@ public class RocksDBTimeOrderedWindowStore
     private final boolean retainDuplicates;
     private final long windowSize;
 
-    private StateStoreContext stateStoreContext;
     private int seqnum = 0;
+    private StateStoreContext stateStoreContext;
 
     RocksDBTimeOrderedWindowStore(
         final RocksDBTimeOrderedWindowSegmentedBytesStore store,

@@ -45,8 +45,7 @@ class TimestampedTupleForwarder<K, V> {
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
-    TimestampedTupleForwarder(final StateStore store,
-                              final ProcessorContext<K, Change<V>> context,
+    TimestampedTupleForwarder(final ProcessorContext<K, Change<V>> context,
                               final boolean sendOldValues) {
         this.context = (InternalProcessorContext<K, Change<V>>) context;
         this.sendOldValues = sendOldValues;

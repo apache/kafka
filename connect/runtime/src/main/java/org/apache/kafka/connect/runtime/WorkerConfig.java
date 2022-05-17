@@ -111,7 +111,8 @@ public class WorkerConfig extends AbstractConfig {
     private static final String OFFSET_COMMIT_TIMEOUT_MS_DOC
             = "Maximum number of milliseconds to wait for records to flush and partition offset data to be"
             + " committed to offset storage before cancelling the process and restoring the offset "
-            + "data to be committed in a future attempt.";
+            + "data to be committed in a future attempt. This property has no effect for source connectors "
+            + "running with exactly-once support.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     public static final String LISTENERS_CONFIG = "listeners";
@@ -343,12 +344,69 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * @return the {@link CommonClientConfigs#BOOTSTRAP_SERVERS_CONFIG bootstrap servers} property
+     * used by the worker when instantiating Kafka clients for connectors and tasks (unless overridden)
+     * and its internal topics (if running in distributed mode)
+     */
+    public String bootstrapServers() {
+        return String.join(",", getList(BOOTSTRAP_SERVERS_CONFIG));
+    }
+
     public Integer getRebalanceTimeout() {
         return null;
     }
 
     public boolean topicCreationEnable() {
         return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
+    }
+
+    /**
+     * Whether this worker is configured with exactly-once support for source connectors.
+     * The default implementation returns {@code false} and should be overridden by subclasses
+     * if the worker mode for the subclass provides exactly-once support for source connectors.
+     * @return whether exactly-once support is enabled for source connectors on this worker
+     */
+    public boolean exactlyOnceSourceEnabled() {
+        return false;
+    }
+
+    /**
+     * Get the internal topic used by this worker to store source connector offsets.
+     * The default implementation returns {@code null} and should be overridden by subclasses
+     * if the worker mode for the subclass uses an internal offsets topic.
+     * @return the name of the internal offsets topic, or {@code null} if the worker does not use
+     * an internal offsets topic
+     */
+    public String offsetsTopic() {
+        return null;
+    }
+
+    /**
+     * Determine whether this worker supports per-connector source offsets topics.
+     * The default implementation returns {@code false} and should be overridden by subclasses
+     * if the worker mode for the subclass supports per-connector offsets topics.
+     * @return whether the worker supports per-connector offsets topics
+     */
+    public boolean connectorOffsetsTopicsPermitted() {
+        return false;
+    }
+
+    /**
+     * @return the offset commit interval for tasks created by this worker
+     */
+    public long offsetCommitInterval() {
+        return getLong(OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+    }
+
+    /**
+     * Get the {@link CommonClientConfigs#GROUP_ID_CONFIG group ID} used by this worker to form a cluster.
+     * The default implementation returns {@code null} and should be overridden by subclasses
+     * if the worker mode for the subclass is capable of forming a cluster using Kafka's group coordination API.
+     * @return the group ID for the worker's cluster, or {@code null} if the worker is not capable of forming a cluster.
+     */
+    public String groupId() {
+        return null;
     }
 
     @Override
