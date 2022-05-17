@@ -17,7 +17,6 @@
 package kafka.cluster
 
 import java.net.InetAddress
-
 import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
@@ -26,7 +25,7 @@ import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.EpochEntry
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.errors.{ApiException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
+import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -42,10 +41,10 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
+
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
-
 import kafka.server.epoch.LeaderEpochFileCache
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
@@ -58,7 +57,45 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
+object PartitionTest {
+  def followerFetchParams(
+    replicaId: Int,
+    maxWaitMs: Long = 0L,
+    minBytes: Int = 1,
+    maxBytes: Int = Int.MaxValue
+  ): FetchParams = {
+    FetchParams(
+      requestVersion = ApiKeys.FETCH.latestVersion,
+      replicaId = replicaId,
+      maxWaitMs = maxWaitMs,
+      minBytes = minBytes,
+      maxBytes = maxBytes,
+      isolation = FetchLogEnd,
+      clientMetadata = None
+    )
+  }
+
+  def consumerFetchParams(
+    maxWaitMs: Long = 0L,
+    minBytes: Int = 1,
+    maxBytes: Int = Int.MaxValue,
+    clientMetadata: Option[ClientMetadata] = None,
+    isolation: FetchIsolation = FetchHighWatermark
+  ): FetchParams = {
+    FetchParams(
+      requestVersion = ApiKeys.FETCH.latestVersion,
+      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
+      maxWaitMs = maxWaitMs,
+      minBytes = minBytes,
+      maxBytes = maxBytes,
+      isolation = isolation,
+      clientMetadata = clientMetadata
+    )
+  }
+}
+
 class PartitionTest extends AbstractPartitionTest {
+  import PartitionTest._
 
   @Test
   def testLastFetchedOffsetValidation(): Unit = {
@@ -91,22 +128,13 @@ class PartitionTest extends AbstractPartitionTest {
     }
 
     def read(lastFetchedEpoch: Int, fetchOffset: Long): LogReadInfo = {
-      val fetchPartitionData = new FetchRequest.PartitionData(
-        Uuid.ZERO_UUID,
+      fetchFollower(
+        partition,
+        remoteReplicaId,
         fetchOffset,
         logStartOffset,
-        Int.MaxValue,
-        Optional.of(Int.box(leaderEpoch)),
-        Optional.of(Int.box(lastFetchedEpoch))
-      )
-
-      partition.fetchRecords(
-        fetchParams = followerFetchParams(remoteReplicaId),
-        fetchPartitionData = fetchPartitionData,
-        fetchTimeMs = time.milliseconds(),
-        maxBytes = Int.MaxValue,
-        minOneMessage = true,
-        updateFetchState = true
+        leaderEpoch = Some(leaderEpoch),
+        lastFetchedEpoch = Some(lastFetchedEpoch)
       )
     }
 
@@ -499,88 +527,48 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testReadRecordEpochValidationForLeader(): Unit = {
+  def testLeaderEpochValidationOnLeader(): Unit = {
     val leaderEpoch = 5
     val partition = setupPartitionWithMocks(leaderEpoch, isLeader = true)
 
-    def assertReadRecordsError(error: Errors,
-                               currentLeaderEpochOpt: Optional[Integer]): Unit = {
-      try {
-        val fetchOffset = 0L
-        val logStartOffset = 0L
-
-        val fetchPartitionData = new FetchRequest.PartitionData(
-          Uuid.ZERO_UUID,
-          fetchOffset,
-          logStartOffset,
-          Int.MaxValue,
-          currentLeaderEpochOpt,
-          Optional.empty[Integer]
-        )
-
-        partition.fetchRecords(
-          fetchParams = followerFetchParams(remoteReplicaId),
-          fetchPartitionData = fetchPartitionData,
-          fetchTimeMs = time.milliseconds(),
-          maxBytes = 1024,
-          minOneMessage = false,
-          updateFetchState = true
-        )
-        if (error != Errors.NONE)
-          fail(s"Expected readRecords to fail with error $error")
-      } catch {
-        case e: Exception =>
-          assertEquals(error, Errors.forException(e))
-      }
+    def sendFetch(leaderEpoch: Option[Int]): LogReadInfo = {
+      fetchFollower(
+        partition,
+        remoteReplicaId,
+        fetchOffset = 0L,
+        leaderEpoch = leaderEpoch
+      )
     }
 
-    assertReadRecordsError(Errors.NONE, Optional.empty())
-    assertReadRecordsError(Errors.NONE, Optional.of(leaderEpoch))
-    assertReadRecordsError(Errors.FENCED_LEADER_EPOCH, Optional.of(leaderEpoch - 1))
-    assertReadRecordsError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1))
+    assertEquals(0L, sendFetch(leaderEpoch = None).logEndOffset)
+    assertEquals(0L, sendFetch(leaderEpoch = Some(leaderEpoch)).logEndOffset)
+    assertThrows(classOf[FencedLeaderEpochException], () => sendFetch(Some(leaderEpoch - 1)))
+    assertThrows(classOf[UnknownLeaderEpochException], () => sendFetch(Some(leaderEpoch + 1)))
   }
 
   @Test
-  def testReadRecordEpochValidationForFollower(): Unit = {
+  def testLeaderEpochValidationOnFollower(): Unit = {
     val leaderEpoch = 5
     val partition = setupPartitionWithMocks(leaderEpoch, isLeader = false)
 
-    def assertReadRecordsError(
-      error: Errors,
-      currentLeaderEpochOpt: Optional[Integer],
+    def sendFetch(
+      leaderEpoch: Option[Int],
       clientMetadata: Option[ClientMetadata]
-    ): Unit = {
-      try {
-        val fetchOffset = 0L
-        val logStartOffset = 0L
-
-        val fetchPartitionData = new FetchRequest.PartitionData(
-          Uuid.ZERO_UUID,
-          fetchOffset,
-          logStartOffset,
-          Int.MaxValue,
-          currentLeaderEpochOpt,
-          Optional.empty[Integer]
-        )
-
-        partition.fetchRecords(
-          fetchParams = consumerFetchParams(clientMetadata),
-          fetchPartitionData = fetchPartitionData,
-          fetchTimeMs = time.milliseconds(),
-          maxBytes = 1024,
-          minOneMessage = false,
-          updateFetchState = false
-        )
-
-        if (error != Errors.NONE)
-          fail(s"Expected readRecords to fail with error $error")
-      } catch {
-        case e: Exception =>
-          assertEquals(error, Errors.forException(e))
-      }
+    ): LogReadInfo = {
+      fetchConsumer(
+        partition,
+        fetchOffset = 0L,
+        leaderEpoch = leaderEpoch,
+        clientMetadata = clientMetadata
+      )
     }
 
-    // Follower fetching is allowed when the client provides metadata
+    // Follower fetching is only allowed when the client provides metadata
+    assertThrows(classOf[NotLeaderOrFollowerException], () => sendFetch(None, None))
+    assertThrows(classOf[NotLeaderOrFollowerException], () => sendFetch(Some(leaderEpoch), None))
+    assertThrows(classOf[FencedLeaderEpochException], () => sendFetch(Some(leaderEpoch - 1), None))
+    assertThrows(classOf[UnknownLeaderEpochException], () => sendFetch(Some(leaderEpoch + 1), None))
+
     val clientMetadata = new DefaultClientMetadata(
       "rack",
       "clientId",
@@ -588,15 +576,10 @@ class PartitionTest extends AbstractPartitionTest {
       KafkaPrincipal.ANONYMOUS,
       ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT).value
     )
-    assertReadRecordsError(Errors.NONE, Optional.empty(), Some(clientMetadata))
-    assertReadRecordsError(Errors.NONE, Optional.of(leaderEpoch), Some(clientMetadata))
-    assertReadRecordsError(Errors.FENCED_LEADER_EPOCH, Optional.of(leaderEpoch - 1), Some(clientMetadata))
-    assertReadRecordsError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1), Some(clientMetadata))
-
-    assertReadRecordsError(Errors.NOT_LEADER_OR_FOLLOWER, Optional.empty(), None)
-    assertReadRecordsError(Errors.NOT_LEADER_OR_FOLLOWER, Optional.of(leaderEpoch), None)
-    assertReadRecordsError(Errors.FENCED_LEADER_EPOCH, Optional.of(leaderEpoch - 1), None)
-    assertReadRecordsError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1), None)
+    assertEquals(0L, sendFetch(leaderEpoch = None, Some(clientMetadata)).logEndOffset)
+    assertEquals(0L, sendFetch(leaderEpoch = Some(leaderEpoch), Some(clientMetadata)).logEndOffset)
+    assertThrows(classOf[FencedLeaderEpochException], () => sendFetch(Some(leaderEpoch - 1), Some(clientMetadata)))
+    assertThrows(classOf[UnknownLeaderEpochException], () => sendFetch(Some(leaderEpoch + 1), Some(clientMetadata)))
   }
 
   @Test
@@ -1560,7 +1543,7 @@ class PartitionTest extends AbstractPartitionTest {
     // The total elapsed time from initialization is larger than the max allowed replica lag.
     time.sleep(5001)
     seedLogData(log, numRecords = 5, leaderEpoch = leaderEpoch)
-    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L, fetchTimeMs = time.milliseconds())
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = firstFetchTimeMs,
       logStartOffset = 0L,
@@ -2444,27 +2427,39 @@ class PartitionTest extends AbstractPartitionTest {
     }
   }
 
-  private def followerFetchParams(replicaId: Int): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = replicaId,
-      maxWaitMs = 0,
-      minBytes = 1,
-      maxBytes = Int.MaxValue,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+  private def fetchConsumer(
+    partition: Partition,
+    fetchOffset: Long,
+    leaderEpoch: Option[Int],
+    clientMetadata: Option[ClientMetadata],
+    maxBytes: Int = Int.MaxValue,
+    lastFetchedEpoch: Option[Int] = None,
+    fetchTimeMs: Long = time.milliseconds(),
+    topicId: Uuid = Uuid.ZERO_UUID,
+    isolation: FetchIsolation = FetchHighWatermark
+  ): LogReadInfo = {
+    val fetchParams = consumerFetchParams(
+      maxBytes = maxBytes,
+      clientMetadata = clientMetadata,
+      isolation = isolation
     )
-  }
 
-  private def consumerFetchParams(clientMetadata: Option[ClientMetadata]): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-      maxWaitMs = 0,
-      minBytes = 1,
-      maxBytes = Int.MaxValue,
-      isolation = FetchHighWatermark,
-      clientMetadata = clientMetadata
+    val fetchPartitionData = new FetchRequest.PartitionData(
+      topicId,
+      fetchOffset,
+      FetchRequest.INVALID_LOG_START_OFFSET,
+      maxBytes,
+      leaderEpoch.map(Int.box).asJava,
+      lastFetchedEpoch.map(Int.box).asJava
+    )
+
+    partition.fetchRecords(
+      fetchParams,
+      fetchPartitionData,
+      fetchTimeMs,
+      maxBytes,
+      minOneMessage = true,
+      updateFetchState = false
     )
   }
 
@@ -2477,9 +2472,12 @@ class PartitionTest extends AbstractPartitionTest {
     leaderEpoch: Option[Int] = None,
     lastFetchedEpoch: Option[Int] = None,
     fetchTimeMs: Long = time.milliseconds(),
-    topicId: Uuid = partition.topicId.getOrElse(Uuid.ZERO_UUID)
+    topicId: Uuid = Uuid.ZERO_UUID
   ): LogReadInfo = {
-    val fetchParams = followerFetchParams(replicaId)
+    val fetchParams = followerFetchParams(
+      replicaId,
+      maxBytes = maxBytes
+    )
 
     val fetchPartitionData = new FetchRequest.PartitionData(
       topicId,

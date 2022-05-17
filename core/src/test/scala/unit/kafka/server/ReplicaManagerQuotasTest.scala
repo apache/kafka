@@ -18,8 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.{Collections, Optional, Properties}
-
-import kafka.cluster.Partition
+import kafka.cluster.{Partition, PartitionTest}
 import kafka.log.{LogManager, LogOffsetSnapshot, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
@@ -65,7 +64,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(false)
       .thenReturn(true)
 
-    val fetchParams = buildFollowerFetchParams(followerReplicaId)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
     val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with only one throttled, we should get the first")
@@ -83,7 +82,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(true)
       .thenReturn(true)
 
-    val fetchParams = buildFollowerFetchParams(followerReplicaId)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
     val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(0, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with both throttled, we should get no messages")
@@ -101,7 +100,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(false)
       .thenReturn(false)
 
-    val fetchParams = buildFollowerFetchParams(followerReplicaId)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
     val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with both non-throttled, we should get both messages")
@@ -119,7 +118,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(false)
       .thenReturn(true)
 
-    val fetchParams = buildFollowerFetchParams(followerReplicaId)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
     val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with only one throttled, we should get the first")
@@ -135,7 +134,7 @@ class ReplicaManagerQuotasTest {
     val quota = mockQuota()
     when(quota.isQuotaExceeded).thenReturn(true)
 
-    val fetchParams = buildConsumerFetchParams()
+    val fetchParams = PartitionTest.consumerFetchParams()
     val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false).toMap
     assertEquals(1, fetch(topicIdPartition1).info.records.batches.asScala.size,
       "Replication throttled partitions should return data for consumer fetch")
@@ -331,34 +330,6 @@ class ReplicaManagerQuotasTest {
     val quota: ReplicaQuota = mock(classOf[ReplicaQuota])
     when(quota.isThrottled(any[TopicPartition])).thenReturn(true)
     quota
-  }
-
-  private def buildFollowerFetchParams(
-    replicaId: Int,
-  ): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = replicaId,
-      maxWaitMs = 0,
-      minBytes = 1,
-      maxBytes = Int.MaxValue,
-      isolation = FetchLogEnd,
-      clientMetadata = None
-    )
-  }
-
-  private def buildConsumerFetchParams(
-
-  ): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-      maxWaitMs = 0,
-      minBytes = 1,
-      maxBytes = Int.MaxValue,
-      isolation = FetchHighWatermark,
-      clientMetadata = None
-    )
   }
 
 }
