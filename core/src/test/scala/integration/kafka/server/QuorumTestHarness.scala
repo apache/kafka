@@ -27,7 +27,6 @@ import kafka.raft.KafkaRaftManager
 import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
-import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
@@ -268,7 +267,6 @@ abstract class QuorumTestHarness extends Logging {
     val config = new KafkaConfig(props)
     val threadNamePrefix = "Controller_" + testInfo.getDisplayName
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
-    val apiVersions = new ApiVersions
     val raftManager = new KafkaRaftManager(
       metaProperties = metaProperties,
       config = config,
@@ -278,8 +276,7 @@ abstract class QuorumTestHarness extends Logging {
       time = Time.SYSTEM,
       metrics = controllerMetrics,
       threadNamePrefixOpt = Option(threadNamePrefix),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
-      apiVersions = apiVersions)
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture)
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(
@@ -291,7 +288,7 @@ abstract class QuorumTestHarness extends Logging {
         threadNamePrefix = Option(threadNamePrefix),
         controllerQuorumVotersFuture = controllerQuorumVotersFuture,
         configSchema = KafkaRaftServer.configSchema,
-        raftApiVersions = apiVersions,
+        raftApiVersions = raftManager.apiVersions,
         bootstrapMetadata = BootstrapMetadata.create(metadataVersion, bootstrapRecords.asJava),
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {

@@ -73,7 +73,7 @@ class BrokerLifecycleManagerTest {
     val metadata = new Metadata(1000, 1000, new LogContext(), new ClusterResourceListeners())
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = new SimpleControllerNodeProvider()
-    val nodeApiVersions = new NodeApiVersions(Seq(BROKER_REGISTRATION, BROKER_HEARTBEAT).map {
+    val nodeApiVersions = NodeApiVersions.create(Seq(BROKER_REGISTRATION, BROKER_HEARTBEAT).map {
       apiKey => new ApiVersion().setApiKey(apiKey.id).
         setMinVersion(apiKey.oldestVersion()).setMaxVersion(apiKey.latestVersion())
     }.toList.asJava)

@@ -76,7 +76,7 @@ public class NodeApiVersions {
             }
             if (!exists) apiVersions.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        return new NodeApiVersions(apiVersions);
+        return new NodeApiVersions(apiVersions, Collections.emptyList());
     }
 
 
@@ -93,10 +93,6 @@ public class NodeApiVersions {
                 .setApiKey(apiKey)
                 .setMinVersion(minVersion)
                 .setMaxVersion(maxVersion)));
-    }
-
-    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {
-        this(nodeApiVersions, Collections.emptyList());
     }
 
     public NodeApiVersions(Collection<ApiVersion> nodeApiVersions, Collection<SupportedFeatureKey> nodeSupportedFeatures) {
