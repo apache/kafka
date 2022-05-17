@@ -440,8 +440,10 @@ class Partition(val topicPartition: TopicPartition,
     leaderReplicaIdOpt.filter(_ == localBrokerId)
   }
 
-  private def localLogWithEpochOrException(currentLeaderEpoch: Optional[Integer],
-                                           requireLeader: Boolean): UnifiedLog = {
+  private def localLogWithEpochOrThrow(
+    currentLeaderEpoch: Optional[Integer],
+    requireLeader: Boolean
+  ): UnifiedLog = {
     getLocalLog(currentLeaderEpoch, requireLeader) match {
       case Left(localLog) => localLog
       case Right(error) =>
@@ -1150,12 +1152,13 @@ class Partition(val topicPartition: TopicPartition,
     }
 
     if (fetchParams.isFromFollower) {
-      var replica: Replica = null
+      val replica = followerReplicaOrThrow(fetchParams.replicaId, fetchPartitionData)
 
       val logReadInfo = inReadLock(leaderIsrUpdateLock) {
-        val localLog = localLogWithEpochOrException(fetchPartitionData.currentLeaderEpoch, fetchParams.fetchOnlyLeader)
-        replica = followerReplicaOrThrow(fetchParams.replicaId, fetchPartitionData)
-        doReadRecords(localLog)
+        doReadRecords(localLogWithEpochOrThrow(
+          fetchPartitionData.currentLeaderEpoch,
+          fetchParams.fetchOnlyLeader
+        ))
       }
 
       if (updateFetchState && logReadInfo.divergingEpoch.isEmpty) {
@@ -1171,7 +1174,7 @@ class Partition(val topicPartition: TopicPartition,
       logReadInfo
     } else {
       inReadLock(leaderIsrUpdateLock) {
-        val localLog = localLogWithEpochOrException(fetchPartitionData.currentLeaderEpoch, fetchParams.fetchOnlyLeader)
+        val localLog = localLogWithEpochOrThrow(fetchPartitionData.currentLeaderEpoch, fetchParams.fetchOnlyLeader)
         doReadRecords(localLog)
       }
     }
@@ -1279,7 +1282,7 @@ class Partition(val topicPartition: TopicPartition,
                               currentLeaderEpoch: Optional[Integer],
                               fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
-    val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
+    val localLog = localLogWithEpochOrThrow(currentLeaderEpoch, fetchOnlyFromLeader)
 
     val lastFetchableOffset = isolationLevel match {
       case Some(IsolationLevel.READ_COMMITTED) => localLog.lastStableOffset
@@ -1340,7 +1343,7 @@ class Partition(val topicPartition: TopicPartition,
   def fetchOffsetSnapshot(currentLeaderEpoch: Optional[Integer],
                           fetchOnlyFromLeader: Boolean): LogOffsetSnapshot = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
-    val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
+    val localLog = localLogWithEpochOrThrow(currentLeaderEpoch, fetchOnlyFromLeader)
     localLog.fetchOffsetSnapshot
   }
 
@@ -1348,7 +1351,7 @@ class Partition(val topicPartition: TopicPartition,
                                      maxNumOffsets: Int,
                                      isFromConsumer: Boolean,
                                      fetchOnlyFromLeader: Boolean): Seq[Long] = inReadLock(leaderIsrUpdateLock) {
-    val localLog = localLogWithEpochOrException(Optional.empty(), fetchOnlyFromLeader)
+    val localLog = localLogWithEpochOrThrow(Optional.empty(), fetchOnlyFromLeader)
     val allOffsets = localLog.legacyFetchOffsetsBefore(timestamp, maxNumOffsets)
 
     if (!isFromConsumer) {
