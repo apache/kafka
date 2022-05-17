@@ -345,7 +345,7 @@ class ReplicaManagerQuotasTest {
       partition.setLog(log, isFutureLog = false)
 
       partition.updateAssignmentAndIsr(
-        assignment = Seq(leaderBrokerId, configs.last.brokerId),
+        replicas = Seq(leaderBrokerId, configs.last.brokerId),
         followers = Seq(configs.last.brokerId),
         isr = if (bothReplicasInSync) Set(leaderBrokerId, configs.last.brokerId) else Set(leaderBrokerId),
         addingReplicas = Seq.empty,

@@ -85,7 +85,7 @@ class HighwatermarkPersistenceTest {
       partition0.setLog(log0, isFutureLog = false)
 
       partition0.updateAssignmentAndIsr(
-        assignment = Seq(configs.head.brokerId, configs.last.brokerId),
+        replicas = Seq(configs.head.brokerId, configs.last.brokerId),
         followers = Seq(configs.last.brokerId),
         isr = Set(configs.head.brokerId),
         addingReplicas = Seq.empty,

@@ -579,7 +579,7 @@ class Partition(val topicPartition: TopicPartition,
       // Updating the assignment and ISR state is safe if the partition epoch is
       // larger or equal to the current partition epoch.
       updateAssignmentAndIsr(
-        assignment = replicas,
+        replicas = replicas,
         followers = replicas.filter(_ != localBrokerId),
         isr = isr,
         addingReplicas = addingReplicas,
@@ -674,7 +674,7 @@ class Partition(val topicPartition: TopicPartition,
       controllerEpoch = partitionState.controllerEpoch
 
       updateAssignmentAndIsr(
-        assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
+        replicas = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
         followers = Seq.empty,
         isr = Set.empty,
         addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
@@ -777,7 +777,7 @@ class Partition(val topicPartition: TopicPartition,
    *
    * Note: public visibility for tests.
    *
-   * @param assignment An ordered sequence of all the broker ids that were assigned to this
+   * @param replicas An ordered sequence of all the broker ids that were assigned to this
    *                   topic partition
    * @param followers An ordered sequence of all the followers (remote replicas)
    * @param isr The set of broker ids that are known to be insync with the leader
@@ -786,7 +786,7 @@ class Partition(val topicPartition: TopicPartition,
    * @param removingReplicas An ordered sequence of all broker ids that will be removed from
     *                         the assignment
    */
-  def updateAssignmentAndIsr(assignment: Seq[Int],
+  def updateAssignmentAndIsr(replicas: Seq[Int],
                              followers: Seq[Int],
                              isr: Set[Int],
                              addingReplicas: Seq[Int],
@@ -800,9 +800,9 @@ class Partition(val topicPartition: TopicPartition,
     remoteReplicasMap.removeAll(removedReplicas)
 
     if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
-      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, assignment)
+      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, replicas)
     else
-      assignmentState = SimpleAssignmentState(assignment)
+      assignmentState = SimpleAssignmentState(replicas)
     partitionState = CommittedPartitionState(isr, leaderRecoveryState)
   }
 
