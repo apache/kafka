@@ -20,7 +20,7 @@ package kafka.utils
 import java.util
 import kafka.api._
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LiCombinedControlRequestData
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
@@ -73,8 +73,14 @@ object LiDecomposedControlRequestUtils {
         else throw new IllegalStateException("The inter.broker.protocol.version config should not be smaller than 2.4-IV1")
 
       // the LiCombinedControl request will only include incremental LeaderAndIsr requests
-      Some(new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, request.controllerId(), request.controllerEpoch(), request.brokerEpoch(),
-        request.maxBrokerEpoch(), effectivePartitionStates, util.Collections.emptyMap(), leaderNodes
+      val topicIds: util.Map[String, Uuid] = if (request.version() >= 1) {
+        request.leaderAndIsrTopicIds();
+      } else {
+        util.Collections.emptyMap();
+      }
+
+      Some(new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, request.controllerId(), request.controllerEpoch(),
+        request.brokerEpoch(), request.maxBrokerEpoch(), effectivePartitionStates, topicIds, leaderNodes
       ).build())
     }
   }
@@ -98,8 +104,14 @@ object LiDecomposedControlRequestUtils {
         if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 7
         else throw new IllegalStateException("The inter.broker.protocol.version config should not be smaller than 2.4-IV1")
 
+      val topicIds: util.Map[String, Uuid] = if (request.version() >= 1) {
+        request.updateMetadataTopicIds();
+      } else {
+        util.Collections.emptyMap();
+      }
+
       Some(new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, request.controllerId(), request.controllerEpoch(), request.brokerEpoch(),
-        request.maxBrokerEpoch(), effectivePartitionStates, liveBrokers, util.Collections.emptyMap()).build())
+        request.maxBrokerEpoch(), effectivePartitionStates, liveBrokers, topicIds).build())
     }
   }
 

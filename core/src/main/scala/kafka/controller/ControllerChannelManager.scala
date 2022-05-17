@@ -249,7 +249,7 @@ class RequestSendThread(val controllerId: Int,
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
-  private val controllerRequestMerger = new ControllerRequestMerger
+  private val controllerRequestMerger = new ControllerRequestMerger(config)
 
   private var firstUpdateMetadataWithPartitionsSent = false
 

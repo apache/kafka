@@ -48,6 +48,7 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
 
         // fields from the StopReplicaRequest
         private final List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitions;
+
         private final Map<String, Uuid> topicIds;
 
         public Builder(short version, int controllerId, int controllerEpoch,
@@ -91,7 +92,13 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
             data.setUpdateMetadataTopicStates(new ArrayList<>(updateMetadataTopicStateMap.values()));
 
             // setting the StopReplica fields
-            data.setStopReplicaPartitionStates(stopReplicaPartitions);
+            if (version == 0) {
+                data.setStopReplicaPartitionStates(stopReplicaPartitions);
+            } else {
+                Map<String, LiCombinedControlRequestData.StopReplicaTopicState> stopReplicaTopicStateMap =
+                    groupByStopReplicaTopic(stopReplicaPartitions);
+                data.setStopReplicaTopicStates(new ArrayList<>(stopReplicaTopicStateMap.values()));
+            }
 
             return new LiCombinedControlRequest(data, version);
         }
@@ -121,6 +128,19 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
                     t -> new LiCombinedControlRequestData.UpdateMetadataTopicState()
                             .setTopicName(partition.topicName())
                             .setTopicId(topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID))
+                );
+                topicState.partitionStates().add(partition);
+            }
+            return topicStates;
+        }
+
+        private static Map<String, LiCombinedControlRequestData.StopReplicaTopicState> groupByStopReplicaTopic(
+            List<LiCombinedControlRequestData.StopReplicaPartitionState> partitionStates) {
+            Map<String, LiCombinedControlRequestData.StopReplicaTopicState> topicStates = new HashMap<>();
+            for (LiCombinedControlRequestData.StopReplicaPartitionState partition : partitionStates) {
+                LiCombinedControlRequestData.StopReplicaTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
+                    t -> new LiCombinedControlRequestData.StopReplicaTopicState()
+                            .setTopicName(partition.topicName())
                 );
                 topicState.partitionStates().add(partition);
             }
@@ -183,6 +203,13 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
          */
         public List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitionStates() {
             return stopReplicaPartitions;
+        }
+
+        /**
+         * visible for test only
+         */
+        public Map<String, Uuid> topicIds() {
+            return topicIds;
         }
     }
 
@@ -281,6 +308,13 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
             topicState -> topicState.partitionStates().iterator());
     }
 
+    public Map<String, Uuid> leaderAndIsrTopicIds() {
+        return data.leaderAndIsrTopicStates()
+            .stream()
+            .collect(Collectors.toMap(LiCombinedControlRequestData.LeaderAndIsrTopicState::topicName,
+                LiCombinedControlRequestData.LeaderAndIsrTopicState::topicId));
+    }
+
     public List<LiCombinedControlRequestData.LeaderAndIsrLiveLeader> liveLeaders() {
         return Collections.unmodifiableList(data.liveLeaders());
     }
@@ -288,6 +322,13 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
     public Iterable<LiCombinedControlRequestData.UpdateMetadataPartitionState> updateMetadataPartitionStates() {
         return () -> new FlattenedIterator<>(data.updateMetadataTopicStates().iterator(),
             topicState -> topicState.partitionStates().iterator());
+    }
+
+    public Map<String, Uuid> updateMetadataTopicIds() {
+        return data.updateMetadataTopicStates()
+            .stream()
+            .collect(Collectors.toMap(LiCombinedControlRequestData.UpdateMetadataTopicState::topicName,
+                LiCombinedControlRequestData.UpdateMetadataTopicState::topicId));
     }
 
     public List<LiCombinedControlRequestData.UpdateMetadataBroker> liveBrokers() {
