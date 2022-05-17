@@ -19,8 +19,8 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
-import org.apache.kafka.controller.util.SnapshotFileReader;
-import org.apache.kafka.controller.util.SnapshotFileWriter;
+import org.apache.kafka.metadata.util.SnapshotFileReader;
+import org.apache.kafka.metadata.util.SnapshotFileWriter;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.RaftClient;

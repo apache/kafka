@@ -270,6 +270,7 @@ public final class MetadataDelta {
             getOrCreateTopicsDelta();
             getOrCreateClientQuotasDelta();
             getOrCreateProducerIdsDelta();
+            getOrCreateAclsDelta();
         });
     }
 

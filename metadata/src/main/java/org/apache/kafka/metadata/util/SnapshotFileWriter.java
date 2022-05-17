@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller.util;
+package org.apache.kafka.metadata.util;
 
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller.util;
+package org.apache.kafka.metadata.util;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
