@@ -168,15 +168,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, expectedPresent = topics, expectedMissing = List())
 
-    TestUtils.waitUntilTrue(
-      () => brokers.exists(_.metadataCache.getControllerId.nonEmpty),
-      "Timeout waiting for controller being elected"
-    )
-    val controller = brokers.find(_.config.brokerId == brokers.flatMap(_.metadataCache.getControllerId).head).get
-    controller.shutdown()
-    controller.awaitShutdown()
-    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
-    assertEquals(topics.toSet, topicDesc.keySet.asScala)
+    if (!isKRaftTest()) {
+      val controller = brokers.find(_.config.brokerId == brokers.flatMap(_.metadataCache.getControllerId).head).get
+      controller.shutdown()
+      controller.awaitShutdown()
+      val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
+      assertEquals(topics.toSet, topicDesc.keySet.asScala)
+    }
   }
 
   /**
