@@ -77,10 +77,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         int size();
     }
 
-    static class LeaderChangeBatch implements LocalBatch {
+    public static class LeaderChangeBatch implements LocalBatch {
         private final LeaderAndEpoch newLeader;
 
-        LeaderChangeBatch(LeaderAndEpoch newLeader) {
+        public LeaderChangeBatch(LeaderAndEpoch newLeader) {
             this.newLeader = newLeader;
         }
 
@@ -113,12 +113,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
-    static class LocalRecordBatch implements LocalBatch {
+    public static class LocalRecordBatch implements LocalBatch {
         private final int leaderEpoch;
         private final long appendTimestamp;
         private final List<ApiMessageAndVersion> records;
 
-        LocalRecordBatch(int leaderEpoch, long appendTimestamp, List<ApiMessageAndVersion> records) {
+        public LocalRecordBatch(int leaderEpoch, long appendTimestamp, List<ApiMessageAndVersion> records) {
             this.leaderEpoch = leaderEpoch;
             this.appendTimestamp = appendTimestamp;
             this.records = records;
@@ -185,6 +185,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         private long prevOffset;
 
         /**
+         * The initial max read offset which LocalLog instances will be configured with.
+         */
+        private long initialMaxReadOffset = Long.MAX_VALUE;
+
+        /**
          * Maps committed offset to snapshot reader.
          */
         private NavigableMap<Long, RawSnapshotReader> snapshots = new TreeMap<>();
@@ -237,7 +242,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             return offset;
         }
 
-        synchronized long append(LocalBatch batch) {
+        public synchronized long append(LocalBatch batch) {
+            try {
+                throw new RuntimeException("foo");
+            } catch (Exception e) {
+                log.info("WATERMELON: appending {}", batch, e);
+            }
             prevOffset += batch.size();
             log.debug("append(batch={}, prevOffset={})", batch, prevOffset);
             batches.put(prevOffset, batch);
@@ -352,6 +362,15 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 })
                 .sum();
         }
+
+        public SharedLogData setInitialMaxReadOffset(long initialMaxReadOffset) {
+            this.initialMaxReadOffset = initialMaxReadOffset;
+            return this;
+        }
+
+        public long initialMaxReadOffset() {
+            return initialMaxReadOffset;
+        }
     }
 
     private static class MetaLogListenerData {
@@ -454,6 +473,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         this.log = logContext.logger(LocalLogManager.class);
         this.nodeId = nodeId;
         this.shared = shared;
+        this.maxReadOffset = shared.initialMaxReadOffset();
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, threadNamePrefix);
         shared.registerLogManager(this);
     }
@@ -502,6 +522,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             // Only notify the listener if it equals the shared leader state
                             LeaderAndEpoch sharedLeader = shared.leaderAndEpoch();
                             if (batch.newLeader.equals(sharedLeader)) {
+                                log.debug("Node {}: Executing handleLeaderChange {}",
+                                    nodeId, sharedLeader);
                                 listenerData.handleLeaderChange(entryOffset, batch.newLeader);
                                 if (batch.newLeader.epoch() > leader.epoch()) {
                                     leader = batch.newLeader;
@@ -656,6 +678,15 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 }
             }
         });
+    }
+
+    @Override
+    public synchronized OptionalLong highWatermark() {
+        if (shared.prevOffset > 0) {
+            return OptionalLong.of(shared.prevOffset);
+        } else {
+            return OptionalLong.empty();
+        }
     }
 
     @Override

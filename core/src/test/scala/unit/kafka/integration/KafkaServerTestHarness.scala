@@ -352,4 +352,13 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
       )
     }
   }
+
+  def ensureConsistentKRaftMetadata(): Unit = {
+    if (isKRaftTest()) {
+      TestUtils.ensureConsistentKRaftMetadata(
+        brokers,
+        controllerServer
+      )
+    }
+  }
 }
