@@ -23,6 +23,8 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,6 +40,8 @@ import java.util.stream.Collectors;
  * A holder class of the local node's supported feature flags as well as the ApiVersions of other nodes.
  */
 public class QuorumFeatures {
+    private static final Logger log = LoggerFactory.getLogger(QuorumFeatures.class);
+
     private final int nodeId;
     private final ApiVersions apiVersions;
     private final Map<String, VersionRange> supportedFeatures;
@@ -75,6 +79,7 @@ public class QuorumFeatures {
         List<VersionRange> supportedVersions = new ArrayList<>(quorumNodeIds.size());
         for (int nodeId : quorumNodeIds) {
             if (nodeId == this.nodeId) {
+                // We get this node's features from "supportedFeatures"
                 continue;
             }
             NodeApiVersions nodeVersions = apiVersions.get(Integer.toString(nodeId));
@@ -97,6 +102,9 @@ public class QuorumFeatures {
             OptionalInt lowestMaxVersion = supportedVersions.stream().mapToInt(VersionRange::max).min();
             if (highestMinVersion.isPresent() && lowestMaxVersion.isPresent()) {
                 if (highestMinVersion.getAsInt() <= lowestMaxVersion.getAsInt()) {
+                    if (supportedVersions.size() < quorumNodeIds.size()) {
+                        log.info("Using incomplete set of quorum supported features.");
+                    }
                     return Optional.of(VersionRange.of((short) highestMinVersion.getAsInt(), (short) lowestMaxVersion.getAsInt()));
                 } else {
                     return Optional.empty();
