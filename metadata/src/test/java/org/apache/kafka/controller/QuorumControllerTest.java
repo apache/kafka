@@ -1165,7 +1165,7 @@ public class QuorumControllerTest {
                 controller.updateFeatures(ANONYMOUS_CONTEXT, data).get();
 
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
-                    logEnv.waitForSnapshot(previousEndOffset.get())
+                    logEnv.waitForLatestSnapshot()
                 );
 
                 // The previous version should appear in a snapshot
