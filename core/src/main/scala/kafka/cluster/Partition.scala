@@ -1131,6 +1131,30 @@ class Partition(val topicPartition: TopicPartition,
     info.copy(leaderHwChange = if (leaderHWIncremented) LeaderHwChange.Increased else LeaderHwChange.Same)
   }
 
+  /**
+   * Fetch records from the partition.
+   *
+   * @param fetchParams parameters of the corresponding `Fetch` request
+   * @param fetchPartitionData partition-level parameters of the `Fetch` (e.g. the fetch offset)
+   * @param fetchTimeMs current time in milliseconds on the broker of this fetch request
+   * @param maxBytes the maximum bytes to return
+   * @param minOneMessage whether to ensure that at least one complete message is returned
+   * @param updateFetchState true if the Fetch should update replica state (only applies to follower fetches)
+   * @return [[LogReadInfo]] containing the fetched records or the diverging epoch if present
+   * @throws NotLeaderOrFollowerException if this node is not the current leader and [[FetchParams.fetchOnlyLeader]]
+   *                                      is enabled, or if this is a follower fetch with an older request version
+   *                                      and the replicaId is not recognized among the current valid replicas
+   * @throws FencedLeaderEpochException if the leader epoch in the `Fetch` request is lower than the current
+   *                                    leader epoch
+   * @throws UnknownLeaderEpochException if the leader epoch in the `Fetch` request is higher than the current
+   *                                     leader epoch, or if this is a follower fetch and the replicaId is not
+   *                                     recognized among the current valid replicas
+   * @throws OffsetOutOfRangeException if the fetch offset is smaller than the log start offset or larger than
+   *                                   the log end offset (or high watermark depending on [[FetchParams.isolation]]),
+   *                                   or if the end offset for the last fetched epoch in [[FetchRequest.PartitionData]]
+   *                                   cannot be determined from the local epoch cache (e.g. if it is larger than
+   *                                   any cached epoch value)
+   */
   def fetchRecords(
     fetchParams: FetchParams,
     fetchPartitionData: FetchRequest.PartitionData,
@@ -1139,27 +1163,22 @@ class Partition(val topicPartition: TopicPartition,
     minOneMessage: Boolean,
     updateFetchState: Boolean
   ): LogReadInfo = {
-    def doReadRecords(log: UnifiedLog): LogReadInfo = {
+    def readFromLocalLog(): LogReadInfo = {
       readRecords(
-        log,
         fetchPartitionData.lastFetchedEpoch,
         fetchPartitionData.fetchOffset,
         fetchPartitionData.currentLeaderEpoch,
         maxBytes,
         fetchParams.isolation,
-        minOneMessage
+        minOneMessage,
+        fetchParams.fetchOnlyLeader
       )
     }
 
     if (fetchParams.isFromFollower) {
+      // Check that the request is from a valid replica before doing the read
       val replica = followerReplicaOrThrow(fetchParams.replicaId, fetchPartitionData)
-
-      val logReadInfo = inReadLock(leaderIsrUpdateLock) {
-        doReadRecords(localLogWithEpochOrThrow(
-          fetchPartitionData.currentLeaderEpoch,
-          fetchParams.fetchOnlyLeader
-        ))
-      }
+      val logReadInfo = readFromLocalLog()
 
       if (updateFetchState && logReadInfo.divergingEpoch.isEmpty) {
         updateFollowerFetchState(
@@ -1173,10 +1192,7 @@ class Partition(val topicPartition: TopicPartition,
 
       logReadInfo
     } else {
-      inReadLock(leaderIsrUpdateLock) {
-        val localLog = localLogWithEpochOrThrow(fetchPartitionData.currentLeaderEpoch, fetchParams.fetchOnlyLeader)
-        doReadRecords(localLog)
-      }
+      readFromLocalLog()
     }
   }
 
@@ -1212,14 +1228,16 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def readRecords(
-    localLog: UnifiedLog,
     lastFetchedEpoch: Optional[Integer],
     fetchOffset: Long,
     currentLeaderEpoch: Optional[Integer],
     maxBytes: Int,
     fetchIsolation: FetchIsolation,
-    minOneMessage: Boolean
-  ): LogReadInfo = {
+    minOneMessage: Boolean,
+    fetchOnlyFromLeader: Boolean
+  ): LogReadInfo = inReadLock(leaderIsrUpdateLock) {
+    val localLog = localLogWithEpochOrThrow(currentLeaderEpoch, fetchOnlyFromLeader)
+
     // Note we use the log end offset prior to the read. This ensures that any appends following
     // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark
