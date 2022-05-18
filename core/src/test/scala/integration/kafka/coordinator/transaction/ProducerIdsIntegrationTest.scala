@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{InitProducerIdRequest, InitProducerIdResponse}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtendWith
@@ -43,9 +44,9 @@ class ProducerIdsIntegrationTest {
   }
 
   @ClusterTests(Array(
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "2.8"),
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "3.0-IV0"),
-    new ClusterTest(clusterType = Type.KRAFT, brokers = 3, ibp = "3.0-IV0")
+    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),
+    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_0_IV0),
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 3, metadataVersion = MetadataVersion.IBP_3_0_IV0)
   ))
   def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
     verifyUniqueIds(clusterInstance)

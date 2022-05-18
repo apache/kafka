@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -45,6 +46,10 @@ public final class ClientQuotasDelta {
                 __ -> new ClientQuotaDelta(quotaImage));
             quotaDelta.finishSnapshot();
         }
+    }
+
+    public void handleMetadataVersionChange(MetadataVersion newVersion) {
+        // no-op
     }
 
     public void replay(ClientQuotaRecord record) {

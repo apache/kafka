@@ -290,7 +290,7 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(QuorumController|ReplicationControlManager|ReplicationControlManagerTest).java"/>
+              files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="(ParameterNumber|ClassDataAbstractionCoupling)"
               files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"
@@ -303,6 +303,8 @@
               files="(MetadataImage).java"/>
     <suppress checks="ImportControl"
               files="ApiVersionsResponse.java"/>
+    <suppress checks="AvoidStarImport"
+              files="MetadataVersionTest.java"/>
 
     <!-- Storage -->
     <suppress checks="(CyclomaticComplexity|ParameterNumber)"

@@ -27,7 +27,7 @@ class BrokerFeaturesTest {
 
   @Test
   def testEmpty(): Unit = {
-    assertTrue(BrokerFeatures.createDefault().supportedFeatures.empty)
+    assertTrue(BrokerFeatures.createEmpty().supportedFeatures.empty)
   }
 
   @Test

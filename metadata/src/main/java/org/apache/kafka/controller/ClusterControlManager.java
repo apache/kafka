@@ -336,8 +336,7 @@ public class ClusterControlManager {
         heartbeatManager.register(brokerId, record.fenced());
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record,
-            REGISTER_BROKER_RECORD.highestSupportedVersion()));
+        records.add(new ApiMessageAndVersion(record, REGISTER_BROKER_RECORD.highestSupportedVersion()));
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -535,8 +534,7 @@ public class ClusterControlManager {
                 setEndPoints(endpoints).
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced()),
-                    REGISTER_BROKER_RECORD.highestSupportedVersion()));
+                setFenced(registration.fenced()), REGISTER_BROKER_RECORD.highestSupportedVersion()));
             return batch;
         }
     }

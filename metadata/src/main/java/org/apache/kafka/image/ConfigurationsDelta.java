@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -50,6 +51,10 @@ public final class ConfigurationsDelta {
                 __ -> new ConfigurationDelta(configImage));
             configDelta.finishSnapshot();
         }
+    }
+
+    public void handleMetadataVersionChange(MetadataVersion newVersion) {
+        // no-op
     }
 
     public void replay(ConfigRecord record) {

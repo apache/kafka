@@ -19,6 +19,7 @@ package kafka.test.junit;
 
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
@@ -41,6 +42,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -106,7 +108,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
-                        clusterConfig.ibp().ifPresent(ibp -> props.put(KafkaConfig.InterBrokerProtocolVersionProp(), ibp));
+                        clusterConfig.metadataVersion().ifPresent(mv -> props.put(KafkaConfig.InterBrokerProtocolVersionProp(), mv.version()));
                         return props;
                     }
 
@@ -235,6 +237,14 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 .map(KafkaServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
+        }
+
+        @Override
+        public Map<Integer, BrokerFeatures> brokerFeatures() {
+            return servers().collect(Collectors.toMap(
+                brokerServer -> brokerServer.config().nodeId(),
+                KafkaServer::brokerFeatures
+            ));
         }
 
         @Override

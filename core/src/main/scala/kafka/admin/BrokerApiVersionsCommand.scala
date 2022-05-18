@@ -40,7 +40,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
@@ -157,10 +156,10 @@ object BrokerApiVersionsCommand {
       throw new RuntimeException(s"Request ${request.apiKey()} failed on brokers $bootstrapBrokers")
     }
 
-    private def getApiVersions(node: Node): ApiVersionCollection = {
+    private def getNodeApiVersions(node: Node): NodeApiVersions = {
       val response = send(node, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
       Errors.forCode(response.data.errorCode).maybeThrow()
-      response.data.apiKeys
+      new NodeApiVersions(response.data.apiKeys, response.data.supportedFeatures)
     }
 
     /**
@@ -186,7 +185,7 @@ object BrokerApiVersionsCommand {
 
     def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
       findAllBrokers().map { broker =>
-        broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker)))
+        broker -> Try[NodeApiVersions](getNodeApiVersions(broker))
       }.toMap
 
     def close(): Unit = {

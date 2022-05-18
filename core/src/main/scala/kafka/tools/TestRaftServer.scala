@@ -90,7 +90,7 @@ class TestRaftServer(
       time,
       metrics,
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
     )
 
     workloadGenerator = new RaftWorkloadGenerator(
