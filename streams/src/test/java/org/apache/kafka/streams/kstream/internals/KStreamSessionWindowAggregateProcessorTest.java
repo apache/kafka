@@ -16,6 +16,24 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static java.time.Duration.ofMillis;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Properties;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -34,12 +52,13 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogCaptureAppender.Event;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.RocksDBTransactionalMechanism;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -55,26 +74,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Properties;
-import java.util.stream.Collectors;
-
-import static java.time.Duration.ofMillis;
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 public class KStreamSessionWindowAggregateProcessorTest {
@@ -99,12 +98,17 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @Parameterized.Parameter
     public EmitStrategy.StrategyType type;
 
+    @Parameterized.Parameter(1)
+    public boolean transactional;
+
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {EmitStrategy.StrategyType.ON_WINDOW_UPDATE},
-            {EmitStrategy.StrategyType.ON_WINDOW_CLOSE}
-        });
+        final List<Object[]> data = new ArrayList<>();
+        for (final EmitStrategy.StrategyType type : EmitStrategy.StrategyType.values()) {
+            data.add(new Object[]{type, false});
+            data.add(new Object[]{type, true});
+        }
+        return data;
     }
 
     private EmitStrategy emitStrategy;
@@ -164,9 +168,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void initStore(final boolean enableCaching) {
-        final SessionBytesStoreSupplier supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, GAP_MS * 3, true) :
-            Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3));
+        final SessionBytesStoreSupplier supplier;
+        if (emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
+            supplier = new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME,
+                GAP_MS * 3,
+                true,
+                transactional ? RocksDBTransactionalMechanism.SECONDARY_STORE : null);
+        } else {
+            supplier = Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3), transactional);
+        }
 
         final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(supplier, Serdes.String(), Serdes.Long())
             .withLoggingDisabled();
@@ -247,7 +257,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(new Record<>(sessionId, "third", now));
         processor.process(new Record<>(sessionId, "third", now));
 
-        sessionStore.flush();
+        sessionStore.commit(null);
 
         if (emitFinal) {
             assertEquals(
@@ -317,7 +327,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(new Record<>("a", "3", GAP_MS + 1 + GAP_MS / 2));
         processor.process(new Record<>("c", "3", GAP_MS + 1 + GAP_MS / 2));
 
-        sessionStore.flush();
+        sessionStore.commit(null);
 
         if (emitFinal) {
             assertEquals(Arrays.asList(

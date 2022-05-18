@@ -36,7 +36,7 @@ import org.rocksdb.WriteBatch;
  */
 public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
 
-    private class WindowKeySchemaIndexToBaseStoreIterator  extends IndexToBaseStoreIterator {
+    private class WindowKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
         WindowKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
             super(indexIterator);
         }
@@ -54,9 +54,10 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
                                                 final String metricsScope,
                                                 final long retention,
                                                 final long segmentInterval,
-                                                final boolean withIndex) {
+                                                final boolean withIndex,
+                                                final RocksDBTransactionalMechanism txnMechanism) {
         super(name, metricsScope, retention, segmentInterval, new TimeFirstWindowKeySchema(),
-            Optional.ofNullable(withIndex ? new KeyFirstWindowKeySchema() : null));
+            Optional.ofNullable(withIndex ? new KeyFirstWindowKeySchema() : null), txnMechanism);
     }
 
     public void put(final Bytes key, final long timestamp, final int seqnum, final byte[] value) {
@@ -78,7 +79,7 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
     }
 
     @Override
-    Map<KeyValueSegment, WriteBatch> getWriteBatches(
+    Map<Segment, WriteBatch> getWriteBatches(
         final Collection<ConsumerRecord<byte[], byte[]>> records) {
         // advance stream time to the max timestamp in the batch
         for (final ConsumerRecord<byte[], byte[]> record : records) {
@@ -86,11 +87,11 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
             observedStreamTime = Math.max(observedStreamTime, timestamp);
         }
 
-        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
+        final Map<Segment, WriteBatch> writeBatchMap = new HashMap<>();
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = WindowKeySchema.extractStoreTimestamp(record.key());
             final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+            final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
@@ -121,7 +122,7 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
 
     @Override
     protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(
-        final SegmentIterator<KeyValueSegment> segmentIterator) {
+        final SegmentIterator<Segment> segmentIterator) {
         return new WindowKeySchemaIndexToBaseStoreIterator(segmentIterator);
     }
 }

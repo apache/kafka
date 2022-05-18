@@ -168,9 +168,9 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldFlushUnderlyingStore() {
-        store.flush();
+        store.commit(null);
 
-        verify(inner).flush();
+        verify(inner).commit(null);
     }
 
     @Test

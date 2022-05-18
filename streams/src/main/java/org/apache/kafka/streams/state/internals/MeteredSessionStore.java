@@ -381,8 +381,8 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public void flush() {
-        maybeMeasureLatency(super::flush, time, flushSensor);
+    public void commit(final Long changelogOffset) {
+        maybeMeasureLatency(() -> super.commit(changelogOffset), time, flushSensor);
     }
 
     @Override

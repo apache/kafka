@@ -361,7 +361,7 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
-                        public void flush() {
+                        public void commit(final Long changelogOffset) {
 
                         }
 

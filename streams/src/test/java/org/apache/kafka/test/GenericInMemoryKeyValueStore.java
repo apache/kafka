@@ -144,7 +144,7 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         // do-nothing since it is in-memory
     }
 

@@ -254,8 +254,14 @@ public class ProcessorStateManager implements StateManager {
                              store.changelogPartition, store.stateStore.name());
                 } else if (store.offset() == null) {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
-                        final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
-                        store.setOffset(offset);
+                        final Long changelogOffset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
+                        final boolean recovered = changelogOffset != null && store.stateStore.recover(changelogOffset);
+                        if (eosEnabled && !recovered) {
+                            log.warn("Failed to recover state store {} from changelog {} at offset {}",
+                                      store.stateStore.name(), store.changelogPartition, changelogOffset);
+                            throw new TaskCorruptedException(Collections.singleton(taskId));
+                        }
+                        store.setOffset(changelogOffset);
 
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                                   store.stateStore.name(), store.offset, store.changelogPartition);
@@ -285,10 +291,6 @@ public class ProcessorStateManager implements StateManager {
 
             if (!loadedCheckpoints.isEmpty()) {
                 log.warn("Some loaded checkpoint offsets cannot find their corresponding state stores: {}", loadedCheckpoints);
-            }
-
-            if (eosEnabled) {
-                checkpointFile.delete();
             }
         } catch (final TaskCorruptedException e) {
             throw e;
@@ -466,7 +468,7 @@ public class ProcessorStateManager implements StateManager {
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public void flush() {
+    public void commit() {
         RuntimeException firstException = null;
         // attempting to flush the stores
         if (!stores.isEmpty()) {
@@ -475,7 +477,7 @@ public class ProcessorStateManager implements StateManager {
                 final StateStore store = metadata.stateStore;
                 log.trace("Flushing store {}", store.name());
                 try {
-                    store.flush();
+                    store.commit(metadata.offset());
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
@@ -506,7 +508,7 @@ public class ProcessorStateManager implements StateManager {
                 try {
                     // buffer should be flushed to send all records to changelog
                     if (store instanceof TimeOrderedKeyValueBuffer) {
-                        store.flush();
+                        store.commit(metadata.offset());
                     } else if (store instanceof CachedStateStore) {
                         ((CachedStateStore) store).flushCache();
                     }
@@ -617,6 +619,11 @@ public class ProcessorStateManager implements StateManager {
         // checkpoint those stores that are only logged and persistent to the checkpoint file
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
+            // do not checkpont non-transactional state stores under EOS
+            if (eosEnabled && !storeMetadata.stateStore.transactional()) {
+                continue;
+            }
+
             if (storeMetadata.commitCallback != null && !storeMetadata.corrupted) {
                 try {
                     storeMetadata.commitCallback.onCommit();
@@ -706,11 +713,5 @@ public class ProcessorStateManager implements StateManager {
 
     public String changelogFor(final String storeName) {
         return storeToChangelogTopic.get(storeName);
-    }
-
-    public void deleteCheckPointFileIfEOSEnabled() throws IOException {
-        if (eosEnabled) {
-            checkpointFile.delete();
-        }
     }
 }

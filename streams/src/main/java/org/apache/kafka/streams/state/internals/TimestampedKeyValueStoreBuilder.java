@@ -175,8 +175,8 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         }
 
         @Override
-        public void flush() {
-            wrapped.flush();
+        public void commit(final Long changelogOffset) {
+            wrapped.commit(changelogOffset);
         }
 
         @Override

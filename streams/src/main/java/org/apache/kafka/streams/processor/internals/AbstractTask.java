@@ -96,7 +96,7 @@ public abstract class AbstractTask implements Task {
         final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
         if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
             // the state's current offset would be used to checkpoint
-            stateMgr.flush();
+            stateMgr.commit();
             stateMgr.checkpoint();
             offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
         }

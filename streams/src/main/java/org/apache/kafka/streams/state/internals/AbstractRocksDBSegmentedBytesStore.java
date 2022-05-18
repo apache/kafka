@@ -290,8 +290,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public void flush() {
-        segments.flush();
+    public void commit(final Long changelogOffset) {
+        segments.commit(changelogOffset);
     }
 
     @Override

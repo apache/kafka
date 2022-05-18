@@ -24,13 +24,17 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
     private final String name;
     private final long retentionPeriod;
     private final boolean withIndex;
+    private final RocksDBTransactionalMechanism txnMechanism;
+
 
     public RocksDbTimeOrderedSessionBytesStoreSupplier(final String name,
                                                        final long retentionPeriod,
-                                                       final boolean withIndex) {
+                                                       final boolean withIndex,
+                                                       final RocksDBTransactionalMechanism txnMechanism) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.withIndex = withIndex;
+        this.txnMechanism = txnMechanism;
     }
 
     @Override
@@ -46,7 +50,8 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
                 metricsScope(),
                 retentionPeriod,
                 segmentIntervalMs(),
-                withIndex
+                withIndex,
+                txnMechanism
             )
         );
     }

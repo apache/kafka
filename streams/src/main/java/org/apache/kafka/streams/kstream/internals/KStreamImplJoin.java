@@ -20,9 +20,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
@@ -30,6 +32,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -124,10 +127,23 @@ class KStreamImplJoin {
         final WindowBytesStoreSupplier otherStoreSupplier = streamJoinedInternal.otherStoreSupplier();
 
         assertUniqueStoreNames(thisStoreSupplier, otherStoreSupplier);
+        final boolean transactional;
+        final TopologyConfig topologyConfig = builder.internalTopologyBuilder.topologyConfigs();
+        if (topologyConfig != null) {
+            transactional = topologyConfig.parseStoreType() == StoreType.TXN_ROCKS_DB;
+        } else {
+            transactional = false;
+        }
 
         if (thisStoreSupplier == null) {
             final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
-            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.logConfig());
+            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName,
+                windows,
+                streamJoinedInternal.keySerde(),
+                streamJoinedInternal.valueSerde(),
+                streamJoinedInternal.loggingEnabled(),
+                streamJoinedInternal.logConfig(),
+                transactional);
         } else {
             assertWindowSettings(thisStoreSupplier, windows);
             thisWindowStore = joinWindowStoreBuilderFromSupplier(thisStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
@@ -135,7 +151,13 @@ class KStreamImplJoin {
 
         if (otherStoreSupplier == null) {
             final String otherJoinStoreName = userProvidedBaseStoreName == null ? joinOtherGeneratedName : userProvidedBaseStoreName + joinOtherSuffix;
-            otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.logConfig());
+            otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName,
+                windows,
+                streamJoinedInternal.keySerde(),
+                streamJoinedInternal.otherValueSerde(),
+                streamJoinedInternal.loggingEnabled(),
+                streamJoinedInternal.logConfig(),
+                transactional);
         } else {
             assertWindowSettings(otherStoreSupplier, windows);
             otherWindowStore = joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
@@ -253,14 +275,22 @@ class KStreamImplJoin {
                                                                                  final Serde<K> keySerde,
                                                                                  final Serde<V> valueSerde,
                                                                                  final boolean loggingEnabled,
-                                                                                 final Map<String, String> logConfig) {
+                                                                                 final Map<String, String> logConfig,
+                                                                                 final boolean transactional) {
+        final String windowStoreName = storeName + "-store";
+        final Duration retentionPeriod = Duration.ofMillis(
+            windows.size() + windows.gracePeriodMs());
+        final Duration windowSize = Duration.ofMillis(windows.size());
+        final boolean retainDuplicates = true;
+        final WindowBytesStoreSupplier supplier = Stores.persistentWindowStore(
+            windowStoreName,
+            retentionPeriod,
+            windowSize,
+            retainDuplicates,
+            transactional
+        );
         final StoreBuilder<WindowStore<K, V>> builder = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                storeName + "-store",
-                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
-                Duration.ofMillis(windows.size()),
-                true
-            ),
+            supplier,
             keySerde,
             valueSerde
         );
@@ -292,7 +322,20 @@ class KStreamImplJoin {
     private <K, V1, V2> StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final JoinWindows windows,
                                                                                                                                               final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
                                                                                                                                               final String joinThisGeneratedName) {
-        final boolean persistent = streamJoinedInternal.thisStoreSupplier() == null || streamJoinedInternal.thisStoreSupplier().get().persistent();
+        final boolean persistent;
+        final boolean transactional;
+        if (streamJoinedInternal.thisStoreSupplier() == null) {
+            persistent = true;
+            final TopologyConfig topologyConfig = builder.internalTopologyBuilder.topologyConfigs();
+            if (topologyConfig != null) {
+                transactional = topologyConfig.parseStoreType() == StoreType.TXN_ROCKS_DB;
+            } else {
+                transactional = false;
+            }
+        } else {
+            persistent = streamJoinedInternal.thisStoreSupplier().get().persistent();
+            transactional = streamJoinedInternal.thisStoreSupplier().get().transactional();
+        }
         final String storeName = buildOuterJoinWindowStoreName(streamJoinedInternal, joinThisGeneratedName) + "-store";
 
         // we are using a key-value store with list-values for the shared store, and have the window retention / grace period
@@ -319,9 +362,15 @@ class KStreamImplJoin {
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoinedInternal.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde());
 
+        final KeyValueBytesStoreSupplier storeSupplier;
+        if (persistent) {
+            storeSupplier = Stores.persistentKeyValueStore(storeName, transactional);
+        } else {
+            storeSupplier = Stores.inMemoryKeyValueStore(storeName);
+        }
         final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder =
             new ListValueStoreBuilder<>(
-                persistent ? Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName),
+                storeSupplier,
                 timestampedKeyAndJoinSideSerde,
                 leftOrRightValueSerde,
                 Time.SYSTEM

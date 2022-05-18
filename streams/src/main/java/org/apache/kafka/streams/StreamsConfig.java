@@ -519,6 +519,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_DSL_STORE_DOC = "The default state store type used by DSL operators.";
 
     public static final String ROCKS_DB = "rocksDB";
+    public static final String TXN_ROCKS_DB = "txn_rocksDB";
     public static final String IN_MEMORY = "in_memory";
 
     /** {@code default.windowed.key.serde.inner} */

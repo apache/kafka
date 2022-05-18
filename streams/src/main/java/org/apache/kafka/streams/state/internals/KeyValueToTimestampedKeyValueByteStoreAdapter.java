@@ -101,8 +101,8 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     }
 
     @Override
-    public void flush() {
-        store.flush();
+    public void commit(final Long changelogOffset) {
+        store.commit(changelogOffset);
     }
 
     @Override

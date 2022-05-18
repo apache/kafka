@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -50,6 +51,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
+import static org.apache.kafka.streams.StreamsConfig.TXN_ROCKS_DB;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 
 /**
@@ -101,7 +103,7 @@ public class TopologyConfig extends AbstractConfig {
             .define(DEFAULT_DSL_STORE_CONFIG,
                 Type.STRING,
                 ROCKS_DB,
-                in(ROCKS_DB, IN_MEMORY),
+                in(ROCKS_DB, IN_MEMORY, TXN_ROCKS_DB),
                 Importance.LOW,
                 DEFAULT_DSL_STORE_DOC);
     }
@@ -217,10 +219,16 @@ public class TopologyConfig extends AbstractConfig {
     }
 
     public Materialized.StoreType parseStoreType() {
-        if (storeType.equals(IN_MEMORY)) {
-            return Materialized.StoreType.IN_MEMORY;
+        switch (storeType) {
+            case IN_MEMORY:
+                return Materialized.StoreType.IN_MEMORY;
+            case ROCKS_DB:
+                return Materialized.StoreType.ROCKS_DB;
+            case TXN_ROCKS_DB:
+                return Materialized.StoreType.TXN_ROCKS_DB;
+            default:
+                throw new ConfigException(String.format("Unknown store type %s", storeType));
         }
-        return Materialized.StoreType.ROCKS_DB;
     }
 
     public boolean isNamedTopology() {

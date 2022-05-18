@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static java.time.Duration.ofMillis;
+
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
-
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
-
-import static java.time.Duration.ofMillis;
-import static java.util.Arrays.asList;
 
 @RunWith(Parameterized.class)
 public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
@@ -36,13 +38,21 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
     @Parameter
     public StoreType storeType;
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> getParamStoreType() {
-        return asList(new Object[][] {
-            {StoreType.RocksDBSessionStore},
-            {StoreType.RocksDBTimeOrderedSessionStoreWithIndex},
-            {StoreType.RocksDBTimeOrderedSessionStoreWithoutIndex}
-        });
+    @Parameter(1)
+    public boolean transactional;
+
+
+    @Parameterized.Parameters(name = "{0} {1}")
+    public static Collection<Object[]> data() {
+        final List<StoreType> storeTypes = Arrays.asList(StoreType.RocksDBSessionStore,
+                                                         StoreType.RocksDBTimeOrderedSessionStoreWithIndex,
+                                                         StoreType.RocksDBTimeOrderedSessionStoreWithoutIndex);
+        final List<Object[]> data = new ArrayList<>(storeTypes.size() * 2);
+        for (final StoreType storeType : storeTypes) {
+            data.add(new Object[]{storeType, true});
+            data.add(new Object[]{storeType, false});
+        }
+        return data;
     }
 
     @Override
@@ -56,10 +66,12 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
                                                  final Serde<V> valueSerde) {
         switch (storeType) {
             case RocksDBSessionStore: {
-                return Stores.sessionStoreBuilder(
-                    Stores.persistentSessionStore(
+                final SessionBytesStoreSupplier supplier = Stores.persistentSessionStore(
                         STORE_NAME,
-                        ofMillis(retentionPeriod)),
+                        ofMillis(retentionPeriod),
+                        transactional);
+                return Stores.sessionStoreBuilder(
+                    supplier,
                     keySerde,
                     valueSerde).build();
             }
@@ -68,7 +80,8 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
                     new RocksDbTimeOrderedSessionBytesStoreSupplier(
                         STORE_NAME,
                         retentionPeriod,
-                        true
+                        true,
+                        transactional ? RocksDBTransactionalMechanism.SECONDARY_STORE : null
                     ),
                     keySerde,
                     valueSerde
@@ -79,7 +92,8 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
                     new RocksDbTimeOrderedSessionBytesStoreSupplier(
                         STORE_NAME,
                         retentionPeriod,
-                       false
+                       false,
+                        transactional ? RocksDBTransactionalMechanism.SECONDARY_STORE : null
                     ),
                     keySerde,
                     valueSerde

@@ -97,8 +97,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             true,
-            new HashMap<>()
-        );
+            new HashMap<>());
     }
 
     /**
@@ -107,7 +106,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      * or ${applicationId}-&lt;storeName&gt;-outer-this-join and ${applicationId}-&lt;storeName&gt;-outer-other-join depending if the join is an inner-join
      * or an outer join. The changelog topics will have the -changelog suffix.  The user should note that even though the join stores will have a
      * specified name, the stores will remain unavailable for querying.
-     *
+     * <p>
      * Please note that if you are using {@link StreamJoined} to replace deprecated {@link KStream#join} functions with
      * {@link Joined} parameters in order to set the name for the join processors, you would need to create the {@link StreamJoined}
      * object first and then call {@link StreamJoined#withName}

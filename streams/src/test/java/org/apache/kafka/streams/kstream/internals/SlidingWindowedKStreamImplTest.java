@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Collection;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
@@ -47,6 +49,8 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
@@ -54,12 +58,24 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 
+@RunWith(Parameterized.class)
 public class SlidingWindowedKStreamImplTest {
 
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private TimeWindowedKStream<String, String> windowedStream;
+
+    @Parameterized.Parameter
+    public StoreType storeType;
+
+    @Parameterized.Parameters(name = "storeType={0}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {
+            {StoreType.TXN_ROCKS_DB},
+            {StoreType.ROCKS_DB}
+        });
+    }
 
     @Before
     public void before() {
@@ -154,11 +170,14 @@ public class SlidingWindowedKStreamImplTest {
     @Test
     public void shouldAggregateSlidingWindows() {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = Materialized.with(
+            Serdes.String(), Serdes.String());
+        materialized.withStoreType(storeType);
         windowedStream
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.with(Serdes.String(), Serdes.String()))
+                materialized)
             .toStream()
             .process(supplier);
 
@@ -197,10 +216,12 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeCount() {
-        windowedStream.count(
+        final Materialized<String, Long, WindowStore<Bytes, byte[]>> materialized =
             Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
                 .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.Long()));
+                .withValueSerde(Serdes.Long());
+        materialized.withStoreType(storeType);
+        windowedStream.count(materialized);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -236,11 +257,12 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeReduced() {
-        windowedStream.reduce(
-            MockReducer.STRING_ADDER,
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized =
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
                 .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String()));
+                .withValueSerde(Serdes.String());
+        materialized.withStoreType(storeType);
+        windowedStream.reduce(MockReducer.STRING_ADDER, materialized);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -276,12 +298,12 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeAggregated() {
-        windowedStream.aggregate(
-            MockInitializer.STRING_INIT,
-            MockAggregator.TOSTRING_ADDER,
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized =
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
                 .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String()));
+                .withValueSerde(Serdes.String());
+        materialized.withStoreType(storeType);
+        windowedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, materialized);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);

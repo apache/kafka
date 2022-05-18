@@ -368,7 +368,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t2);
         stateManager.registerStore(store2, stateRestoreCallback, null);
 
-        stateManager.flush();
+        stateManager.commit();
         assertTrue(store1.flushed);
         assertTrue(store2.flushed);
     }
@@ -380,11 +380,11 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t1);
         stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
             @Override
-            public void flush() {
+            public void commit(final Long changelogOffset) {
                 throw new RuntimeException("KABOOM!");
             }
         }, stateRestoreCallback, null);
-        assertThrows(StreamsException.class, stateManager::flush);
+        assertThrows(StreamsException.class, stateManager::commit);
     }
 
     @Test

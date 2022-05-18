@@ -190,7 +190,8 @@ public class WindowStoreBuilderTest {
                 null,
                 10L,
                 5L,
-                new WindowKeySchema()),
+                new WindowKeySchema(),
+                null),
             false,
             1L));
         expect(supplier.name()).andReturn("name");

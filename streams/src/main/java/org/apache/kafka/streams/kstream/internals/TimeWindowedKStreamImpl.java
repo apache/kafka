@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.state.internals.RocksDBTransactionalMechanism;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -258,20 +259,43 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     );
                     break;
                 case ROCKS_DB:
-                    supplier = emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE ?
-                        RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
+                    if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                        supplier = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
                             materialized.storeName(),
                             Duration.ofMillis(retentionPeriod),
                             Duration.ofMillis(windows.size()),
                             false,
-                            false
-                        ) :
-                        Stores.persistentTimestampedWindowStore(
+                            false,
+                            null
+                        );
+                    } else {
+                        supplier = Stores.persistentTimestampedWindowStore(
                             materialized.storeName(),
                             Duration.ofMillis(retentionPeriod),
                             Duration.ofMillis(windows.size()),
                             false
-                    );
+                        );
+                    }
+                    break;
+                case TXN_ROCKS_DB:
+                    if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+                        supplier = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            Duration.ofMillis(windows.size()),
+                            false,
+                            false,
+                            RocksDBTransactionalMechanism.SECONDARY_STORE
+                        );
+                    } else {
+                        supplier = Stores.persistentTimestampedWindowStore(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            Duration.ofMillis(windows.size()),
+                            false,
+                            true
+                        );
+                    }
                     break;
                 default:
                     throw new IllegalStateException("Unknown store type: " + materialized.storeType());

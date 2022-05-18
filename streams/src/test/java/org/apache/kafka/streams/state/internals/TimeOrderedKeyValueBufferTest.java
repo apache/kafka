@@ -304,7 +304,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
 
         // flush everything to the changelog
-        buffer.flush();
+        buffer.commit(null);
 
         // the buffer should serialize the buffer time and the value as byte[],
         // which we can't compare for equality using ProducerRecord.

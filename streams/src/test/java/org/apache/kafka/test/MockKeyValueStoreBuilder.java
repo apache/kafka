@@ -24,16 +24,22 @@ import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
 public class MockKeyValueStoreBuilder extends AbstractStoreBuilder<Integer, byte[], KeyValueStore<Object, Object>> {
 
     private final boolean persistent;
+    private final boolean transactional;
 
     public MockKeyValueStoreBuilder(final String storeName, final boolean persistent) {
+        this(storeName, persistent, persistent);
+    }
+
+    public MockKeyValueStoreBuilder(final String storeName, final boolean persistent, final boolean transactional) {
         super(storeName, Serdes.Integer(), Serdes.ByteArray(), new MockTime());
 
         this.persistent = persistent;
+        this.transactional = transactional;
     }
 
     @Override
     public KeyValueStore<Object, Object> build() {
-        return new MockKeyValueStore(name, persistent);
+        return new MockKeyValueStore(name, persistent, transactional);
     }
 }
 

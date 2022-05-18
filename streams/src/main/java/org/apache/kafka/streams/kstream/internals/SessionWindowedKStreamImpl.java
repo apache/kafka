@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.state.internals.RocksDBTransactionalMechanism;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -259,15 +260,33 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                     );
                     break;
                 case ROCKS_DB:
-                    supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                            materialized.storeName(),
-                            retentionPeriod,
-                            true) :
-                        Stores.persistentSessionStore(
+                    if (emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
+                        supplier = new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                                materialized.storeName(),
+                                retentionPeriod,
+                                true,
+                                null);
+                    } else {
+                        supplier = Stores.persistentSessionStore(
                             materialized.storeName(),
                             Duration.ofMillis(retentionPeriod)
                         );
+                    }
+                    break;
+                case TXN_ROCKS_DB:
+                    if (emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
+                        supplier = new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                            materialized.storeName(),
+                            retentionPeriod,
+                            true,
+                            RocksDBTransactionalMechanism.SECONDARY_STORE);
+                    } else {
+                        supplier = Stores.persistentSessionStore(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            true
+                        );
+                    }
                     break;
                 default:
                     throw new IllegalStateException("Unknown store type: " + materialized.storeType());

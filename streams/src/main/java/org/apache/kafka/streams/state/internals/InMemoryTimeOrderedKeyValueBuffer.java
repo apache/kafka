@@ -258,7 +258,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         if (loggingEnabled) {
             // counting on this getting called before the record collector's flush
             for (final Bytes key : dirtyKeys) {

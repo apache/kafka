@@ -458,13 +458,13 @@ public class CachingKeyValueStore
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         validateStoreOpen();
         lock.writeLock().lock();
         try {
             validateStoreOpen();
             context.cache().flush(cacheName);
-            wrapped().flush();
+            wrapped().commit(changelogOffset);
         } finally {
             lock.writeLock().unlock();
         }

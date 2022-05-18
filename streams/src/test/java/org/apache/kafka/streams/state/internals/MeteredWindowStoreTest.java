@@ -368,11 +368,11 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFlushLatency() {
-        innerStoreMock.flush();
+        innerStoreMock.commit(null);
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
-        store.flush();
+        store.commit(null);
 
         // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
         // and the sensor is tested elsewhere

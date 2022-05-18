@@ -104,7 +104,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         noTimestampsIter.close();
     }
 
-
     private class DualColumnFamilyAccessor implements RocksDBAccessor {
         private final ColumnFamilyHandle oldColumnFamily;
         private final ColumnFamilyHandle newColumnFamily;

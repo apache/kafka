@@ -112,18 +112,23 @@ public class TimeOrderedWindowStoreTest {
     @Parameter
     public boolean hasIndex;
 
-    @Parameterized.Parameters(name = "{0}")
+    @Parameter(1)
+    public RocksDBTransactionalMechanism txnMechanism;
+
+    @Parameterized.Parameters(name = "{0} {1}")
     public static Collection<Object[]> data() {
         return asList(new Object[][] {
-            {true},
-            {false}
+            {true, RocksDBTransactionalMechanism.SECONDARY_STORE},
+            {true, null},
+            {false, RocksDBTransactionalMechanism.SECONDARY_STORE},
+            {false, null}
         });
     }
 
     @Before
     public void setUp() {
         baseKeySchema = new TimeFirstWindowKeySchema();
-        bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
+        bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex, txnMechanism);
         underlyingStore = new RocksDBTimeOrderedWindowStore(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
@@ -197,7 +202,8 @@ public class TimeOrderedWindowStoreTest {
                 ofHours(1L),
                 ofMinutes(1),
                 false,
-                hasIndex
+                hasIndex,
+                txnMechanism
             ), Serdes.String(), Serdes.String())
             .withCachingEnabled();
 
@@ -338,7 +344,7 @@ public class TimeOrderedWindowStoreTest {
         assertEquals(Position.emptyPosition(), cachingStore.getPosition());
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -682,7 +688,7 @@ public class TimeOrderedWindowStoreTest {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(1L);
         assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
@@ -700,23 +706,23 @@ public class TimeOrderedWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -727,22 +733,22 @@ public class TimeOrderedWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -756,7 +762,7 @@ public class TimeOrderedWindowStoreTest {
     @Test
     public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks() {
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
         try (final WindowStoreIterator<byte[]> fetch =

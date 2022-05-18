@@ -57,9 +57,10 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
                                                  final String metricsScope,
                                                  final long retention,
                                                  final long segmentInterval,
-                                                 final boolean withIndex) {
+                                                 final boolean withIndex,
+                                                 final RocksDBTransactionalMechanism txnMechanism) {
         super(name, metricsScope, retention, segmentInterval, new TimeFirstSessionKeySchema(),
-            Optional.ofNullable(withIndex ? new KeyFirstSessionKeySchema() : null));
+            Optional.ofNullable(withIndex ? new KeyFirstSessionKeySchema() : null), txnMechanism);
     }
 
     public byte[] fetchSession(final Bytes key,
@@ -74,7 +75,7 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
 
     public KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime,
                                                          final long latestSessionEndTime) {
-        final List<KeyValueSegment> searchSpace = segments.segments(earliestSessionEndTime, latestSessionEndTime, true);
+        final List<Segment> searchSpace = segments.segments(earliestSessionEndTime, latestSessionEndTime, true);
 
         // here we want [0, latestSE, FF] as the upper bound to cover any possible keys,
         // but since we can only get upper bound based on timestamps, we use a slight larger upper bound as [0, latestSE+1]
@@ -118,7 +119,7 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
     }
 
     @Override
-    Map<KeyValueSegment, WriteBatch> getWriteBatches(
+    Map<Segment, WriteBatch> getWriteBatches(
         final Collection<ConsumerRecord<byte[], byte[]>> records) {
         // advance stream time to the max timestamp in the batch
         for (final ConsumerRecord<byte[], byte[]> record : records) {
@@ -126,11 +127,11 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
             observedStreamTime = Math.max(observedStreamTime, timestamp);
         }
 
-        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
+        final Map<Segment, WriteBatch> writeBatchMap = new HashMap<>();
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = SessionKeySchema.extractEndTimestamp(record.key());
             final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+            final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
@@ -161,7 +162,7 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
 
     @Override
     protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(
-        final SegmentIterator<KeyValueSegment> segmentIterator) {
+        final SegmentIterator<Segment> segmentIterator) {
         return new SessionKeySchemaIndexToBaseStoreIterator(segmentIterator);
     }
 }

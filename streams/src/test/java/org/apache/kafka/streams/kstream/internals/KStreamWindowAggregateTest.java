@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -48,6 +50,7 @@ import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForwa
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.state.internals.RocksDBTransactionalMechanism;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -94,29 +97,35 @@ public class KStreamWindowAggregateTest {
     private final String threadId = Thread.currentThread().getName();
 
     @Parameter
-    public StrategyType type;
+    public StrategyType strategyType;
 
     @Parameter(1)
     public boolean withCache;
+
+    @Parameter(2)
+    public StoreType storeType;
 
     private EmitStrategy emitStrategy;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_cache:{1}")
-    public static Collection<Object[]> getEmitStrategy() {
-        return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true},
-            {StrategyType.ON_WINDOW_UPDATE, false},
-            {StrategyType.ON_WINDOW_CLOSE, true},
-            {StrategyType.ON_WINDOW_CLOSE, false}
-        });
+    @Parameterized.Parameters(name = "{0}_cache:{1}_storeType:{2}")
+    public static Collection<Object[]> data() {
+        final List<Object[]> data = new ArrayList<>();
+        for (final StrategyType strategyType : StrategyType.values()) {
+            for (final boolean withCache : new boolean[]{false, true}) {
+                for (final StoreType storeType: new StoreType[]{StoreType.ROCKS_DB, StoreType.TXN_ROCKS_DB}) {
+                    data.add(new Object[]{strategyType, withCache, storeType});
+                }
+            }
+        }
+        return data;
     }
 
     @Before
     public void before() {
-        emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
-        emitStrategy = StrategyType.forType(type);
+        emitFinal = strategyType.equals(StrategyType.ON_WINDOW_CLOSE);
+        emitStrategy = StrategyType.forType(strategyType);
         // Set interval to 0 so that it always tries to emit
         props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
     }
@@ -126,11 +135,16 @@ public class KStreamWindowAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized =
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized")
+                .withValueSerde(Serdes.String());
+        materialized.withStoreType(storeType);
         final KTable<Windowed<String>, String> table2 = builder.stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(100)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(
+                materialized));
 
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
@@ -222,12 +236,20 @@ public class KStreamWindowAggregateTest {
         final String topic2 = "topic2";
         final long grace = emitFinal ? 5L : 100L;
 
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized1 =
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized")
+                .withValueSerde(Serdes.String());
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized2 =
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized")
+                .withValueSerde(Serdes.String());
+        materialized1.withStoreType(storeType);
+        materialized2.withStoreType(storeType);
         final KTable<Windowed<String>, String> table1 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(grace)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(materialized1));
 
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
@@ -237,7 +259,7 @@ public class KStreamWindowAggregateTest {
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(grace)).advanceBy(ofMillis(5)))
             .emitStrategy(emitStrategy)
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String())));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, setMaterializedCache(materialized2));
         table2.toStream().process(supplier);
 
         table1.join(table2, (p1, p2) -> p1 + "%" + p2).toStream().process(supplier);
@@ -975,14 +997,16 @@ public class KStreamWindowAggregateTest {
                 Duration.ofDays(1),
                 Duration.ofMillis(windowSize),
                 false,
-                false
+                false,
+                storeType == StoreType.TXN_ROCKS_DB ? RocksDBTransactionalMechanism.SECONDARY_STORE : null
             );
         } else {
             supplier = Stores.persistentTimestampedWindowStore(
                 WINDOW_STORE_NAME,
                 Duration.ofDays(1),
                 Duration.ofMillis(windowSize),
-                false
+                false,
+                storeType == StoreType.TXN_ROCKS_DB
             );
         }
 

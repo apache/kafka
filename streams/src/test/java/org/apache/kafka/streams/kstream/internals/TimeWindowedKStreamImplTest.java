@@ -17,44 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.EmitStrategy;
-import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
-import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.TimeWindowedKStream;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockAggregator;
-import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.util.List;
-import java.util.Properties;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
@@ -62,6 +24,44 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Properties;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
+import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Materialized.StoreType;
+import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockApiProcessorSupplier;
+import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockReducer;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
 @RunWith(Parameterized.class)
 public class TimeWindowedKStreamImplTest {
@@ -76,28 +76,34 @@ public class TimeWindowedKStreamImplTest {
     private TimeWindowedKStream<String, String> windowedStream;
 
     @Parameter
-    public StrategyType type;
+    public StrategyType strategyType;
 
     @Parameter(1)
     public boolean withCache;
 
+    @Parameter(2)
+    public StoreType storeType;
+
     private EmitStrategy emitStrategy;
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_cache:{1}")
+    @Parameterized.Parameters(name = "{0}_cache:{1}_storeType:{2}")
     public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true},
-            {StrategyType.ON_WINDOW_UPDATE, false},
-            {StrategyType.ON_WINDOW_CLOSE, true},
-            {StrategyType.ON_WINDOW_CLOSE, false}
-        });
+        final List<Object[]> data = new ArrayList<>();
+        for (final StrategyType strategyType : StrategyType.values()) {
+            for (final boolean withCache : new boolean[]{false, true}) {
+                for (final StoreType storetype : new StoreType[]{StoreType.ROCKS_DB, StoreType.TXN_ROCKS_DB}) {
+                    data.add(new Object[]{strategyType, withCache, storetype});
+                }
+            }
+        }
+        return data;
     }
 
     @Before
     public void before() {
-        emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
-        emitStrategy = StrategyType.forType(type);
+        emitFinal = strategyType.equals(StrategyType.ON_WINDOW_CLOSE);
+        emitStrategy = StrategyType.forType(strategyType);
         // Set interval to 0 so that it always tries to emit
         props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
@@ -184,12 +190,15 @@ public class TimeWindowedKStreamImplTest {
     @Test
     public void shouldAggregateWindowed() {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = Materialized.with(
+            Serdes.String(), Serdes.String());
+        materialized.withStoreType(storeType);
         windowedStream
             .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                setMaterializedCache(Materialized.with(Serdes.String(), Serdes.String())))
+                setMaterializedCache(materialized))
             .toStream()
             .process(supplier);
 
@@ -224,12 +233,15 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeCount() {
+        final Materialized<String, Long, WindowStore<Bytes, byte[]>> materialized = Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(
+                "count-store")
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.Long());
+        materialized.withStoreType(storeType);
         windowedStream
             .emitStrategy(emitStrategy)
             .count(
-                setMaterializedCache(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
-                    .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.Long())));
+                setMaterializedCache(materialized));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -261,11 +273,14 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeReduced() {
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = Materialized.<String, String, WindowStore<Bytes, byte[]>>as(
+                "reduced")
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String());
+        materialized.withStoreType(storeType);
         windowedStream.reduce(
             MockReducer.STRING_ADDER,
-            setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String())));
+            setMaterializedCache(materialized));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -296,12 +311,15 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeAggregated() {
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = Materialized.<String, String, WindowStore<Bytes, byte[]>>as(
+                "aggregated")
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String());
+        materialized.withStoreType(storeType);
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
-            setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String())));
+            setMaterializedCache(materialized));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);

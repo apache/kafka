@@ -211,7 +211,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldAlwaysCheckpointStateIfEnforced() {
-        stateManager.flush();
+        stateManager.commit();
         EasyMock.expectLastCall().once();
         stateManager.checkpoint();
         EasyMock.expectLastCall().once();
@@ -228,7 +228,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
-        stateManager.flush();
+        stateManager.commit();
         EasyMock.expectLastCall().once();
         stateManager.checkpoint();
         EasyMock.expectLastCall().once();
@@ -254,7 +254,7 @@ public class StandbyTaskTest {
     @Test
     public void shouldFlushAndCheckpointStateManagerOnCommit() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
-        stateManager.flush();
+        stateManager.commit();
         EasyMock.expectLastCall();
         stateManager.checkpoint();
         EasyMock.expectLastCall().once();
@@ -296,7 +296,7 @@ public class StandbyTaskTest {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         stateManager.close();
         EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
-        stateManager.flush();
+        stateManager.commit();
         EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint();
         EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
@@ -377,7 +377,7 @@ public class StandbyTaskTest {
         EasyMock.expect(stateManager.changelogOffsets())
             .andReturn(Collections.singletonMap(partition, 50L))
             .andReturn(Collections.singletonMap(partition, 10100L)).anyTimes();
-        stateManager.flush();
+        stateManager.commit();
         EasyMock.expectLastCall();
         stateManager.checkpoint();
         EasyMock.expectLastCall();

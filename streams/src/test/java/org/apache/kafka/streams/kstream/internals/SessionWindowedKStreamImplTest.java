@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
@@ -75,17 +76,23 @@ public class SessionWindowedKStreamImplTest {
 
     private SessionWindowedKStream<String, String> stream;
 
-    @Parameterized.Parameter
+    @Parameterized.Parameter(0)
     public EmitStrategy.StrategyType type;
+
+    @Parameterized.Parameter(1)
+    public StoreType storeType;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}")
+    @Parameterized.Parameters(name = "strategyType={0} storeType={1}")
     public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {EmitStrategy.StrategyType.ON_WINDOW_UPDATE},
-            {EmitStrategy.StrategyType.ON_WINDOW_CLOSE}
-        });
+        final List<Object[]> values = new ArrayList<>();
+        for (final EmitStrategy.StrategyType strategyType : EmitStrategy.StrategyType.values()) {
+            for (final StoreType storeType : Arrays.asList(StoreType.ROCKS_DB, StoreType.TXN_ROCKS_DB)) {
+                values.add(new Object[]{strategyType, storeType});
+            }
+        }
+        return values;
     }
 
     @Before
@@ -189,10 +196,12 @@ public class SessionWindowedKStreamImplTest {
     @Test
     public void shouldAggregateSessionWindowed() {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final Materialized<String, String, SessionStore<Bytes, byte[]>> materialized = Materialized.with(Serdes.String(), Serdes.String());
+        materialized.withStoreType(storeType);
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
                          sessionMerger,
-                         Materialized.with(Serdes.String(), Serdes.String()))
+                         materialized)
             .toStream()
             .process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -244,7 +253,10 @@ public class SessionWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeReduced() {
-        stream.reduce(MockReducer.STRING_ADDER, Materialized.as("reduced"));
+        final Materialized<String, String, SessionStore<Bytes, byte[]>> materialized = Materialized.as(
+            "reduced");
+        materialized.withStoreType(storeType);
+        stream.reduce(MockReducer.STRING_ADDER, materialized);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -262,11 +274,15 @@ public class SessionWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeAggregated() {
+        final Materialized<String, String, SessionStore<Bytes, byte[]>> materialized = Materialized
+            .<String, String, SessionStore<Bytes, byte[]>>as("aggregated")
+            .withValueSerde(Serdes.String());
+        materialized.withStoreType(storeType);
         stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             sessionMerger,
-            Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
+            materialized);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -364,11 +380,15 @@ public class SessionWindowedKStreamImplTest {
         if (!emitFinal)
             return;
 
+        final Materialized<String, String, SessionStore<Bytes, byte[]>> materialized = Materialized
+            .<String, String, SessionStore<Bytes, byte[]>>as("aggregated")
+            .withValueSerde(Serdes.String());
+        materialized.withStoreType(storeType);
         stream.aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 sessionMerger,
-                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
+            materialized);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final SessionStore<String, String> store = driver.getSessionStore("aggregated");

@@ -169,8 +169,8 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
-    public void flush() {
-        store.flush();
+    public void commit(final Long changelogOffset) {
+        store.commit(changelogOffset);
     }
 
     @Override

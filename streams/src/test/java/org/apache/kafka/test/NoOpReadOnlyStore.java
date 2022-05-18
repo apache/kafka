@@ -90,7 +90,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         flushed = true;
     }
 

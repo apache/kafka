@@ -190,7 +190,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
 
     }
 

@@ -160,12 +160,12 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
         // Flush now so that for caching store, we will not skip the deletion following an put
-        store.flush();
+        store.commit(null);
         store.delete(5);
         assertEquals(4, driver.sizeOf(store));
 
         // Flush the store and verify all current entries were properly flushed ...
-        store.flush();
+        store.commit(null);
         assertEquals("zero", driver.flushedEntryStored(0));
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
@@ -208,12 +208,12 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
         // Flush now so that for caching store, we will not skip the deletion following an put
-        store.flush();
+        store.commit(null);
         store.delete(5);
         assertEquals(4, driver.sizeOf(store));
 
         // Flush the store and verify all current entries were properly flushed ...
-        store.flush();
+        store.commit(null);
         assertEquals("zero", driver.flushedEntryStored(0));
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
@@ -255,11 +255,11 @@ public abstract class AbstractKeyValueStoreTest {
         assertNull(store.get(3));
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
-        store.flush();
+        store.commit(null);
         store.delete(5);
 
         // Flush the store and verify all current entries were properly flushed ...
-        store.flush();
+        store.commit(null);
         assertEquals("zero", driver.flushedEntryStored(0));
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
@@ -332,7 +332,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("four", store.get(4));
 
         // Flush the store and verify all current entries were properly flushed ...
-        store.flush();
+        store.commit(null);
         assertEquals("zero", driver.flushedEntryStored(0));
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
@@ -485,7 +485,7 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(2, "two");
         store.put(4, "four");
         store.put(5, "five");
-        store.flush();
+        store.commit(null);
         assertEquals(5, store.approximateNumEntries());
     }
 

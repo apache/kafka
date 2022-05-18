@@ -62,8 +62,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public void flush() {
-
+    public void commit(final Long changelogOffset) {
     }
 
     @Override

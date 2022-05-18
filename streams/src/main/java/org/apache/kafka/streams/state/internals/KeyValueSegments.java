@@ -23,34 +23,52 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 /**
  * Manages the {@link KeyValueSegment}s that are used by the {@link RocksDBSegmentedBytesStore}
  */
-class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
+class KeyValueSegments extends AbstractSegments<Segment> {
 
     private final RocksDBMetricsRecorder metricsRecorder;
 
     KeyValueSegments(final String name,
                      final String metricsScope,
                      final long retentionPeriod,
-                     final long segmentInterval) {
-        super(name, retentionPeriod, segmentInterval);
+                     final long segmentInterval,
+                     final RocksDBTransactionalMechanism txnMechanism) {
+        super(name, retentionPeriod, segmentInterval, txnMechanism);
         metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }
 
     @Override
-    public KeyValueSegment getOrCreateSegment(final long segmentId,
-                                              final ProcessorContext context) {
+    public Segment getOrCreateSegment(final long segmentId,
+                                      final ProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
-        } else {
-            final KeyValueSegment newSegment =
-                new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
-
-            if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
-            }
-
-            newSegment.openDB(context.appConfigs(), context.stateDir());
-            return newSegment;
         }
+
+        final KeyValueSegment newSegment =
+            new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+        final Segment returnSegment;
+        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
+            final KeyValueSegment tmpSegment = new KeyValueSegment(segmentName(segmentId) + ".tmp",
+                                                                   name,
+                                                                   segmentId,
+                                                                   metricsRecorder);
+            returnSegment = new TransactionalKeyValueSegment(tmpSegment, newSegment);
+        } else if (txnMechanism == null) {
+            returnSegment = newSegment;
+        } else {
+            throw new IllegalStateException("Unknown transactional mechanism: " + txnMechanism);
+        }
+
+        if (segments.put(segmentId, returnSegment) != null) {
+            throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
+        }
+
+        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
+            ((TransactionalKeyValueSegment) returnSegment).openDB(context.appConfigs(), context.stateDir());
+        } else {
+            newSegment.openDB(context.appConfigs(), context.stateDir());
+        }
+
+        return returnSegment;
     }
 
     @Override

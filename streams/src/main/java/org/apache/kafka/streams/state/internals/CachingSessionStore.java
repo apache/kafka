@@ -324,9 +324,9 @@ class CachingSessionStore
         return backwardFindSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         context.cache().flush(cacheName);
-        wrapped().flush();
+        wrapped().commit(changelogOffset);
     }
 
     @Override

@@ -340,11 +340,11 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldFlushInnerWhenFlushTimeRecords() {
-        inner.flush();
+        inner.commit(null);
         expectLastCall().once();
         init();
 
-        metered.flush();
+        metered.commit(null);
 
         final KafkaMetric metric = metric("flush-rate");
         assertTrue((Double) metric.metricValue() > 0);

@@ -415,9 +415,9 @@ class CachingWindowStore
     }
 
     @Override
-    public synchronized void flush() {
+    public synchronized void commit(final Long changelogOffset) {
         context.cache().flush(cacheName);
-        wrapped().flush();
+        wrapped().commit(changelogOffset);
     }
 
     @Override

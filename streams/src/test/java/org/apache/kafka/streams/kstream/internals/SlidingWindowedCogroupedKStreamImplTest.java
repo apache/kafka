@@ -23,6 +23,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
@@ -41,6 +43,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
@@ -53,7 +56,10 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
+@RunWith(Parameterized.class)
 @SuppressWarnings("deprecation")
 public class SlidingWindowedCogroupedKStreamImplTest {
 
@@ -63,11 +69,22 @@ public class SlidingWindowedCogroupedKStreamImplTest {
     private static final long WINDOW_SIZE_MS = 500L;
     private final StreamsBuilder builder = new StreamsBuilder();
 
+    @Parameterized.Parameter
+    public StoreType storeType;
+
     private KGroupedStream<String, String> groupedStream;
 
     private TimeWindowedCogroupedKStream<String, String> windowedCogroupedStream;
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    @Parameterized.Parameters(name = "storeType={0}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {
+            {StoreType.ROCKS_DB},
+            {StoreType.TXN_ROCKS_DB}
+        });
+    }
 
     @Before
     public void setup() {
@@ -149,8 +166,11 @@ public class SlidingWindowedCogroupedKStreamImplTest {
 
     @Test
     public void slidingWindowAggregateStreamsTest() {
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = Materialized.with(
+            Serdes.String(), Serdes.String());
+        materialized.withStoreType(storeType);
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(
-                MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+                MockInitializer.STRING_INIT, materialized);
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -206,10 +226,13 @@ public class SlidingWindowedCogroupedKStreamImplTest {
 
     @Test
     public void slidingWindowAggregateOverlappingWindowsTest() {
+        final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized = Materialized.with(
+            Serdes.String(), Serdes.String());
+        materialized.withStoreType(storeType);
 
         final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L))).aggregate(
-                        MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+                        MockInitializer.STRING_INIT, materialized);
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

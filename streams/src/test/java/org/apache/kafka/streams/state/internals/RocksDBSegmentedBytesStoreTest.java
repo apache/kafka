@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedBytesStoreTest<KeyValueSegment> {
+public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedBytesStoreTest<Segment> {
 
     private final static String METRICS_SCOPE = "metrics-scope";
 
@@ -27,12 +27,13 @@ public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedByte
             METRICS_SCOPE,
             retention,
             segmentInterval,
-            schema
+            schema,
+            null
         );
     }
 
     @Override
     KeyValueSegments newSegments() {
-        return new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval);
+        return new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval, txnMechanism);
     }
 }

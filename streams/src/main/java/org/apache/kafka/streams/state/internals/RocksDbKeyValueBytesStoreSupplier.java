@@ -19,16 +19,20 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
     private final String name;
     private final boolean returnTimestampedStore;
+    private final RocksDBTransactionalMechanism mechanism;
 
     public RocksDbKeyValueBytesStoreSupplier(final String name,
-                                             final boolean returnTimestampedStore) {
+                                             final boolean returnTimestampedStore,
+                                             final RocksDBTransactionalMechanism mechanism) {
         this.name = name;
         this.returnTimestampedStore = returnTimestampedStore;
+        this.mechanism = mechanism;
     }
 
     @Override
@@ -38,9 +42,27 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
-        return returnTimestampedStore ?
-            new RocksDBTimestampedStore(name, metricsScope()) :
-            new RocksDBStore(name, metricsScope());
+        if (mechanism == null)  {
+            return returnTimestampedStore ?
+                new RocksDBTimestampedStore(name, metricsScope()) :
+                new RocksDBStore(name, metricsScope());
+        }
+
+        if (mechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
+            final String tmpStoreName = name + ".tmp";
+            final KeyValueSegment tmpStore = new KeyValueSegment(tmpStoreName,
+                name,
+                0,
+                new RocksDBMetricsRecorder(metricsScope(), tmpStoreName));
+            if (returnTimestampedStore) {
+                return new TransactionalKeyValueStore(tmpStore,
+                    new RocksDBTimestampedStore(name, metricsScope()));
+            } else {
+                return new TransactionalKeyValueStore(tmpStore,
+                    new RocksDBStore(name, metricsScope()));
+            }
+        }
+        throw new IllegalArgumentException("Unsupported transactional mechanism: " + mechanism);
     }
 
     @Override

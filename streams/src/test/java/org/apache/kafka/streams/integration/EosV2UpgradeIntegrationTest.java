@@ -920,7 +920,7 @@ public class EosV2UpgradeIntegrationTest {
                             sum += value;
                         }
                         state.put(key, sum);
-                        state.flush();
+                        state.commit(null);
 
                         if (value % 10 == 4 && // potentially crash when processing 5th, 15th, or 25th record (etc.)
                             crash != null && crash.compareAndSet(true, false)) {

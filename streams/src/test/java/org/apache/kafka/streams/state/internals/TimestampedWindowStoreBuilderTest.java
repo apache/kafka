@@ -166,7 +166,8 @@ public class TimestampedWindowStoreBuilderTest {
                 "metric-scope",
                 10L,
                 5L,
-                new WindowKeySchema()),
+                new WindowKeySchema(),
+                null),
             false,
             1L));
         expect(supplier.name()).andReturn("name");
@@ -188,7 +189,8 @@ public class TimestampedWindowStoreBuilderTest {
                 "metric-scope",
                 10L,
                 5L,
-                new WindowKeySchema()),
+                new WindowKeySchema(),
+                null),
             false,
             1L));
         expect(supplier.name()).andReturn("name");
@@ -247,7 +249,8 @@ public class TimestampedWindowStoreBuilderTest {
                 null,
                 10L,
                 5L,
-                new WindowKeySchema()),
+                new WindowKeySchema(),
+                null),
             false,
             1L));
         expect(supplier.name()).andReturn("name");

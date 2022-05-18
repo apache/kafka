@@ -248,8 +248,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     @Override
-    public void flush() {
-        segments.flush();
+    public void commit(final Long changelogOffset) {
+        segments.commit(changelogOffset);
     }
 
     @Override

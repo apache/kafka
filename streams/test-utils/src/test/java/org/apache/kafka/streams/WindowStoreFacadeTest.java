@@ -74,8 +74,8 @@ public class WindowStoreFacadeTest {
 
     @Test
     public void shouldForwardFlush() {
-        windowStoreFacade.flush();
-        verify(mockedWindowTimestampStore).flush();
+        windowStoreFacade.commit(null);
+        verify(mockedWindowTimestampStore).commit(null);
     }
 
     @Test

@@ -132,8 +132,13 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                 case ROCKS_DB:
                     supplier = Stores.persistentSessionStore(
                         materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod)
-                    );
+                        Duration.ofMillis(retentionPeriod));
+                    break;
+                case TXN_ROCKS_DB:
+                    supplier = Stores.persistentSessionStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        true);
                     break;
                 default:
                     throw new IllegalStateException("Unknown store type: " + materialized.storeType());

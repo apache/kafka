@@ -38,7 +38,7 @@ interface Segments<S extends Segment> {
 
     List<S> allSegments(final boolean forward);
 
-    void flush();
+    void commit(final Long changelogOffset);
 
     void close();
 }

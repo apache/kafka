@@ -1,0 +1,109 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.state.internals;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Objects;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
+
+public abstract class AbstractTransactionalSegment extends AbstractTransactionalStore implements Segment {
+    final Segment mainStore;
+    private final String name;
+
+    AbstractTransactionalSegment(final KeyValueSegment tmpStore,
+                                 final Segment mainStore) {
+        super(tmpStore);
+        this.mainStore = mainStore;
+        this.name = PREFIX + mainStore.name();
+    }
+
+    public abstract void openDB(final Map<String, Object> configs, final File stateDir);
+
+    @Override
+    public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatch batch)
+        throws RocksDBException {
+        final byte[] value = toUncommittedValue(record.value);
+        tmpStore.addToBatch(KeyValue.pair(record.key, value), batch);
+    }
+
+    @Override
+    public void write(final WriteBatch batch) throws RocksDBException {
+        tmpStore.write(batch);
+    }
+
+    @Override
+    public long id() {
+        return mainStore.id();
+    }
+
+    @Override
+    public void destroy() throws IOException {
+        tmpStore.destroy();
+        mainStore.destroy();
+    }
+
+    @Override
+    public void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
+        try (KeyValueIterator<Bytes, byte[]> iterator = range(keyFrom, keyTo)) {
+            while (iterator.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = iterator.next();
+                delete(next.key);
+            }
+        }
+    }
+
+    @Override
+    public String name() {
+        return name;
+    }
+
+    @Override
+    KeyValueStore<Bytes, byte[]> mainStore() {
+        return mainStore;
+    }
+
+    @Override
+    public int compareTo(final Segment o) {
+        return Long.compare(mainStore.id(), o.id());
+    }
+
+    @Override
+    public String toString() {
+        return "TransactionalKeyValueSegment(id=" + mainStore.id() + ", name=" + name() + ")";
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        final AbstractTransactionalSegment segment = (AbstractTransactionalSegment) obj;
+        return mainStore.id() == segment.mainStore.id();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(mainStore.id());
+    }
+}

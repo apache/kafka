@@ -76,6 +76,8 @@ public class MaterializedInternalTest {
 
     @Test
     public void shouldUseStoreTypeWhenProvidedViaTopologyConfig() {
+        EasyMock.replay(supplier);
+
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());

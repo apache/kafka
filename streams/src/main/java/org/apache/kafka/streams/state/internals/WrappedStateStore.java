@@ -99,8 +99,8 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
-    public void flush() {
-        wrapped.flush();
+    public void commit(final Long changelogOffset) {
+        wrapped.commit(changelogOffset);
     }
 
     @Override

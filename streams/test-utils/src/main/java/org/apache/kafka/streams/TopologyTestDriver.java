@@ -1223,8 +1223,8 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public void flush() {
-            inner.flush();
+        public void commit(final Long changelogOffset) {
+            inner.commit(changelogOffset);
         }
 
         @Override
@@ -1322,8 +1322,8 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public void flush() {
-            inner.flush();
+        public void commit(final Long changelogOffset) {
+            inner.commit(changelogOffset);
         }
 
         @Override

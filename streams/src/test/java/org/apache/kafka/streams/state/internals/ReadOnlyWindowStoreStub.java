@@ -383,7 +383,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
     }
 
     @Override

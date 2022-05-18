@@ -43,14 +43,19 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     private final long retentionPeriod;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
+    final RocksDBTransactionalMechanism txnMechanism;
 
-    AbstractSegments(final String name, final long retentionPeriod, final long segmentInterval) {
+    AbstractSegments(final String name,
+                     final long retentionPeriod,
+                     final long segmentInterval,
+                     final RocksDBTransactionalMechanism txnMechanism) {
         this.name = name;
         this.segmentInterval = segmentInterval;
         this.retentionPeriod = retentionPeriod;
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
+        this.txnMechanism = txnMechanism;
     }
 
     @Override
@@ -158,9 +163,9 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         for (final S segment : segments.values()) {
-            segment.flush();
+            segment.commit(changelogOffset);
         }
     }
 

@@ -97,7 +97,7 @@ public class StateManagerUtilTest {
 
     @Test
     public void testRegisterStateStoreFailToLockStateDirectory() {
-        expect(topology.stateStores()).andReturn(singletonList(new MockKeyValueStore("store", false)));
+        expect(topology.stateStores()).andReturn(singletonList(new MockKeyValueStore("store", false, false)));
 
         expect(stateManager.taskId()).andReturn(taskId);
 
@@ -117,8 +117,8 @@ public class StateManagerUtilTest {
 
     @Test
     public void testRegisterStateStores() {
-        final MockKeyValueStore store1 = new MockKeyValueStore("store1", false);
-        final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
+        final MockKeyValueStore store1 = new MockKeyValueStore("store1", false, false);
+        final MockKeyValueStore store2 = new MockKeyValueStore("store2", false, false);
         final List<StateStore> stateStores = Arrays.asList(store1, store2);
 
         expect(topology.stateStores()).andReturn(stateStores);

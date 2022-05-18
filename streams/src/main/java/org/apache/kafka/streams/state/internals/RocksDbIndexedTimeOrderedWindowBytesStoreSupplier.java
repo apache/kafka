@@ -37,12 +37,14 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
     private final long windowSize;
     private final boolean retainDuplicates;
     private final WindowStoreTypes windowStoreType;
+    private final RocksDBTransactionalMechanism txnMechanism;
 
     public static RocksDbIndexedTimeOrderedWindowBytesStoreSupplier create(final String name,
                                                                            final Duration retentionPeriod,
                                                                            final Duration windowSize,
                                                                            final boolean retainDuplicates,
-                                                                           final boolean hasIndex) {
+                                                                           final boolean hasIndex,
+                                                                           final RocksDBTransactionalMechanism txnMechanism) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -67,33 +69,37 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
         }
 
         return new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(name, retentionMs,
-            defaultSegmentInterval, windowSizeMs, retainDuplicates, hasIndex);
+            defaultSegmentInterval, windowSizeMs, retainDuplicates, hasIndex, txnMechanism);
     }
 
     public RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(final String name,
-                                           final long retentionPeriod,
-                                           final long segmentInterval,
-                                           final long windowSize,
-                                           final boolean retainDuplicates,
-                                           final boolean withIndex) {
+                                                             final long retentionPeriod,
+                                                             final long segmentInterval,
+                                                             final long windowSize,
+                                                             final boolean retainDuplicates,
+                                                             final boolean withIndex,
+                                                             final RocksDBTransactionalMechanism txnMechanism) {
         this(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates,
             withIndex
                 ? WindowStoreTypes.INDEXED_WINDOW_STORE
-                : WindowStoreTypes.DEFAULT_WINDOW_STORE);
+                : WindowStoreTypes.DEFAULT_WINDOW_STORE,
+            txnMechanism);
     }
 
     public RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(final String name,
-                                           final long retentionPeriod,
-                                           final long segmentInterval,
-                                           final long windowSize,
-                                           final boolean retainDuplicates,
-                                           final WindowStoreTypes windowStoreType) {
+                                                             final long retentionPeriod,
+                                                             final long segmentInterval,
+                                                             final long windowSize,
+                                                             final boolean retainDuplicates,
+                                                             final WindowStoreTypes windowStoreType,
+                                                             final RocksDBTransactionalMechanism txnMechanism) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.segmentInterval = segmentInterval;
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
         this.windowStoreType = windowStoreType;
+        this.txnMechanism = txnMechanism;
     }
 
     @Override
@@ -111,7 +117,8 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
                         metricsScope(),
                         retentionPeriod,
                         segmentInterval,
-                        false),
+                        false,
+                        txnMechanism),
                     retainDuplicates,
                     windowSize);
             case INDEXED_WINDOW_STORE:
@@ -121,7 +128,8 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
                         metricsScope(),
                         retentionPeriod,
                         segmentInterval,
-                        true),
+                        true,
+                        txnMechanism),
                     retainDuplicates,
                     windowSize);
             default:

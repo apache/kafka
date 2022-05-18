@@ -318,7 +318,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         rocksDBStore.put(new Bytes("existingKey".getBytes(UTF_8)), "existingValue".getBytes(UTF_8));
-        rocksDBStore.flush();
+        rocksDBStore.commit(1L);
 
         final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
 
@@ -381,7 +381,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(null);
 
         assertEquals(
             "a",
@@ -440,7 +440,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(null);
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("prefix", stringSerializer)) {
             final List<String> valuesWithPrefix = new ArrayList<>();
@@ -475,7 +475,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(null);
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = rocksDBStore.prefixScan("abcd", stringSerializer)) {
             int numberOfKeysReturned = 0;
@@ -507,7 +507,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(null);
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer)) {
             final List<String> valuesWithPrefix = new ArrayList<>();
@@ -542,7 +542,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             stringSerializer.serialize(null, "e")));
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(null);
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("d", stringSerializer)) {
             int numberOfKeysReturned = 0;
@@ -756,7 +756,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore.put(
             new Bytes(stringSerializer.serialize(null, "anyKey")),
             stringSerializer.serialize(null, "anyValue"));
-        assertThrows(ProcessorStateException.class, () -> rocksDBStore.flush());
+        assertThrows(ProcessorStateException.class, () -> rocksDBStore.commit(null));
     }
 
     @Test

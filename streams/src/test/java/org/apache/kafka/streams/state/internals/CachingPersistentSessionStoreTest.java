@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Collection;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -51,6 +52,8 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -68,6 +71,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(Parameterized.class)
 public class CachingPersistentSessionStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 600;
@@ -85,6 +89,16 @@ public class CachingPersistentSessionStoreTest {
     private ThreadCache cache;
     private InternalMockProcessorContext<Object, Object> context;
 
+    @Parameterized.Parameter
+    public boolean transactional;
+
+    @Parameterized.Parameters(name = "transactional={0}")
+    public static Collection<Object[]> data() {
+        return asList(new Object[][] {
+            {true}, {false}
+        });
+    }
+
     @Before
     public void before() {
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(
@@ -92,7 +106,8 @@ public class CachingPersistentSessionStoreTest {
             "metric-scope",
             Long.MAX_VALUE,
             SEGMENT_INTERVAL,
-            new SessionKeySchema()
+            new SessionKeySchema(),
+            transactional ? RocksDBTransactionalMechanism.SECONDARY_STORE : null
         );
         underlyingStore = new RocksDBSessionStore(segmented);
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
@@ -155,7 +170,7 @@ public class CachingPersistentSessionStoreTest {
         assertEquals(Position.emptyPosition(), cachingStore.getPosition());
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -489,7 +504,7 @@ public class CachingPersistentSessionStoreTest {
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(null);
         cachingStore.put(a4, "4".getBytes());
         cachingStore.put(a5, "5".getBytes());
         cachingStore.put(a6, "6".getBytes());
@@ -516,7 +531,7 @@ public class CachingPersistentSessionStoreTest {
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(null);
         cachingStore.put(a4, "4".getBytes());
         cachingStore.put(a5, "5".getBytes());
         cachingStore.put(a6, "6".getBytes());
@@ -598,7 +613,7 @@ public class CachingPersistentSessionStoreTest {
         cachingStore.setFlushListener(flushListener, true);
 
         cachingStore.put(b, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Collections.singletonList(
@@ -613,7 +628,7 @@ public class CachingPersistentSessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.put(a, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Collections.singletonList(
@@ -628,7 +643,7 @@ public class CachingPersistentSessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.put(a, "2".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Collections.singletonList(
@@ -643,7 +658,7 @@ public class CachingPersistentSessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Collections.singletonList(
@@ -660,7 +675,7 @@ public class CachingPersistentSessionStoreTest {
         cachingStore.put(a, "1".getBytes());
         cachingStore.put(a, "2".getBytes());
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Collections.emptyList(),
@@ -680,13 +695,13 @@ public class CachingPersistentSessionStoreTest {
         cachingStore.setFlushListener(flushListener, false);
 
         cachingStore.put(a, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         cachingStore.put(a, "2".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             asList(
@@ -713,7 +728,7 @@ public class CachingPersistentSessionStoreTest {
         cachingStore.put(a, "1".getBytes());
         cachingStore.put(a, "2".getBytes());
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Collections.emptyList(),

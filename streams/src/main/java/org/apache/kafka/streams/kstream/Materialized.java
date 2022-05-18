@@ -69,7 +69,8 @@ public class Materialized<K, V, S extends StateStore> {
     // the built-in state store types
     public enum StoreType {
         ROCKS_DB,
-        IN_MEMORY
+        IN_MEMORY,
+        TXN_ROCKS_DB
     }
 
     private Materialized(final StoreSupplier<S> storeSupplier) {

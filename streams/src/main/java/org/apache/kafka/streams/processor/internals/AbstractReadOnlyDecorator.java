@@ -43,7 +43,7 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 

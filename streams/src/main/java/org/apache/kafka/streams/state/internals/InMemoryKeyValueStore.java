@@ -235,7 +235,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         // do-nothing since it is in-memory
     }
 

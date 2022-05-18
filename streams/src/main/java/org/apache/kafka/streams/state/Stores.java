@@ -24,6 +24,7 @@ import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplie
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
+import org.apache.kafka.streams.state.internals.RocksDBTransactionalMechanism;
 import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
@@ -77,6 +78,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  */
 public final class Stores {
 
+    private static final RocksDBTransactionalMechanism DEFAULT_TXN_MECHANISM = RocksDBTransactionalMechanism.SECONDARY_STORE;
+
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
      * <p>
@@ -89,8 +92,24 @@ public final class Stores {
      * to build a persistent key-value store
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
+        return persistentKeyValueStore(name, false);
+    }
+
+    /**
+     * Create a persistent {@link KeyValueBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link TimestampedKeyValueStore} you should use
+     * {@link #persistentTimestampedKeyValueStore(String)} to create a store supplier instead.
+     *
+     * @param name  name of the store (cannot be {@code null})
+     * @param transactional whether the store should be transactional
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * to build a persistent key-value store
+     */
+    public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name, final boolean transactional) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name, false);
+        return new RocksDbKeyValueBytesStoreSupplier(name, false, transactional ? DEFAULT_TXN_MECHANISM : null);
     }
 
     /**
@@ -106,8 +125,26 @@ public final class Stores {
      * to build a persistent key-(timestamp/value) store
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
+        return persistentTimestampedKeyValueStore(name, false);
+    }
+
+
+    /**
+     * Create a persistent {@link KeyValueBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link KeyValueStore} you should use
+     * {@link #persistentKeyValueStore(String)} to create a store supplier instead.
+     *
+     * @param name  name of the store (cannot be {@code null})
+     * @param transactional whether the store should be transactional
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * to build a persistent key-(timestamp/value) store
+     */
+    public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name, final boolean transactional) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name, true);
+        return new RocksDbKeyValueBytesStoreSupplier(name, true, transactional ? DEFAULT_TXN_MECHANISM : null);
     }
 
     /**
@@ -189,10 +226,38 @@ public final class Stores {
     /**
      * Create a persistent {@link WindowBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a
-     * {@link #timestampedWindowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
-     * If you want to create a {@link WindowStore} you should use
-     * {@link #persistentWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link TimestampedWindowStore} you should use
+     * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     *
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              (note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
+     * @param transactional         whether the store should be transactional
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
+     */
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                 final Duration retentionPeriod,
+                                                                 final Duration windowSize,
+                                                                 final boolean retainDuplicates,
+                                                                 final boolean transactional) throws IllegalArgumentException {
+
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, false, transactional);
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link TimestampedWindowStore} you should use
+     * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
      *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
@@ -210,14 +275,63 @@ public final class Stores {
                                                                             final Duration retentionPeriod,
                                                                             final Duration windowSize,
                                                                             final boolean retainDuplicates) throws IllegalArgumentException {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true, false);
     }
 
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link TimestampedWindowStore} you should use
+     * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     *
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              (note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
+     * @param transactional         whether the store should be transactional
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
+     */
+    public static WindowBytesStoreSupplier persistentTimestampedWindowStore(final String name,
+                                                                            final Duration retentionPeriod,
+                                                                            final Duration windowSize,
+                                                                            final boolean retainDuplicates,
+                                                                            final boolean transactional) throws IllegalArgumentException {
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true, transactional);
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link TimestampedWindowStore} you should use
+     * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     *
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              (note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
+     * @param transactional         whether the store should be transactional
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
+     */
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                   final Duration retentionPeriod,
                                                                   final Duration windowSize,
                                                                   final boolean retainDuplicates,
-                                                                  final boolean timestampedStore) {
+                                                                  final boolean timestampedStore,
+                                                                  final boolean transactional) throws IllegalArgumentException {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -226,7 +340,13 @@ public final class Stores {
 
         final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
 
-        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval, timestampedStore);
+        return persistentWindowStore(name,
+                                     retentionMs,
+                                     windowSizeMs,
+                                     retainDuplicates,
+                                     defaultSegmentInterval,
+                                     timestampedStore,
+                                     transactional ? DEFAULT_TXN_MECHANISM : null);
     }
 
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
@@ -234,7 +354,8 @@ public final class Stores {
                                                                   final long windowSize,
                                                                   final boolean retainDuplicates,
                                                                   final long segmentInterval,
-                                                                  final boolean timestampedStore) {
+                                                                  final boolean timestampedStore,
+                                                                  final RocksDBTransactionalMechanism txnMechanism) {
         Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
@@ -251,13 +372,13 @@ public final class Stores {
                 + windowSize + "], retention=[" + retentionPeriod + "]");
         }
 
-        return new RocksDbWindowBytesStoreSupplier(
-            name,
-            retentionPeriod,
-            segmentInterval,
-            windowSize,
-            retainDuplicates,
-            timestampedStore);
+        return new RocksDbWindowBytesStoreSupplier(name,
+                                                   retentionPeriod,
+                                                   segmentInterval,
+                                                   windowSize,
+                                                   retainDuplicates,
+                                                   timestampedStore,
+                                                   txnMechanism);
     }
 
     /**
@@ -316,13 +437,37 @@ public final class Stores {
      */
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
+        return persistentSessionStore(name, retentionPeriod, false);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier}.
+     *
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
+     *                          (note that the retention period must be at least as long enough to
+     *                          contain the inactivity gap of the session and the entire grace period.)
+     * @param transactional     whether the store should be transactional
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                   final Duration retentionPeriod,
+                                                                   final boolean transactional) {
+        return persistentSessionStore(name, retentionPeriod, transactional ? DEFAULT_TXN_MECHANISM : null);
+    }
+
+
+    private static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                   final Duration retentionPeriod,
+                                                                   final RocksDBTransactionalMechanism mechanism) {
         Objects.requireNonNull(name, "name cannot be null");
+        Objects.requireNonNull(name, "txnMechanism cannot be null");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
         if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs, mechanism);
     }
 
     /**

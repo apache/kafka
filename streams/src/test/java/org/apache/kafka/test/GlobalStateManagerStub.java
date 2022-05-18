@@ -64,7 +64,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
                               final CommitCallback checkpoint) {}
 
     @Override
-    public void flush() {}
+    public void commit() {}
 
     @Override
     public void close() {

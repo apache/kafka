@@ -101,8 +101,48 @@ public interface StateStore {
 
     /**
      * Flush any cached data
+     *
+     * @deprecated since WIP version
      */
-    void flush();
+    @Deprecated
+    default void flush() {}
+
+    /**
+     * Flush and commit any cached data
+     * <p>
+     * For transactional state store commit applies all changes atomically. In other words, either the
+     * entire commit will be successful or none of the changes will be applied.
+     * <p>
+     * For non-transactional state store this method flushes cached data.
+     *
+     * @param changelogOffset the offset of the changelog topic this commit corresponds to. The
+     *                        offset can be null if the state store does not have a changelog
+     *                        (e.g. a global store).
+     */
+    default void commit(final Long changelogOffset) {
+        if (transactional()) {
+            throw new UnsupportedOperationException("Transactional state store must implement StateStore#commit");
+        } else {
+            flush();
+        }
+    }
+
+    /**
+     * Recovers the state store after crash failure.
+     * <p>
+     * The state store recovers by discarding any writes that are not committed to the changelog
+     * and rolling to the state that corresponds to {@code changelogOffset} or greater offset of
+     * the changelog topic.
+     *
+     * @param changelogOffset the checkpointed changelog offset.
+     * @return {@code true} if the state store recovered, {@code false} otherwise.
+     */
+    default boolean recover(final long changelogOffset) {
+        if (transactional()) {
+            throw new UnsupportedOperationException("Transactional state store must implement StateStore#recover");
+        }
+        return false;
+    }
 
     /**
      * Close the storage engine.
@@ -120,6 +160,15 @@ public interface StateStore {
      * @return  {@code true} if the storage is persistent&mdash;{@code false} otherwise
      */
     boolean persistent();
+
+    /**
+     * Return if the storage supports transactions or not.
+     *
+     * @return {@code true} if the storage supports transactions, {@code false} otherwise
+     */
+    default boolean transactional() {
+        return false;
+    }
 
     /**
      * Is this store open for reading and writing

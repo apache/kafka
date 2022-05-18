@@ -153,7 +153,8 @@ public class SessionStoreBuilderTest {
                 null,
                 10L,
                 5L,
-                new SessionKeySchema())
+                new SessionKeySchema(),
+                null)
         ));
         expect(supplier.name()).andReturn("name");
         replay(supplier);

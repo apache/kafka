@@ -39,7 +39,7 @@ public class StateManagerStub implements StateManager {
                               final CommitCallback checkpoint) {}
 
     @Override
-    public void flush() {}
+    public void commit() {}
 
     @Override
     public void close() {}

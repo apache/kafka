@@ -131,11 +131,18 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                     break;
                 case ROCKS_DB:
                     supplier = Stores.persistentTimestampedWindowStore(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod),
+                            Duration.ofMillis(windows.size()),
+                            false);
+                    break;
+                case TXN_ROCKS_DB:
+                    supplier = Stores.persistentTimestampedWindowStore(
                         materialized.storeName(),
                         Duration.ofMillis(retentionPeriod),
                         Duration.ofMillis(windows.size()),
-                        false
-                    );
+                        false,
+                        true);
                     break;
                 default:
                     throw new IllegalStateException("Unknown store type: " + materialized.storeType());

@@ -109,8 +109,8 @@ public class KeyValueStoreFacadeTest {
 
     @Test
     public void shouldForwardFlush() {
-        keyValueStoreFacade.flush();
-        verify(mockedKeyValueTimestampStore).flush();
+        keyValueStoreFacade.commit(null);
+        verify(mockedKeyValueTimestampStore).commit(null);
     }
 
     @Test

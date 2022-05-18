@@ -989,7 +989,7 @@ public class TaskManager {
                     try {
                         // for non-revoking active tasks, we should not enforce checkpoint
                         // since if it is EOS enabled, no checkpoint should be written while
-                        // the task is in RUNNING tate
+                        // the task is in RUNNING state
                         task.postCommit(false);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);

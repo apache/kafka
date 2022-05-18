@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Collection;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -59,6 +60,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
@@ -81,6 +84,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(Parameterized.class)
 public class CachingPersistentWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 150;
@@ -98,10 +102,27 @@ public class CachingPersistentWindowStoreTest {
     private ThreadCache cache;
     private WindowKeySchema keySchema;
 
+    @Parameterized.Parameter
+    public boolean transactional;
+
+    @Parameterized.Parameters(name = "transactional={0}")
+    public static Collection<Object[]> data() {
+        return asList(new Object[][] {
+            {true}, {false}
+        });
+    }
+
     @Before
     public void setUp() {
         keySchema = new WindowKeySchema();
-        bytesStore = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
+        bytesStore = new RocksDBSegmentedBytesStore(
+            "test",
+            "metrics-scope",
+            0,
+            SEGMENT_INTERVAL,
+            keySchema,
+            transactional ? RocksDBTransactionalMechanism.SECONDARY_STORE : null
+        );
         underlyingStore = new RocksDBWindowStore(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
@@ -292,7 +313,7 @@ public class CachingPersistentWindowStoreTest {
         assertEquals(Position.emptyPosition(), cachingStore.getPosition());
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        cachingStore.flush();
+        cachingStore.commit(null);
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -635,7 +656,7 @@ public class CachingPersistentWindowStoreTest {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
@@ -653,23 +674,23 @@ public class CachingPersistentWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -680,22 +701,22 @@ public class CachingPersistentWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -709,7 +730,7 @@ public class CachingPersistentWindowStoreTest {
     @Test
     public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks() {
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(null);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
         try (final WindowStoreIterator<byte[]> fetch =

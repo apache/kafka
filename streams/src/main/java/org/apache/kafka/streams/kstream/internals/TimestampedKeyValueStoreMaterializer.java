@@ -43,6 +43,9 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
                 case ROCKS_DB:
                     supplier = Stores.persistentTimestampedKeyValueStore(materialized.storeName());
                     break;
+                case TXN_ROCKS_DB:
+                    supplier = Stores.persistentTimestampedKeyValueStore(materialized.storeName(), true);
+                    break;
                 default:
                     throw new IllegalStateException("Unknown store type: " + materialized.storeType());
             }

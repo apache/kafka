@@ -107,9 +107,17 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     @Parameter
     public SegmentedBytesStore.KeySchema schema;
 
-    @Parameters(name = "{0}")
-    public static Object[] getKeySchemas() {
-        return new Object[] {new SessionKeySchema(), new WindowKeySchema()};
+    @Parameter(1)
+    public RocksDBTransactionalMechanism txnMechanism;
+
+    @Parameters(name = "{0} {1}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {
+            {new SessionKeySchema(), RocksDBTransactionalMechanism.SECONDARY_STORE},
+            {new SessionKeySchema(), null},
+            {new WindowKeySchema(), RocksDBTransactionalMechanism.SECONDARY_STORE},
+            {new WindowKeySchema(), null},
+        });
     }
 
     @Before

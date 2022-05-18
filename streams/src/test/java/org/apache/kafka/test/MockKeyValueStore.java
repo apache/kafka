@@ -38,6 +38,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     private final AtomicInteger instanceLastFlushCount = new AtomicInteger(-1);
     private final String name;
     private final boolean persistent;
+    private final boolean transactional;
 
     public boolean initialized = false;
     public boolean flushed = false;
@@ -47,8 +48,15 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
 
     public MockKeyValueStore(final String name,
                              final boolean persistent) {
+        this(name, persistent, false);
+    }
+
+    public MockKeyValueStore(final String name,
+                             final boolean persistent,
+                             final boolean transactional) {
         this.name = name;
         this.persistent = persistent;
+        this.transactional = transactional;
     }
 
     @Override
@@ -66,9 +74,14 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
-    public void flush() {
+    public void commit(final Long changelogOffset) {
         instanceLastFlushCount.set(GLOBAL_FLUSH_COUNTER.getAndIncrement());
         flushed = true;
+    }
+
+    @Override
+    public boolean recover(final long changelogOffset) {
+        return transactional;
     }
 
     public int getLastFlushCount() {
@@ -145,5 +158,10 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     @Override
     public long approximateNumEntries() {
         return 0;
+    }
+
+    @Override
+    public boolean transactional() {
+        return transactional;
     }
 }

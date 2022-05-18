@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static java.util.Arrays.asList;
-
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.KeyFirstSessionKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.TimeFirstSessionKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
@@ -29,7 +29,7 @@ import org.junit.runners.Parameterized;
 
 @RunWith(Parameterized.class)
 public class RocksDBTimeOrderedWindowSegmentedBytesStoreTest
-    extends AbstractDualSchemaRocksDBSegmentedBytesStoreTest<KeyValueSegment> {
+    extends AbstractDualSchemaRocksDBSegmentedBytesStoreTest<Segment> {
 
     private final static String METRICS_SCOPE = "metrics-scope";
 
@@ -43,23 +43,35 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStoreTest
     private boolean hasIndex;
     private SchemaType schemaType;
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> getKeySchema() {
-        return asList(new Object[][] {
+    private RocksDBTransactionalMechanism txnMechanism;
+
+    @Parameterized.Parameters(name = "{0} {1} {2}")
+    public static Collection<Object[]> data() {
+        final Object[][] schemaTypes = new Object[][] {
             {SchemaType.WindowSchemaWithIndex, true},
             {SchemaType.WindowSchemaWithoutIndex, false},
             {SchemaType.SessionSchemaWithIndex, true},
-            {SchemaType.SessionSchemaWithoutIndex, false}
-        });
+            {SchemaType.SessionSchemaWithoutIndex, false}};
+
+        final List<Object[]> data = new ArrayList<>();
+        for (final Object[] obj : schemaTypes) {
+            data.add(new Object[] {obj[0], obj[1], RocksDBTransactionalMechanism.SECONDARY_STORE});
+            data.add(new Object[] {obj[0], obj[1], null});
+        }
+        return data;
     }
 
-    public RocksDBTimeOrderedWindowSegmentedBytesStoreTest(final SchemaType schemaType, final boolean hasIndex) {
+    public RocksDBTimeOrderedWindowSegmentedBytesStoreTest(
+        final SchemaType schemaType,
+        final boolean hasIndex,
+        final RocksDBTransactionalMechanism txnMechanism) {
         this.schemaType = schemaType;
         this.hasIndex = hasIndex;
+        this.txnMechanism = txnMechanism;
     }
 
 
-    AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
+    AbstractDualSchemaRocksDBSegmentedBytesStore<Segment> getBytesStore() {
         switch (schemaType) {
             case WindowSchemaWithIndex:
             case WindowSchemaWithoutIndex:
@@ -68,7 +80,8 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStoreTest
                     METRICS_SCOPE,
                     retention,
                     segmentInterval,
-                    hasIndex
+                    hasIndex,
+                    txnMechanism
                 );
             case SessionSchemaWithIndex:
             case SessionSchemaWithoutIndex:
@@ -77,7 +90,8 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStoreTest
                     METRICS_SCOPE,
                     retention,
                     segmentInterval,
-                    hasIndex
+                    hasIndex,
+                    txnMechanism
                 );
             default:
                 throw new IllegalStateException("Unknown SchemaType: " + schemaType);
@@ -86,7 +100,7 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStoreTest
 
     @Override
     KeyValueSegments newSegments() {
-        return new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval);
+        return new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval, txnMechanism);
     }
 
     @Override
