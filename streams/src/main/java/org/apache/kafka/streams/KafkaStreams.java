@@ -1674,8 +1674,8 @@ public class KafkaStreams implements AutoCloseable {
      */
     public void pause() {
         if (topologyMetadata.hasNamedTopologies()) {
-            for (final NamedTopology allNamedTopology : topologyMetadata.getAllNamedTopologies()) {
-                topologyMetadata.pauseTopology(allNamedTopology.name());
+            for (final NamedTopology namedTopology : topologyMetadata.getAllNamedTopologies()) {
+                topologyMetadata.pauseTopology(namedTopology.name());
             }
         } else {
             topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
@@ -1687,9 +1687,9 @@ public class KafkaStreams implements AutoCloseable {
      */
     public boolean isPaused() {
         if (topologyMetadata.hasNamedTopologies()) {
-            return topologyMetadata.getAllNamedTopologies()
-                .stream().map(NamedTopology::name).allMatch(topologyMetadata::isPaused);
-
+            return topologyMetadata.getAllNamedTopologies().stream()
+                .map(NamedTopology::name)
+                .allMatch(topologyMetadata::isPaused);
         } else {
             return topologyMetadata.isPaused(UNNAMED_TOPOLOGY);
         }
@@ -1700,8 +1700,8 @@ public class KafkaStreams implements AutoCloseable {
      */
     public void resume() {
         if (topologyMetadata.hasNamedTopologies()) {
-            for (final NamedTopology allNamedTopology : topologyMetadata.getAllNamedTopologies()) {
-                topologyMetadata.resumeTopology(allNamedTopology.name());
+            for (final NamedTopology namedTopology : topologyMetadata.getAllNamedTopologies()) {
+                topologyMetadata.resumeTopology(namedTopology.name());
             }
         } else {
             topologyMetadata.resumeTopology(UNNAMED_TOPOLOGY);
