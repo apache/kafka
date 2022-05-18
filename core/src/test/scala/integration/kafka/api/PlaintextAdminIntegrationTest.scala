@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
@@ -1853,9 +1852,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
 
-    if (isKRaftTest()) {
-      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
-    }
+    ensureConsistentKRaftMetadata()
 
     // Verify that topics were updated correctly
     var describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
@@ -1889,9 +1886,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
 
-    if (isKRaftTest()) {
-      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer, "Timeout waiting for topic configs propagating to brokers")
-    }
+    ensureConsistentKRaftMetadata()
 
     // Verify that topics were updated correctly
     describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
@@ -1970,9 +1965,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val subtractResult = client.incrementalAlterConfigs(Map(topicResource -> topicSubtractConfigs).asJava)
     subtractResult.all.get
 
-    if (isKRaftTest()) {
-      TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer)
-    }
+    ensureConsistentKRaftMetadata()
 
     // Verify that topics were updated correctly
     val describeResult = client.describeConfigs(Seq(topicResource).asJava)
@@ -2214,6 +2207,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def validateLogConfig(compressionType: String): Unit = {
       val logConfig = if (isKRaftTest()) {
+        ensureConsistentKRaftMetadata()
         val topicProps = brokers.head.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(topic)
         LogConfig.fromProps(Collections.emptyMap[String, AnyRef], topicProps)
       } else {
@@ -2237,8 +2231,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Some("Null value not supported for topic configs: retention.bytes")
     )
 
-    val validConfigs = Map[String, String](LogConfig.CompressionTypeProp -> "producer")
-    client.createTopics(Collections.singletonList(newTopic.configs(validConfigs.asJava))).all.get()
+    val validConfigs = Map[String, String](LogConfig.CompressionTypeProp -> "producer").asJava
+    client.createTopics(Collections.singletonList(newTopic.configs(validConfigs))).all.get()
     waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
     validateLogConfig(compressionType = "producer")
 
