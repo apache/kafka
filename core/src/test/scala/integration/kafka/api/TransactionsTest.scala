@@ -22,26 +22,26 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.{Optional, Properties}
-
-import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
 import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
-class TransactionsTest extends KafkaServerTestHarness {
-  val numServers = 3
+class TransactionsTest extends IntegrationTestHarness {
+  override def brokerCount = 3
+
   val transactionalProducerCount = 2
   val transactionalConsumerCount = 1
   val nonTransactionalConsumerCount = 1
@@ -54,17 +54,26 @@ class TransactionsTest extends KafkaServerTestHarness {
   val transactionalConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
   val nonTransactionalConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
 
-  override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
-  }
+  serverConfig.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+  // Set a smaller value for the number of partitions for the __consumer_offsets topic
+  // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
+  serverConfig.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
+  serverConfig.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
+  serverConfig.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
+  serverConfig.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
+  serverConfig.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
+  serverConfig.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
+  serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+  serverConfig.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+  serverConfig.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    createTopic(topic1, numPartitions, numServers, topicConfig)
-    createTopic(topic2, numPartitions, numServers, topicConfig)
+    createTopic(topic1, numPartitions, brokerCount, topicConfig)
+    createTopic(topic2, numPartitions, brokerCount, topicConfig)
 
     for (_ <- 0 until transactionalProducerCount)
       createTransactionalProducer("transactional-producer")
@@ -82,8 +91,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @Test
-  def testBasicTransactions() = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBasicTransactions(quorum: String): Unit = {
     val producer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
@@ -116,8 +126,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testReadCommittedConsumerShouldNotSeeUndecidedData(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testReadCommittedConsumerShouldNotSeeUndecidedData(quorum: String): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("other")
     val readCommittedConsumer = transactionalConsumers.head
@@ -183,8 +194,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
 
-  @Test
-  def testDelayedFetchIncludesAbortedTransaction(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDelayedFetchIncludesAbortedTransaction(quorum: String): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("other")
 
@@ -228,14 +240,16 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @nowarn("cat=deprecation")
-  @Test
-  def testSendOffsetsWithGroupId() = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendOffsetsWithGroupId(quorum: String): Unit = {
     sendOffset((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
-  @Test
-  def testSendOffsetsWithGroupMetadata() = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendOffsetsWithGroupMetadata(quorum: String): Unit = {
     sendOffset((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
@@ -255,7 +269,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val consumerGroupId = "foobar-consumer-group"
     val numSeedMessages = 500
 
-    TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, servers)
+    TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, brokers)
 
     val producer = transactionalProducers.head
 
@@ -307,8 +321,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
   }
 
-  @Test
-  def testFencingOnCommit() = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFencingOnCommit(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
@@ -336,8 +351,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testFencingOnSendOffsets() = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFencingOnSendOffsets(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
@@ -367,8 +383,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testOffsetMetadataInSendOffsetsToTransaction() = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testOffsetMetadataInSendOffsetsToTransaction(quorum: String): Unit = {
     val tp = new TopicPartition(topic1, 0)
     val groupId = "group"
 
@@ -392,24 +409,28 @@ class TransactionsTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
   }
 
-  @Test
-  def testInitTransactionsTimeout(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testInitTransactionsTimeout(quorum: String): Unit = {
     testTimeout(false, producer => producer.initTransactions())
   }
 
-  @Test
-  def testSendOffsetsToTransactionTimeout(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendOffsetsToTransactionTimeout(quorum: String): Unit = {
     testTimeout(true, producer => producer.sendOffsetsToTransaction(
       Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, new ConsumerGroupMetadata("test-group")))
   }
 
-  @Test
-  def testCommitTransactionTimeout(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCommitTransactionTimeout(quorum: String): Unit = {
     testTimeout(true, producer => producer.commitTransaction())
   }
 
-  @Test
-  def testAbortTransactionTimeout(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAbortTransactionTimeout(quorum: String): Unit = {
     testTimeout(true, producer => producer.abortTransaction())
   }
 
@@ -422,14 +443,15 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
     }
 
-    for  (i <- servers.indices) killBroker(i)
+    for  (i <- brokers.indices) killBroker(i)
 
     assertThrows(classOf[TimeoutException], () => timeoutProcess(producer))
     producer.close(Duration.ZERO)
   }
 
-  @Test
-  def testFencingOnSend(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFencingOnSend(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
@@ -451,8 +473,8 @@ class TransactionsTest extends KafkaServerTestHarness {
       val result = producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
-      servers.foreach { server =>
-        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
+      brokers.foreach { broker =>
+        error(s"log dirs: ${broker.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -472,8 +494,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testFencingOnAddPartitions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFencingOnAddPartitions(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
@@ -498,8 +521,8 @@ class TransactionsTest extends KafkaServerTestHarness {
       val result =  producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
-      servers.foreach { server =>
-        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
+      brokers.foreach { broker =>
+        error(s"log dirs: ${broker.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -518,8 +541,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testFencingOnTransactionExpiration(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFencingOnTransactionExpiration(quorum: String): Unit = {
     val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
 
     producer.initTransactions()
@@ -560,8 +584,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     assertTrue(transactionalRecords.isEmpty)
   }
 
-  @Test
-  def testMultipleMarkersOneLeader(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testMultipleMarkersOneLeader(quorum: String): Unit = {
     val firstProducer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
@@ -570,7 +595,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
 
-    createTopic(topicWith10Partitions, 10, numServers, topicConfig)
+    createTopic(topicWith10Partitions, 10, brokerCount, topicConfig)
     createTopic(topicWith10PartitionsAndOneReplica, 10, 1, new Properties())
 
     firstProducer.initTransactions()
@@ -599,16 +624,18 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testConsecutivelyRunInitTransactions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsecutivelyRunInitTransactions(quorum: String): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
     producer.initTransactions()
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
-  @Test
-  def testBumpTransactionalEpoch(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBumpTransactionalEpoch(quorum: String): Unit = {
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
@@ -616,7 +643,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       // Create a topic with RF=1 so that a single broker failure will render it unavailable
       val testTopic = "test-topic"
       createTopic(testTopic, numPartitions, 1, new Properties)
-      val partitionLeader = TestUtils.waitUntilLeaderIsKnown(servers, new TopicPartition(testTopic, 0))
+      val partitionLeader = TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(testTopic, 0))
 
       producer.initTransactions()
 
@@ -625,7 +652,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer.commitTransaction()
 
       var producerStateEntry =
-        servers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.head._2
+        brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.head._2
       val producerId = producerStateEntry.producerId
       val initialProducerEpoch = producerStateEntry.producerEpoch
 
@@ -658,15 +685,16 @@ class TransactionsTest extends KafkaServerTestHarness {
       // get here without having bumped the epoch. If bumping the epoch is possible, the producer will attempt to, so
       // check there that the epoch has actually increased
       producerStateEntry =
-        servers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers(producerId)
+        brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers(producerId)
       assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch)
     } finally {
       producer.close(Duration.ZERO)
     }
   }
 
-  @Test
-  def testFailureToFenceEpoch(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFailureToFenceEpoch(quorum: String): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
 
@@ -676,9 +704,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
     producer1.commitTransaction()
 
-    val partitionLeader = TestUtils.waitUntilLeaderIsKnown(servers, new TopicPartition(topic1, 0))
+    val partitionLeader = TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic1, 0))
     var producerStateEntry =
-      servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers.head._2
+      brokers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers.head._2
     val producerId = producerStateEntry.producerId
     val initialProducerEpoch = producerStateEntry.producerEpoch
 
@@ -720,7 +748,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     // Check that the epoch only increased by 1
     producerStateEntry =
-      servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers(producerId)
+      brokers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers(producerId)
     assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
   }
 
@@ -730,23 +758,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic, null, value = i.toString, willBeCommitted = willBeCommitted, key = i.toString))
     }
     producer.flush()
-  }
-
-  private def serverProps() = {
-    val serverProps = new Properties()
-    serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
-    // Set a smaller value for the number of partitions for the __consumer_offsets topic
-    // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-    serverProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
-    serverProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    serverProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-    serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-    serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    serverProps
   }
 
   private def createReadCommittedConsumer(group: String = "group",
@@ -774,11 +785,14 @@ class TransactionsTest extends KafkaServerTestHarness {
                                           maxBlockMs: Long = 60000,
                                           deliveryTimeoutMs: Int = 120000,
                                           requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val producer = TestUtils.createTransactionalProducer(transactionalId, servers,
+    val producer = TestUtils.createTransactionalProducer(
+      transactionalId,
+      brokers,
       transactionTimeoutMs = transactionTimeoutMs,
       maxBlockMs = maxBlockMs,
       deliveryTimeoutMs = deliveryTimeoutMs,
-      requestTimeoutMs = requestTimeoutMs)
+      requestTimeoutMs = requestTimeoutMs
+    )
     transactionalProducers += producer
     producer
   }
