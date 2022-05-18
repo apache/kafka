@@ -141,7 +141,6 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
       topicResource3 -> new Config(topicConfigEntries3),
       brokerResource -> new Config(brokerConfigEntries)
     ).asJava)
-    ensureConsistentKRaftMetadata()
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[PolicyViolationException])

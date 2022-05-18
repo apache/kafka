@@ -160,7 +160,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk")) // KRaft mode will be supported in KAFKA-13910
   def testMetadataRefresh(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val topics = Seq("mytopic")
@@ -168,13 +168,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, expectedPresent = topics, expectedMissing = List())
 
-    if (!isKRaftTest()) {
-      val controller = brokers.find(_.config.brokerId == brokers.flatMap(_.metadataCache.getControllerId).head).get
-      controller.shutdown()
-      controller.awaitShutdown()
-      val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
-      assertEquals(topics.toSet, topicDesc.keySet.asScala)
-    }
+    val controller = brokers.find(_.config.brokerId == brokers.flatMap(_.metadataCache.getControllerId).head).get
+    controller.shutdown()
+    controller.awaitShutdown()
+    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
+    assertEquals(topics.toSet, topicDesc.keySet.asScala)
   }
 
   /**
@@ -206,6 +204,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val existingTopic = "existing-topic"
     client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
     waitForTopics(client, Seq(existingTopic), List())
+    ensureConsistentKRaftMetadata()
+
     val existingTopicId = brokers.head.metadataCache.getTopicId(existingTopic)
 
     val nonExistingTopicId = Uuid.randomUuid()
@@ -1487,7 +1487,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
       if (isKRaftTest()) {
-        assertEquals("No such topic as topic-does-not-exist", exception.getMessage)
+        assertEquals(s"No such topic as ${topicPartition.topic()}", exception.getMessage)
       } else {
         assertEquals("The partition does not exist.", exception.getMessage)
       }
@@ -2065,14 +2065,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val topic2Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     createTopic(topic2)
 
-    //Add duplicate Keys for topic1
+    // Add duplicate Keys for topic1
     var topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.75"), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.65"), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.SET) // valid entry
     ).asJavaCollection
 
-    //Add valid config for topic2
+    // Add valid config for topic2
     var topic2AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET)
     ).asJavaCollection
@@ -2083,12 +2083,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ).asJava)
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
 
-    //InvalidRequestException error for topic1
+    // InvalidRequestException error for topic1
     assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
       Some("Error due to duplicate config keys"))
 
-    //operation should succeed for topic2
+    // Operation should succeed for topic2
     alterResult.values().get(topic2Resource).get()
+    ensureConsistentKRaftMetadata()
 
     // Verify that topic1 is not config not updated, and topic2 config is updated
     val describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
@@ -2099,7 +2100,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Defaults.CompressionType, configs.get(topic1Resource).get(LogConfig.CompressionTypeProp).value)
     assertEquals("0.9", configs.get(topic2Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
 
-    //check invalid use of append/subtract operation types
+    // Check invalid use of append/subtract operation types
     topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.APPEND)
     ).asJavaCollection
@@ -2128,7 +2129,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         Some("Config value subtract is not allowed for config")
       })
 
-    //try to add invalid config
+    // Try to add invalid config
     topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), AlterConfigOp.OpType.SET)
     ).asJavaCollection
