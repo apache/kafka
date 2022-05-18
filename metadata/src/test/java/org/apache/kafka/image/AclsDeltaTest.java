@@ -48,8 +48,6 @@ public class AclsDeltaTest {
         assertEquals(0, delta.changes().size());
 
         delta.replay(inputAclRecord);
-        assertTrue(delta.changes().containsKey(aclId));
-        assertTrue(delta.changes().get(aclId).isPresent());
         assertEquals(Optional.of(testStandardAcl()), delta.changes().get(aclId));
 
         RemoveAccessControlEntryRecord inputRemoveAclRecord = testRemoveAccessControlEntryRecord();
