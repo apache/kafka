@@ -50,7 +50,7 @@ public class AclsDeltaTest {
         delta.replay(inputAclRecord);
         assertTrue(delta.changes().containsKey(aclId));
         assertTrue(delta.changes().get(aclId).isPresent());
-        assertEquals(testStandardAcl(), delta.changes().get(aclId).get());
+        assertEquals(Optional.of(testStandardAcl()), delta.changes().get(aclId));
 
         RemoveAccessControlEntryRecord inputRemoveAclRecord = testRemoveAccessControlEntryRecord();
         delta.replay(inputRemoveAclRecord);
@@ -75,12 +75,34 @@ public class AclsDeltaTest {
     }
 
     @Test
-    public void testThrowsExceptionOnInvalidState() {
+    public void testThrowsExceptionOnInvalidStateWhenImageIsEmpty() {
         AclsImage image = new AclsImage(Collections.emptyMap());
         AclsDelta delta = new AclsDelta(image);
 
         RemoveAccessControlEntryRecord removeAccessControlEntryRecord = testRemoveAccessControlEntryRecord();
-        assertThrows(RuntimeException.class, () -> delta.replay(removeAccessControlEntryRecord));
+        assertThrows(IllegalStateException.class, () -> delta.replay(removeAccessControlEntryRecord));
+    }
+
+    @Test
+    public void testThrowsExceptionOnInvalidStateWhenImageHasOtherAcls() {
+        Uuid id = Uuid.fromString("nGiNMQHwRgmgsIlfu73aJQ");
+        AccessControlEntryRecord record = new AccessControlEntryRecord();
+        record.setId(id);
+        record.setResourceType((byte) 1);
+        record.setResourceName("foo");
+        record.setPatternType((byte) 1);
+        record.setPrincipal("User:user");
+        record.setHost("host");
+        record.setOperation((byte) 1);
+        record.setPermissionType((byte) 1);
+
+        Map<Uuid, StandardAcl> initialImageMap = new HashMap<>();
+        initialImageMap.put(id, StandardAcl.fromRecord(record));
+        AclsImage image = new AclsImage(initialImageMap);
+        AclsDelta delta = new AclsDelta(image);
+
+        RemoveAccessControlEntryRecord removeAccessControlEntryRecord = testRemoveAccessControlEntryRecord();
+        assertThrows(IllegalStateException.class, () -> delta.replay(removeAccessControlEntryRecord));
     }
 
     private AccessControlEntryRecord testAccessControlEntryRecord() {
