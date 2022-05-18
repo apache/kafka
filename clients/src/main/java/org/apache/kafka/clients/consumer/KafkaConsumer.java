@@ -678,7 +678,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *            won't be called in the consumer when the deserializer is passed in directly.
      * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
      *            won't be called in the consumer when the deserializer is passed in directly.
-     * @param interceptors The list interceptors for consumer that implements {$link ConsumerInterceptor}.
+     * @param interceptors The list interceptors for consumer that implements {@link ConsumerInterceptor}.
      */
     public KafkaConsumer(Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,

@@ -302,7 +302,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                       called in the producer when the serializer is passed in directly.
      * @param valueSerializer  The serializer for value that implements {@link Serializer}. The configure() method won't
      *                         be called in the producer when the serializer is passed in directly.
-     * @param interceptors The list interceptors for producer that implements {$link ProducerInterceptor}.
+     * @param interceptors The list interceptors for producer that implements {@link ProducerInterceptor}.
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer,
                          List<ProducerInterceptor<K, V>> interceptors) {
