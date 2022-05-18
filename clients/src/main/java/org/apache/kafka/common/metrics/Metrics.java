@@ -525,35 +525,6 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Create or get an existing metric to monitor an object that implements Measurable.
-     * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
-     *
-     * This method is kept for binary compatibility purposes, it has the same behaviour as
-     * {@link #metricOrElseCreate(MetricName, MetricConfig, MetricValueProvider)}.
-     *
-     * @param metricName The name of the metric
-     * @param config The configuration to use when measuring this measurable
-     * @param measurable The measurable that will be measured by this metric
-     * @return Existing KafkaMetric if already registered or else a newly created one
-     */
-    public KafkaMetric metricOrElseCreate(MetricName metricName, MetricConfig config, Measurable measurable) {
-        return metricOrElseCreate(metricName, config, (MetricValueProvider<?>) measurable);
-    }
-
-    /**
-     * Create or get an existing metric to monitor an object that implements MetricValueProvider.
-     * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
-     * This method takes care of synchronisation while updating/accessing metrics by concurrent threads.
-     *
-     * @param metricName The name of the metric
-     * @param metricValueProvider The metric value provider associated with this metric
-     * @return Existing KafkaMetric if already registered or else a newly created one
-     */
-    public KafkaMetric metricOrElseCreate(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
-        return metricOrElseCreate(metricName, null, metricValueProvider);
-    }
-
-    /**
      * Create or get an existing metric to monitor an object that implements MetricValueProvider.
      * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
      * This method takes care of synchronisation while updating/accessing metrics by concurrent threads.
