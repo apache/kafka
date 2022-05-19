@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.common.ClientIdAndBroker
 import kafka.log.LogAppendInfo
 import kafka.metrics.KafkaMetricsGroup
@@ -52,7 +51,6 @@ import scala.math._
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
                                      val leader: LeaderEndPoint,
-                                     val sourceBroker: BrokerEndPoint,
                                      failedPartitions: FailedPartitions,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true,
@@ -66,7 +64,7 @@ abstract class AbstractFetcherThread(name: String,
   protected val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
 
-  private val metricId = ClientIdAndBroker(clientId, sourceBroker.host, sourceBroker.port)
+  private val metricId = ClientIdAndBroker(clientId, leader.brokerEndPoint().host, leader.brokerEndPoint().port)
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
 

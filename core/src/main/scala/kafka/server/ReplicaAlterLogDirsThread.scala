@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse
@@ -26,7 +25,6 @@ import scala.collection.{Map, Set}
 
 class ReplicaAlterLogDirsThread(name: String,
                                 leader: LeaderEndPoint,
-                                sourceBroker: BrokerEndPoint,
                                 failedPartitions: FailedPartitions,
                                 replicaMgr: ReplicaManager,
                                 quota: ReplicationQuotaManager,
@@ -35,7 +33,6 @@ class ReplicaAlterLogDirsThread(name: String,
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 leader = leader,
-                                sourceBroker = sourceBroker,
                                 failedPartitions,
                                 fetchBackOffMs = fetchBackOffMs,
                                 isInterruptible = false,

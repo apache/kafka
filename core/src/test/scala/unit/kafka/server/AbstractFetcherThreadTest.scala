@@ -1025,7 +1025,8 @@ class AbstractFetcherThreadTest {
     assertTrue(fetcher.fetchState(unknownPartition).isEmpty)
   }
 
-  class MockLeaderEndPoint extends LeaderEndPoint {
+  class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, host = "localhost", port = Random.nextInt()))
+    extends LeaderEndPoint {
 
     private val leaderPartitionStates = mutable.Map[TopicPartition, PartitionState]()
     var responseCallback: () => Unit = () => {}
@@ -1059,6 +1060,8 @@ class AbstractFetcherThreadTest {
     override def initiateClose(): Unit = {}
 
     override def close(): Unit = {}
+
+    override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
     override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
       fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>
@@ -1255,7 +1258,6 @@ class AbstractFetcherThreadTest {
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
       leader = mockLeader,
-      sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
       failedPartitions,
       fetchBackOffMs = fetchBackOffMs,
       brokerTopicStats = new BrokerTopicStats) {

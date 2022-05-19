@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
@@ -25,7 +24,6 @@ import org.apache.kafka.common.TopicPartition
 
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
-                           sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
@@ -34,7 +32,6 @@ class ReplicaFetcherThread(name: String,
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 leader = leader,
-                                sourceBroker = sourceBroker,
                                 failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,

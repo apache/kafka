@@ -80,17 +80,15 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.futureLogExists(t1p0)).thenReturn(false)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       new BrokerTopicStats,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
 
     val addedPartitions = thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
     assertEquals(Set.empty, addedPartitions)
@@ -150,17 +148,15 @@ class ReplicaAlterLogDirsThreadTest {
     mockFetchFromCurrentLog(tid1p0, fencedRequestData, config, replicaManager, fencedResponseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-log-dirs-thread",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       new BrokerTopicStats,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
 
     // Initially we add the partition with an older epoch which results in an error
     thread.addPartitions(Map(t1p0 -> initialFetchState(fetchOffset = 0L, leaderEpoch - 1)))
@@ -251,17 +247,15 @@ class ReplicaAlterLogDirsThreadTest {
     mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       new BrokerTopicStats,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
 
     thread.addPartitions(Map(t1p0 -> initialFetchState(fetchOffset = 0L, leaderEpoch)))
     assertTrue(thread.fetchState(t1p0).isDefined)
@@ -344,17 +338,15 @@ class ReplicaAlterLogDirsThreadTest {
         .setEndOffset(leoT1p1))
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, null)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, null)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       null,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
 
     val result = thread.leader.fetchEpochEndOffsets(Map(
       t1p0 -> new OffsetForLeaderPartition()
@@ -408,17 +400,15 @@ class ReplicaAlterLogDirsThreadTest {
       .thenThrow(new KafkaStorageException)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, null)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, null)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       null,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
 
     val result = thread.leader.fetchEpochEndOffsets(Map(
       t1p0 -> new OffsetForLeaderPartition()
@@ -512,17 +502,15 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
     thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
 
     //Run it
@@ -598,17 +586,15 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
     thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
 
     // First run will result in another offset for leader epoch request
@@ -656,17 +642,15 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
     thread.addPartitions(Map(t1p0 -> initialFetchState(initialFetchOffset)))
 
     //Run it
@@ -741,17 +725,15 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
     thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
 
     // Run thread 3 times (exactly number of times we mock exception for getReplicaOrException)
@@ -812,17 +794,15 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
     thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
 
     // loop few times
@@ -855,17 +835,15 @@ class ReplicaAlterLogDirsThreadTest {
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leaderEpoch = 1
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
     thread.addPartitions(Map(
       t1p0 -> initialFetchState(0L, leaderEpoch),
       t1p1 -> initialFetchState(0L, leaderEpoch)))
@@ -908,17 +886,15 @@ class ReplicaAlterLogDirsThreadTest {
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leaderEpoch = 1
-    val leader = new LocalLeaderEndPoint(config, replicaManager, quotaManager)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       leader,
-      endPoint,
       failedPartitions,
       replicaManager,
       quotaManager,
       null,
-      config.replicaFetchBackoffMs
-    )
+      config.replicaFetchBackoffMs)
     thread.addPartitions(Map(
       t1p0 -> initialFetchState(0L, leaderEpoch),
       t1p1 -> initialFetchState(0L, leaderEpoch)))

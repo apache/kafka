@@ -96,18 +96,16 @@ class ReplicaFetcherThreadTest {
 
   private def createReplicaFetcherThread(name: String,
                                          fetcherId: Int,
-                                         sourceBroker: BrokerEndPoint,
                                          brokerConfig: KafkaConfig,
                                          failedPartitions: FailedPartitions,
                                          replicaMgr: ReplicaManager,
                                          quota: ReplicaQuota,
-                                         leaderEndpointBlockingSend: BlockingSend): ReplicaFetcherThread = {
-    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${sourceBroker.id}, fetcherId=$fetcherId] ")
-    val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
+                                         leaderEndpointBlockingSend: BrokerBlockingSender): ReplicaFetcherThread = {
+    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${leaderEndpointBlockingSend.sourceBroker.id}, fetcherId=$fetcherId] ")
+    val fetchSessionHandler = new FetchSessionHandler(logContext, leaderEndpointBlockingSend.sourceBroker.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler, brokerConfig, replicaMgr, quota)
     new ReplicaFetcherThread(name,
       leader,
-      sourceBroker,
       brokerConfig,
       failedPartitions,
       replicaMgr,
@@ -169,7 +167,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -235,16 +232,16 @@ class ReplicaFetcherThreadTest {
   def shouldHandleExceptionFromBlockingSend(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
-    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
-
+    val mockBlockingSend: BrokerBlockingSender = mock(classOf[BrokerBlockingSender])
+    when(mockBlockingSend.sourceBroker).thenReturn(brokerEndPoint)
     when(mockBlockingSend.sendRequest(any())).thenThrow(new NullPointerException)
+
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -315,7 +312,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -382,7 +378,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -443,7 +438,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -507,7 +501,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -586,7 +579,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config, replicaManager, quota)
-    val thread = new ReplicaFetcherThread("bob", leader, brokerEndPoint, config, failedPartitions, replicaManager, quota, logContext.logPrefix) {
+    val thread = new ReplicaFetcherThread("bob", leader, config, failedPartitions, replicaManager, quota, logContext.logPrefix) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
     }
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialLEO), t1p1 -> initialFetchState(Some(topicId1), initialLEO)))
@@ -704,7 +697,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -769,7 +761,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -831,7 +822,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -894,7 +884,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -955,7 +944,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -984,10 +972,12 @@ class ReplicaFetcherThreadTest {
   def shouldCatchExceptionFromBlockingSendWhenShuttingDownReplicaFetcherThread(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
-    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
 
+    val mockBlockingSend: BrokerBlockingSender = mock(classOf[BrokerBlockingSender])
+    when(mockBlockingSend.sourceBroker).thenReturn(brokerEndPoint)
     when(mockBlockingSend.initiateClose()).thenThrow(new IllegalArgumentException())
     when(mockBlockingSend.close()).thenThrow(new IllegalStateException())
+
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
@@ -995,7 +985,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -1033,10 +1022,11 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
+    val mockBlockingSend: BrokerBlockingSender = mock(classOf[BrokerBlockingSender])
     val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
 
+    when(mockBlockingSend.sourceBroker).thenReturn(brokerEndPoint)
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
     when(replicaQuota.isThrottled(any[TopicPartition])).thenReturn(false)
@@ -1047,7 +1037,6 @@ class ReplicaFetcherThreadTest {
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config, replicaManager, replicaQuota)
     val thread = new ReplicaFetcherThread("bob",
       leader,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,
@@ -1128,7 +1117,8 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
 
-    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
+    val mockBlockingSend: BrokerBlockingSender = mock(classOf[BrokerBlockingSender])
+    when(mockBlockingSend.sourceBroker).thenReturn(brokerEndPoint)
 
     val log: UnifiedLog = mock(classOf[UnifiedLog])
 
@@ -1147,7 +1137,6 @@ class ReplicaFetcherThreadTest {
     val thread = createReplicaFetcherThread(
       "bob",
       0,
-      brokerEndPoint,
       config,
       failedPartitions,
       replicaManager,

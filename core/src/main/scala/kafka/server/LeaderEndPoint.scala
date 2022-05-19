@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchRequest
@@ -26,8 +27,8 @@ import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochR
 import scala.collection.Map
 
 /**
- * The LeaderEndPoint acts as an abstraction which serves all fetches from the leader
- * for the fetcher threads.
+ * This trait defines the APIs to be used on the client side to access a broker that is a leader.
+ * Presently, it is used in the AbstractFetcherThread class to access the leader for fetch APIs.
  */
 trait LeaderEndPoint {
 
@@ -46,8 +47,14 @@ trait LeaderEndPoint {
 
   /**
    * Closes access to fetches from leader.
+   * `initiateClose` must be called prior to invoking `close`.
    */
   def close(): Unit
+
+  /**
+   * The specific broker (host:port) we want to connect to.
+   */
+  def brokerEndPoint(): BrokerEndPoint
 
   /**
    * Given a fetchRequest, carries out the expected request and returns

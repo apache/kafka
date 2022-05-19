@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import kafka.cluster.BrokerEndPoint
+
 import java.util.{Collections, Optional}
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
@@ -38,15 +40,15 @@ import scala.compat.java8.OptionConverters.RichOptionForJava8
 /**
  * Facilitates fetches from a remote replica leader.
  *
- * @param logPrefix The log prefix from the ReplicaFetcherThread
- * @param endpoint A ReplicaFetcherBlockingSend
+ * @param logPrefix The log prefix
+ * @param endpoint The raw leader endpoint used to communicate with the leader
  * @param fetchSessionHandler A FetchSessionHandler to track the partitions in the session
- * @param brokerConfig A config file with broker related configurations
+ * @param brokerConfig Broker configuration
  * @param replicaMgr A ReplicaManager
  * @param quota The quota, used when building a fetch request
  */
 class RemoteLeaderEndPoint(logPrefix: String,
-                           endpoint: BlockingSend,
+                           endpoint: BrokerBlockingSender,
                            private[server] val fetchSessionHandler: FetchSessionHandler, // visible for testing
                            brokerConfig: KafkaConfig,
                            replicaMgr: ReplicaManager,
@@ -64,6 +66,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
   override def initiateClose(): Unit = endpoint.initiateClose()
 
   override def close(): Unit = endpoint.close()
+
+  override def brokerEndPoint(): BrokerEndPoint = endpoint.sourceBroker
 
   override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchData] = {
     val clientResponse = try {
@@ -220,4 +224,3 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
   override def toString: String = s"RemoteLeaderEndPoint with ReplicaFetcherBlockingSend $endpoint"
 }
-

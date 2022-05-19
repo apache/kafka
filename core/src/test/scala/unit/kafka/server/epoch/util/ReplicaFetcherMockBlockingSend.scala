@@ -19,14 +19,16 @@ package kafka.server.epoch.util
 import java.net.SocketTimeoutException
 import java.util
 import kafka.cluster.BrokerEndPoint
-import kafka.server.BlockingSend
+import kafka.server.{BrokerBlockingSender, KafkaConfig}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochResponseData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
-import org.apache.kafka.common.utils.{SystemTime, Time}
+import org.apache.kafka.common.utils.{LogContext, SystemTime, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 
 import scala.collection.Map
@@ -40,9 +42,15 @@ import scala.collection.Map
   * setOffsetsForNextResponse
   */
 class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset],
-                                     sourceBroker: BrokerEndPoint,
+                                     override private[server] val sourceBroker: BrokerEndPoint,
                                      time: Time)
-  extends BlockingSend {
+  extends BrokerBlockingSender(sourceBroker = sourceBroker,
+    brokerConfig = new KafkaConfig(TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)),
+    metrics = new Metrics,
+    time = time,
+    fetcherId = 0,
+    clientId = "",
+    logContext = new LogContext) {
 
   private val client = new MockClient(new SystemTime)
   var fetchCount = 0

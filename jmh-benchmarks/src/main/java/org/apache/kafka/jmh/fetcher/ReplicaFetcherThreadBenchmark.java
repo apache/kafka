@@ -37,7 +37,7 @@ import kafka.server.OffsetAndEpoch;
 import kafka.server.OffsetTruncationState;
 import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
-import kafka.server.ReplicaFetcherBlockingSend;
+import kafka.server.BrokerBlockingSender;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -311,7 +311,7 @@ public class ReplicaFetcherThreadBenchmark {
             super("name",
                     new RemoteLeaderEndPoint(
                             String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
-                            new ReplicaFetcherBlockingSend(
+                            new BrokerBlockingSender(
                                     new BrokerEndPoint(3, "host", 3000),
                                     config,
                                     new Metrics(),

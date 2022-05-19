@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.api.Request
+import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils.Logging
@@ -38,11 +39,13 @@ import scala.jdk.CollectionConverters._
 /**
  * Facilitates fetches from a local replica leader.
  *
+ * @param brokerEndPoint The broker (host:port) that we want to connect to
  * @param brokerConfig A config file with broker related configurations
  * @param replicaMgr A ReplicaManager
  * @param quota The quota, used when building a fetch request
  */
-class LocalLeaderEndPoint(brokerConfig: KafkaConfig,
+class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
+                          brokerConfig: KafkaConfig,
                           replicaMgr: ReplicaManager,
                           quota: ReplicaQuota) extends LeaderEndPoint with Logging {
 
@@ -56,6 +59,8 @@ class LocalLeaderEndPoint(brokerConfig: KafkaConfig,
   override def initiateClose(): Unit = {} // do nothing
 
   override def close(): Unit = {} // do nothing
+
+  override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
   override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchData] = {
     var partitionData: Seq[(TopicPartition, FetchData)] = null

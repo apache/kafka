@@ -65,8 +65,8 @@ class AbstractFetcherManagerTest {
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
 
-    when(fetcher.sourceBroker)
-      .thenReturn(new BrokerEndPoint(0, "localhost", 9092))
+    when(fetcher.leader)
+      .thenReturn(new MockLeaderEndPoint(new BrokerEndPoint(0, "localhost", 9092)))
     when(fetcher.addPartitions(Map(tp -> initialFetchState)))
       .thenReturn(Set(tp))
     when(fetcher.fetchState(tp))
@@ -127,8 +127,8 @@ class AbstractFetcherManagerTest {
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
 
-    when(fetcher.sourceBroker)
-      .thenReturn(new BrokerEndPoint(0, "localhost", 9092))
+    when(fetcher.leader)
+      .thenReturn(new MockLeaderEndPoint(new BrokerEndPoint(0, "localhost", 9092)))
     when(fetcher.addPartitions(Map(tp -> initialFetchState)))
       .thenReturn(Set(tp))
     when(fetcher.isThreadFailed).thenReturn(true)
@@ -174,8 +174,8 @@ class AbstractFetcherManagerTest {
       initOffset = fetchOffset)
 
     // Simulate calls to different fetchers due to different leaders
-    when(fetcher.sourceBroker)
-      .thenReturn(new BrokerEndPoint(0, "localhost", 9092))
+    when(fetcher.leader)
+      .thenReturn(new MockLeaderEndPoint(new BrokerEndPoint(0, "localhost", 9092)))
     when(fetcher.addPartitions(Map(tp1 -> initialFetchState1)))
       .thenReturn(Set(tp1))
     when(fetcher.addPartitions(Map(tp2 -> initialFetchState2)))
@@ -288,10 +288,12 @@ class AbstractFetcherManagerTest {
     Utils.abs(tp.hashCode) % brokerNum
   }
 
-  private class MockLeaderEndPoint extends LeaderEndPoint {
+  private class MockLeaderEndPoint(sourceBroker: BrokerEndPoint) extends LeaderEndPoint {
     override def initiateClose(): Unit = {}
 
     override def close(): Unit = {}
+
+    override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
     override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
 
@@ -310,8 +312,7 @@ class AbstractFetcherManagerTest {
     extends AbstractFetcherThread(
       name = "test-resize-fetcher",
       clientId = "mock-fetcher",
-      leader = new MockLeaderEndPoint,
-      sourceBroker,
+      leader = new MockLeaderEndPoint(sourceBroker),
       failedPartitions,
       fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {

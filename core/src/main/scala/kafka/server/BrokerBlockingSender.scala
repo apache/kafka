@@ -40,13 +40,13 @@ trait BlockingSend {
   def close(): Unit
 }
 
-class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
-                                 brokerConfig: KafkaConfig,
-                                 metrics: Metrics,
-                                 time: Time,
-                                 fetcherId: Int,
-                                 clientId: String,
-                                 logContext: LogContext) extends BlockingSend {
+class BrokerBlockingSender(private[server] val sourceBroker: BrokerEndPoint,
+                           brokerConfig: KafkaConfig,
+                           metrics: Metrics,
+                           time: Time,
+                           fetcherId: Int,
+                           clientId: String,
+                           logContext: LogContext) extends BlockingSend {
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs

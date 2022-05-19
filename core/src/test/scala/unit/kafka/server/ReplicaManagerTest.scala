@@ -2003,7 +2003,7 @@ class ReplicaManagerTest {
               s"fetcherId=$fetcherId] ")
             val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
             val leader = new RemoteLeaderEndPoint(logContext.logPrefix, blockingSend, fetchSessionHandler, config, replicaManager, quotaManager.follower)
-            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", leader, sourceBroker, config, failedPartitions, replicaManager,
+            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", leader, config, failedPartitions, replicaManager,
               quotaManager.follower, logContext.logPrefix) {
               override def doWork(): Unit = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,
@@ -3194,7 +3194,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
     } finally {
       replicaManager.shutdown()
     }
@@ -3222,7 +3222,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
 
       // Append on a follower should fail
       val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
@@ -3277,7 +3277,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply the same delta again
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
@@ -3288,7 +3288,7 @@ class ReplicaManagerTest {
       assertEquals(0, noChangePartition.getLeaderEpoch)
 
       val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.sourceBroker))
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.leader.brokerEndPoint()))
     } finally {
       replicaManager.shutdown()
     }
@@ -3315,7 +3315,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply changes that remove replica
       val notReplicaTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), otherId, true)
@@ -3352,7 +3352,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply changes that remove topic and replica
       val removeTopicsDelta = topicsDeleteDelta(followerMetadataImage.topics())
