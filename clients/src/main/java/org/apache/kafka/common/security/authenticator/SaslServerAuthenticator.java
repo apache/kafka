@@ -679,10 +679,11 @@ public class SaslServerAuthenticator implements Authenticator {
                 else if (connectionsMaxReauthMs == null)
                     retvalSessionLifetimeMs = zeroIfNegative(credentialExpirationMs - authenticationEndMs);
                 else
-                    retvalSessionLifetimeMs = zeroIfNegative(
-                            Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
-                if (retvalSessionLifetimeMs > 0L)
+                    retvalSessionLifetimeMs = zeroIfNegative(Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
+
+                if (connectionsMaxReauthMs != null) {
                     sessionExpirationTimeNanos = authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs;
+                }
             }
             if (credentialExpirationMs != null) {
                 if (sessionExpirationTimeNanos != null)
