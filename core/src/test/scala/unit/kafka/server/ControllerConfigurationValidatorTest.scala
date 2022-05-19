@@ -58,8 +58,8 @@ class ControllerConfigurationValidatorTest {
     config.put(SEGMENT_JITTER_MS_CONFIG, "10")
     config.put(SEGMENT_BYTES_CONFIG, null)
     config.put(SEGMENT_MS_CONFIG, null)
-    assertEquals("Null value not supported for topic configs : segment.bytes,segment.ms",
-      assertThrows(classOf[InvalidRequestException], () => validator.validate(
+    assertEquals("Null value not supported for topic configs: segment.bytes,segment.ms",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(TOPIC, "foo"), config)). getMessage())
   }
 

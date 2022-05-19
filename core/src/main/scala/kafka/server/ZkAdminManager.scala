@@ -158,7 +158,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
         if (nullConfigs.nonEmpty)
-          throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
+          throw new InvalidConfigurationException(s"Null value not supported for topic configs: ${nullConfigs.mkString(",")}")
 
         if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
             && !topic.assignments().isEmpty) {

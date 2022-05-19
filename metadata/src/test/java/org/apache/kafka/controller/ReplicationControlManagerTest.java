@@ -445,6 +445,56 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testCreateTopicsWithConfigs() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+
+        CreateTopicsRequestData.CreateableTopicConfigCollection validConfigs =
+            new CreateTopicsRequestData.CreateableTopicConfigCollection();
+        validConfigs.add(
+            new CreateTopicsRequestData.CreateableTopicConfig()
+                .setName("foo")
+                .setValue("notNull")
+        );
+        CreateTopicsRequestData request1 = new CreateTopicsRequestData();
+        request1.topics().add(new CreatableTopic().setName("foo")
+            .setNumPartitions(-1).setReplicationFactor((short) -1)
+            .setConfigs(validConfigs));
+
+        ControllerResult<CreateTopicsResponseData> result1 =
+            replicationControl.createTopics(request1, Collections.singleton("foo"));
+        assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
+
+        ctx.replay(result1.records());
+        assertEquals(
+            "notNull",
+            ctx.configurationControl.getConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "foo")).get("foo")
+        );
+
+        CreateTopicsRequestData.CreateableTopicConfigCollection invalidConfigs =
+            new CreateTopicsRequestData.CreateableTopicConfigCollection();
+        invalidConfigs.add(
+            new CreateTopicsRequestData.CreateableTopicConfig()
+                .setName("foo")
+                .setValue(null)
+        );
+        CreateTopicsRequestData request2 = new CreateTopicsRequestData();
+        request2.topics().add(new CreatableTopic().setName("bar")
+            .setNumPartitions(-1).setReplicationFactor((short) -1)
+            .setConfigs(invalidConfigs));
+
+        ControllerResult<CreateTopicsResponseData> result2 =
+            replicationControl.createTopics(request2, Collections.singleton("bar"));
+        assertEquals(Errors.INVALID_CONFIG.code(), result2.response().topics().find("bar").errorCode());
+        assertEquals(
+            "Null value not supported for topic configs: foo",
+            result2.response().topics().find("bar").errorMessage()
+        );
+    }
+
+    @Test
     public void testBrokerCountMetrics() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
