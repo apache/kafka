@@ -21,12 +21,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -49,8 +52,14 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+
+import static org.apache.kafka.metadata.LeaderRecoveryState.NO_CHANGE;
 
 /**
  * Maintains the in-memory metadata for the metadata tool.
@@ -151,6 +160,11 @@ public final class MetadataNodeManager implements AutoCloseable {
         return logListener;
     }
 
+    // VisibleForTesting
+    Data getData() {
+        return data;
+    }
+
     @Override
     public void close() throws Exception {
         queue.close();
@@ -182,7 +196,8 @@ public final class MetadataNodeManager implements AutoCloseable {
         });
     }
 
-    private void handleMessage(ApiMessage message) {
+    // VisibleForTesting
+    void handleMessage(ApiMessage message) {
         try {
             MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
             handleCommitImpl(type, message);
@@ -267,6 +282,9 @@ public final class MetadataNodeManager implements AutoCloseable {
                     partition.setLeader(record.leader());
                     partition.setLeaderEpoch(partition.leaderEpoch() + 1);
                 }
+                if (record.leaderRecoveryState() != NO_CHANGE) {
+                    partition.setLeaderRecoveryState(record.leaderRecoveryState());
+                }
                 partition.setPartitionEpoch(partition.partitionEpoch() + 1);
                 file.setContents(PartitionRecordJsonConverter.write(partition,
                     PartitionRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
@@ -293,8 +311,43 @@ public final class MetadataNodeManager implements AutoCloseable {
                 data.root.rmrf("topicIds", record.topicId().toString());
                 break;
             }
+            case CLIENT_QUOTA_RECORD: {
+                ClientQuotaRecord record = (ClientQuotaRecord) message;
+                List<String> directories = clientQuotaRecordDirectories(record.entity());
+                DirectoryNode node = data.root;
+                for (String directory : directories) {
+                    node = node.mkdirs(directory);
+                }
+                if (record.remove())
+                    node.rmrf(record.key());
+                else
+                    node.create(record.key()).setContents(record.value() + "");
+                break;
+            }
+            case PRODUCER_IDS_RECORD: {
+                ProducerIdsRecord record = (ProducerIdsRecord) message;
+                DirectoryNode producerIds = data.root.mkdirs("producerIds");
+                producerIds.create("lastBlockBrokerId").setContents(record.brokerId() + "");
+                producerIds.create("lastBlockBrokerEpoch").setContents(record.brokerEpoch() + "");
+
+                producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
+                break;
+            }
             default:
                 throw new RuntimeException("Unhandled metadata record type");
         }
+    }
+
+    static List<String> clientQuotaRecordDirectories(List<EntityData> entityData) {
+        List<String> result = new ArrayList<>();
+        result.add("client-quotas");
+        TreeMap<String, EntityData> entries = new TreeMap<>();
+        entityData.forEach(e -> entries.put(e.entityType(), e));
+        for (Map.Entry<String, EntityData> entry : entries.entrySet()) {
+            result.add(entry.getKey());
+            result.add(entry.getValue().entityName() == null ?
+                "<default>" : entry.getValue().entityName());
+        }
+        return result;
     }
 }

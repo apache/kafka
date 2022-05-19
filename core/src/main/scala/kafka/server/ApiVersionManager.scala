@@ -16,13 +16,13 @@
  */
 package kafka.server
 
-import kafka.api.ApiVersion
 import kafka.network
 import kafka.network.RequestChannel
+import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.ApiVersionsResponseData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.jdk.CollectionConverters._
 
@@ -70,7 +70,7 @@ class SimpleApiVersionManager(
 
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
-  interBrokerProtocolVersion: ApiVersion,
+  interBrokerProtocolVersion: MetadataVersion,
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
   featureCache: FinalizedFeatureCache
@@ -81,46 +81,31 @@ class DefaultApiVersionManager(
     val finalizedFeaturesOpt = featureCache.get
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
-    val response = finalizedFeaturesOpt match {
-      case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
+    finalizedFeaturesOpt match {
+      case Some(finalizedFeatures) => ApiVersionsResponse.createApiVersionsResponse(
         throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
+        interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
         finalizedFeatures.features,
         finalizedFeatures.epoch,
-        controllerApiVersions,
+        controllerApiVersions.orNull,
         listenerType)
-      case None => ApiVersion.apiVersionsResponse(
+      case None => ApiVersionsResponse.createApiVersionsResponse(
         throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
+        interBrokerProtocolVersion.highestSupportedRecordVersion,
         supportedFeatures,
-        controllerApiVersions,
+        Features.emptyFinalizedFeatures,
+        ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+        controllerApiVersions.orNull,
         listenerType)
     }
-
-    // This is a temporary workaround in order to allow testing of forwarding
-    // in integration tests. We can remove this after the KRaft controller
-    // is available for integration testing.
-    if (forwardingManager.isDefined) {
-      response.data.apiKeys.add(
-        new ApiVersionsResponseData.ApiVersion()
-          .setApiKey(ApiKeys.ENVELOPE.id)
-          .setMinVersion(ApiKeys.ENVELOPE.oldestVersion)
-          .setMaxVersion(ApiKeys.ENVELOPE.latestVersion)
-      )
-    }
-
-    response
   }
 
   override def enabledApis: collection.Set[ApiKeys] = {
-    forwardingManager match {
-      case Some(_) => ApiKeys.apisForListener(listenerType).asScala ++ Set(ApiKeys.ENVELOPE)
-      case None => ApiKeys.apisForListener(listenerType).asScala
-    }
+    ApiKeys.apisForListener(listenerType).asScala
   }
 
   override def isApiEnabled(apiKey: ApiKeys): Boolean = {
-    apiKey.inScope(listenerType) || (apiKey == ApiKeys.ENVELOPE && forwardingManager.isDefined)
+    apiKey.inScope(listenerType)
   }
 }

@@ -72,8 +72,10 @@ import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -331,7 +333,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
-            SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
+            RecordsSnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
         );
     }
 
@@ -441,7 +443,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void flushLeaderLog(LeaderState<T> state, long currentTimeMs) {
         // We update the end offset before flushing so that parked fetches can return sooner.
         updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
-        log.flush();
+        log.flush(false);
     }
 
     private boolean maybeTransitionToLeader(CandidateState state, long currentTimeMs) {
@@ -1134,7 +1136,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Records records
     ) {
         LogAppendInfo info = log.appendAsFollower(records);
-        log.flush();
+        log.flush(false);
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
@@ -1332,7 +1334,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             partitionSnapshot.snapshotId().epoch() < 0) {
 
             /* The leader deleted the snapshot before the follower could download it. Start over by
-             * reseting the fetching snapshot state and sending another fetch request.
+             * resetting the fetching snapshot state and sending another fetch request.
              */
             logger.trace(
                 "Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}",
@@ -2347,7 +2349,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         int committedEpoch,
         long lastContainedLogTime
     ) {
-        return SnapshotWriter.createWithHeader(
+        return RecordsSnapshotWriter.createWithHeader(
                 () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
                 MAX_BATCH_SIZE_BYTES,
                 memoryPool,
@@ -2360,6 +2362,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void close() {
+        log.flush(true);
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
         }
@@ -2432,7 +2435,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return listener;
         }
 
-        private static enum Ops {
+        private enum Ops {
             REGISTER, UNREGISTER
         }
 
@@ -2448,7 +2451,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final class ListenerContext implements CloseListener<BatchReader<T>> {
         private final RaftClient.Listener<T> listener;
         // This field is used only by the Raft IO thread
-        private LeaderAndEpoch lastFiredLeaderChange = new LeaderAndEpoch(OptionalInt.empty(), 0);
+        private LeaderAndEpoch lastFiredLeaderChange = LeaderAndEpoch.UNKNOWN;
 
         // These fields are visible to both the Raft IO thread and the listener
         // and are protected through synchronization on this ListenerContext instance

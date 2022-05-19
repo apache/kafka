@@ -100,7 +100,7 @@ public class MockLog implements ReplicatedLog {
                 epochStartOffsets.clear();
                 snapshots.headMap(snapshotId, false).clear();
                 updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
-                flush();
+                flush(false);
 
                 truncated.set(true);
             }
@@ -328,7 +328,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public void flush() {
+    public void flush(boolean forceFlushActiveSegment) {
         lastFlushedOffset = endOffset().offset;
     }
 

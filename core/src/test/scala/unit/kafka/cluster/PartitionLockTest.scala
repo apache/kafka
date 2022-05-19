@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -139,7 +140,7 @@ class PartitionLockTest extends Logging {
       .setLeader(replicas.get(0))
       .setLeaderEpoch(1)
       .setIsr(replicas)
-      .setZkVersion(1)
+      .setPartitionEpoch(1)
       .setReplicas(replicas)
       .setIsNew(true)
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
@@ -253,16 +254,16 @@ class PartitionLockTest extends Logging {
   private def setupPartitionWithMocks(logManager: LogManager): Partition = {
     val leaderEpoch = 1
     val brokerId = 0
-    val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
+    val isrChangeListener: AlterPartitionListener = mock(classOf[AlterPartitionListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
-    val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
+    val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 
     logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
       mockTime,
       isrChangeListener,
@@ -285,9 +286,16 @@ class PartitionLockTest extends Logging {
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
+        val maxTransactionTimeout = 5 * 60 * 1000
         val maxProducerIdExpirationMs = 60 * 60 * 1000
-        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
-        val offsets = LogLoader.load(LoadLogParams(
+        val producerStateManager = new ProducerStateManager(
+          log.topicPartition,
+          log.dir,
+          maxTransactionTimeout,
+          maxProducerIdExpirationMs,
+          mockTime
+        )
+        val offsets = new LogLoader(
           log.dir,
           log.topicPartition,
           log.config,
@@ -298,9 +306,9 @@ class PartitionLockTest extends Logging {
           segments,
           0L,
           0L,
-          maxProducerIdExpirationMs,
           leaderEpochCache,
-          producerStateManager))
+          producerStateManager
+        ).load()
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
           logDirFailureChannel)
@@ -328,7 +336,7 @@ class PartitionLockTest extends Logging {
       .setLeader(brokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
-      .setZkVersion(1)
+      .setPartitionEpoch(1)
       .setReplicas(replicas)
       .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
 
@@ -389,7 +397,7 @@ class PartitionLockTest extends Logging {
     keepPartitionMetadataFile = true) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                interBrokerProtocolVersion: ApiVersion, requestLocal: RequestLocal): LogAppendInfo = {
+                                interBrokerProtocolVersion: MetadataVersion, requestLocal: RequestLocal): LogAppendInfo = {
       val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal)
       appendSemaphore.acquire()
       appendInfo

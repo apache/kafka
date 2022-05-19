@@ -39,6 +39,7 @@ import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -53,6 +54,7 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.ThreadMetadataImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -102,7 +104,9 @@ import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.capture;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -113,7 +117,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({KafkaStreams.class, StreamThread.class, ClientMetrics.class})
+@PrepareForTest({KafkaStreams.class, StreamThread.class, ClientMetrics.class, StreamsConfigUtils.class})
 public class KafkaStreamsTest {
 
     private static final int NUM_THREADS = 2;
@@ -139,6 +143,8 @@ public class KafkaStreamsTest {
     private GlobalStreamThread globalStreamThread;
     @Mock
     private Metrics metrics;
+    @Mock
+    private State state;
 
     private StateListenerStub streamsStateListener;
     private Capture<List<MetricsReporter>> metricsReportersCapture;
@@ -212,6 +218,7 @@ public class KafkaStreamsTest {
         ClientMetrics.addStateMetric(anyObject(StreamsMetricsImpl.class), anyObject());
         ClientMetrics.addNumAliveStreamThreadMetric(anyObject(StreamsMetricsImpl.class), anyObject());
 
+
         // setup stream threads
         PowerMock.mockStatic(StreamThread.class);
         EasyMock.expect(StreamThread.create(
@@ -225,6 +232,7 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             anyObject(StreamsMetadataState.class),
             anyLong(),
+            anyLong(),
             anyObject(StateDirectory.class),
             anyObject(StateRestoreListener.class),
             anyInt(),
@@ -232,10 +240,16 @@ public class KafkaStreamsTest {
             anyObject()
         )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
 
-        EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
-        EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
+        PowerMock.mockStatic(StreamsConfigUtils.class);
+        EasyMock.expect(StreamsConfigUtils.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE).anyTimes();
+        EasyMock.expect(StreamsConfigUtils.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
+        EasyMock.expect(StreamsConfigUtils.getTotalCacheSize(anyObject(StreamsConfig.class))).andReturn(10 * 1024 * 1024L).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(1L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(2L).anyTimes();
+        EasyMock.expect(streamThreadOne.getCacheSize()).andReturn(10485760L).anyTimes();
+        EasyMock.expect(streamThreadOne.getMaxBufferSize()).andReturn(536870912L).anyTimes();
+        EasyMock.expect(streamThreadTwo.getCacheSize()).andReturn(10485760L).anyTimes();
+        EasyMock.expect(streamThreadTwo.getMaxBufferSize()).andReturn(536870912L).anyTimes();
         prepareStreamThread(streamThreadOne, 1, true);
         prepareStreamThread(streamThreadTwo, 2, false);
 
@@ -284,9 +298,12 @@ public class KafkaStreamsTest {
         EasyMock.expect(globalStreamThread.stillRunning()).andReturn(globalThreadState.get() == GlobalStreamThread.State.RUNNING).anyTimes();
         globalStreamThread.join();
         EasyMock.expectLastCall().anyTimes();
+        globalStreamThread.resize(EasyMock.anyLong());
+        EasyMock.expectLastCall().anyTimes();
 
         PowerMock.replay(
             StreamThread.class,
+            StreamsConfigUtils.class,
             Metrics.class,
             metrics,
             ClientMetrics.class,
@@ -339,7 +356,7 @@ public class KafkaStreamsTest {
         ).anyTimes();
         EasyMock.expect(thread.waitOnThreadState(EasyMock.isA(StreamThread.State.class), anyLong())).andStubReturn(true);
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
-        thread.resizeCache(EasyMock.anyLong());
+        thread.resizeCacheAndBufferMemory(EasyMock.anyLong(), EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
         thread.requestLeaveGroupDuringShutdown();
         EasyMock.expectLastCall().anyTimes();
@@ -459,12 +476,15 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.close();
 
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
                 "Streams never stopped.");
+
+            assertThat(appender.getMessages(), not(hasItem(containsString("ERROR"))));
         }
 
         assertTrue(supplier.consumer.closed());
@@ -516,7 +536,8 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -528,6 +549,8 @@ public class KafkaStreamsTest {
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
+
+            // shutting down the global thread from "external" will yield an error in KafkaStreams
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
                 "Thread never stopped."
@@ -538,6 +561,8 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.ERROR,
                 "Thread never stopped."
             );
+
+            assertThat(appender.getMessages(), hasItem(containsString("ERROR")));
         }
     }
 
@@ -548,11 +573,12 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
             final int initDiff = newInitCount - oldInitCount;
-            assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
+            assertTrue("some reporters including MockMetricsReporter should be initialized by calling on construction", initDiff == 1);
 
             streams.start();
             final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
             streams.close();
+            assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
             assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
         }
     }
@@ -576,6 +602,27 @@ public class KafkaStreamsTest {
             streams.start();
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
+            EasyMock.reset(streamThreadOne, streamThreadTwo);
+            EasyMock.expect(streamThreadOne.isRunning()).andStubReturn(true);
+            EasyMock.expect(streamThreadTwo.isRunning()).andStubReturn(true);
+            EasyMock.expect(streamThreadOne.state()).andStubReturn(StreamThread.State.RUNNING);
+            EasyMock.expect(streamThreadTwo.state()).andStubReturn(StreamThread.State.RUNNING);
+            EasyMock.expect(streamThreadOne.getName()).andStubReturn("processId-StreamThread-1");
+            EasyMock.expect(streamThreadTwo.getName()).andStubReturn("processId-StreamThread-2");
+            EasyMock.expect(streamThreadTwo.getId()).andStubReturn(2L);
+            EasyMock.expect(streamThreadOne.getCacheSize()).andReturn(10485760L).anyTimes();
+            EasyMock.expect(streamThreadOne.getMaxBufferSize()).andReturn(536870912L).anyTimes();
+            EasyMock.expect(streamThreadTwo.getCacheSize()).andReturn(10485760L).anyTimes();
+            EasyMock.expect(streamThreadTwo.getMaxBufferSize()).andReturn(536870912L).anyTimes();
+            streamThreadTwo.setStateListener(EasyMock.anyObject());
+            streamThreadTwo.start();
+
+            streamThreadOne.resizeCacheAndBufferMemory(5 * 1024 * 1024L, 256 * 1024 * 1024L);
+            streamThreadTwo.resizeCacheAndBufferMemory(5 * 1024 * 1024L, 256 * 1024 * 1024L);
+            streamThreadOne.shutdown();
+            streamThreadTwo.shutdown();
+            EasyMock.expect(state.isRunningOrRebalancing()).andStubReturn(true);
+            EasyMock.replay(streamThreadOne, streamThreadTwo, state);
             assertThat(streams.addStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 2)));
             assertThat(streams.threads.size(), equalTo(oldSize + 1));
         }

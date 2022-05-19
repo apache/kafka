@@ -75,13 +75,24 @@ public class StreamsBuilder {
     protected final InternalStreamsBuilder internalStreamsBuilder;
 
     public StreamsBuilder() {
-        topology = getNewTopology();
+        topology = new Topology();
         internalTopologyBuilder = topology.internalTopologyBuilder;
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
-    protected Topology getNewTopology() {
-        return new Topology();
+    /**
+     * Create a {@code StreamsBuilder} instance.
+     *
+     * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
+     */
+    public StreamsBuilder(final TopologyConfig topologyConfigs) {
+        topology = getNewTopology(topologyConfigs);
+        internalTopologyBuilder = topology.internalTopologyBuilder;
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+    }
+
+    protected Topology getNewTopology(final TopologyConfig topologyConfigs) {
+        return new Topology(topologyConfigs);
     }
 
     /**
@@ -610,7 +621,11 @@ public class StreamsBuilder {
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build(final Properties props) {
-        internalStreamsBuilder.buildAndOptimizeTopology(props);
+        final boolean optimizeTopology =
+            props != null &&
+            StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
+
+        internalStreamsBuilder.buildAndOptimizeTopology(optimizeTopology);
         return topology;
     }
 }

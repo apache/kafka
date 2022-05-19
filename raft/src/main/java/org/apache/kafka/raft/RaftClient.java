@@ -24,6 +24,7 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 public interface RaftClient<T> extends AutoCloseable {
@@ -112,6 +113,11 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param listener the listener to unregister
      */
     void unregister(Listener<T> listener);
+
+    /**
+     * Returns the current high water mark, or OptionalLong.empty if it is not known.
+     */
+    OptionalLong highWatermark();
 
     /**
      * Return the current {@link LeaderAndEpoch}.

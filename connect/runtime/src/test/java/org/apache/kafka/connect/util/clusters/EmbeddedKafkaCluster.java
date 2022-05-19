@@ -135,6 +135,8 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
         putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
+        // reduce the size of the log cleaner map to reduce test memory usage
+        putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
 
         Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
         if (listenerConfig == null)
@@ -378,6 +380,19 @@ public class EmbeddedKafkaCluster {
 
         try (final Admin adminClient = createAdminClient(adminClientConfig)) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Delete a Kafka topic.
+     *
+     * @param topic the topic to delete; may not be null
+     */
+    public void deleteTopic(String topic) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.deleteTopics(Collections.singleton(topic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }

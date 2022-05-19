@@ -37,8 +37,8 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -63,15 +63,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
-
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamKStreamJoinTest {
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    private final JoinWindows joinWindows = JoinWindows.of(ofMillis(50)).grace(Duration.ofMillis(50));
+    private final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(50), Duration.ofMillis(50));
     private final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
 
@@ -85,7 +83,7 @@ public class KStreamKStreamJoinTest {
         left.join(
             right,
             Integer::sum,
-            JoinWindows.of(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
         );
 
@@ -100,12 +98,10 @@ public class KStreamKStreamJoinTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] "
-                    + "offset=[0]")
+                hasItem("Skipping record due to null key or value. topic=[left] partition=[0] offset=[0]")
             );
         }
     }
-
 
     @Test
     public void shouldReuseRepartitionTopicWithGeneratedName() {
@@ -116,8 +112,8 @@ public class KStreamKStreamJoinTest {
         final KStream<String, String> stream2 = builder.stream("topic2", Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> stream3 = builder.stream("topic3", Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> newStream = stream1.map((k, v) -> new KeyValue<>(v, k));
-        newStream.join(stream2, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100))).to("out-one");
-        newStream.join(stream3, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100))).to("out-to");
+        newStream.join(stream2, (value1, value2) -> value1 + value2, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100))).to("out-one");
+        newStream.join(stream3, (value1, value2) -> value1 + value2, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100))).to("out-to");
         assertEquals(expectedTopologyWithGeneratedRepartitionTopic, builder.build(props).describe().toString());
     }
 
@@ -131,8 +127,8 @@ public class KStreamKStreamJoinTest {
         final KStream<String, String> stream3 = builder.stream("topic3", Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> newStream = stream1.map((k, v) -> new KeyValue<>(v, k));
         final StreamJoined<String, String, String> streamJoined = StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String());
-        newStream.join(stream2, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100)), streamJoined.withName("first-join")).to("out-one");
-        newStream.join(stream3, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100)), streamJoined.withName("second-join")).to("out-two");
+        newStream.join(stream2, (value1, value2) -> value1 + value2, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)), streamJoined.withName("first-join")).to("out-one");
+        newStream.join(stream3, (value1, value2) -> value1 + value2, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)), streamJoined.withName("second-join")).to("out-two");
         final Topology topology =  builder.build(props);
         System.out.println(topology.describe().toString());
         assertEquals(expectedTopologyWithUserNamedRepartitionTopics, topology.describe().toString());
@@ -140,8 +136,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldDisableLoggingOnStreamJoined() {
-
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ofMillis(50));
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), Duration.ofMillis(50));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
             .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
             .withStoreName("store")
@@ -167,8 +162,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldEnableLoggingWithCustomConfigOnStreamJoined() {
-
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ofMillis(50));
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), Duration.ofMillis(50));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
             .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
             .withStoreName("store")
@@ -192,8 +186,8 @@ public class KStreamKStreamJoinTest {
 
         assertThat(internalTopologyBuilder.stateStores().get("store-this-join-store").loggingEnabled(), equalTo(true));
         assertThat(internalTopologyBuilder.stateStores().get("store-other-join-store").loggingEnabled(), equalTo(true));
-        assertThat(internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).stateChangelogTopics.size(), equalTo(2));
-        for (final InternalTopicConfig config : internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).stateChangelogTopics.values()) {
+        assertThat(internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.size(), equalTo(2));
+        for (final InternalTopicConfig config : internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.values()) {
             assertThat(
                 config.getProperties(Collections.emptyMap(), 0).get("test"),
                 equalTo("property")
@@ -296,8 +290,8 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void shouldExceptionWhenJoinStoresDontHaveUniqueNames() {
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100L)).grace(Duration.ofMillis(50L));
+    public void shouldExceptionWhenJoinStoresDoNotHaveUniqueNames() {
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), Duration.ofMillis(50L));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 100L, true);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 100L, true);
@@ -311,7 +305,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldJoinWithCustomStoreSuppliers() {
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100L));
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore(
             "in-memory-join-store",
@@ -345,7 +339,7 @@ public class KStreamKStreamJoinTest {
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final KStream<String, Integer> joinedStream;
 
         joinedStream = left.join(
@@ -362,7 +356,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, Integer> inputTopicRight =
                     driver.createInputTopic("right", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<String, Integer> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<String, Integer, Void, Void> processor = supplier.theCapturedProcessor();
 
             inputTopicLeft.pipeInput("A", 1, 1L);
             inputTopicLeft.pipeInput("B", 1, 2L);
@@ -386,13 +380,13 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100L)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -408,7 +402,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream; the other window is empty
             // w1 = {}
@@ -508,7 +502,7 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
@@ -530,7 +524,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream; the other window is empty; this should not produce items yet
             // w1 = {}
@@ -630,14 +624,14 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100L)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -653,7 +647,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 0L;
 
             // push two items to the primary stream; the other window is empty; this should produce no items
@@ -1193,14 +1187,14 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(0)).after(ofMillis(100)).grace(ofMillis(0)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).after(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String())
@@ -1218,7 +1212,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 1000L;
 
             // push four items with increasing timestamps to the primary stream; the other window is empty; this should produce no items
@@ -1461,7 +1455,7 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
@@ -1469,7 +1463,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(0)).before(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).before(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -1485,7 +1479,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 1000L;
 
             // push four items with increasing timestamps to the primary stream; the other window is empty; this should produce no items

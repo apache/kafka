@@ -46,6 +46,7 @@ import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, S
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -80,7 +81,7 @@ class TopologyTest {
     def getTopologyJava: TopologyDescription = {
       val streamBuilder = new StreamsBuilderJ
       val textLines = streamBuilder.stream[String, String](inputTopic)
-      val _: KStreamJ[String, String] = textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
+      val _: KStreamJ[String, String] = textLines.flatMapValues(s => pattern.split(s.toLowerCase).toBuffer.asJava)
       streamBuilder.build().describe()
     }
 
@@ -114,7 +115,7 @@ class TopologyTest {
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
 
       val splits: KStreamJ[String, String] =
-        textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
+        textLines.flatMapValues(s => pattern.split(s.toLowerCase).toBuffer.asJava)
 
       val grouped: KGroupedStreamJ[String, String] = splits.groupBy((_, v) => v)
 
@@ -275,6 +276,7 @@ class TopologyTest {
     assertEquals(getTopologyScala, getTopologyJava)
   }
 
+  @nowarn
   @Test
   def shouldBuildIdenticalTopologyInJavaNScalaTransform(): Unit = {
 
@@ -301,6 +303,7 @@ class TopologyTest {
       streamBuilder.build().describe()
     }
 
+    @nowarn
     // build the Java topology
     def getTopologyJava: TopologyDescription = {
 

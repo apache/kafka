@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -82,12 +83,25 @@ public class MetadataRequestTest {
 
         // if version is 10 or 11, the invalid topic metadata should return an error
         List<Short> invalidVersions = Arrays.asList((short) 10, (short) 11);
-        invalidVersions.forEach(version ->
-            topics.forEach(topic -> {
-                MetadataRequestData metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic));
-                MetadataRequest.Builder builder = new MetadataRequest.Builder(metadataRequestData);
-                assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
-            })
-        );
+        invalidVersions.forEach(version -> topics.forEach(topic -> {
+            MetadataRequestData metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic));
+            MetadataRequest.Builder builder = new MetadataRequest.Builder(metadataRequestData);
+            assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
+        }));
+    }
+
+    @Test
+    public void testTopicIdWithZeroUuid() {
+        List<MetadataRequestData.MetadataRequestTopic> topics = Arrays.asList(
+                new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(Uuid.ZERO_UUID),
+                new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(new Uuid(0L, 0L)),
+                new MetadataRequestData.MetadataRequestTopic().setName("topic"));
+
+        List<Short> invalidVersions = Arrays.asList((short) 10, (short) 11);
+        invalidVersions.forEach(version -> topics.forEach(topic -> {
+            MetadataRequestData metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic));
+            MetadataRequest.Builder builder = new MetadataRequest.Builder(metadataRequestData);
+            assertDoesNotThrow(() -> builder.build(version));
+        }));
     }
 }

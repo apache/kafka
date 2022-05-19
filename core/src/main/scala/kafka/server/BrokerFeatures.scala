@@ -19,8 +19,9 @@ package kafka.server
 
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.feature.Features._
+import org.apache.kafka.server.common.MetadataVersion
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -32,18 +33,20 @@ import scala.jdk.CollectionConverters._
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange]) {
   // For testing only.
   def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
-    supportedFeatures = newFeatures
+    val combined = new util.HashMap[String, SupportedVersionRange](supportedFeatures.features())
+    combined.putAll(newFeatures.features())
+    supportedFeatures = Features.supportedFeatures(combined)
   }
 
   /**
-   * Returns the default finalized features that a new Kafka cluster with IBP config >= KAFKA_2_7_IV0
+   * Returns the default finalized features that a new Kafka cluster with IBP config >= IBP_2_7_IV0
    * needs to be bootstrapped with.
    */
   def defaultFinalizedFeatures: Features[FinalizedVersionRange] = {
     Features.finalizedFeatures(
       supportedFeatures.features.asScala.map {
         case(name, versionRange) => (
-          name, new FinalizedVersionRange(versionRange.min, versionRange.max))
+          name, new FinalizedVersionRange(versionRange.max, versionRange.max))
       }.asJava)
   }
 
@@ -70,9 +73,13 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
 object BrokerFeatures extends Logging {
 
   def createDefault(): BrokerFeatures = {
-    // The arguments are currently empty, but, in the future as we define features we should
-    // populate the required values here.
-    new BrokerFeatures(emptySupportedFeatures)
+    new BrokerFeatures(Features.supportedFeatures(
+      java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
+        new SupportedVersionRange(MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.latest().featureLevel()))))
+  }
+
+  def createEmpty(): BrokerFeatures = {
+    new BrokerFeatures(Features.emptySupportedFeatures())
   }
 
   /**

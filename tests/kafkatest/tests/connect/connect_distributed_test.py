@@ -80,7 +80,7 @@ class ConnectDistributedTest(Test):
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
 
-    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None, broker_version=DEV_BRANCH, auto_create_topics=False):
+    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None, broker_version=DEV_BRANCH, auto_create_topics=False, include_filestream_connectors=False):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
                                   topics=self.topics, version=broker_version,
@@ -89,7 +89,8 @@ class ConnectDistributedTest(Test):
             for node in self.kafka.nodes:
                 node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type
 
-        self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE])
+        self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE],
+                                            include_filestream_connectors=include_filestream_connectors)
         self.cc.log_level = "DEBUG"
 
         self.zk.start()
@@ -370,7 +371,7 @@ class ConnectDistributedTest(Test):
         """
 
         self.CONNECT_PROTOCOL = connect_protocol
-        self.setup_services(security_protocol=security_protocol)
+        self.setup_services(security_protocol=security_protocol, include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
 
         self.cc.start()
@@ -522,7 +523,7 @@ class ConnectDistributedTest(Test):
     @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_transformations(self, connect_protocol):
         self.CONNECT_PROTOCOL = connect_protocol
-        self.setup_services(timestamp_type='CreateTime')
+        self.setup_services(timestamp_type='CreateTime', include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
@@ -610,7 +611,8 @@ class ConnectDistributedTest(Test):
         or relies upon the broker to auto-create the topics (v0.10.0.x and before).
         """
         self.CONNECT_PROTOCOL = connect_protocol
-        self.setup_services(broker_version=KafkaVersion(broker_version), auto_create_topics=auto_create_topics, security_protocol=security_protocol)
+        self.setup_services(broker_version=KafkaVersion(broker_version), auto_create_topics=auto_create_topics,
+                            security_protocol=security_protocol, include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
 
         self.cc.start()

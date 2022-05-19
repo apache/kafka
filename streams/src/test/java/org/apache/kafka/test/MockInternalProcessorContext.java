@@ -16,29 +16,34 @@
  */
 package org.apache.kafka.test;
 
+import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorMetadata;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext<Object, Object> {
 
@@ -47,12 +52,15 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private RecordCollector recordCollector;
     private long currentSystemTimeMs;
     private TaskType taskType = TaskType.ACTIVE;
+    private ProcessorMetadata processorMetadata;
 
     public MockInternalProcessorContext() {
+        processorMetadata = new ProcessorMetadata();
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
+        processorMetadata = new ProcessorMetadata();
     }
 
     @Override
@@ -132,7 +140,16 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {
+        restoreCallbacks.put(store.name(), stateRestoreCallback);
+        super.register(store, stateRestoreCallback);
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CommitCallback checkpoint) {
         restoreCallbacks.put(store.name(), stateRestoreCallback);
         super.register(store, stateRestoreCallback);
     }
@@ -150,7 +167,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     public void logChange(final String storeName,
                           final Bytes key,
                           final byte[] value,
-                          final long timestamp) {
+                          final long timestamp,
+                          final Position position) {
     }
 
     @Override
@@ -168,5 +186,39 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public String changelogFor(final String storeName) {
         return "mock-changelog";
+    }
+
+    @Override
+    public void addProcessorMetadataKeyValue(final String key, final long value) {
+        processorMetadata.put(key, value);
+    }
+
+    @Override
+    public Long processorMetadataForKey(final String key) {
+        return processorMetadata.get(key);
+    }
+
+    @Override
+    public void setProcessorMetadata(final ProcessorMetadata metadata) {
+        Objects.requireNonNull(metadata);
+        processorMetadata = metadata;
+    }
+
+    @Override
+    public ProcessorMetadata getProcessorMetadata() {
+        return processorMetadata;
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
     }
 }

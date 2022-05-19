@@ -41,10 +41,11 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
@@ -177,10 +178,10 @@ public class TaskManagerTest {
 
     @Before
     public void setUp() {
-        setUpTaskManager(StreamThread.ProcessingMode.AT_LEAST_ONCE);
+        setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE);
     }
 
-    private void setUpTaskManager(final StreamThread.ProcessingMode processingMode) {
+    private void setUpTaskManager(final StreamsConfigUtils.ProcessingMode processingMode) {
         taskManager = new TaskManager(
             time,
             changeLogReader,
@@ -189,10 +190,9 @@ public class TaskManagerTest {
             new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, time),
             activeTaskCreator,
             standbyTaskCreator,
-            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig()),
+            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode)),
             adminClient,
-            stateDirectory,
-            processingMode
+            stateDirectory
         );
         taskManager.setMainConsumer(consumer);
         reset(topologyBuilder);
@@ -1830,7 +1830,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldOnlyCommitRevokedStandbyTaskAndPropagatePrepareCommitException() {
-        setUpTaskManager(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA);
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
@@ -2228,7 +2228,7 @@ public class TaskManagerTest {
         producer.commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA, producer, offsetsT01, offsetsT02);
+        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_ALPHA, producer, offsetsT01, offsetsT02);
     }
 
     @Test
@@ -2245,10 +2245,10 @@ public class TaskManagerTest {
         producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
+        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
     }
 
-    private void shouldCommitViaProducerIfEosEnabled(final StreamThread.ProcessingMode processingMode,
+    private void shouldCommitViaProducerIfEosEnabled(final ProcessingMode processingMode,
                                                      final StreamsProducer producer,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
@@ -2635,7 +2635,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPropagateRuntimeExceptionsInProcessActiveTasks() {
+    public void shouldWrapRuntimeExceptionsInProcessActiveTasksAndSetTaskId() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public boolean process(final long wallClockTime) {
@@ -2657,8 +2657,10 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, time));
-        assertThat(exception.getMessage(), is("oops"));
+        final StreamsException exception = assertThrows(StreamsException.class, () -> taskManager.process(1, time));
+        assertThat(exception.taskId().isPresent(), is(true));
+        assertThat(exception.taskId().get(), is(taskId00));
+        assertThat(exception.getCause().getMessage(), is("oops"));
     }
 
     @Test
@@ -2875,15 +2877,16 @@ public class TaskManagerTest {
         taskManager.addTask(migratedTask01);
         taskManager.addTask(migratedTask02);
 
-        final KafkaException thrown = assertThrows(
-            KafkaException.class,
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
             () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
 
-        // Expecting the original Kafka exception instead of a wrapped one.
-        assertThat(thrown.getMessage(), equalTo("Kaboom for t2!"));
+        assertThat(thrown.taskId().isPresent(), is(true));
+        assertThat(thrown.taskId().get(), is(taskId02));
 
-        assertThat(thrown.getCause().getMessage(), equalTo(null));
+        // Expecting the original Kafka exception wrapped in the StreamsException.
+        assertThat(thrown.getCause().getMessage(), equalTo("Kaboom for t2!"));
     }
 
     @Test

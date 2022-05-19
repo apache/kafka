@@ -601,7 +601,7 @@ public class Selector implements Selectable, AutoCloseable {
                     close(channel, CloseMode.GRACEFUL);
 
             } catch (Exception e) {
-                String desc = channel.socketDescription();
+                String desc = String.format("%s (channelId=%s)", channel.socketDescription(), channel.id());
                 if (e instanceof IOException) {
                     log.debug("Connection with {} disconnected", desc, e);
                 } else if (e instanceof AuthenticationException) {
@@ -845,7 +845,7 @@ public class Selector implements Selectable, AutoCloseable {
             boolean hasPending = false;
             if (!sendFailed)
                 hasPending = maybeReadFromClosingChannel(channel);
-            if (!hasPending || sendFailed) {
+            if (!hasPending) {
                 doClose(channel, true);
                 it.remove();
             }

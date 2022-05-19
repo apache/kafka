@@ -161,6 +161,12 @@
         Starting in 2.6, Kafka Streams will guarantee that a task is only ever assigned to an instance with a fully caught-up local copy of the state, if such an instance
         exists. Standby tasks will increase the likelihood that a caught-up instance exists in the case of a failure.
     </p>
+    <p>
+        You can also configure standby replicas with rack awareness. When configured, Kafka Streams will attempt to
+        distribute a standby task on a different "rack" than the active one, thus having a faster recovery time when the
+        rack of the active tasks fails. See <code>rack.aware.assignment.tags</code>
+        in the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-tags"><b>Kafka Streams Developer Guide</b></a> section.
+    </p>
 
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/core-concepts" class="pagination__btn pagination__btn__prev">Previous</a>

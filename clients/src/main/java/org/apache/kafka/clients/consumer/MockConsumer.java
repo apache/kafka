@@ -560,6 +560,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance() {
+        enforceRebalance(null);
+    }
+
+    @Override
+    public void enforceRebalance(final String reason) {
         shouldRebalance = true;
     }
 

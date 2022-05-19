@@ -16,12 +16,11 @@
   */
 package kafka.cluster
 
-import kafka.api.ApiVersion
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
-import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
+import kafka.utils.TestUtils.{MockAlterPartitionManager, MockAlterPartitionListener}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -30,9 +29,10 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
-
 import java.io.File
 import java.util.Properties
+
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.jdk.CollectionConverters._
 
@@ -49,8 +49,8 @@ class AbstractPartitionTest {
   var logDir1: File = _
   var logDir2: File = _
   var logManager: LogManager = _
-  var alterIsrManager: MockAlterIsrManager = _
-  var isrChangeListener: MockIsrChangeListener = _
+  var alterPartitionManager: MockAlterPartitionManager = _
+  var alterPartitionListener: MockAlterPartitionListener = _
   var logConfig: LogConfig = _
   var configRepository: MockConfigRepository = _
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
@@ -73,24 +73,24 @@ class AbstractPartitionTest {
       CleanerConfig(enableCleaner = false), time, interBrokerProtocolVersion)
     logManager.startup(Set.empty)
 
-    alterIsrManager = TestUtils.createAlterIsrManager()
-    isrChangeListener = TestUtils.createIsrChangeListener()
+    alterPartitionManager = TestUtils.createAlterIsrManager()
+    alterPartitionListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       time,
-      isrChangeListener,
+      alterPartitionListener,
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager)
+      alterPartitionManager)
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
   }
 
-  protected def interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion
+  protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest
 
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
@@ -124,7 +124,7 @@ class AbstractPartitionTest {
         .setLeader(brokerId)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)
-        .setZkVersion(1)
+        .setPartitionEpoch(1)
         .setReplicas(replicas)
         .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
       assertEquals(leaderEpoch, partition.getLeaderEpoch)
@@ -134,7 +134,7 @@ class AbstractPartitionTest {
         .setLeader(brokerId + 1)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)
-        .setZkVersion(1)
+        .setPartitionEpoch(1)
         .setReplicas(replicas)
         .setIsNew(true), offsetCheckpoints, None), "Expected become follower transition to succeed")
       assertEquals(leaderEpoch, partition.getLeaderEpoch)

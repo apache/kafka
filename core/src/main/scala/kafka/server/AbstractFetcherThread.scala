@@ -374,7 +374,7 @@ abstract class AbstractFetcherThread(name: String,
                       }
                     }
                   } catch {
-                    case ime@( _: CorruptRecordException | _: InvalidRecordException) =>
+                    case ime@(_: CorruptRecordException | _: InvalidRecordException) =>
                       // we log the error and continue. This ensures two things
                       // 1. If there is a corrupt message in a topic partition, it does not bring the fetcher thread
                       //    down and cause other topic partition to also lag
@@ -413,8 +413,20 @@ abstract class AbstractFetcherThread(name: String,
 
                 case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
                   warn(s"Received ${Errors.UNKNOWN_TOPIC_OR_PARTITION} from the leader for partition $topicPartition. " +
-                       "This error may be returned transiently when the partition is being created or deleted, but it is not " +
-                       "expected to persist.")
+                    "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                    "expected to persist.")
+                  partitionsWithError += topicPartition
+
+                case Errors.UNKNOWN_TOPIC_ID =>
+                  warn(s"Received ${Errors.UNKNOWN_TOPIC_ID} from the leader for partition $topicPartition. " +
+                    "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                    "expected to persist.")
+                  partitionsWithError += topicPartition
+
+                case Errors.INCONSISTENT_TOPIC_ID =>
+                  warn(s"Received ${Errors.INCONSISTENT_TOPIC_ID} from the leader for partition $topicPartition. " +
+                    "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                    "expected to persist.")
                   partitionsWithError += topicPartition
 
                 case partitionError =>
@@ -545,11 +557,11 @@ abstract class AbstractFetcherThread(name: String,
    * For each topic partition, the offset to truncate to is calculated based on leader's returned
    * epoch and offset:
    *  -- If the leader replied with undefined epoch offset, we must use the high watermark. This can
-   *  happen if 1) the leader is still using message format older than KAFKA_0_11_0; 2) the follower
+   *  happen if 1) the leader is still using message format older than IBP_0_11_0; 2) the follower
    *  requested leader epoch < the first leader epoch known to the leader.
    *  -- If the leader replied with the valid offset but undefined leader epoch, we truncate to
    *  leader's offset if it is lower than follower's Log End Offset. This may happen if the
-   *  leader is on the inter-broker protocol version < KAFKA_2_0_IV0
+   *  leader is on the inter-broker protocol version < IBP_2_0_IV0
    *  -- If the leader replied with leader epoch not known to the follower, we truncate to the
    *  end offset of the largest epoch that is smaller than the epoch the leader replied with, and
    *  send OffsetsForLeaderEpochRequest with that leader epoch. In a more rare case, where the
@@ -572,7 +584,7 @@ abstract class AbstractFetcherThread(name: String,
            s"The initial fetch offset ${partitionStates.stateValue(tp).fetchOffset} will be used for truncation.")
       OffsetTruncationState(partitionStates.stateValue(tp).fetchOffset, truncationCompleted = true)
     } else if (leaderEpochOffset.leaderEpoch == UNDEFINED_EPOCH) {
-      // either leader or follower or both use inter-broker protocol version < KAFKA_2_0_IV0
+      // either leader or follower or both use inter-broker protocol version < IBP_2_0_IV0
       // (version 0 of OffsetForLeaderEpoch request/response)
       warn(s"Leader or replica is on protocol version where leader epoch is not considered in the OffsetsForLeaderEpoch response. " +
            s"The leader's offset ${leaderEpochOffset.endOffset} will be used for truncation in $tp.")
@@ -728,6 +740,18 @@ abstract class AbstractFetcherThread(name: String,
         fetcherLagStats.unregister(topicPartition)
         topicPartition -> state
       }.filter(_._2 != null).toMap
+    } finally partitionMapLock.unlock()
+  }
+
+  def removeAllPartitions(): Map[TopicPartition, PartitionFetchState] = {
+    partitionMapLock.lockInterruptibly()
+    try {
+      val allPartitionState = partitionStates.partitionStateMap.asScala.toMap
+      allPartitionState.keys.foreach { tp =>
+        partitionStates.remove(tp)
+        fetcherLagStats.unregister(tp)
+      }
+      allPartitionState
     } finally partitionMapLock.unlock()
   }
 

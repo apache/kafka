@@ -40,21 +40,17 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.internals.RocksDBStore;
-import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockInternalProcessorContext;
-import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
@@ -71,7 +67,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,6 +86,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
+import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -98,7 +94,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
@@ -250,7 +245,7 @@ public class EosIntegrationTest {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
-        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
@@ -266,39 +261,25 @@ public class EosIntegrationTest {
                 Serdes.LongSerde.class.getName(),
                 properties);
 
+            final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
+
+            final Properties producerConfigs = new Properties();
+            if (inputTopicTransactional) {
+                producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
+            }
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                inputData,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
+                CLUSTER.time,
+                inputTopicTransactional
+            );
+
             try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
                 startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
-                final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
-
-                final Properties producerConfigs = new Properties();
-                if (inputTopicTransactional) {
-                    producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
-                }
-
-                IntegrationTestUtils.produceKeyValuesSynchronously(
-                    inputTopic,
-                    inputData,
-                    TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
-                    CLUSTER.time,
-                    inputTopicTransactional
-                );
-
-                final List<KeyValue<Long, Long>> committedRecords =
-                    IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                        TestUtils.consumerConfig(
-                            CLUSTER.bootstrapServers(),
-                            CONSUMER_GROUP_ID,
-                            LongDeserializer.class,
-                            LongDeserializer.class,
-                            Utils.mkProperties(Collections.singletonMap(
-                                ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                            ),
-                        outputTopic,
-                        inputData.size()
-                    );
-
+                final List<KeyValue<Long, Long>> committedRecords = readResult(outputTopic, inputData.size(), CONSUMER_GROUP_ID);
                 checkResultPerKey(committedRecords, inputData, "The committed records do not match what expected");
             }
         }
@@ -341,7 +322,7 @@ public class EosIntegrationTest {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
-        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -366,21 +347,7 @@ public class EosIntegrationTest {
                 CLUSTER.time
             );
 
-            final List<KeyValue<Long, Long>> firstCommittedRecords =
-                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                    TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        CONSUMER_GROUP_ID,
-                        LongDeserializer.class,
-                        LongDeserializer.class,
-                        Utils.mkProperties(Collections.singletonMap(
-                            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                            IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
-                    SINGLE_PARTITION_OUTPUT_TOPIC,
-                    firstBurstOfData.size()
-                );
-
+            final List<KeyValue<Long, Long>> firstCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, firstBurstOfData.size(), CONSUMER_GROUP_ID);
             assertThat(firstCommittedRecords, equalTo(firstBurstOfData));
 
             IntegrationTestUtils.produceKeyValuesSynchronously(
@@ -390,21 +357,7 @@ public class EosIntegrationTest {
                 CLUSTER.time
             );
 
-            final List<KeyValue<Long, Long>> secondCommittedRecords =
-                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                    TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        CONSUMER_GROUP_ID,
-                        LongDeserializer.class,
-                        LongDeserializer.class,
-                        Utils.mkProperties(Collections.singletonMap(
-                            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                            IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
-                    SINGLE_PARTITION_OUTPUT_TOPIC,
-                    secondBurstOfData.size()
-                );
-
+            final List<KeyValue<Long, Long>> secondCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, secondBurstOfData.size(), CONSUMER_GROUP_ID);
             assertThat(secondCommittedRecords, equalTo(secondBurstOfData));
         }
     }
@@ -446,7 +399,7 @@ public class EosIntegrationTest {
             // p-0: ---> 10 rec + C
             // p-1: ---> 10 rec + C
 
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
             checkResultPerKey(
                 committedRecords,
                 committedDataBeforeFailure,
@@ -459,7 +412,7 @@ public class EosIntegrationTest {
             // p-0: ---> 10 rec + C  + 5 rec (pending)
             // p-1: ---> 10 rec + C  + 5 rec (pending)
 
-            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataBeforeFailure.size(), null);
             checkResultPerKey(
                 uncommittedRecords,
                 dataBeforeFailure,
@@ -478,10 +431,12 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterFailure = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID);
 
@@ -552,7 +507,7 @@ public class EosIntegrationTest {
             // p-0: ---> 10 rec + C
             // p-1: ---> 10 rec + C
 
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
             checkResultPerKey(
                 committedRecords,
                 computeExpectedResult(committedDataBeforeFailure),
@@ -565,7 +520,7 @@ public class EosIntegrationTest {
             // p-0: ---> 10 rec + C  + 5 rec (pending)
             // p-1: ---> 10 rec + C  + 5 rec (pending)
 
-            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataBeforeFailure.size(), null);
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
 
 
@@ -591,10 +546,12 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterFailure = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID);
 
@@ -672,7 +629,7 @@ public class EosIntegrationTest {
             // p-0: ---> 10 rec + C
             // p-1: ---> 10 rec + C
 
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
             checkResultPerKey(
                 committedRecords,
                 committedDataBeforeStall,
@@ -685,7 +642,7 @@ public class EosIntegrationTest {
             // p-0: ---> 10 rec + C  + 5 rec (pending)
             // p-1: ---> 10 rec + C  + 5 rec (pending)
 
-            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeStall.size(), null);
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataBeforeStall.size(), null);
             checkResultPerKey(
                 uncommittedRecords,
                 dataBeforeStall,
@@ -731,6 +688,7 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
 
             final List<KeyValue<Long, Long>> committedRecordsAfterRebalance = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size(),
                 CONSUMER_GROUP_ID);
 
@@ -767,6 +725,7 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C   + 10 rec + C
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
                 + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
@@ -792,48 +751,35 @@ public class EosIntegrationTest {
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
         try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, eosConfig, MAX_POLL_INTERVAL_MS)) {
+            writeInputData(writtenData);
 
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
-
-            writeInputData(writtenData);
 
             waitForCondition(
                     () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                     "SteamsTasks did not request commit.");
 
-            final List<KeyValue<Long, Long>> committedRecords = readResult(writtenData.size(), CONSUMER_GROUP_ID);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, writtenData.size(), CONSUMER_GROUP_ID);
 
-            checkResultPerKey(
-                    committedRecords,
-                    expectedResult,
-                    "The committed records do not match what expected");
+            if (!eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) {
+                checkResultPerKey(
+                        committedRecords,
+                        expectedResult,
+                        "The committed records do not match what expected");
 
-            verifyStateStore(
-                    streams,
-                    getMaxPerKey(expectedResult),
-                    "The state store content do not match what expected");
+                verifyStateStore(
+                        streams,
+                        getMaxPerKey(expectedResult),
+                        "The state store content do not match what expected");
+            }
         }
 
-        final Set<KeyValue<Long, Long>> expectedState = getMaxPerKey(expectedResult);
-        verifyStateIsInStoreAndOffsetsAreInCheckpoint(0, expectedState);
-        verifyStateIsInStoreAndOffsetsAreInCheckpoint(1, expectedState);
-
-        assertThat("Not all expected state values were found in the state stores", expectedState.isEmpty());
+        verifyOffsetsAreInCheckpoint(0);
+        verifyOffsetsAreInCheckpoint(1);
     }
 
-    private void verifyStateIsInStoreAndOffsetsAreInCheckpoint(final int partition, final Set<KeyValue<Long, Long>> expectedState) throws IOException {
+    private void verifyOffsetsAreInCheckpoint(final int partition) throws IOException {
         final String stateStoreDir = stateTmpDir + File.separator + "appDir" + File.separator + applicationId + File.separator + "0_" + partition + File.separator;
-
-        // Verify that the data in the state store on disk is fully up-to-date
-        final StateStoreContext context = new MockInternalProcessorContext(new Properties(), new TaskId(0, 0), new File(stateStoreDir));
-        final MockKeyValueStore stateStore = new MockKeyValueStore("store", false);
-        final RocksDBStore store = (RocksDBStore) new RocksDbKeyValueBytesStoreSupplier(storeName, false).get();
-        store.init(context, stateStore);
-
-        store.all().forEachRemaining(kv -> {
-            final KeyValue<Long, Long> kv2 = new KeyValue<>(new BigInteger(kv.key.get()).longValue(), new BigInteger(kv.value).longValue());
-            expectedState.remove(kv2);
-        });
 
         // Verify that the checkpointed offsets match exactly with max offset of the records in the changelog
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateStoreDir + ".checkpoint"));
@@ -867,8 +813,8 @@ public class EosIntegrationTest {
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
                                                    final long toExclusive,
                                                    final Long... keys) {
-        final Long dataSize = keys.length * (toExclusive - fromInclusive);
-        final List<KeyValue<Long, Long>> data = new ArrayList<>(dataSize.intValue());
+        final long dataSize = keys.length * (toExclusive - fromInclusive);
+        final List<KeyValue<Long, Long>> data = new ArrayList<>((int) dataSize);
 
         for (final Long k : keys) {
             for (long v = fromInclusive; v < toExclusive; ++v) {
@@ -990,7 +936,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), maxPollIntervalMs);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), maxPollIntervalMs - 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), maxPollIntervalMs);
-        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
 
@@ -1023,7 +969,8 @@ public class EosIntegrationTest {
         );
     }
 
-    private List<KeyValue<Long, Long>> readResult(final int numberOfRecords,
+    private List<KeyValue<Long, Long>> readResult(final String topic,
+                                                  final int numberOfRecords,
                                                   final String groupId) throws Exception {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -1035,7 +982,7 @@ public class EosIntegrationTest {
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                         IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
+                topic,
                 numberOfRecords
             );
         }
@@ -1043,7 +990,7 @@ public class EosIntegrationTest {
         // read uncommitted
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
+            topic,
             numberOfRecords
         );
     }
@@ -1089,17 +1036,21 @@ public class EosIntegrationTest {
 
     private void verifyStateStore(final KafkaStreams streams,
                                   final Set<KeyValue<Long, Long>> expectedStoreContent,
-                                  final String reason) throws Exception {
-        final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
-            .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
-        assertNotNull(store);
+                                  final String reason) {
+        final StateQueryRequest<KeyValueIterator<Long, Long>> request =
+                inStore(storeName).withQuery(RangeQuery.withNoBounds());
 
-        try (final KeyValueIterator<Long, Long> it = store.all()) {
-            while (it.hasNext()) {
-                assertTrue(reason, expectedStoreContent.remove(it.next()));
+        final StateQueryResult<KeyValueIterator<Long, Long>> result =
+                IntegrationTestUtils.iqv2WaitForResult(streams, request);
+
+        for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult: result.getPartitionResults().values()) {
+            try (final KeyValueIterator<Long, Long> it = partitionResult.getResult()) {
+                while (it.hasNext()) {
+                    assertTrue(reason, expectedStoreContent.remove(it.next()));
+                }
             }
-
-            assertTrue(reason, expectedStoreContent.isEmpty());
         }
+
+        assertTrue(reason, expectedStoreContent.isEmpty());
     }
 }

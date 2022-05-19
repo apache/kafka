@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_3_0_IV1}
 import kafka.log.LogConfig.configDef
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
@@ -27,8 +26,14 @@ import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigExceptio
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, TimestampType}
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
-
+import org.apache.kafka.metadata.ConfigSynonym
+import org.apache.kafka.metadata.ConfigSynonym.{HOURS_TO_MILLISECONDS, MINUTES_TO_MILLISECONDS}
+import java.util.Arrays.asList
 import java.util.{Collections, Locale, Properties}
+
+import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
+import org.apache.kafka.server.common.MetadataVersion._
+
 import scala.annotation.nowarn
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -100,7 +105,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
   @deprecated("3.0")
-  val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
+  val messageFormatVersion = MetadataVersion.fromVersionString(getString(LogConfig.MessageFormatVersionProp))
 
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
@@ -142,7 +147,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
         }
 
         if (localLogRetentionBytes > retentionSize) {
-          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.");
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.")
         }
 
         localLogRetentionBytes
@@ -154,7 +159,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   def remoteLogConfig = _remoteLogConfig
 
   @nowarn("cat=deprecation")
-  def recordVersion = messageFormatVersion.recordVersion
+  def recordVersion = messageFormatVersion.highestSupportedRecordVersion
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -234,7 +239,7 @@ object LogConfig {
   val LocalLogRetentionMsDoc = TopicConfig.LOCAL_LOG_RETENTION_MS_DOC
   val LocalLogRetentionBytesDoc = TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC
   val MaxMessageSizeDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC
-  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOCS
+  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOC
   val FileDeleteDelayMsDoc = TopicConfig.FILE_DELETE_DELAY_MS_DOC
   val DeleteRetentionMsDoc = TopicConfig.DELETE_RETENTION_MS_DOC
   val MinCompactionLagMsDoc = TopicConfig.MIN_COMPACTION_LAG_MS_DOC
@@ -265,7 +270,7 @@ object LogConfig {
 
   private[log] val ServerDefaultHeaderName = "Server Default Property"
 
-  val configsWithNoServerDefaults: Set[String] = Set(RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp);
+  val configsWithNoServerDefaults: Set[String] = Set(RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp)
 
   // Package private for testing
   private[log] class LogConfigDef(base: ConfigDef) extends ConfigDef(base) {
@@ -328,9 +333,9 @@ object LogConfig {
         KafkaConfig.LogRollTimeMillisProp)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
-      .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc,
+      .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(4), MEDIUM, MaxIndexSizeDoc,
         KafkaConfig.LogIndexSizeMaxBytesProp)
-      .define(FlushMessagesProp, LONG, Defaults.FlushInterval, atLeast(0), MEDIUM, FlushIntervalDoc,
+      .define(FlushMessagesProp, LONG, Defaults.FlushInterval, atLeast(1), MEDIUM, FlushIntervalDoc,
         KafkaConfig.LogFlushIntervalMessagesProp)
       .define(FlushMsProp, LONG, Defaults.FlushMs, atLeast(0), MEDIUM, FlushMsDoc,
         KafkaConfig.LogFlushIntervalMsProp)
@@ -364,7 +369,7 @@ object LogConfig {
         MEDIUM, CompressionTypeDoc, KafkaConfig.CompressionTypeProp)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable, MEDIUM, PreAllocateEnableDoc,
         KafkaConfig.LogPreAllocateProp)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, ApiVersionValidator, MEDIUM, MessageFormatVersionDoc,
+      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, new MetadataVersionValidator(), MEDIUM, MessageFormatVersionDoc,
         KafkaConfig.LogMessageFormatVersionProp)
       .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc,
         KafkaConfig.LogMessageTimestampTypeProp)
@@ -440,37 +445,86 @@ object LogConfig {
   }
 
   /**
-   * Map topic config to the broker config with highest priority. Some of these have additional synonyms
-   * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
+   * Maps topic configurations to their equivalent broker configurations.
+   *
+   * Topics can be configured either by setting their dynamic topic configurations, or by
+   * setting equivalent broker configurations. For historical reasons, the equivalent broker
+   * configurations have different names. This table maps each topic configuration to its
+   * equivalent broker configurations.
+   *
+   * In some cases, the equivalent broker configurations must be transformed before they
+   * can be used. For example, log.roll.hours must be converted to milliseconds before it
+   * can be used as the value of segment.ms.
+   *
+   * The broker configurations will be used in the order specified here. In other words, if
+   * both the first and the second synonyms are configured, we will use only the value of
+   * the first synonym and ignore the second.
    */
   @nowarn("cat=deprecation")
-  val TopicConfigSynonyms = Map(
-    SegmentBytesProp -> KafkaConfig.LogSegmentBytesProp,
-    SegmentMsProp -> KafkaConfig.LogRollTimeMillisProp,
-    SegmentJitterMsProp -> KafkaConfig.LogRollTimeJitterMillisProp,
-    SegmentIndexBytesProp -> KafkaConfig.LogIndexSizeMaxBytesProp,
-    FlushMessagesProp -> KafkaConfig.LogFlushIntervalMessagesProp,
-    FlushMsProp -> KafkaConfig.LogFlushIntervalMsProp,
-    RetentionBytesProp -> KafkaConfig.LogRetentionBytesProp,
-    RetentionMsProp -> KafkaConfig.LogRetentionTimeMillisProp,
-    MaxMessageBytesProp -> KafkaConfig.MessageMaxBytesProp,
-    IndexIntervalBytesProp -> KafkaConfig.LogIndexIntervalBytesProp,
-    DeleteRetentionMsProp -> KafkaConfig.LogCleanerDeleteRetentionMsProp,
-    MinCompactionLagMsProp -> KafkaConfig.LogCleanerMinCompactionLagMsProp,
-    MaxCompactionLagMsProp -> KafkaConfig.LogCleanerMaxCompactionLagMsProp,
-    FileDeleteDelayMsProp -> KafkaConfig.LogDeleteDelayMsProp,
-    MinCleanableDirtyRatioProp -> KafkaConfig.LogCleanerMinCleanRatioProp,
-    CleanupPolicyProp -> KafkaConfig.LogCleanupPolicyProp,
-    UncleanLeaderElectionEnableProp -> KafkaConfig.UncleanLeaderElectionEnableProp,
-    MinInSyncReplicasProp -> KafkaConfig.MinInSyncReplicasProp,
-    CompressionTypeProp -> KafkaConfig.CompressionTypeProp,
-    PreAllocateEnableProp -> KafkaConfig.LogPreAllocateProp,
-    MessageFormatVersionProp -> KafkaConfig.LogMessageFormatVersionProp,
-    MessageTimestampTypeProp -> KafkaConfig.LogMessageTimestampTypeProp,
-    MessageTimestampDifferenceMaxMsProp -> KafkaConfig.LogMessageTimestampDifferenceMaxMsProp,
-    MessageDownConversionEnableProp -> KafkaConfig.LogMessageDownConversionEnableProp
-  )
+  val AllTopicConfigSynonyms = Map(
+    SegmentBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogSegmentBytesProp)),
+    SegmentMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRollTimeMillisProp),
+      new ConfigSynonym(KafkaConfig.LogRollTimeHoursProp, HOURS_TO_MILLISECONDS)),
+    SegmentJitterMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRollTimeJitterMillisProp),
+      new ConfigSynonym(KafkaConfig.LogRollTimeJitterHoursProp, HOURS_TO_MILLISECONDS)),
+    SegmentIndexBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogIndexSizeMaxBytesProp)),
+    FlushMessagesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogFlushIntervalMessagesProp)),
+    FlushMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogFlushIntervalMsProp),
+      new ConfigSynonym(KafkaConfig.LogFlushSchedulerIntervalMsProp)),
+    RetentionBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRetentionBytesProp)),
+    RetentionMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogRetentionTimeMillisProp),
+      new ConfigSynonym(KafkaConfig.LogRetentionTimeMinutesProp, MINUTES_TO_MILLISECONDS),
+      new ConfigSynonym(KafkaConfig.LogRetentionTimeHoursProp, HOURS_TO_MILLISECONDS)),
+    MaxMessageBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.MessageMaxBytesProp)),
+    IndexIntervalBytesProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogIndexIntervalBytesProp)),
+    DeleteRetentionMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerDeleteRetentionMsProp)),
+    MinCompactionLagMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerMinCompactionLagMsProp)),
+    MaxCompactionLagMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerMaxCompactionLagMsProp)),
+    FileDeleteDelayMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogDeleteDelayMsProp)),
+    MinCleanableDirtyRatioProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanerMinCleanRatioProp)),
+    CleanupPolicyProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogCleanupPolicyProp)),
+    UncleanLeaderElectionEnableProp -> asList(
+      new ConfigSynonym(KafkaConfig.UncleanLeaderElectionEnableProp)),
+    MinInSyncReplicasProp -> asList(
+      new ConfigSynonym(KafkaConfig.MinInSyncReplicasProp)),
+    CompressionTypeProp -> asList(
+      new ConfigSynonym(KafkaConfig.CompressionTypeProp)),
+    PreAllocateEnableProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogPreAllocateProp)),
+    MessageFormatVersionProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageFormatVersionProp)),
+    MessageTimestampTypeProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageTimestampTypeProp)),
+    MessageTimestampDifferenceMaxMsProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)),
+    MessageDownConversionEnableProp -> asList(
+      new ConfigSynonym(KafkaConfig.LogMessageDownConversionEnableProp)),
+  ).asJava
 
+  /**
+   * Map topic config to the broker config with highest priority. Some of these have additional synonyms
+   * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
+   * or using [[AllTopicConfigSynonyms]]
+   */
+  val TopicConfigSynonyms = AllTopicConfigSynonyms.asScala.map {
+    case (k, v) => k -> v.get(0).name()
+  }
 
   /**
    * Copy the subset of properties that are relevant to Logs. The individual properties
@@ -508,17 +562,17 @@ object LogConfig {
     logProps
   }
 
-  def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: ApiVersion): Boolean =
-    interBrokerProtocolVersion >= KAFKA_3_0_IV1
+  def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: MetadataVersion): Boolean =
+    interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)
 
   class MessageFormatVersion(messageFormatVersionString: String, interBrokerProtocolVersionString: String) {
-    val messageFormatVersion = ApiVersion(messageFormatVersionString)
-    private val interBrokerProtocolVersion = ApiVersion(interBrokerProtocolVersionString)
+    val messageFormatVersion = MetadataVersion.fromVersionString(messageFormatVersionString)
+    private val interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
 
     def shouldIgnore: Boolean = shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion)
 
     def shouldWarn: Boolean =
-      interBrokerProtocolVersion >= KAFKA_3_0_IV1 && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
+      interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1) && messageFormatVersion.highestSupportedRecordVersion.precedes(RecordVersion.V2)
 
     @nowarn("cat=deprecation")
     def topicWarningMessage(topicName: String): String = {

@@ -21,6 +21,7 @@ import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -32,6 +33,10 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "ControllerEventManager", "EventQueueTimeMs");
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
+    private final static MetricName FENCED_BROKER_COUNT = getMetricName(
+        "KafkaController", "FencedBrokerCount");
+    private final static MetricName ACTIVE_BROKER_COUNT = getMetricName(
+        "KafkaController", "ActiveBrokerCount");
     private final static MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
     private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
@@ -40,14 +45,18 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "KafkaController", "OfflinePartitionsCount");
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
-
+    
     private final MetricsRegistry registry;
     private volatile boolean active;
+    private volatile int fencedBrokerCount;
+    private volatile int activeBrokerCount;
     private volatile int globalTopicCount;
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
     private final Gauge<Integer> activeControllerCount;
+    private final Gauge<Integer> fencedBrokerCountGauge;
+    private final Gauge<Integer> activeBrokerCountGauge;
     private final Gauge<Integer> globalPartitionCountGauge;
     private final Gauge<Integer> globalTopicCountGauge;
     private final Gauge<Integer> offlinePartitionCountGauge;
@@ -58,6 +67,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.registry = Objects.requireNonNull(registry);
         this.active = false;
+        this.fencedBrokerCount = 0;
+        this.activeBrokerCount = 0;
         this.globalTopicCount = 0;
         this.globalPartitionCount = 0;
         this.offlinePartitionCount = 0;
@@ -70,6 +81,18 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
+        this.fencedBrokerCountGauge = registry.newGauge(FENCED_BROKER_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return fencedBrokerCount;
+            }
+        });
+        this.activeBrokerCountGauge = registry.newGauge(ACTIVE_BROKER_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return activeBrokerCount;
+            }
+        });
         this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -113,7 +136,26 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
 
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
-        eventQueueTime.update(durationMs);
+        eventQueueProcessingTime.update(durationMs);
+    }
+
+    @Override
+    public void setFencedBrokerCount(int brokerCount) {
+        this.fencedBrokerCount = brokerCount;
+    }
+
+    @Override
+    public int fencedBrokerCount() {
+        return this.fencedBrokerCount;
+    }
+
+    public void setActiveBrokerCount(int brokerCount) {
+        this.activeBrokerCount = brokerCount;
+    }
+
+    @Override
+    public int activeBrokerCount() {
+        return this.activeBrokerCount;
     }
 
     @Override
@@ -169,9 +211,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     private static MetricName getMetricName(String type, String name) {
-        final String group = "kafka.controller";
-        final StringBuilder mbeanNameBuilder = new StringBuilder();
-        mbeanNameBuilder.append(group).append(":type=").append(type).append(",name=").append(name);
-        return new MetricName(group, type, name, null, mbeanNameBuilder.toString());
+        return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
     }
 }

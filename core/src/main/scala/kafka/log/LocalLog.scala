@@ -86,7 +86,7 @@ class LocalLog(@volatile private var _dir: File,
 
   private[log] def dir: File = _dir
 
-  private[log] def name: String = dir.getName()
+  private[log] def name: String = dir.getName
 
   private[log] def parentDir: String = _parentDir
 
@@ -168,10 +168,14 @@ class LocalLog(@volatile private var _dir: File,
    * @param offset The offset to flush up to (non-inclusive)
    */
   private[log] def flush(offset: Long): Unit = {
-    val segmentsToFlush = segments.values(recoveryPoint, offset)
-    segmentsToFlush.foreach(_.flush())
-    // If there are any new segments, we need to flush the parent directory for crash consistency.
-    segmentsToFlush.lastOption.filter(_.baseOffset >= this.recoveryPoint).foreach(_ => Utils.flushDir(dir.toPath))
+    val currentRecoveryPoint = recoveryPoint
+    if (currentRecoveryPoint <= offset) {
+      val segmentsToFlush = segments.values(currentRecoveryPoint, offset)
+      segmentsToFlush.foreach(_.flush())
+      // If there are any new segments, we need to flush the parent directory for crash consistency.
+      if (segmentsToFlush.exists(_.baseOffset >= currentRecoveryPoint))
+        Utils.flushDir(dir.toPath)
+    }
   }
 
   /**
@@ -309,6 +313,44 @@ class LocalLog(@volatile private var _dir: File,
       }
       LocalLog.deleteSegmentFiles(toDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
     }
+  }
+
+  /**
+   * This method deletes the given segment and creates a new segment with the given new base offset. It ensures an
+   * active segment exists in the log at all times during this process.
+   *
+   * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
+   * physically deleting a file while it is being read.
+   *
+   * This method does not convert IOException to KafkaStorageException, the immediate caller
+   * is expected to catch and handle IOException.
+   *
+   * @param newOffset The base offset of the new segment
+   * @param segmentToDelete The old active segment to schedule for deletion
+   * @param asyncDelete Whether the segment files should be deleted asynchronously
+   * @param reason The reason for the segment deletion
+   */
+  private[log] def createAndDeleteSegment(newOffset: Long,
+                                          segmentToDelete: LogSegment,
+                                          asyncDelete: Boolean,
+                                          reason: SegmentDeletionReason): LogSegment = {
+    if (newOffset == segmentToDelete.baseOffset)
+      segmentToDelete.changeFileSuffixes("", DeletedFileSuffix)
+
+    val newSegment = LogSegment.open(dir,
+      baseOffset = newOffset,
+      config,
+      time = time,
+      initFileSize = config.initFileSize,
+      preallocate = config.preallocate)
+    segments.add(newSegment)
+
+    reason.logReason(List(segmentToDelete))
+    if (newOffset != segmentToDelete.baseOffset)
+      segments.remove(segmentToDelete.baseOffset)
+    LocalLog.deleteSegmentFiles(List(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
+
+    newSegment
   }
 
   /**
@@ -461,7 +503,10 @@ class LocalLog(@volatile private var _dir: File,
             s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
             s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
             s" size of offset index: ${activeSegment.offsetIndex.entries}.")
-          removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true, LogRoll(this))
+          val newSegment = createAndDeleteSegment(newOffset, activeSegment, asyncDelete = true, LogRoll(this))
+          updateLogEndOffset(nextOffsetMetadata.messageOffset)
+          info(s"Rolled new log segment at offset $newOffset in ${time.hiResClockMs() - start} ms.")
+          return newSegment
         } else {
           throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
             s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
@@ -513,14 +558,16 @@ class LocalLog(@volatile private var _dir: File,
       debug(s"Truncate and start at offset $newOffset")
       checkIfMemoryMappedBufferClosed()
       val segmentsToDelete = List[LogSegment]() ++ segments.values
-      removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, LogTruncation(this))
-      segments.add(LogSegment.open(dir,
-        baseOffset = newOffset,
-        config = config,
-        time = time,
-        initFileSize = config.initFileSize,
-        preallocate = config.preallocate))
+
+      if (segmentsToDelete.nonEmpty) {
+        removeAndDeleteSegments(segmentsToDelete.dropRight(1), asyncDelete = true, LogTruncation(this))
+        // Use createAndDeleteSegment() to create new segment first and then delete the old last segment to prevent missing
+        // active segment during the deletion process
+        createAndDeleteSegment(newOffset, segmentsToDelete.last, asyncDelete = true, LogTruncation(this))
+      }
+
       updateLogEndOffset(newOffset)
+
       segmentsToDelete
     }
   }
@@ -610,9 +657,9 @@ object LocalLog extends Logging {
    */
   private[log] def logDeleteDirName(topicPartition: TopicPartition): String = {
     val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
-    val suffix = s"-${topicPartition.partition()}.${uniqueId}${DeleteDirSuffix}"
+    val suffix = s"-${topicPartition.partition()}.$uniqueId$DeleteDirSuffix"
     val prefixLength = Math.min(topicPartition.topic().size, 255 - suffix.size)
-    s"${topicPartition.topic().substring(0, prefixLength)}${suffix}"
+    s"${topicPartition.topic().substring(0, prefixLength)}$suffix"
   }
 
   /**
@@ -876,7 +923,7 @@ object LocalLog extends Logging {
                                    isRecoveredSwapFile: Boolean = false): Iterable[LogSegment] = {
     val sortedNewSegments = newSegments.sortBy(_.baseOffset)
     // Some old segments may have been removed from index and scheduled for async deletion after the caller reads segments
-    // but before this method is executed. We want to filter out those segments to avoid calling asyncDeleteSegment()
+    // but before this method is executed. We want to filter out those segments to avoid calling deleteSegmentFiles()
     // multiple times for the same segment.
     val sortedOldSegments = oldSegments.filter(seg => existingSegments.contains(seg.baseOffset)).sortBy(_.baseOffset)
 
@@ -884,7 +931,7 @@ object LocalLog extends Logging {
     // if we crash in the middle of this we complete the swap in loadSegments()
     if (!isRecoveredSwapFile)
       sortedNewSegments.reverse.foreach(_.changeFileSuffixes(CleanedFileSuffix, SwapFileSuffix))
-    sortedNewSegments.reverse.foreach(existingSegments.add(_))
+    sortedNewSegments.reverse.foreach(existingSegments.add)
     val newSegmentBaseOffsets = sortedNewSegments.map(_.baseOffset).toSet
 
     // delete the old files
@@ -937,7 +984,10 @@ object LocalLog extends Logging {
                                       scheduler: Scheduler,
                                       logDirFailureChannel: LogDirFailureChannel,
                                       logPrefix: String): Unit = {
-    segmentsToDelete.foreach(_.changeFileSuffixes("", DeletedFileSuffix))
+    segmentsToDelete.foreach { segment =>
+      if (!segment.hasSuffix(DeletedFileSuffix))
+        segment.changeFileSuffixes("", DeletedFileSuffix)
+    }
 
     def deleteSegments(): Unit = {
       info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")

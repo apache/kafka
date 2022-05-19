@@ -18,8 +18,7 @@
 package kafka.server
 
 import java.util.Optional
-
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
@@ -28,7 +27,9 @@ import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -36,25 +37,32 @@ import scala.jdk.CollectionConverters._
 class MetadataRequestTest extends AbstractMetadataRequestTest {
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @Test
-  def testClusterIdWithRequestVersion1(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClusterIdWithRequestVersion1(quorum: String): Unit = {
     val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     val v1ClusterId = v1MetadataResponse.clusterId
     assertNull(v1ClusterId, s"v1 clusterId should be null")
   }
 
-  @Test
-  def testClusterIdIsValid(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClusterIdIsValid(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(2.toShort))
     isValidClusterId(metadataResponse.clusterId)
   }
 
-  @Test
-  def testControllerId(): Unit = {
+  /**
+   * This test only runs in ZK mode because in KRaft mode, the controller ID visible to
+   * the client is randomized.
+   */
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testControllerId(quorum: String): Unit = {
     val controllerServer = servers.find(_.kafkaController.isActive).get
     val controllerId = controllerServer.config.brokerId
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
@@ -75,8 +83,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }, "Controller id should match the active controller after failover", 5000)
   }
 
-  @Test
-  def testRack(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRack(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     // Validate rack matches what's set in generateConfigs() above
     metadataResponse.brokers.forEach { broker =>
@@ -84,8 +93,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
   }
 
-  @Test
-  def testIsInternal(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIsInternal(quorum: String): Unit = {
     val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
     val notInternalTopic = "notInternal"
     // create the topics
@@ -105,8 +115,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(Set(internalTopic).asJava, metadataResponse.buildCluster().internalTopics)
   }
 
-  @Test
-  def testNoTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testNoTopicsRequest(quorum: String): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
     createTopic("t2", 3, 2)
@@ -118,8 +129,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertTrue(metadataResponse.topicMetadata.isEmpty, "Response should have no topics")
   }
 
-  @Test
-  def testAutoTopicCreation(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAutoTopicCreation(quorum: String): Unit = {
     val topic1 = "t1"
     val topic2 = "t2"
     val topic3 = "t3"
@@ -143,26 +155,34 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val response3 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic4, topic5).asJava, false, 4.toShort).build)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic4))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic5))
-    assertEquals(None, zkClient.getTopicPartitionCount(topic5))
+    if (!isKRaftTest()) {
+      assertEquals(None, zkClient.getTopicPartitionCount(topic5))
+    }
   }
 
-  @Test
-  def testAutoCreateTopicWithInvalidReplicationFactor(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAutoCreateTopicWithInvalidReplicationFactor(quorum: String): Unit = {
     // Shutdown all but one broker so that the number of brokers is less than the default replication factor
-    servers.tail.foreach(_.shutdown())
-    servers.tail.foreach(_.awaitShutdown())
+    brokers.tail.foreach(_.shutdown())
+    brokers.tail.foreach(_.awaitShutdown())
 
     val topic1 = "testAutoCreateTopic"
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1).asJava, true).build)
     assertEquals(1, response1.topicMetadata.size)
     val topicMetadata = response1.topicMetadata.asScala.head
-    assertEquals(Errors.INVALID_REPLICATION_FACTOR, topicMetadata.error)
+    if (isKRaftTest()) {
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicMetadata.error)
+    } else {
+      assertEquals(Errors.INVALID_REPLICATION_FACTOR, topicMetadata.error)
+    }
     assertEquals(topic1, topicMetadata.topic)
     assertEquals(0, topicMetadata.partitionMetadata.size)
   }
 
-  @Test
-  def testAutoCreateOfCollidingTopics(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testAutoCreateOfCollidingTopics(quorum: String): Unit = {
     val topic1 = "testAutoCreate.Topic"
     val topic2 = "testAutoCreate_Topic"
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build)
@@ -176,7 +196,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
 
     val topicCreated = responseMap.head._1
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicCreated, 0)
-    TestUtils.waitForPartitionMetadata(servers, topicCreated, 0)
+    TestUtils.waitForPartitionMetadata(brokers, topicCreated, 0)
 
     // retry the metadata for the first auto created topic
     val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topicCreated).asJava, true).build)
@@ -191,8 +211,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertTrue(partitionMetadata.leaderId.get >= 0)
   }
 
-  @Test
-  def testAllTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAllTopicsRequest(quorum: String): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
     createTopic("t2", 3, 2)
@@ -208,16 +229,17 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(2, metadataResponseV1.topicMetadata.size(), "V1 Response should have 2 (all) topics")
   }
 
-  @Test
-  def testTopicIdsInResponse(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicIdsInResponse(quorum: String): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
     val topic2 = "topic2"
-    createTopic(topic1, replicaAssignment)
-    createTopic(topic2, replicaAssignment)
+    createTopicWithAssignment(topic1, replicaAssignment)
+    createTopicWithAssignment(topic2, replicaAssignment)
 
     // if version < 9, return ZERO_UUID in MetadataResponse
-    val resp1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 0, 9).build(), Some(controllerSocketServer))
+    val resp1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 0, 9).build(), Some(anySocketServer))
     assertEquals(2, resp1.topicMetadata.size)
     resp1.topicMetadata.forEach { topicMetadata =>
       assertEquals(Errors.NONE, topicMetadata.error)
@@ -225,7 +247,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
 
     // from version 10, UUID will be included in MetadataResponse
-    val resp2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 10, 10).build(), Some(notControllerSocketServer))
+    val resp2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 10, 10).build(), Some(anySocketServer))
     assertEquals(2, resp2.topicMetadata.size)
     resp2.topicMetadata.forEach { topicMetadata =>
       assertEquals(Errors.NONE, topicMetadata.error)
@@ -237,15 +259,15 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   /**
     * Preferred replica should be the first item in the replicas list
     */
-  @Test
-  def testPreferredReplica(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPreferredReplica(quorum: String): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
-    createTopic("t1", replicaAssignment)
-    // Call controller and one different broker to ensure that metadata propagation works correctly
-    val responses = Seq(
-      sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(), Some(controllerSocketServer)),
-      sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(), Some(notControllerSocketServer))
-    )
+    createTopicWithAssignment("t1", replicaAssignment)
+    // Test metadata on two different brokers to ensure that metadata propagation works correctly
+    val responses = Seq(0, 1).map(index =>
+      sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(),
+        Some(brokers(index).socketServer)))
     responses.foreach { response =>
       assertEquals(1, response.topicMetadata.size)
       val topicMetadata = response.topicMetadata.iterator.next()
@@ -261,8 +283,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
   }
 
-  @Test
-  def testReplicaDownResponse(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testReplicaDownResponse(quorum: String): Unit = {
     val replicaDownTopic = "replicaDown"
     val replicaCount = 3
 
@@ -272,8 +295,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     // Kill a replica node that is not the leader
     val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build())
     val partitionMetadata = metadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
-    val downNode = servers.find { server =>
-      val serverId = server.dataPlaneRequestProcessor.brokerId
+    val downNode = brokers.find { broker =>
+      val serverId = broker.dataPlaneRequestProcessor.brokerId
       val leaderId = partitionMetadata.leaderId
       val replicaIds = partitionMetadata.replicaIds.asScala
       leaderId.isPresent && leaderId.get() != serverId && replicaIds.contains(serverId)
@@ -283,7 +306,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     TestUtils.waitUntilTrue(() => {
       val response = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build())
       !response.brokers.asScala.exists(_.id == downNode.dataPlaneRequestProcessor.brokerId)
-    }, "Replica was not found down", 5000)
+    }, "Replica was not found down", 50000)
 
     // Validate version 0 still filters unavailable replicas and contains error
     val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), true), 0.toShort))
@@ -306,10 +329,14 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(replicaCount, v1PartitionMetadata.replicaIds.size, s"Response should have $replicaCount replicas")
   }
 
-  @Test
-  def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
-    def checkIsr(servers: Seq[KafkaServer], topic: String): Unit = {
-      val activeBrokers = servers.filter(_.brokerState != BrokerState.NOT_RUNNING)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIsrAfterBrokerShutDownAndJoinsBack(quorum: String): Unit = {
+    def checkIsr[B <: KafkaBroker](
+      brokers: Seq[B],
+      topic: String
+    ): Unit = {
+      val activeBrokers = brokers.filter(_.brokerState != BrokerState.NOT_RUNNING)
       val expectedIsr = activeBrokers.map(_.config.brokerId).toSet
 
       // Assert that topic metadata at new brokers is updated correctly
@@ -333,45 +360,52 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val replicaCount = 3
     createTopic(topic, 1, replicaCount)
 
-    servers.last.shutdown()
-    servers.last.awaitShutdown()
-    servers.last.startup()
+    brokers.last.shutdown()
+    brokers.last.awaitShutdown()
+    brokers.last.startup()
 
-    checkIsr(servers, topic)
+    checkIsr(brokers, topic)
   }
 
-  @Test
-  def testAliveBrokersWithNoTopics(): Unit = {
-    def checkMetadata(servers: Seq[KafkaServer], expectedBrokersCount: Int): Unit = {
-      var controllerMetadataResponse: Option[MetadataResponse] = None
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAliveBrokersWithNoTopics(quorum: String): Unit = {
+    def checkMetadata[B <: KafkaBroker](
+      brokers: Seq[B],
+      expectedBrokersCount: Int
+    ): Unit = {
+      var response: Option[MetadataResponse] = None
       TestUtils.waitUntilTrue(() => {
         val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
-          Some(controllerSocketServer))
-        controllerMetadataResponse = Some(metadataResponse)
+          Some(anySocketServer))
+        response = Some(metadataResponse)
         metadataResponse.brokers.size == expectedBrokersCount
-      }, s"Expected $expectedBrokersCount brokers, but there are ${controllerMetadataResponse.get.brokers.size} " +
-        "according to the Controller")
+      }, s"Expected $expectedBrokersCount brokers, but there are ${response.get.brokers.size}")
 
-      val brokersInController = controllerMetadataResponse.get.brokers.asScala.toSeq.sortBy(_.id)
+      val brokersSorted = response.get.brokers.asScala.toSeq.sortBy(_.id)
 
       // Assert that metadata is propagated correctly
-      servers.filter(_.brokerState != BrokerState.NOT_RUNNING).foreach { broker =>
+      brokers.filter(_.brokerState == BrokerState.RUNNING).foreach { broker =>
         TestUtils.waitUntilTrue(() => {
           val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
             Some(brokerSocketServer(broker.config.brokerId)))
           val brokers = metadataResponse.brokers.asScala.toSeq.sortBy(_.id)
           val topicMetadata = metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic)
-          brokersInController == brokers && metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic) == topicMetadata
+          brokersSorted == brokers && metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic) == topicMetadata
         }, s"Topic metadata not updated correctly")
       }
     }
 
-    val serverToShutdown = servers.filterNot(_.kafkaController.isActive).last
-    serverToShutdown.shutdown()
-    serverToShutdown.awaitShutdown()
-    checkMetadata(servers, servers.size - 1)
+    val brokerToShutdown = if (isKRaftTest()) {
+      brokers.last
+    } else {
+      servers.filterNot(_.kafkaController.isActive).last
+    }
+    brokerToShutdown.shutdown()
+    brokerToShutdown.awaitShutdown()
+    checkMetadata(brokers, brokers.size - 1)
 
-    serverToShutdown.startup()
-    checkMetadata(servers, servers.size)
+    brokerToShutdown.startup()
+    checkMetadata(brokers, brokers.size)
   }
 }

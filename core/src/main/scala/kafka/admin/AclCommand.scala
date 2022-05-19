@@ -40,6 +40,9 @@ import scala.io.StdIn
 
 object AclCommand extends Logging {
 
+  val AuthorizerDeprecationMessage: String = "Warning: support for ACL configuration directly " +
+    "through the authorizer is deprecated and will be removed in a future release. Please use " +
+    "--bootstrap-server instead to set ACLs through the admin client."
   val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, PatternType.LITERAL)
 
   private val Newline = scala.util.Properties.lineSeparator
@@ -499,32 +502,36 @@ object AclCommand extends Logging {
       .describedAs("command-config")
       .ofType(classOf[String])
 
-    val authorizerOpt = parser.accepts("authorizer", "Fully qualified class name of the authorizer, defaults to kafka.security.authorizer.AclAuthorizer.")
+    val authorizerOpt = parser.accepts("authorizer", "DEPRECATED: Fully qualified class name of " +
+      "the authorizer, which defaults to kafka.security.authorizer.AclAuthorizer if --bootstrap-server is not provided. " +
+      AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg
       .describedAs("authorizer")
       .ofType(classOf[String])
 
-    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "REQUIRED: properties required to configure an instance of Authorizer. " +
-      "These are key=val pairs. For the default authorizer the example values are: zookeeper.connect=localhost:2181")
+    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "DEPRECATED: The " +
+      "properties required to configure an instance of the Authorizer specified by --authorizer. " +
+      "These are key=val pairs. For the default authorizer, example values are: zookeeper.connect=localhost:2181. " +
+      AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg
       .describedAs("authorizer-properties")
       .ofType(classOf[String])
 
     val topicOpt = parser.accepts("topic", "topic to which ACLs should be added or removed. " +
-      "A value of * indicates ACL should apply to all topics.")
+      "A value of '*' indicates ACL should apply to all topics.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
 
     val clusterOpt = parser.accepts("cluster", "Add/Remove cluster ACLs.")
     val groupOpt = parser.accepts("group", "Consumer Group to which the ACLs should be added or removed. " +
-      "A value of * indicates the ACLs should apply to all groups.")
+      "A value of '*' indicates the ACLs should apply to all groups.")
       .withRequiredArg
       .describedAs("group")
       .ofType(classOf[String])
 
     val transactionalIdOpt = parser.accepts("transactional-id", "The transactionalId to which ACLs should " +
-      "be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.")
+      "be added or removed. A value of '*' indicates the ACLs should apply to all transactionalIds.")
       .withRequiredArg
       .describedAs("transactional-id")
       .ofType(classOf[String])
@@ -534,7 +541,7 @@ object AclCommand extends Logging {
       "the producer is authorized to a particular transactional-id.")
 
     val delegationTokenOpt = parser.accepts("delegation-token", "Delegation token to which ACLs should be added or removed. " +
-      "A value of * indicates ACL should apply to all tokens.")
+      "A value of '*' indicates ACL should apply to all tokens.")
       .withRequiredArg
       .describedAs("delegation-token")
       .ofType(classOf[String])
@@ -562,7 +569,7 @@ object AclCommand extends Logging {
 
     val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
       " Note that principalType must be supported by the Authorizer being used." +
-      " For example, User:* is the wild card indicating all users.")
+      " For example, User:'*' is the wild card indicating all users.")
       .withRequiredArg
       .describedAs("allow-principal")
       .ofType(classOf[String])
@@ -572,7 +579,7 @@ object AclCommand extends Logging {
       "You only need to use this option as negation to already allowed set. " +
       "Note that principalType must be supported by the Authorizer being used. " +
       "For example if you wanted to allow access to all users in the system but not test-user you can define an ACL that " +
-      "allows access to User:* and specify --deny-principal=User:test@EXAMPLE.COM. " +
+      "allows access to User:'*' and specify --deny-principal=User:test@EXAMPLE.COM. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")
       .withRequiredArg
       .describedAs("deny-principal")
@@ -585,13 +592,13 @@ object AclCommand extends Logging {
       .ofType(classOf[String])
 
     val allowHostsOpt = parser.accepts("allow-host", "Host from which principals listed in --allow-principal will have access. " +
-      "If you have specified --allow-principal then the default for this option will be set to * which allows access from all hosts.")
+      "If you have specified --allow-principal then the default for this option will be set to '*' which allows access from all hosts.")
       .withRequiredArg
       .describedAs("allow-host")
       .ofType(classOf[String])
 
     val denyHostsOpt = parser.accepts("deny-host", "Host from which principals listed in --deny-principal will be denied access. " +
-      "If you have specified --deny-principal then the default for this option will be set to * which denies access from all hosts.")
+      "If you have specified --deny-principal then the default for this option will be set to '*' which denies access from all hosts.")
       .withRequiredArg
       .describedAs("deny-host")
       .ofType(classOf[String])
@@ -605,10 +612,13 @@ object AclCommand extends Logging {
     val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
-      "Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.  Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
+      "DEPRECATED: Identifies the file where ZooKeeper client TLS connectivity properties are defined for" +
+        " the default authorizer kafka.security.authorizer.AclAuthorizer." +
+        " Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
         ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
-        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true")
+        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true. " +
+        AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg().describedAs("Authorizer ZooKeeper TLS configuration").ofType(classOf[String])
 
     options = parser.parse(args: _*)
@@ -617,8 +627,10 @@ object AclCommand extends Logging {
       if (options.has(bootstrapServerOpt) && options.has(authorizerOpt))
         CommandLineUtils.printUsageAndDie(parser, "Only one of --bootstrap-server or --authorizer must be specified")
 
-      if (!options.has(bootstrapServerOpt))
+      if (!options.has(bootstrapServerOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, authorizerPropertiesOpt)
+        System.err.println(AclCommand.AuthorizerDeprecationMessage)
+      }
 
       if (options.has(commandConfigOpt) && !options.has(bootstrapServerOpt))
         CommandLineUtils.printUsageAndDie(parser, "The --command-config option can only be used with --bootstrap-server option")

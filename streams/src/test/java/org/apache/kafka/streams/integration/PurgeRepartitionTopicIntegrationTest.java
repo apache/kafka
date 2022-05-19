@@ -161,6 +161,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
+        streamsConfiguration.put(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
@@ -203,10 +204,11 @@ public class PurgeRepartitionTopicIntegrationTest {
         TestUtils.waitForCondition(new RepartitionTopicCreatedWithExpectedConfigs(), 60000,
                 "Repartition topic " + REPARTITION_TOPIC + " not created with the expected configs after 60000 ms.");
 
+        // wait until we received more than 1 segment of data, so that we can confirm the purge succeeds in next verification
         TestUtils.waitForCondition(
-            new RepartitionTopicVerified(currentSize -> currentSize > 0),
+            new RepartitionTopicVerified(currentSize -> currentSize > PURGE_SEGMENT_BYTES),
             60000,
-            "Repartition topic " + REPARTITION_TOPIC + " not received data after 60000 ms."
+            "Repartition topic " + REPARTITION_TOPIC + " not received more than " + PURGE_SEGMENT_BYTES + "B of data after 60000 ms."
         );
 
         // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side

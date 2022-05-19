@@ -16,11 +16,11 @@
  */
 package kafka.server
 
-import kafka.api.ApiVersion
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.jupiter.api.Test
+import org.apache.kafka.server.common.MetadataVersion
+import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -37,7 +37,7 @@ class ApiVersionManagerTest {
   def testApiScope(apiScope: ListenerType): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache
@@ -61,7 +61,7 @@ class ApiVersionManagerTest {
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -75,13 +75,36 @@ class ApiVersionManagerTest {
   }
 
   @Test
+  def testEnvelopeDisabledForKRaftBroker(): Unit = {
+    val forwardingManager = Mockito.mock(classOf[ForwardingManager])
+    Mockito.when(forwardingManager.controllerApiVersions).thenReturn(None)
+
+    for (forwardingManagerOpt <- Seq(Some(forwardingManager), None)) {
+      val versionManager = new DefaultApiVersionManager(
+        listenerType = ListenerType.BROKER,
+        interBrokerProtocolVersion = MetadataVersion.latest,
+        forwardingManager = forwardingManagerOpt,
+        features = brokerFeatures,
+        featureCache = featureCache
+      )
+      assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
+      assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
+
+      val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
+      val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
+      assertNull(envelopeVersion)
+    }
+  }
+
+  @Disabled("Enable after enable KIP-590 forwarding in KAFKA-12886")
+  @Test
   def testEnvelopeEnabledWhenForwardingManagerPresent(): Unit = {
     val forwardingManager = Mockito.mock(classOf[ForwardingManager])
     Mockito.when(forwardingManager.controllerApiVersions).thenReturn(None)
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -100,7 +123,7 @@ class ApiVersionManagerTest {
   def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache

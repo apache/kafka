@@ -55,6 +55,10 @@ class EndToEndTest(Test):
             self.topic: self.topic_config,
             "__consumer_offsets": group_metadata_config
         }
+
+        if self.topic:
+            topics[self.topic] = self.topic_config
+
         self.kafka = KafkaService(self.test_context, num_nodes=num_nodes,
                                   zk=self.zk, topics=topics, **kwargs)
 
@@ -83,7 +87,13 @@ class EndToEndTest(Test):
         self.last_consumed_offsets[partition] = offset
         self.records_consumed.append(record_id)
 
-    def await_consumed_offsets(self, last_acked_offsets, timeout_sec):
+    def await_produced_records(self, min_records, timeout_sec=30):
+        wait_until(lambda: self.producer.num_acked > min_records,
+                   timeout_sec=timeout_sec,
+                   err_msg="Producer failed to produce messages for %ds." %\
+                   timeout_sec)
+
+    def await_consumed_offsets(self, last_acked_offsets, timeout_sec=30):
         def has_finished_consuming():
             for partition, offset in last_acked_offsets.items():
                 if not partition in self.last_consumed_offsets:
@@ -98,6 +108,10 @@ class EndToEndTest(Test):
                    err_msg="Consumer failed to consume up to offsets %s after waiting %ds." %\
                    (str(last_acked_offsets), timeout_sec))
 
+    def await_consumed_records(self, min_records, producer_timeout_sec=30,
+                               consumer_timeout_sec=30):
+        self.await_produced_records(min_records=min_records)
+        self.await_consumed_offsets(self.producer.last_acked_offsets)
 
     def _collect_all_logs(self):
         for s in self.test_context.services:
@@ -116,11 +130,7 @@ class EndToEndTest(Test):
     def run_validation(self, min_records=5000, producer_timeout_sec=30,
                        consumer_timeout_sec=30, enable_idempotence=False):
         try:
-            wait_until(lambda: self.producer.num_acked > min_records,
-                       timeout_sec=producer_timeout_sec,
-                       err_msg="Producer failed to produce messages for %ds." %\
-                       producer_timeout_sec)
-
+            self.await_produced_records(min_records, producer_timeout_sec)
             self.logger.info("Stopping producer after writing up to offsets %s" %\
                          str(self.producer.last_acked_offsets))
             self.producer.stop()

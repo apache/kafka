@@ -35,12 +35,12 @@ import java.util.Set;
 public class WorkerSinkTaskContext implements SinkTaskContext {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
-    private Map<TopicPartition, Long> offsets;
-    private long timeoutMs;
-    private KafkaConsumer<byte[], byte[]> consumer;
+    private final Map<TopicPartition, Long> offsets;
+    private final KafkaConsumer<byte[], byte[]> consumer;
     private final WorkerSinkTask sinkTask;
     private final ClusterConfigState configState;
     private final Set<TopicPartition> pausedPartitions;
+    private long timeoutMs;
     private boolean commitRequested;
 
     public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer,

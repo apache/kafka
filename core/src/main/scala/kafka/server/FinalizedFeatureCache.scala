@@ -22,10 +22,10 @@ import java.util.Collections
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.image.FeaturesDelta
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.concurrent.TimeoutException
 import scala.math.max
-
 import scala.compat.java8.OptionConverters._
 
 // Raised whenever there was an error in updating the FinalizedFeatureCache with features.
@@ -138,11 +138,14 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
     val newFeatures = new util.HashMap[String, FinalizedVersionRange]()
     newFeatures.putAll(features.features.features())
     featuresDelta.changes().entrySet().forEach { e =>
-      e.getValue().asScala match {
+      e.getValue.asScala match {
         case None => newFeatures.remove(e.getKey)
-        case Some(feature) => newFeatures.put(e.getKey,
-          new FinalizedVersionRange(feature.min(), feature.max()))
+        case Some(version) => newFeatures.put(e.getKey,
+          new FinalizedVersionRange(version, version))
       }
+    }
+    featuresDelta.metadataVersionChange().ifPresent { metadataVersion =>
+      newFeatures.put(MetadataVersion.FEATURE_NAME, new FinalizedVersionRange(metadataVersion.featureLevel(), metadataVersion.featureLevel()))
     }
     featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(Features.finalizedFeatures(
       Collections.unmodifiableMap(newFeatures)), highestMetadataOffset))
