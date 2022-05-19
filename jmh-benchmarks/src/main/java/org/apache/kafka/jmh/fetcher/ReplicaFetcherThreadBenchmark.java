@@ -351,7 +351,6 @@ public class ReplicaFetcherThreadBenchmark {
                             return new scala.collection.mutable.HashMap<>();
                         }
                     },
-                    new BrokerEndPoint(3, "host", 3000),
                     config,
                     new FailedPartitions(),
                     replicaManager,
