@@ -27,7 +27,7 @@ import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, _}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer, OffsetResetStrategy}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
@@ -147,7 +147,7 @@ object ConsoleConsumer extends Logging {
     val props = new Properties
     props ++= config.consumerProps
     props ++= config.extraConsumerProps
-    setAutoOffsetResetValue(config, props)
+    checkAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
       props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
@@ -161,19 +161,17 @@ object ConsoleConsumer extends Logging {
     *
     * Order of priority is:
     *   1. Explicitly set parameter via --consumer.property command line parameter
-    *   2. Explicit --from-beginning given -> 'earliest'
-    *   3. Default value of 'latest'
+    *   2. Explicit --from-beginning given -> 'earliest-on-start'
+    *   3. If not set, exit
     *
     * In case both --from-beginning and an explicit value are specified an error is thrown if these
     * are conflicting.
     */
-  def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties): Unit = {
-    val (earliestConfigValue, latestConfigValue) = ("earliest", "latest")
-
+  def checkAutoOffsetResetValue(config: ConsumerConfig, props: Properties): Unit = {
     if (props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
       // auto.offset.reset parameter was specified on the command line
       val autoResetOption = props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)
-      if (config.options.has(config.resetBeginningOpt) && earliestConfigValue != autoResetOption) {
+      if (config.options.has(config.resetBeginningOpt) && OffsetResetStrategy.EARLIEST_ON_START != autoResetOption) {
         // conflicting options - latest und earliest, throw an error
         System.err.println(s"Can't simultaneously specify --from-beginning and 'auto.offset.reset=$autoResetOption', " +
           "please remove one option")
@@ -183,8 +181,14 @@ object ConsoleConsumer extends Logging {
       // value was already copied during .putall operation
     } else {
       // no explicit value for auto.offset.reset was specified
-      // if --from-beginning was specified use earliest, otherwise default to latest
-      val autoResetOption = if (config.options.has(config.resetBeginningOpt)) earliestConfigValue else latestConfigValue
+      val autoResetOption = {
+        if (config.options.has(config.resetBeginningOpt))
+          OffsetResetStrategy.EARLIEST_ON_START
+        else {
+          System.err.println("If not set --from-beginning, must set auto.offset.reset.")
+          Exit.exit(1)
+        }
+      }
       props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoResetOption)
     }
   }
