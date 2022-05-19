@@ -43,7 +43,6 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -175,7 +174,13 @@ class ControllerServer(
           OptionalLong.empty()
         }
 
+        val maxIdleIntervalNs = config.metadataMaxIdleIntervalMs match {
+          case Some(value) => OptionalLong.of(TimeUnit.NANOSECONDS.convert(value, TimeUnit.MILLISECONDS))
+          case None => OptionalLong.empty()
+        }
+
         new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
+          setMetadataVersion(config.interBrokerProtocolVersion).
           setTime(time).
           setThreadNamePrefix(threadNamePrefixAsString).
           setConfigSchema(configSchema).
@@ -183,12 +188,12 @@ class ControllerServer(
           setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
-          setIsLeaderRecoverySupported(bootstrapMetadata.metadataVersion().isAtLeast(IBP_3_2_IV0)).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
-          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+          setMaxIdleIntervalNs(maxIdleIntervalNs).
+          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).

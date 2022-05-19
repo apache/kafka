@@ -216,6 +216,11 @@ public final class MetadataDelta {
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
                 replay((RemoveAccessControlEntryRecord) record);
                 break;
+            case NO_OP_RECORD:
+                /* NoOpRecord is an empty record and doesn't need to be replayed beyond
+                 * updating the highest offset and epoch.
+                 */
+                break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
         }

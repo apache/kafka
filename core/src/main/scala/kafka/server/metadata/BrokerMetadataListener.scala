@@ -39,7 +39,8 @@ class BrokerMetadataListener(
   time: Time,
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
-  val snapshotter: Option[MetadataSnapshotter]
+  val snapshotter: Option[MetadataSnapshotter],
+  brokerMetrics: BrokerMetrics
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
@@ -279,6 +280,10 @@ class BrokerMetadataListener(
       debug(s"Publishing new metadata delta $delta at offset ${_image.highestOffsetAndEpoch().offset}.")
     }
     publisher.publish(delta, _image)
+
+    // Update the metrics since the publisher handled the lastest image
+    brokerMetrics.lastAppliedRecordOffset.set(_highestOffset)
+    brokerMetrics.lastAppliedRecordTimestamp.set(_highestTimestamp)
   }
 
   override def handleLeaderChange(leaderAndEpoch: LeaderAndEpoch): Unit = {

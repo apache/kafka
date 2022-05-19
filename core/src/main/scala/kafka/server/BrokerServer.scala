@@ -31,6 +31,7 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
+import kafka.server.metadata.BrokerMetrics
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.feature.SupportedVersionRange
@@ -322,11 +323,14 @@ class BrokerServer(
         ))
       }
 
-      metadataListener = new BrokerMetadataListener(config.nodeId,
-                                                    time,
-                                                    threadNamePrefix,
-                                                    config.metadataSnapshotMaxNewRecordBytes,
-                                                    metadataSnapshotter)
+      metadataListener = new BrokerMetadataListener(
+        config.nodeId,
+        time,
+        threadNamePrefix,
+        config.metadataSnapshotMaxNewRecordBytes,
+        metadataSnapshotter,
+        BrokerMetrics(metrics)
+      )
 
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>

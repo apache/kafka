@@ -84,6 +84,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -419,6 +420,48 @@ public class QuorumControllerTest {
                 },
                 TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 10, TimeUnit.NANOSECONDS),
                 "Leaders where not balanced after unfencing all of the brokers"
+            );
+        }
+    }
+
+    @Test
+    public void testNoOpRecordWriteAfterTimeout() throws Throwable {
+        long maxIdleIntervalNs = 1_000_000;
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
+                logEnv,
+                builder -> {
+                    builder.setConfigSchema(SCHEMA)
+                        .setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs));
+                }
+            );
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+
+            LocalLogManager localLogManager = logEnv.logManagers().get(0);
+            TestUtils.waitForCondition(
+                () -> localLogManager.highWatermark().isPresent(),
+                10_000, // 10 seconds
+                "High watermark was not established"
+            );
+
+
+            final long firstHighWatermark = localLogManager.highWatermark().getAsLong();
+            TestUtils.waitForCondition(
+                () -> localLogManager.highWatermark().getAsLong() > firstHighWatermark,
+                TimeUnit.MILLISECONDS.convert(2 * maxIdleIntervalNs, TimeUnit.MICROSECONDS),
+                "Active controller didn't write NoOpRecord"
+            );
+
+            // Do it again to make sure that we are not counting the leader change record
+            final long secondHighWatermark = localLogManager.highWatermark().getAsLong();
+            TestUtils.waitForCondition(
+                () -> localLogManager.highWatermark().getAsLong() > secondHighWatermark,
+                TimeUnit.MILLISECONDS.convert(2 * maxIdleIntervalNs, TimeUnit.MICROSECONDS),
+                "Active controller didn't write NoOpRecord"
             );
         }
     }
