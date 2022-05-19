@@ -177,11 +177,10 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
 
         val queuedStates = stopReplicaPartitionStates.getOrElseUpdate(partition,
           new util.LinkedList[StopReplicaPartitionState]())
-        val deletePartitions = request.deletePartitions()
         val transformedPartitionState = new StopReplicaPartitionState()
           .setTopicName(partition.topicPartition().topic())
           .setPartitionIndex(partition.topicPartition().partition())
-          .setDeletePartitions(deletePartitions)
+          .setDeletePartitions(partitionState.deletePartition())
           .setBrokerEpoch(request.brokerEpoch())
 
           if (liCombinedControlRequestVersion >= 1) {
@@ -288,7 +287,9 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
       LiDecomposedControlResponseUtils.decomposeResponse(response.asInstanceOf[LiCombinedControlResponse])
     }
     if (leaderAndIsrCallback != null
-      && (!leaderAndIsrResponse.data.partitionErrors.isEmpty || leaderAndIsrResponse.error() != Errors.NONE)) {
+      && (!leaderAndIsrResponse.data.partitionErrors.isEmpty ||
+      !leaderAndIsrResponse.data().topics().isEmpty ||
+      leaderAndIsrResponse.error() != Errors.NONE)) {
       // fire callback only if leaderAndIsrResponse is non-empty or contains errors
       leaderAndIsrCallback(leaderAndIsrResponse)
     }

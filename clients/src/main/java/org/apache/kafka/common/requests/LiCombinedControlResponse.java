@@ -40,6 +40,10 @@ public class LiCombinedControlResponse extends AbstractResponse {
         return data.leaderAndIsrPartitionErrors();
     }
 
+    public LiCombinedControlResponseData.LeaderAndIsrTopicErrorCollection leaderAndIsrTopicErrors() {
+        return data.leaderAndIsrTopics();
+    }
+
     public List<LiCombinedControlResponseData.StopReplicaPartitionError> stopReplicaPartitionErrors() {
         return data.stopReplicaPartitionErrors();
     }

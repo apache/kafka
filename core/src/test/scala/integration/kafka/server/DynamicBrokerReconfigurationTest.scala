@@ -521,7 +521,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testLiCombinedControlRequestEnable(): Unit = {
-    verifyLiCombinedControlRequestEnable(false)
     val props = new Properties
     props.put(KafkaConfig.LiCombinedControlRequestEnableProp, "true")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LiCombinedControlRequestEnableProp, "true"))

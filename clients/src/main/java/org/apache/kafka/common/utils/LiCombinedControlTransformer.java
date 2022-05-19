@@ -155,6 +155,16 @@ public class LiCombinedControlTransformer {
                         .setErrorCode(error.errorCode())).collect(Collectors.toList());
     }
 
+    public static LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection restoreLeaderAndIsrTopicErrors(
+            LiCombinedControlResponseData.LeaderAndIsrTopicErrorCollection errors) {
+        LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection topicErrors = new LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection();
+        for (LiCombinedControlResponseData.LeaderAndIsrTopicError error : errors) {
+            topicErrors.add(new LeaderAndIsrResponseData.LeaderAndIsrTopicError().setTopicId(error.topicId())
+                    .setPartitionErrors(restoreLeaderAndIsrPartitionErrors(error.partitionErrors())));
+        }
+        return topicErrors;
+    }
+
     public static List<LiCombinedControlResponseData.StopReplicaPartitionError> transformStopReplicaPartitionErrors(
             List<StopReplicaResponseData.StopReplicaPartitionError> errors) {
         return errors.stream().map(error ->

@@ -57,9 +57,6 @@ class LiCombinedControlRequestTest extends KafkaServerTestHarness  with Logging 
 
   @Test
   def testChangingLiCombinedControlRequestFlag(): Unit = {
-    // check that no LiCombinedControlRequest can be sent with the default config
-    assertTrue(createTopicAndGetCombinedRequestCount(Set(0, 1).map("topic" + _)) == 0)
-
     // turn on the feature by setting the /li_combined_control_request_flag to true
     val props = new Properties
     props.put(KafkaConfig.LiCombinedControlRequestEnableProp, "true")

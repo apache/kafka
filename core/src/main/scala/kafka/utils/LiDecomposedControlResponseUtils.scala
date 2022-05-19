@@ -24,8 +24,9 @@ import org.apache.kafka.common.utils.LiCombinedControlTransformer
 object LiDecomposedControlResponseUtils {
   def decomposeResponse(response: LiCombinedControlResponse): LiDecomposedControlResponse = {
     val leaderAndIsrResponse = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-    .setErrorCode(response.leaderAndIsrErrorCode())
-    .setPartitionErrors(LiCombinedControlTransformer.restoreLeaderAndIsrPartitionErrors(response.leaderAndIsrPartitionErrors())),
+      .setErrorCode(response.leaderAndIsrErrorCode())
+      .setPartitionErrors(LiCombinedControlTransformer.restoreLeaderAndIsrPartitionErrors(response.leaderAndIsrPartitionErrors()))
+      .setTopics(LiCombinedControlTransformer.restoreLeaderAndIsrTopicErrors(response.leaderAndIsrTopicErrors())),
       leaderAndIsrResponseVersion(response))
 
     val updateMetadataResponse = new UpdateMetadataResponse(new UpdateMetadataResponseData()

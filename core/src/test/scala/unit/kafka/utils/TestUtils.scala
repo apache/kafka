@@ -334,7 +334,7 @@ object TestUtils extends Logging {
 
     props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
-
+    props.put(KafkaConfig.LiCombinedControlRequestEnableProp, "true")
     props
   }
 

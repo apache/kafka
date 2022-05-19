@@ -111,6 +111,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition(topic, 0)
     val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
+    brokerConfigs.foreach(p => p.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true"))
     // create brokers
     val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     this.servers = allServers
@@ -194,6 +195,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition(topic, 0)
     val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
+    brokerConfigs.foreach(p => p.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true"))
     // create brokers
     val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     this.servers = allServers
@@ -336,6 +338,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     brokerConfigs.head.setProperty("log.cleanup.policy","compact")
     brokerConfigs.head.setProperty("log.segment.bytes","100")
     brokerConfigs.head.setProperty("log.cleaner.dedupe.buffer.size","1048577")
+    brokerConfigs.head.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true")
 
     servers = createTestTopicAndCluster(topic, brokerConfigs, expectedReplicaAssignment)
 
@@ -370,6 +373,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true, replicaAssignment: Map[Int, List[Int]] = expectedReplicaAssignment): Seq[KafkaServer] = {
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false)
     brokerConfigs.foreach(_.setProperty("delete.topic.enable", deleteTopicEnabled.toString))
+    brokerConfigs.foreach(_.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true"))
     createTestTopicAndCluster(topic, brokerConfigs, replicaAssignment)
   }
 

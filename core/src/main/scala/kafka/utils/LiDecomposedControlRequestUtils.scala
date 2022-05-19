@@ -69,7 +69,8 @@ object LiDecomposedControlRequestUtils {
       }
 
       val leaderAndIsrRequestVersion: Short =
-        if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 5
+        if (config.interBrokerProtocolVersion >= KAFKA_3_0_IV1) 6
+        else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 5
         else throw new IllegalStateException("The inter.broker.protocol.version config should not be smaller than 2.4-IV1")
 
       // the LiCombinedControl request will only include incremental LeaderAndIsr requests
@@ -101,7 +102,8 @@ object LiDecomposedControlRequestUtils {
       None
     } else {
       val updateMetadataRequestVersion: Short =
-        if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 7
+        if (config.interBrokerProtocolVersion >= KAFKA_3_0_IV1) 8
+        else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 7
         else throw new IllegalStateException("The inter.broker.protocol.version config should not be smaller than 2.4-IV1")
 
       val topicIds: util.Map[String, Uuid] = if (request.version() >= 1) {
