@@ -16,6 +16,7 @@
  */
 package kafka.cluster
 
+import java.net.InetAddress
 import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
@@ -24,13 +25,13 @@ import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.EpochEntry
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.errors.{ApiException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException}
+import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.ListOffsetsRequest
+import org.apache.kafka.common.requests.{FetchRequest, ListOffsetsRequest}
 import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
@@ -45,13 +46,56 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.epoch.LeaderEpochFileCache
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
+object PartitionTest {
+  def followerFetchParams(
+    replicaId: Int,
+    maxWaitMs: Long = 0L,
+    minBytes: Int = 1,
+    maxBytes: Int = Int.MaxValue
+  ): FetchParams = {
+    FetchParams(
+      requestVersion = ApiKeys.FETCH.latestVersion,
+      replicaId = replicaId,
+      maxWaitMs = maxWaitMs,
+      minBytes = minBytes,
+      maxBytes = maxBytes,
+      isolation = FetchLogEnd,
+      clientMetadata = None
+    )
+  }
+
+  def consumerFetchParams(
+    maxWaitMs: Long = 0L,
+    minBytes: Int = 1,
+    maxBytes: Int = Int.MaxValue,
+    clientMetadata: Option[ClientMetadata] = None,
+    isolation: FetchIsolation = FetchHighWatermark
+  ): FetchParams = {
+    FetchParams(
+      requestVersion = ApiKeys.FETCH.latestVersion,
+      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
+      maxWaitMs = maxWaitMs,
+      minBytes = minBytes,
+      maxBytes = maxBytes,
+      isolation = isolation,
+      clientMetadata = clientMetadata
+    )
+  }
+}
+
 class PartitionTest extends AbstractPartitionTest {
+  import PartitionTest._
 
   @Test
   def testLastFetchedOffsetValidation(): Unit = {
@@ -74,6 +118,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(17L, log.logEndOffset)
 
     val leaderEpoch = 10
+    val logStartOffset = 0L
     val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
 
     def epochEndOffset(epoch: Int, endOffset: Long): FetchResponseData.EpochEndOffset = {
@@ -83,14 +128,13 @@ class PartitionTest extends AbstractPartitionTest {
     }
 
     def read(lastFetchedEpoch: Int, fetchOffset: Long): LogReadInfo = {
-      partition.readRecords(
-        Optional.of(lastFetchedEpoch),
+      fetchFollower(
+        partition,
+        remoteReplicaId,
         fetchOffset,
-        currentLeaderEpoch = Optional.of(leaderEpoch),
-        maxBytes = Int.MaxValue,
-        fetchIsolation = FetchLogEnd,
-        fetchOnlyFromLeader = true,
-        minOneMessage = true
+        logStartOffset,
+        leaderEpoch = Some(leaderEpoch),
+        lastFetchedEpoch = Some(lastFetchedEpoch)
       )
     }
 
@@ -190,6 +234,84 @@ class PartitionTest extends AbstractPartitionTest {
     thread1.join()
     thread2.join()
     assertEquals(None, partition.futureLog)
+  }
+
+  @Test
+  def testFetchFromUnrecognizedFollower(): Unit = {
+    val controllerEpoch = 3
+    val leader = brokerId
+    val validReplica = brokerId + 1
+    val addingReplica1 = brokerId + 2
+    val addingReplica2 = brokerId + 3
+    val replicas = List(leader, validReplica)
+    val isr = List[Integer](leader, validReplica).asJava
+    val leaderEpoch = 8
+    val partitionEpoch = 1
+
+    assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leader)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(isr)
+      .setPartitionEpoch(partitionEpoch)
+      .setReplicas(replicas.map(Int.box).asJava)
+      .setIsNew(true),
+      offsetCheckpoints, None
+    ))
+
+    assertThrows(classOf[UnknownLeaderEpochException], () => {
+      fetchFollower(
+        partition,
+        replicaId = addingReplica1,
+        fetchOffset = 0L,
+        leaderEpoch = Some(leaderEpoch)
+      )
+    })
+    assertEquals(None, partition.getReplica(addingReplica1).map(_.stateSnapshot.logEndOffset))
+
+    assertThrows(classOf[NotLeaderOrFollowerException], () => {
+      fetchFollower(
+        partition,
+        replicaId = addingReplica2,
+        fetchOffset = 0L,
+        leaderEpoch = None
+      )
+    })
+    assertEquals(None, partition.getReplica(addingReplica2).map(_.stateSnapshot.logEndOffset))
+
+    // The replicas are added as part of a reassignment
+    val newReplicas = List(leader, validReplica, addingReplica1, addingReplica2)
+    val newPartitionEpoch = partitionEpoch + 1
+    val addingReplicas = List(addingReplica1, addingReplica2)
+
+    assertFalse(partition.makeLeader(new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leader)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(isr)
+      .setPartitionEpoch(newPartitionEpoch)
+      .setReplicas(newReplicas.map(Int.box).asJava)
+      .setAddingReplicas(addingReplicas.map(Int.box).asJava)
+      .setIsNew(true),
+      offsetCheckpoints, None
+    ))
+
+    // Now the fetches are allowed
+    assertEquals(0L, fetchFollower(
+      partition,
+      replicaId = addingReplica1,
+      fetchOffset = 0L,
+      leaderEpoch = Some(leaderEpoch)
+    ).logEndOffset)
+    assertEquals(Some(0L), partition.getReplica(addingReplica1).map(_.stateSnapshot.logEndOffset))
+
+    assertEquals(0L, fetchFollower(
+      partition,
+      replicaId = addingReplica2,
+      fetchOffset = 0L,
+      leaderEpoch = None
+    ).logEndOffset)
+    assertEquals(Some(0L), partition.getReplica(addingReplica2).map(_.stateSnapshot.logEndOffset))
   }
 
   // Verify that partition.makeFollower() and partition.appendRecordsToFollowerOrFutureReplica() can run concurrently
@@ -405,69 +527,59 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testReadRecordEpochValidationForLeader(): Unit = {
+  def testLeaderEpochValidationOnLeader(): Unit = {
     val leaderEpoch = 5
     val partition = setupPartitionWithMocks(leaderEpoch, isLeader = true)
 
-    def assertReadRecordsError(error: Errors,
-                               currentLeaderEpochOpt: Optional[Integer]): Unit = {
-      try {
-        partition.readRecords(
-          lastFetchedEpoch = Optional.empty(),
-          fetchOffset = 0L,
-          currentLeaderEpoch = currentLeaderEpochOpt,
-          maxBytes = 1024,
-          fetchIsolation = FetchLogEnd,
-          fetchOnlyFromLeader = true,
-          minOneMessage = false)
-        if (error != Errors.NONE)
-          fail(s"Expected readRecords to fail with error $error")
-      } catch {
-        case e: Exception =>
-          assertEquals(error, Errors.forException(e))
-      }
+    def sendFetch(leaderEpoch: Option[Int]): LogReadInfo = {
+      fetchFollower(
+        partition,
+        remoteReplicaId,
+        fetchOffset = 0L,
+        leaderEpoch = leaderEpoch
+      )
     }
 
-    assertReadRecordsError(Errors.NONE, Optional.empty())
-    assertReadRecordsError(Errors.NONE, Optional.of(leaderEpoch))
-    assertReadRecordsError(Errors.FENCED_LEADER_EPOCH, Optional.of(leaderEpoch - 1))
-    assertReadRecordsError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1))
+    assertEquals(0L, sendFetch(leaderEpoch = None).logEndOffset)
+    assertEquals(0L, sendFetch(leaderEpoch = Some(leaderEpoch)).logEndOffset)
+    assertThrows(classOf[FencedLeaderEpochException], () => sendFetch(Some(leaderEpoch - 1)))
+    assertThrows(classOf[UnknownLeaderEpochException], () => sendFetch(Some(leaderEpoch + 1)))
   }
 
   @Test
-  def testReadRecordEpochValidationForFollower(): Unit = {
+  def testLeaderEpochValidationOnFollower(): Unit = {
     val leaderEpoch = 5
     val partition = setupPartitionWithMocks(leaderEpoch, isLeader = false)
 
-    def assertReadRecordsError(error: Errors,
-                               currentLeaderEpochOpt: Optional[Integer],
-                               fetchOnlyLeader: Boolean): Unit = {
-      try {
-        partition.readRecords(
-          lastFetchedEpoch = Optional.empty(),
-          fetchOffset = 0L,
-          currentLeaderEpoch = currentLeaderEpochOpt,
-          maxBytes = 1024,
-          fetchIsolation = FetchLogEnd,
-          fetchOnlyFromLeader = fetchOnlyLeader,
-          minOneMessage = false)
-        if (error != Errors.NONE)
-          fail(s"Expected readRecords to fail with error $error")
-      } catch {
-        case e: Exception =>
-          assertEquals(error, Errors.forException(e))
-      }
+    def sendFetch(
+      leaderEpoch: Option[Int],
+      clientMetadata: Option[ClientMetadata]
+    ): LogReadInfo = {
+      fetchConsumer(
+        partition,
+        fetchOffset = 0L,
+        leaderEpoch = leaderEpoch,
+        clientMetadata = clientMetadata
+      )
     }
 
-    assertReadRecordsError(Errors.NONE, Optional.empty(), fetchOnlyLeader = false)
-    assertReadRecordsError(Errors.NONE, Optional.of(leaderEpoch), fetchOnlyLeader = false)
-    assertReadRecordsError(Errors.FENCED_LEADER_EPOCH, Optional.of(leaderEpoch - 1), fetchOnlyLeader = false)
-    assertReadRecordsError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1), fetchOnlyLeader = false)
+    // Follower fetching is only allowed when the client provides metadata
+    assertThrows(classOf[NotLeaderOrFollowerException], () => sendFetch(None, None))
+    assertThrows(classOf[NotLeaderOrFollowerException], () => sendFetch(Some(leaderEpoch), None))
+    assertThrows(classOf[FencedLeaderEpochException], () => sendFetch(Some(leaderEpoch - 1), None))
+    assertThrows(classOf[UnknownLeaderEpochException], () => sendFetch(Some(leaderEpoch + 1), None))
 
-    assertReadRecordsError(Errors.NOT_LEADER_OR_FOLLOWER, Optional.empty(), fetchOnlyLeader = true)
-    assertReadRecordsError(Errors.NOT_LEADER_OR_FOLLOWER, Optional.of(leaderEpoch), fetchOnlyLeader = true)
-    assertReadRecordsError(Errors.FENCED_LEADER_EPOCH, Optional.of(leaderEpoch - 1), fetchOnlyLeader = true)
-    assertReadRecordsError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1), fetchOnlyLeader = true)
+    val clientMetadata = new DefaultClientMetadata(
+      "rack",
+      "clientId",
+      InetAddress.getLoopbackAddress,
+      KafkaPrincipal.ANONYMOUS,
+      ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT).value
+    )
+    assertEquals(0L, sendFetch(leaderEpoch = None, Some(clientMetadata)).logEndOffset)
+    assertEquals(0L, sendFetch(leaderEpoch = Some(leaderEpoch), Some(clientMetadata)).logEndOffset)
+    assertThrows(classOf[FencedLeaderEpochException], () => sendFetch(Some(leaderEpoch - 1), Some(clientMetadata)))
+    assertThrows(classOf[UnknownLeaderEpochException], () => sendFetch(Some(leaderEpoch + 1), Some(clientMetadata)))
   }
 
   @Test
@@ -588,16 +700,6 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(partition.localLogOrException.logStartOffset, partition.localLogOrException.highWatermark,
       "Expected leader's HW not move")
 
-    // let the follower in ISR move leader's HW to move further but below LEO
-    def updateFollowerFetchState(followerId: Int, fetchOffsetMetadata: LogOffsetMetadata): Unit = {
-      partition.updateFollowerFetchState(
-        followerId,
-        followerFetchOffsetMetadata = fetchOffsetMetadata,
-        followerStartOffset = 0L,
-        followerFetchTimeMs = time.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset)
-    }
-
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
       try {
         Right(partition.fetchOffsetForTimestamp(
@@ -611,11 +713,12 @@ class PartitionTest extends AbstractPartitionTest {
       }
     }
 
-    updateFollowerFetchState(follower1, LogOffsetMetadata(0))
-    updateFollowerFetchState(follower1, LogOffsetMetadata(2))
+    // let the follower in ISR move leader's HW to move further but below LEO
+    fetchFollower(partition, replicaId = follower1, fetchOffset = 0L)
+    fetchFollower(partition, replicaId = follower1, fetchOffset = 2L)
 
-    updateFollowerFetchState(follower2, LogOffsetMetadata(0))
-    updateFollowerFetchState(follower2, LogOffsetMetadata(2))
+    fetchFollower(partition, replicaId = follower2, fetchOffset = 0L)
+    fetchFollower(partition, replicaId = follower2, fetchOffset = 2L)
 
     // Simulate successful ISR update
     alterPartitionManager.completeIsrUpdate(2)
@@ -704,8 +807,8 @@ class PartitionTest extends AbstractPartitionTest {
     }
 
     // Next fetch from replicas, HW is moved up to 5 (ahead of the LEO)
-    updateFollowerFetchState(follower1, LogOffsetMetadata(5))
-    updateFollowerFetchState(follower2, LogOffsetMetadata(5))
+    fetchFollower(partition, replicaId = follower1, fetchOffset = 5L)
+    fetchFollower(partition, replicaId = follower2, fetchOffset = 5L)
 
     // Simulate successful ISR update
     alterPartitionManager.completeIsrUpdate(6)
@@ -919,17 +1022,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(partition.localLogOrException.logStartOffset, partition.log.get.highWatermark, "Expected leader's HW not move")
 
     // let the follower in ISR move leader's HW to move further but below LEO
-    def updateFollowerFetchState(followerId: Int, fetchOffsetMetadata: LogOffsetMetadata): Unit = {
-      partition.updateFollowerFetchState(
-        followerId,
-        followerFetchOffsetMetadata = fetchOffsetMetadata,
-        followerStartOffset = 0L,
-        followerFetchTimeMs = time.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset)
-    }
-
-    updateFollowerFetchState(follower2, LogOffsetMetadata(0))
-    updateFollowerFetchState(follower2, LogOffsetMetadata(lastOffsetOfFirstBatch))
+    fetchFollower(partition, replicaId = follower2, fetchOffset = 0)
+    fetchFollower(partition, replicaId = follower2, fetchOffset = lastOffsetOfFirstBatch)
     assertEquals(lastOffsetOfFirstBatch, partition.log.get.highWatermark, "Expected leader's HW")
 
     // current leader becomes follower and then leader again (without any new records appended)
@@ -959,13 +1053,13 @@ class PartitionTest extends AbstractPartitionTest {
     partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
-    updateFollowerFetchState(follower1, LogOffsetMetadata(0))
-    updateFollowerFetchState(follower1, LogOffsetMetadata(lastOffsetOfFirstBatch))
+    fetchFollower(partition, replicaId = follower1, fetchOffset = 0)
+    fetchFollower(partition, replicaId = follower1, fetchOffset = lastOffsetOfFirstBatch)
     assertEquals(Set[Integer](leader, follower2), partition.partitionState.isr, "ISR")
 
     // fetch from the follower not in ISR from start offset of the current leader epoch should
     // add this follower to ISR
-    updateFollowerFetchState(follower1, LogOffsetMetadata(currentLeaderEpochStartOffset))
+    fetchFollower(partition, replicaId = follower1, fetchOffset = currentLeaderEpochStartOffset)
 
     // Expansion does not affect the ISR
     assertEquals(Set[Integer](leader, follower2), partition.partitionState.isr, "ISR")
@@ -1057,12 +1151,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     time.sleep(500)
 
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(3),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
-
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 3L)
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
       logStartOffset = 0L,
@@ -1071,12 +1160,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     time.sleep(500)
 
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(6L),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
-
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 6L)
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = time.milliseconds(),
       logStartOffset = 0L,
@@ -1114,11 +1198,7 @@ class PartitionTest extends AbstractPartitionTest {
       logEndOffset = UnifiedLog.UnknownOffset
     )
 
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L)
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
 
     // Check that the isr didn't change and alter update is scheduled
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
@@ -1169,12 +1249,7 @@ class PartitionTest extends AbstractPartitionTest {
       logEndOffset = UnifiedLog.UnknownOffset
     )
 
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(3),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
-
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 3L)
     assertEquals(Set(brokerId), partition.partitionState.isr)
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
@@ -1182,12 +1257,7 @@ class PartitionTest extends AbstractPartitionTest {
       logEndOffset = 3L
     )
 
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
-
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
     val isrItem = alterPartitionManager.isrUpdates.head
     assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
@@ -1238,11 +1308,7 @@ class PartitionTest extends AbstractPartitionTest {
       logEndOffset = UnifiedLog.UnknownOffset
     )
 
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L)
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
 
     // Follower state is updated, but the ISR has not expanded
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
@@ -1465,11 +1531,7 @@ class PartitionTest extends AbstractPartitionTest {
     // There is a short delay before the first fetch. The follower is not yet caught up to the log end.
     time.sleep(5000)
     val firstFetchTimeMs = time.milliseconds()
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(5),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = firstFetchTimeMs,
-      leaderEndOffset = 10L)
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 5L, fetchTimeMs = firstFetchTimeMs)
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
       logStartOffset = 0L,
@@ -1481,11 +1543,7 @@ class PartitionTest extends AbstractPartitionTest {
     // The total elapsed time from initialization is larger than the max allowed replica lag.
     time.sleep(5001)
     seedLogData(log, numRecords = 5, leaderEpoch = leaderEpoch)
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 15L)
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L, fetchTimeMs = time.milliseconds())
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = firstFetchTimeMs,
       logStartOffset = 0L,
@@ -1530,11 +1588,7 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     // The follower catches up to the log end immediately.
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L)
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = time.milliseconds(),
       logStartOffset = 0L,
@@ -1658,11 +1712,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // This will attempt to expand the ISR
     val firstFetchTimeMs = time.milliseconds()
-    partition.updateFollowerFetchState(remoteBrokerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L)
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L, fetchTimeMs = firstFetchTimeMs)
 
     // Follower state is updated, but the ISR has not expanded
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
@@ -1706,13 +1756,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // Expand ISR
-    partition.updateFollowerFetchState(
-      followerId = follower3,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10
-    )
+    fetchFollower(partition, replicaId = follower3, fetchOffset = 10L)
     assertEquals(Set(brokerId, follower1, follower2), partition.partitionState.isr)
     assertEquals(Set(brokerId, follower1, follower2, follower3), partition.partitionState.maximalIsr)
 
@@ -1776,13 +1820,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // Expand ISR
-    partition.updateFollowerFetchState(
-      followerId = follower3,
-      followerFetchOffsetMetadata = LogOffsetMetadata(10),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10
-    )
+    fetchFollower(partition, replicaId = follower3, fetchOffset = 10L)
 
     // Try avoiding a race
     TestUtils.waitUntilTrue(() => !partition.partitionState.isInflight, "Expected ISR state to be committed", 100)
@@ -2170,14 +2208,7 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     // Follower fetches and updates its replica state.
-    partition.updateFollowerFetchState(
-      followerId = followerId,
-      followerFetchOffsetMetadata = LogOffsetMetadata(0L),
-      followerStartOffset = 0L,
-      followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = partition.localLogOrException.logEndOffset
-    )
-
+    fetchFollower(partition, replicaId = followerId, fetchOffset = 0L)
     assertReplicaState(partition, followerId,
       lastCaughtUpTimeMs = time.milliseconds(),
       logStartOffset = 0L,
@@ -2473,4 +2504,76 @@ class PartitionTest extends AbstractPartitionTest {
         fail(s"Replica $replicaId not found.")
     }
   }
+
+  private def fetchConsumer(
+    partition: Partition,
+    fetchOffset: Long,
+    leaderEpoch: Option[Int],
+    clientMetadata: Option[ClientMetadata],
+    maxBytes: Int = Int.MaxValue,
+    lastFetchedEpoch: Option[Int] = None,
+    fetchTimeMs: Long = time.milliseconds(),
+    topicId: Uuid = Uuid.ZERO_UUID,
+    isolation: FetchIsolation = FetchHighWatermark
+  ): LogReadInfo = {
+    val fetchParams = consumerFetchParams(
+      maxBytes = maxBytes,
+      clientMetadata = clientMetadata,
+      isolation = isolation
+    )
+
+    val fetchPartitionData = new FetchRequest.PartitionData(
+      topicId,
+      fetchOffset,
+      FetchRequest.INVALID_LOG_START_OFFSET,
+      maxBytes,
+      leaderEpoch.map(Int.box).asJava,
+      lastFetchedEpoch.map(Int.box).asJava
+    )
+
+    partition.fetchRecords(
+      fetchParams,
+      fetchPartitionData,
+      fetchTimeMs,
+      maxBytes,
+      minOneMessage = true,
+      updateFetchState = false
+    )
+  }
+
+  private def fetchFollower(
+    partition: Partition,
+    replicaId: Int,
+    fetchOffset: Long,
+    logStartOffset: Long = 0L,
+    maxBytes: Int = Int.MaxValue,
+    leaderEpoch: Option[Int] = None,
+    lastFetchedEpoch: Option[Int] = None,
+    fetchTimeMs: Long = time.milliseconds(),
+    topicId: Uuid = Uuid.ZERO_UUID
+  ): LogReadInfo = {
+    val fetchParams = followerFetchParams(
+      replicaId,
+      maxBytes = maxBytes
+    )
+
+    val fetchPartitionData = new FetchRequest.PartitionData(
+      topicId,
+      fetchOffset,
+      logStartOffset,
+      maxBytes,
+      leaderEpoch.map(Int.box).asJava,
+      lastFetchedEpoch.map(Int.box).asJava
+    )
+
+    partition.fetchRecords(
+      fetchParams,
+      fetchPartitionData,
+      fetchTimeMs,
+      maxBytes,
+      minOneMessage = true,
+      updateFetchState = true
+    )
+  }
+
 }

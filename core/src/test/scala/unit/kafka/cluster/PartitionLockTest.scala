@@ -17,7 +17,7 @@
 
 package kafka.cluster
 
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -29,7 +29,9 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
@@ -61,7 +63,6 @@ class PartitionLockTest extends Logging {
   val executorService = Executors.newFixedThreadPool(numReplicaFetchers + numProducers + 1)
   val appendSemaphore = new Semaphore(0)
   val shrinkIsrSemaphore = new Semaphore(0)
-  val followerQueues = (0 until numReplicaFetchers).map(_ => new ArrayBlockingQueue[MemoryRecords](2))
 
   var logManager: LogManager = _
   var partition: Partition = _
@@ -181,14 +182,16 @@ class PartitionLockTest extends Logging {
    * Then release the permit for the final append and verify that all appends and follower updates complete.
    */
   private def concurrentProduceFetchWithReadLockOnly(): Unit = {
+    val leaderEpoch = partition.getLeaderEpoch
+
     val appendFutures = scheduleAppends()
-    val stateUpdateFutures = scheduleUpdateFollowers(numProducers * numRecordsPerProducer - 1)
+    val stateUpdateFutures = scheduleFollowerFetches(leaderEpoch, numRecords = numProducers * numRecordsPerProducer - 1)
 
     appendSemaphore.release(numProducers * numRecordsPerProducer - 1)
     stateUpdateFutures.foreach(_.get(15, TimeUnit.SECONDS))
 
     appendSemaphore.release(1)
-    scheduleUpdateFollowers(1).foreach(_.get(15, TimeUnit.SECONDS)) // just to make sure follower state update still works
+    scheduleFollowerFetches(leaderEpoch, numRecords = 1).foreach(_.get(15, TimeUnit.SECONDS)) // just to make sure follower state update still works
     appendFutures.foreach(_.get(15, TimeUnit.SECONDS))
   }
 
@@ -199,9 +202,10 @@ class PartitionLockTest extends Logging {
    * permits for all appends to complete before verifying state updates.
    */
   private def concurrentProduceFetchWithWriteLock(): Unit = {
+    val leaderEpoch = partition.getLeaderEpoch
 
     val appendFutures = scheduleAppends()
-    val stateUpdateFutures = scheduleUpdateFollowers(numProducers * numRecordsPerProducer)
+    val stateUpdateFutures = scheduleFollowerFetches(leaderEpoch, numRecords = numProducers * numRecordsPerProducer)
 
     assertFalse(stateUpdateFutures.exists(_.isDone))
     appendSemaphore.release(numProducers * numRecordsPerProducer)
@@ -216,7 +220,7 @@ class PartitionLockTest extends Logging {
     (0 until numProducers).map { _ =>
       executorService.submit((() => {
         try {
-          append(partition, numRecordsPerProducer, followerQueues)
+          append(partition, numRecordsPerProducer)
         } catch {
           case e: Throwable =>
             error("Exception during append", e)
@@ -226,11 +230,11 @@ class PartitionLockTest extends Logging {
     }
   }
 
-  private def scheduleUpdateFollowers(numRecords: Int): Seq[Future[_]] = {
+  private def scheduleFollowerFetches(leaderEpoch: Int, numRecords: Int): Seq[Future[_]] = {
     (1 to numReplicaFetchers).map { index =>
       executorService.submit((() => {
         try {
-          updateFollowerFetchState(partition, index, numRecords, followerQueues(index - 1))
+          fetchFollower(partition, index, leaderEpoch, numRecords)
         } catch {
           case e: Throwable =>
             error("Exception during updateFollowerFetchState", e)
@@ -352,30 +356,68 @@ class PartitionLockTest extends Logging {
     logProps
   }
 
-  private def append(partition: Partition, numRecords: Int, followerQueues: Seq[ArrayBlockingQueue[MemoryRecords]]): Unit = {
+  private def append(
+    partition: Partition,
+    numRecords: Int
+  ): Unit = {
     val requestLocal = RequestLocal.withThreadConfinedCaching
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
       partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
-      followerQueues.foreach(_.put(batch))
     }
   }
 
-  private def updateFollowerFetchState(partition: Partition, followerId: Int, numRecords: Int, followerQueue: ArrayBlockingQueue[MemoryRecords]): Unit = {
-    (1 to numRecords).foreach { i =>
-      val batch = followerQueue.poll(15, TimeUnit.SECONDS)
-      if (batch == null)
-        throw new RuntimeException(s"Timed out waiting for next batch $i")
-      val batches = batch.batches.iterator.asScala.toList
-      assertEquals(1, batches.size)
-      val recordBatch = batches.head
-      partition.updateFollowerFetchState(
-        followerId,
-        followerFetchOffsetMetadata = LogOffsetMetadata(recordBatch.lastOffset + 1),
-        followerStartOffset = 0L,
-        followerFetchTimeMs = mockTime.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset)
+  private def fetchFollower(
+    partition: Partition,
+    followerId: Int,
+    leaderEpoch: Int,
+    numRecords: Int
+  ): Unit = {
+    val logStartOffset = 0L
+    var fetchOffset = 0L
+    var lastFetchedEpoch = Optional.empty[Integer]
+    val maxBytes = 1
+
+    while (fetchOffset < numRecords) {
+      val fetchParams = FetchParams(
+        requestVersion = ApiKeys.FETCH.latestVersion,
+        replicaId = followerId,
+        maxWaitMs = 0,
+        minBytes = 1,
+        maxBytes = maxBytes,
+        isolation = FetchLogEnd,
+        clientMetadata = None
+      )
+
+      val fetchPartitionData = new FetchRequest.PartitionData(
+        Uuid.ZERO_UUID,
+        fetchOffset,
+        logStartOffset,
+        maxBytes,
+        Optional.of(Int.box(leaderEpoch)),
+        lastFetchedEpoch
+      )
+
+      val logReadInfo = partition.fetchRecords(
+        fetchParams,
+        fetchPartitionData,
+        mockTime.milliseconds(),
+        maxBytes,
+        minOneMessage = true,
+        updateFetchState = true
+      )
+
+      assertTrue(logReadInfo.divergingEpoch.isEmpty)
+
+      val batches = logReadInfo.fetchedData.records.batches.asScala
+      if (batches.nonEmpty) {
+        assertEquals(1, batches.size)
+
+        val batch = batches.head
+        lastFetchedEpoch = Optional.of(Int.box(batch.partitionLeaderEpoch))
+        fetchOffset = batch.lastOffset + 1
+      }
     }
   }
 

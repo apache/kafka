@@ -147,7 +147,7 @@ case class LogOffsetSnapshot(logStartOffset: Long,
                              lastStableOffset: LogOffsetMetadata)
 
 /**
- * Another container which is used for lower level reads using  [[kafka.cluster.Partition.readRecords()]].
+ * Another container which is used for lower level reads using  [[kafka.cluster.Partition.fetchRecords()]].
  */
 case class LogReadInfo(fetchedData: FetchDataInfo,
                        divergingEpoch: Option[FetchResponseData.EpochEndOffset],

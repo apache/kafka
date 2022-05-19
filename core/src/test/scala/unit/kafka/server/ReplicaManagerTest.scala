@@ -973,13 +973,14 @@ class ReplicaManagerTest {
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](0, 2).asJava
       val topicIds = Map(tp0.topic -> topicId, tp1.topic -> topicId).asJava
+      val leaderEpoch = 0
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(
           new LeaderAndIsrPartitionState()
             .setTopicName(tp0.topic)
             .setPartitionIndex(tp0.partition)
             .setControllerEpoch(0)
-            .setLeader(0)
+            .setLeader(leaderEpoch)
             .setLeaderEpoch(0)
             .setIsr(partition0Replicas)
             .setPartitionEpoch(0)
@@ -990,7 +991,7 @@ class ReplicaManagerTest {
             .setPartitionIndex(tp1.partition)
             .setControllerEpoch(0)
             .setLeader(0)
-            .setLeaderEpoch(0)
+            .setLeaderEpoch(leaderEpoch)
             .setIsr(partition1Replicas)
             .setPartitionEpoch(0)
             .setReplicas(partition1Replicas)
@@ -1024,20 +1025,17 @@ class ReplicaManagerTest {
         assertEquals(Errors.NONE, tp0Status.get.error)
         assertTrue(tp0Status.get.records.batches.iterator.hasNext)
 
+        // Replica 1 is not a valid replica for partition 1
         val tp1Status = responseStatusMap.get(tidp1)
-        assertTrue(tp1Status.isDefined)
-        assertEquals(0, tp1Status.get.highWatermark)
-        assertEquals(Some(0), tp0Status.get.lastStableOffset)
-        assertEquals(Errors.NONE, tp1Status.get.error)
-        assertFalse(tp1Status.get.records.batches.iterator.hasNext)
+        assertEquals(Errors.UNKNOWN_LEADER_EPOCH, tp1Status.get.error)
       }
 
       fetchPartitions(
         replicaManager,
         replicaId = 1,
         fetchInfos = Seq(
-          tidp0 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty()),
-          tidp1 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty())
+          tidp0 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.of[Integer](leaderEpoch)),
+          tidp1 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.of[Integer](leaderEpoch))
         ),
         responseCallback = fetchCallback,
         maxWaitMs = 1000,
@@ -1354,13 +1352,14 @@ class ReplicaManagerTest {
       ).toMap)
 
       // Make this replica the leader
+      val leaderEpoch = 1
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(topic)
           .setPartitionIndex(0)
           .setControllerEpoch(0)
           .setLeader(0)
-          .setLeaderEpoch(1)
+          .setLeaderEpoch(leaderEpoch)
           .setIsr(brokerList)
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
@@ -1368,15 +1367,22 @@ class ReplicaManagerTest {
         Collections.singletonMap(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
-      // Avoid the replica selector ignore the follower replica if it not have the data that need to fetch
-      replicaManager.getPartitionOrException(tp0).updateFollowerFetchState(followerBrokerId, new LogOffsetMetadata(0), 0, 0, 0)
+
+      // The leader must record the follower's fetch offset to make it eligible for follower fetch selection
+      val followerFetchData = new PartitionData(topicId, 0L, 0L, Int.MaxValue, Optional.of(Int.box(leaderEpoch)), Optional.empty[Integer])
+      fetchPartitionAsFollower(
+        replicaManager,
+        tidp0,
+        followerFetchData,
+        replicaId = followerBrokerId
+      )
 
       val metadata = new DefaultClientMetadata("rack-b", "client-id",
         InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS, "default")
 
       // If a preferred read replica is selected, the fetch response returns immediately, even if min bytes and timeout conditions are not met.
       val consumerResult = fetchPartitionAsConsumer(replicaManager, tidp0,
-        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
+        new PartitionData(topicId, 0, 0, 100000, Optional.empty()),
         minBytes = 1, clientMetadata = Some(metadata), maxWaitMs = 5000)
 
       // Fetch from leader succeeds
