@@ -59,6 +59,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressi
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
+import org.apache.kafka.streams.processor.MultiCaseStreamPartitionerImpl;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
@@ -1119,11 +1120,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(graphNode, subscriptionNode);
 
 
+/*
         final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner =
             tableJoinedInternal.otherPartitioner() == null
                 ? null
                 : (topic, key, val, numPartitions) ->
                     tableJoinedInternal.otherPartitioner().partition(topic, key, null, numPartitions);
+*/
+
+        final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner = new MultiCaseStreamPartitionerImpl<>();
 
         final StreamSinkNode<KO, SubscriptionWrapper<K>> subscriptionSink = new StreamSinkNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-sink", builder, SINK_NAME),

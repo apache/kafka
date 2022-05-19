@@ -59,4 +59,5 @@ public interface StreamPartitioner<K, V> {
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
     Integer partition(String topic, K key, V value, int numPartitions);
+
 }

@@ -42,6 +42,7 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExce
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.MultiCastStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -130,7 +131,8 @@ public class RecordCollectorImpl implements RecordCollector {
                             final String processorNodeId,
                             final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        final Integer partition;
+        Integer partition = null;
+        final List<Integer> multicastPartitions;
 
         if (partitioner != null) {
             final List<PartitionInfo> partitions;
@@ -150,16 +152,23 @@ public class RecordCollectorImpl implements RecordCollector {
                 );
             }
             if (partitions.size() > 0) {
-                partition = partitioner.partition(topic, key, value, partitions.size());
+                if (partitioner instanceof MultiCastStreamPartitioner) {
+                    multicastPartitions = ((MultiCastStreamPartitioner<? super K, ? super V>) partitioner).partitions(topic, key, value, partitions.size());
+                    for (int p: multicastPartitions) {
+                        send(topic, key, value, headers, p, timestamp, keySerializer, valueSerializer, processorNodeId, context);
+                        return;
+                    }
+                } else {
+                    partition = partitioner.partition(topic, key, value, partitions.size());
+                }
             } else {
                 throw new StreamsException("Could not get partition information for topic " + topic + " for task " + taskId +
-                    ". This can happen if the topic does not exist.");
+                        ". This can happen if the topic does not exist.");
             }
-        } else {
-            partition = null;
         }
 
         send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
+
     }
 
     @Override
