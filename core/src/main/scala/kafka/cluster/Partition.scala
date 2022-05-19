@@ -19,7 +19,6 @@ package kafka.cluster
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
-
 import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -30,6 +29,7 @@ import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
+import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -159,6 +159,7 @@ sealed trait PartitionState {
 }
 
 sealed trait PendingPartitionChange extends PartitionState {
+  def partitionStateToRollBackTo: PartitionState
   def sentLeaderAndIsr: LeaderAndIsr
 
   override val leaderRecoveryState: LeaderRecoveryState = LeaderRecoveryState.RECOVERED
@@ -167,7 +168,8 @@ sealed trait PendingPartitionChange extends PartitionState {
 case class PendingExpandIsr(
   isr: Set[Int],
   newInSyncReplicaId: Int,
-  sentLeaderAndIsr: LeaderAndIsr
+  sentLeaderAndIsr: LeaderAndIsr,
+  partitionStateToRollBackTo: PartitionState
 ) extends PendingPartitionChange {
   val maximalIsr = isr + newInSyncReplicaId
   val isInflight = true
@@ -177,6 +179,7 @@ case class PendingExpandIsr(
     s", newInSyncReplicaId=$newInSyncReplicaId" +
     s", sentLeaderAndIsr=$sentLeaderAndIsr" +
     s", leaderRecoveryState=$leaderRecoveryState" +
+    s", partitionStateToRollBackTo=$partitionStateToRollBackTo" +
     ")"
   }
 }
@@ -184,7 +187,8 @@ case class PendingExpandIsr(
 case class PendingShrinkIsr(
   isr: Set[Int],
   outOfSyncReplicaIds: Set[Int],
-  sentLeaderAndIsr: LeaderAndIsr
+  sentLeaderAndIsr: LeaderAndIsr,
+  partitionStateToRollBackTo: PartitionState
 ) extends PendingPartitionChange  {
   val maximalIsr = isr
   val isInflight = true
@@ -194,13 +198,14 @@ case class PendingShrinkIsr(
     s", outOfSyncReplicaIds=$outOfSyncReplicaIds" +
     s", sentLeaderAndIsr=$sentLeaderAndIsr" +
     s", leaderRecoveryState=$leaderRecoveryState" +
+    s", partitionStateToRollBackTo=$partitionStateToRollBackTo" +
     ")"
   }
 }
 
 case class CommittedPartitionState(
   isr: Set[Int],
-  override val leaderRecoveryState: LeaderRecoveryState
+  leaderRecoveryState: LeaderRecoveryState
 ) extends PartitionState {
   val maximalIsr = isr
   val isInflight = false
@@ -847,19 +852,30 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def needsExpandIsr(followerReplica: Replica): Boolean = {
-    canAddReplicaToIsr(followerReplica.brokerId) && isFollowerAtHighwatermark(followerReplica)
+    canAddReplicaToIsr(followerReplica.brokerId) && isFollowerInSync(followerReplica)
   }
 
   private def canAddReplicaToIsr(followerReplicaId: Int): Boolean = {
     val current = partitionState
-    !current.isInflight && !current.isr.contains(followerReplicaId)
+    !current.isInflight &&
+      !current.isr.contains(followerReplicaId) &&
+      isBrokerIsrEligible(followerReplicaId)
   }
 
-  private def isFollowerAtHighwatermark(followerReplica: Replica): Boolean = {
+  private def isFollowerInSync(followerReplica: Replica): Boolean = {
     leaderLogIfLocal.exists { leaderLog =>
       val followerEndOffset = followerReplica.stateSnapshot.logEndOffset
       followerEndOffset >= leaderLog.highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
     }
+  }
+
+  private def isBrokerIsrEligible(brokerId: Int): Boolean = {
+    // With KRaft, a broker is considered alive if it is unfenced. If it
+    // is fenced or not present, the leader prevent it to be added back
+    // to the ISR.
+    // With ZK, the leader only prevent unexisting brokers to be added back
+    // to the ISR.
+    metadataCache.hasAliveBroker(brokerId)
   }
 
   /*
@@ -1503,8 +1519,19 @@ class Partition(val topicPartition: TopicPartition,
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
     val isrToSend = partitionState.isr + newInSyncReplicaId
-    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, partitionEpoch)
-    val updatedState = PendingExpandIsr(partitionState.isr, newInSyncReplicaId, newLeaderAndIsr)
+    val newLeaderAndIsr = LeaderAndIsr(
+      localBrokerId,
+      leaderEpoch,
+      isrToSend.toList,
+      partitionState.leaderRecoveryState,
+      partitionEpoch
+    )
+    val updatedState = PendingExpandIsr(
+      partitionState.isr,
+      newInSyncReplicaId,
+      newLeaderAndIsr,
+      partitionState
+    )
     partitionState = updatedState
     updatedState
   }
@@ -1514,15 +1541,30 @@ class Partition(val topicPartition: TopicPartition,
     // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
     // for `PendingShrinkIsr` is the the current ISR.
     val isrToSend = partitionState.isr -- outOfSyncReplicaIds
-    val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, partitionState.leaderRecoveryState, partitionEpoch)
-    val updatedState = PendingShrinkIsr(partitionState.isr, outOfSyncReplicaIds, newLeaderAndIsr)
+    val newLeaderAndIsr = LeaderAndIsr(
+      localBrokerId,
+      leaderEpoch,
+      isrToSend.toList,
+      partitionState.leaderRecoveryState,
+      partitionEpoch
+    )
+    val updatedState = PendingShrinkIsr(
+      partitionState.isr,
+      outOfSyncReplicaIds,
+      newLeaderAndIsr,
+      partitionState
+    )
     partitionState = updatedState
     updatedState
   }
 
   private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {
     debug(s"Submitting ISR state change $proposedIsrState")
-    val future = alterIsrManager.submit(topicPartition, proposedIsrState.sentLeaderAndIsr, controllerEpoch)
+    val future = alterIsrManager.submit(
+      new TopicIdPartition(topicId.getOrElse(Uuid.ZERO_UUID), topicPartition),
+      proposedIsrState.sentLeaderAndIsr,
+      controllerEpoch
+    )
     future.whenComplete { (leaderAndIsr, e) =>
       var hwIncremented = false
       var shouldRetry = false
@@ -1571,9 +1613,16 @@ class Partition(val topicPartition: TopicPartition,
     error match {
       case Errors.OPERATION_NOT_ATTEMPTED =>
         // Since the operation was not attempted, it is safe to reset back to the committed state.
-        partitionState = CommittedPartitionState(proposedIsrState.isr, LeaderRecoveryState.RECOVERED)
+        partitionState = proposedIsrState.partitionStateToRollBackTo
         debug(s"Failed to alter partition to $proposedIsrState since there is a pending AlterPartition still inflight. " +
           s"partition state has been reset to the latest committed state $partitionState")
+        false
+      case Errors.INELIGIBLE_REPLICA =>
+        // Since the operation was rejected, it is safe to reset back to the committed state. This
+        // assumes that the current state was still the correct expected state.
+        partitionState = proposedIsrState.partitionStateToRollBackTo
+        debug(s"Failed to alter partition to $proposedIsrState since the controller rejected at least one replica " +
+          s"because it is ineligible to join the ISR. partition state has been reset to the latest committed state $partitionState.")
         false
       case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
         debug(s"Failed to alter partition to $proposedIsrState since the controller doesn't know about " +
@@ -1625,8 +1674,8 @@ class Partition(val topicPartition: TopicPartition,
       info(s"ISR updated to ${partitionState.isr.mkString(",")} and version updated to $partitionEpoch")
 
       proposedIsrState match {
-        case PendingExpandIsr(_, _, _) => alterPartitionListener.markIsrExpand()
-        case PendingShrinkIsr(_, _, _) => alterPartitionListener.markIsrShrink()
+        case PendingExpandIsr(_, _, _, _) => alterPartitionListener.markIsrExpand()
+        case PendingShrinkIsr(_, _, _, _) => alterPartitionListener.markIsrShrink()
       }
 
       // we may need to increment high watermark since ISR could be down to 1

@@ -19,12 +19,12 @@ package kafka.server
 
 import java.util.Collections
 import java.util.stream.{Stream => JStream}
-
 import kafka.api.LeaderAndIsr
 import kafka.utils.{MockScheduler, MockTime}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.TopicIdPartition
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidUpdateVersionException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterPartitionResponseData
 import org.apache.kafka.common.metrics.Metrics
@@ -49,15 +49,16 @@ import scala.jdk.CollectionConverters._
 class AlterPartitionManagerTest {
 
   val topic = "test-topic"
+  val topicId = Uuid.randomUuid()
   val time = new MockTime
   val metrics = new Metrics
   val brokerId = 1
 
   var brokerToController: BrokerToControllerChannelManager = _
 
-  val tp0 = new TopicPartition(topic, 0)
-  val tp1 = new TopicPartition(topic, 1)
-  val tp2 = new TopicPartition(topic, 2)
+  val tp0 = new TopicIdPartition(topicId, 0, topic)
+  val tp1 = new TopicIdPartition(topicId, 1, topic)
+  val tp2 = new TopicIdPartition(topicId, 2, topic)
 
   @BeforeEach
   def setup(): Unit = {
@@ -144,12 +145,12 @@ class AlterPartitionManagerTest {
     alterIsrManager.start()
 
     // First request will send batch of one
-    alterIsrManager.submit(new TopicPartition(topic, 0),
+    alterIsrManager.submit(new TopicIdPartition(topicId, 0, topic),
       LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
 
     // Other submissions will queue up until a response
     for (i <- 1 to 9) {
-      alterIsrManager.submit(new TopicPartition(topic, i),
+      alterIsrManager.submit(new TopicIdPartition(topicId, i, topic),
         LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
     }
 
@@ -219,7 +220,7 @@ class AlterPartitionManagerTest {
     callbackCapture.getValue.onComplete(response)
 
     // Any top-level error, we want to retry, so we don't clear items from the pending map
-    assertTrue(alterIsrManager.unsentIsrUpdates.containsKey(tp0))
+    assertTrue(alterIsrManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
 
     reset(brokerToController)
 
@@ -235,7 +236,7 @@ class AlterPartitionManagerTest {
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
     callbackCapture.getValue.onComplete(retryResponse)
 
-    assertFalse(alterIsrManager.unsentIsrUpdates.containsKey(tp0))
+    assertFalse(alterIsrManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
   }
 
   @Test
@@ -265,7 +266,7 @@ class AlterPartitionManagerTest {
     assertFalse(future.isDone)
   }
 
-  private def testPartitionError(tp: TopicPartition, error: Errors): AlterPartitionManager = {
+  private def testPartitionError(tp: TopicIdPartition, error: Errors): AlterPartitionManager = {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     reset(brokerToController)
 
@@ -326,21 +327,22 @@ class AlterPartitionManagerTest {
     val alterIsrManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => brokerEpoch, () => metadataVersion)
     alterIsrManager.start()
 
-    def matchesAlterIsr(topicPartitions: Set[TopicPartition]): AbstractRequest.Builder[_ <: AbstractRequest] = {
+    def matchesAlterIsr(topicPartitions: Set[TopicIdPartition]): AbstractRequest.Builder[_ <: AbstractRequest] = {
       ArgumentMatchers.argThat[AbstractRequest.Builder[_ <: AbstractRequest]] { request =>
         assertEquals(ApiKeys.ALTER_PARTITION, request.apiKey())
         val alterPartitionRequest = request.asInstanceOf[AlterPartitionRequest.Builder].build()
 
         val requestTopicPartitions = alterPartitionRequest.data.topics.asScala.flatMap { topicData =>
-          val topic = topicData.name
-          topicData.partitions.asScala.map(partitionData => new TopicPartition(topic, partitionData.partitionIndex))
+          val topicId = topicData.topicId
+          val topic = topicData.topicName
+          topicData.partitions.asScala.map(partitionData => new TopicIdPartition(topicId, partitionData.partitionIndex, topic))
         }.toSet
 
         topicPartitions == requestTopicPartitions
       }
     }
 
-    def verifySendAlterIsr(topicPartitions: Set[TopicPartition]): ControllerRequestCompletionHandler = {
+    def verifySendAlterIsr(topicPartitions: Set[TopicIdPartition]): ControllerRequestCompletionHandler = {
       val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] =
         ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
       Mockito.verify(brokerToController).sendRequest(
@@ -351,7 +353,7 @@ class AlterPartitionManagerTest {
       callbackCapture.getValue
     }
 
-    def clientResponse(topicPartition: TopicPartition, error: Errors): ClientResponse = {
+    def clientResponse(topicPartition: TopicIdPartition, error: Errors): ClientResponse = {
       val alterIsrResponse = partitionResponse(topicPartition, error)
       new ClientResponse(null, null, "", 0L, 0L,
         false, null, null, alterIsrResponse)
@@ -410,11 +412,12 @@ class AlterPartitionManagerTest {
     assertFutureThrows(future2, classOf[InvalidUpdateVersionException])
   }
 
-  private def partitionResponse(tp: TopicPartition, error: Errors): AlterPartitionResponse = {
+  private def partitionResponse(tp: TopicIdPartition, error: Errors): AlterPartitionResponse = {
     new AlterPartitionResponse(new AlterPartitionResponseData()
       .setTopics(Collections.singletonList(
         new AlterPartitionResponseData.TopicData()
-          .setName(tp.topic())
+          .setTopicName(tp.topic)
+          .setTopicId(tp.topicId)
           .setPartitions(Collections.singletonList(
             new AlterPartitionResponseData.PartitionData()
               .setPartitionIndex(tp.partition())

@@ -17,10 +17,13 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.OptionalLong;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -28,7 +31,9 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class ControllerRequestContext {
     public static final ControllerRequestContext ANONYMOUS_CONTEXT =
-        new ControllerRequestContext(KafkaPrincipal.ANONYMOUS,
+        new ControllerRequestContext(
+            new RequestHeaderData(),
+            KafkaPrincipal.ANONYMOUS,
             OptionalLong.empty());
 
     public static OptionalLong requestTimeoutMsToDeadlineNs(
@@ -38,16 +43,47 @@ public class ControllerRequestContext {
         return OptionalLong.of(time.nanoseconds() + NANOSECONDS.convert(millisecondsOffset, MILLISECONDS));
     }
 
-    private final KafkaPrincipal principal;
+    public static ControllerRequestContext anonymousContextFor(ApiKeys apiKeys) {
+        return new ControllerRequestContext(
+            new RequestHeaderData()
+                .setRequestApiKey(apiKeys.id)
+                .setRequestApiVersion(apiKeys.latestVersion()),
+            KafkaPrincipal.ANONYMOUS,
+            OptionalLong.empty()
+        );
+    }
 
+    private final KafkaPrincipal principal;
     private final OptionalLong deadlineNs;
+    private final RequestHeaderData requestHeader;
 
     public ControllerRequestContext(
+        RequestHeaderData requestHeader,
         KafkaPrincipal principal,
         OptionalLong deadlineNs
     ) {
+        this.requestHeader = requestHeader;
         this.principal = principal;
         this.deadlineNs = deadlineNs;
+    }
+
+    public ControllerRequestContext(
+        AuthorizableRequestContext requestContext,
+        OptionalLong deadlineNs
+    ) {
+        this(
+            new RequestHeaderData()
+                .setRequestApiKey((short) requestContext.requestType())
+                .setRequestApiVersion((short) requestContext.requestVersion())
+                .setCorrelationId(requestContext.correlationId())
+                .setClientId(requestContext.clientId()),
+            requestContext.principal(),
+            deadlineNs
+        );
+    }
+
+    public RequestHeaderData requestHeader() {
+        return requestHeader;
     }
 
     public KafkaPrincipal principal() {

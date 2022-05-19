@@ -298,7 +298,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
         handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-          new AlterPartitionRequestData()).build(0))))
+          new AlterPartitionRequestData(), false).build(0))))
   }
 
   @Test

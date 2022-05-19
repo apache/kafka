@@ -55,18 +55,22 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.Lis
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.controller.ReplicationControlManager.KRaftClusterDescriber;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -101,6 +105,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -113,12 +118,14 @@ import static org.apache.kafka.common.config.TopicConfig.SEGMENT_BYTES_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
 import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
+import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PARTITIONS;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICATION_FACTOR;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT;
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
 import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
@@ -319,10 +326,14 @@ public class ReplicationControlManagerTest {
 
             String topicName = replicationControl.getTopic(topicIdPartition.topicId()).name();
             TopicData topicData = new TopicData()
-                .setName(topicName)
+                .setTopicName(topicName)
+                .setTopicId(topicIdPartition.topicId())
                 .setPartitions(singletonList(partitionData));
 
+            ControllerRequestContext requestContext =
+                ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION);
             ControllerResult<AlterPartitionResponseData> alterPartition = replicationControl.alterPartition(
+                requestContext,
                 new AlterPartitionRequestData()
                     .setBrokerId(leaderId)
                     .setBrokerEpoch(registration.epoch())
@@ -977,11 +988,12 @@ public class ReplicationControlManagerTest {
             .setBrokerEpoch(brokerEpoch);
 
         AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
-            .setName(topic);
+            .setTopicName(topic);
         request.topics().add(topicData);
         topicData.partitions().add(partitionData);
 
-        ControllerResult<AlterPartitionResponseData> result = replicationControl.alterPartition(request);
+        ControllerRequestContext requestContext = ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION);
+        ControllerResult<AlterPartitionResponseData> result = replicationControl.alterPartition(requestContext, request);
         RecordTestUtils.replayAll(replicationControl, result.records());
         return result;
     }
@@ -995,7 +1007,7 @@ public class ReplicationControlManagerTest {
         assertEquals(1, response.topics().size());
 
         AlterPartitionResponseData.TopicData topicData = response.topics().get(0);
-        assertEquals(topicPartition.topic(), topicData.name());
+        assertEquals(topicPartition.topic(), topicData.topicName());
         assertEquals(1, topicData.partitions().size());
 
         AlterPartitionResponseData.PartitionData partitionData = topicData.partitions().get(0);
@@ -1399,18 +1411,158 @@ public class ReplicationControlManagerTest {
             cancelResult);
         log.info("running final alterPartition...");
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
+            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(3).setBrokerEpoch(103).
-                setTopics(asList(new TopicData().setName("foo").setPartitions(asList(
+                setTopics(asList(new TopicData().setTopicName("foo").setPartitions(asList(
                     new PartitionData().setPartitionIndex(1).setPartitionEpoch(1).
                         setLeaderEpoch(0).setNewIsr(asList(3, 0, 2, 1)))))));
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
-            new AlterPartitionResponseData.TopicData().setName("foo").setPartitions(asList(
+            new AlterPartitionResponseData.TopicData().setTopicName("foo").setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(1).
                     setErrorCode(FENCED_LEADER_EPOCH.code()))))),
             alterPartitionResult.response());
         ctx.replay(alterPartitionResult.records());
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testAlterPartitionShouldRejectFencedBrokers(short version) throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+        Uuid fooId = ctx.createTestTopic(
+            "foo",
+            new int[][] {new int[] {1, 2, 3, 4}}
+        ).topicId();
+
+        List<ApiMessageAndVersion> fenceRecords = new ArrayList<>();
+        replication.handleBrokerFenced(3, fenceRecords);
+        ctx.replay(fenceRecords);
+
+        assertEquals(
+            new PartitionRegistration(
+                new int[] {1, 2, 3, 4},
+                new int[] {1, 2, 4},
+                new int[] {},
+                new int[] {},
+                1,
+                LeaderRecoveryState.RECOVERED,
+                1,
+                1),
+            replication.getPartition(fooId, 0));
+
+        AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData()
+            .setBrokerId(1)
+            .setBrokerEpoch(101)
+            .setTopics(asList(new TopicData()
+                .setTopicName("foo")
+                .setPartitions(asList(new PartitionData()
+                    .setPartitionIndex(0)
+                    .setPartitionEpoch(1)
+                    .setLeaderEpoch(1)
+                    .setNewIsr(asList(1, 2, 3, 4))))));
+
+        ControllerRequestContext requestContext = new ControllerRequestContext(
+            new RequestHeaderData()
+                .setRequestApiVersion(ApiKeys.ALTER_PARTITION.id)
+                .setRequestApiVersion(version),
+            KafkaPrincipal.ANONYMOUS,
+            OptionalLong.empty()
+        );
+
+        ControllerResult<AlterPartitionResponseData> alterPartitionResult =
+            replication.alterPartition(requestContext, alterIsrRequest);
+
+        Errors expectedError = version <= 1 ? OPERATION_NOT_ATTEMPTED : INELIGIBLE_REPLICA;
+        assertEquals(
+            new AlterPartitionResponseData()
+                .setTopics(asList(new AlterPartitionResponseData.TopicData()
+                    .setTopicName("foo")
+                    .setPartitions(asList(new AlterPartitionResponseData.PartitionData()
+                        .setPartitionIndex(0)
+                        .setErrorCode(expectedError.code()))))),
+            alterPartitionResult.response());
+
+        fenceRecords = new ArrayList<>();
+        replication.handleBrokerUnfenced(3, 103, fenceRecords);
+        ctx.replay(fenceRecords);
+
+        alterPartitionResult = replication.alterPartition(requestContext, alterIsrRequest);
+
+        assertEquals(
+            new AlterPartitionResponseData()
+                .setTopics(asList(new AlterPartitionResponseData.TopicData()
+                    .setTopicName("foo")
+                    .setPartitions(asList(new AlterPartitionResponseData.PartitionData()
+                        .setPartitionIndex(0)
+                        .setLeaderId(1)
+                        .setLeaderEpoch(1)
+                        .setIsr(asList(1, 2, 3, 4))
+                        .setPartitionEpoch(2)
+                        .setErrorCode(NONE.code()))))),
+            alterPartitionResult.response());
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testAlterPartitionShouldRejectShuttingDownBrokers(short version) throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+        Uuid fooId = ctx.createTestTopic(
+            "foo",
+            new int[][] {new int[] {1, 2, 3, 4}}
+        ).topicId();
+
+        ctx.clusterControl.heartbeatManager().updateControlledShutdownOffset(3, 0);
+
+        assertEquals(
+            new PartitionRegistration(
+                new int[] {1, 2, 3, 4},
+                new int[] {1, 2, 3, 4},
+                new int[] {},
+                new int[] {},
+                1,
+                LeaderRecoveryState.RECOVERED,
+                0,
+                0),
+            replication.getPartition(fooId, 0));
+
+        AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData()
+            .setBrokerId(1)
+            .setBrokerEpoch(101)
+            .setTopics(asList(new TopicData()
+                .setTopicName("foo")
+                .setPartitions(asList(new PartitionData()
+                    .setPartitionIndex(0)
+                    .setPartitionEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setNewIsr(asList(1, 2, 3, 4))))));
+
+        ControllerRequestContext requestContext = new ControllerRequestContext(
+            new RequestHeaderData()
+                .setRequestApiVersion(ApiKeys.ALTER_PARTITION.id)
+                .setRequestApiVersion(version),
+            KafkaPrincipal.ANONYMOUS,
+            OptionalLong.empty()
+        );
+
+        ControllerResult<AlterPartitionResponseData> alterPartitionResult =
+            replication.alterPartition(requestContext, alterIsrRequest);
+
+        Errors expectedError = version <= 1 ? OPERATION_NOT_ATTEMPTED : INELIGIBLE_REPLICA;
+        assertEquals(
+            new AlterPartitionResponseData()
+                .setTopics(asList(new AlterPartitionResponseData.TopicData()
+                    .setTopicName("foo")
+                    .setPartitions(asList(new AlterPartitionResponseData.PartitionData()
+                        .setPartitionIndex(0)
+                        .setErrorCode(expectedError.code()))))),
+            alterPartitionResult.response());
     }
 
     @Test
@@ -1487,17 +1639,18 @@ public class ReplicationControlManagerTest {
             new ListPartitionReassignmentsTopics().setName("bar").
                 setPartitionIndexes(asList(0, 1, 2)))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
+            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(4).setBrokerEpoch(104).
-                setTopics(asList(new TopicData().setName("bar").setPartitions(asList(
+                setTopics(asList(new TopicData().setTopicName("bar").setPartitions(asList(
                     new PartitionData().setPartitionIndex(0).setPartitionEpoch(2).
-                        setLeaderEpoch(1).setNewIsr(asList(4, 1, 2, 3, 0)))))));
+                        setLeaderEpoch(1).setNewIsr(asList(4, 1, 2, 0)))))));
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
-            new AlterPartitionResponseData.TopicData().setName("bar").setPartitions(asList(
+            new AlterPartitionResponseData.TopicData().setTopicName("bar").setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(4).
                     setLeaderEpoch(1).
-                    setIsr(asList(4, 1, 2, 3, 0)).
+                    setIsr(asList(4, 1, 2, 0)).
                     setPartitionEpoch(3).
                     setErrorCode(NONE.code()))))),
             alterPartitionResult.response());
@@ -1785,8 +1938,9 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
+            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(2).setBrokerEpoch(102).
-                setTopics(asList(new AlterPartitionRequestData.TopicData().setName("foo").
+                setTopics(asList(new AlterPartitionRequestData.TopicData().setTopicName("foo").
                     setPartitions(asList(
                         new AlterPartitionRequestData.PartitionData().
                             setPartitionIndex(0).setPartitionEpoch(0).
@@ -1795,7 +1949,7 @@ public class ReplicationControlManagerTest {
                             setPartitionIndex(2).setPartitionEpoch(0).
                             setLeaderEpoch(0).setNewIsr(asList(0, 2, 1)))))));
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
-            new AlterPartitionResponseData.TopicData().setName("foo").setPartitions(asList(
+            new AlterPartitionResponseData.TopicData().setTopicName("foo").setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(2).
@@ -1871,13 +2025,14 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(1);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
+            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(2).setBrokerEpoch(102).
-                setTopics(asList(new AlterPartitionRequestData.TopicData().setName("foo").
+                setTopics(asList(new AlterPartitionRequestData.TopicData().setTopicName("foo").
                     setPartitions(asList(new AlterPartitionRequestData.PartitionData().
                         setPartitionIndex(0).setPartitionEpoch(0).
                         setLeaderEpoch(0).setNewIsr(asList(1, 2, 3)))))));
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
-            new AlterPartitionResponseData.TopicData().setName("foo").setPartitions(asList(
+            new AlterPartitionResponseData.TopicData().setTopicName("foo").setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(2).
@@ -1903,13 +2058,14 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0);
 
         alterPartitionResult = replication.alterPartition(
+            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(2).setBrokerEpoch(102).
-                setTopics(asList(new AlterPartitionRequestData.TopicData().setName("foo").
+                setTopics(asList(new AlterPartitionRequestData.TopicData().setTopicName("foo").
                     setPartitions(asList(new AlterPartitionRequestData.PartitionData().
                         setPartitionIndex(2).setPartitionEpoch(0).
                         setLeaderEpoch(0).setNewIsr(asList(0, 2, 1)))))));
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
-            new AlterPartitionResponseData.TopicData().setName("foo").setPartitions(asList(
+            new AlterPartitionResponseData.TopicData().setTopicName("foo").setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(2).
                     setLeaderId(2).

@@ -45,8 +45,8 @@ public class AlterPartitionRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new AlterPartitionResponse(new AlterPartitionResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(Errors.forException(e).code()));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(Errors.forException(e).code()));
     }
 
     public static AlterPartitionRequest parse(ByteBuffer buffer, short version) {
@@ -57,8 +57,13 @@ public class AlterPartitionRequest extends AbstractRequest {
 
         private final AlterPartitionRequestData data;
 
-        public Builder(AlterPartitionRequestData data) {
-            super(ApiKeys.ALTER_PARTITION);
+        public Builder(AlterPartitionRequestData data, boolean canUseTopicIds) {
+            super(
+                ApiKeys.ALTER_PARTITION,
+                ApiKeys.ALTER_PARTITION.oldestVersion(),
+                // Version 1 is the maximum version that can be used without topic ids.
+                canUseTopicIds ? ApiKeys.ALTER_PARTITION.latestVersion() : 1
+            );
             this.data = data;
         }
 

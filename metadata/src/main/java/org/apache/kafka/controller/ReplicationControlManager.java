@@ -120,6 +120,7 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECO
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
+import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
@@ -915,15 +916,21 @@ public class ReplicationControlManager {
         return new HashSet<>(imbalancedPartitions);
     }
 
-    ControllerResult<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request) {
+    ControllerResult<AlterPartitionResponseData> alterPartition(
+        ControllerRequestContext context,
+        AlterPartitionRequestData request
+    ) {
         clusterControl.checkBrokerEpoch(request.brokerId(), request.brokerEpoch());
         AlterPartitionResponseData response = new AlterPartitionResponseData();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (AlterPartitionRequestData.TopicData topicData : request.topics()) {
             AlterPartitionResponseData.TopicData responseTopicData =
-                new AlterPartitionResponseData.TopicData().setName(topicData.name());
+                new AlterPartitionResponseData.TopicData().
+                    setTopicName(topicData.topicName()).
+                    setTopicId(topicData.topicId());
             response.topics().add(responseTopicData);
-            Uuid topicId = topicsByName.get(topicData.name());
+            Uuid topicId = topicData.topicId().equals(Uuid.ZERO_UUID) ?
+                topicsByName.get(topicData.topicName()) : topicData.topicId();
             if (topicId == null || !topics.containsKey(topicId)) {
                 for (AlterPartitionRequestData.PartitionData partitionData : topicData.partitions()) {
                     responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
@@ -934,13 +941,25 @@ public class ReplicationControlManager {
                 continue;
             }
 
+            BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
             TopicControlInfo topic = topics.get(topicId);
             for (AlterPartitionRequestData.PartitionData partitionData : topicData.partitions()) {
                 int partitionId = partitionData.partitionIndex();
                 PartitionRegistration partition = topic.parts.get(partitionId);
 
-                Errors validationError = validateAlterPartitionData(request.brokerId(), topic, partitionId, partition, partitionData);
+                Errors validationError = validateAlterPartitionData(
+                    request.brokerId(),
+                    topic,
+                    partitionId,
+                    partition,
+                    clusterControl::active,
+                    partitionData);
+
                 if (validationError != Errors.NONE) {
+                    if (validationError == Errors.INELIGIBLE_REPLICA &&
+                            context.requestHeader().requestApiVersion() <= 1) {
+                        validationError = Errors.OPERATION_NOT_ATTEMPTED;
+                    }
                     responseTopicData.partitions().add(
                         new AlterPartitionResponseData.PartitionData()
                             .setPartitionIndex(partitionId)
@@ -956,7 +975,7 @@ public class ReplicationControlManager {
                     partitionId,
                     clusterControl::active,
                     featureControl.metadataVersion().isLeaderRecoverySupported());
-                if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name())) {
+                if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.topicName())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
                 builder.setTargetIsr(partitionData.newIsr());
@@ -1026,6 +1045,7 @@ public class ReplicationControlManager {
      * @param topic current topic information store by the replication manager
      * @param partitionId partition id being altered
      * @param partition current partition registration for the partition being altered
+     * @param isAcceptableReplica function telling if the replica is acceptable to join the ISR
      * @param partitionData partition data from the alter partition request
      *
      * @return Errors.NONE for valid alter partition data; otherwise the validation error
@@ -1035,6 +1055,7 @@ public class ReplicationControlManager {
         TopicControlInfo topic,
         int partitionId,
         PartitionRegistration partition,
+        Function<Integer, Boolean> isAcceptableReplica,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
         if (partition == null) {
@@ -1085,7 +1106,7 @@ public class ReplicationControlManager {
         if (leaderRecoveryState == LeaderRecoveryState.RECOVERING && newIsr.length > 1) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the ISR {} had more than one replica while the leader was still " +
-                    "recovering from an unlcean leader election {}.",
+                    "recovering from an unclean leader election {}.",
                     brokerId, topic.name, partitionId, partitionData.newIsr(),
                     leaderRecoveryState);
 
@@ -1093,12 +1114,22 @@ public class ReplicationControlManager {
         }
         if (partition.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
                 leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
-
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the leader recovery state cannot change from RECOVERED to RECOVERING.",
                     brokerId, topic.name, partitionId);
 
             return INVALID_REQUEST;
+        }
+
+        List<Integer> ineligibleReplicas = partitionData.newIsr().stream()
+            .filter(replica -> !isAcceptableReplica.apply(replica))
+            .collect(Collectors.toList());
+        if (ineligibleReplicas.size() > 0) {
+            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
+                    "it specified ineligible replicas {} in the new ISR {}.",
+                brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsr());
+
+            return INELIGIBLE_REPLICA;
         }
 
         return Errors.NONE;
@@ -1113,7 +1144,6 @@ public class ReplicationControlManager {
      * @param brokerId      The broker id.
      * @param records       The record list to append to.
      */
-
     void handleBrokerFenced(int brokerId, List<ApiMessageAndVersion> records) {
         BrokerRegistration brokerRegistration = clusterControl.brokerRegistrations().get(brokerId);
         if (brokerRegistration == null) {

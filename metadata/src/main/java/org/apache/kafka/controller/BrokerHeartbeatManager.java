@@ -498,6 +498,23 @@ public class BrokerHeartbeatManager {
         }
     }
 
+    /**
+     * Check if the given broker is active. A broker is active if it is unfenced,
+     * and not shutting down.
+     *
+     * @param brokerId      The broker to check.
+     *
+     * @return              True if the given broker is active.
+     */
+    boolean isActive(int brokerId) {
+        BrokerHeartbeatState broker = brokers.get(brokerId);
+        if (broker == null) {
+            return false;
+        } else {
+            return !(broker.fenced() || broker.shuttingDown());
+        }
+    }
+
     BrokerControlState currentBrokerState(BrokerHeartbeatState broker) {
         if (broker.shuttingDown()) {
             return CONTROLLED_SHUTDOWN;
