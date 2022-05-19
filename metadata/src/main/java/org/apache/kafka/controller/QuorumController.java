@@ -1768,7 +1768,7 @@ public final class QuorumController implements Controller {
             // the controller purgatory. See QuorumMetaLogListener#handleCommit. Since this callback is synchronous,
             // we can safely create a snapshot of the prior offset before it gets cleaned up by the Raft thread.
             long offset = offsetToSnapshot.get();
-            if (offset > 0) {
+            if (offset > 0 && snapshotGeneratorManager.generator == null) {
                 log.info("Generating a snapshot prior to a metadata.version update that includes (epoch={}, offset={}) after {}.",
                     lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot);
                 snapshotGeneratorManager.createSnapshotGenerator(offset, lastCommittedEpoch, lastCommittedTimestamp);
