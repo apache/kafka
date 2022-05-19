@@ -509,7 +509,10 @@ public class Metrics implements Closeable {
                                         Objects.requireNonNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
-        registerMetric(m, true);
+        KafkaMetric maybeMetric = registerMetric(m);
+        if (maybeMetric != null) {
+            throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+        }
     }
 
     /**
@@ -534,17 +537,14 @@ public class Metrics implements Closeable {
      * @return Existing KafkaMetric if already registered or else a newly created one
      */
     public KafkaMetric metricOrElseCreate(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
-        if (this.metrics.containsKey(metricName)) {
-            return this.metrics.get(metricName);
-        }
         KafkaMetric metric = new KafkaMetric(new Object(),
                 Objects.requireNonNull(metricName),
                 Objects.requireNonNull(metricValueProvider),
                 config == null ? this.config : config,
                 time);
 
-        registerMetric(metric, false);
-        return this.metrics.get(metricName);
+        KafkaMetric maybeMetric = registerMetric(metric);
+        return maybeMetric == null ? metric : maybeMetric;
     }
 
     /**
@@ -586,15 +586,10 @@ public class Metrics implements Closeable {
         }
     }
 
-    synchronized void registerMetric(KafkaMetric metric, boolean raiseIfMetricExists) {
+    synchronized KafkaMetric registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
         if (this.metrics.containsKey(metricName)) {
-            if (raiseIfMetricExists) {
-                throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
-            } else {
-                log.info("Metric named {} already exists.", metricName);
-                return;
-            }
+            return this.metrics.get(metricName);
         }
         this.metrics.put(metricName, metric);
         for (MetricsReporter reporter : reporters) {
@@ -605,6 +600,7 @@ public class Metrics implements Closeable {
             }
         }
         log.trace("Registered metric named {}", metricName);
+        return null;
     }
 
     /**

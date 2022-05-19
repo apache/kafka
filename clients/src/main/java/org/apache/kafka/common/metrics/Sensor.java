@@ -297,7 +297,7 @@ public final class Sensor {
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
             if (!metrics.containsKey(metric.metricName())) {
-                registry.registerMetric(metric, true);
+                registry.registerMetric(metric);
                 metrics.put(metric.metricName(), metric);
             }
         }
@@ -336,7 +336,7 @@ public final class Sensor {
                 statConfig,
                 time
             );
-            registry.registerMetric(metric, true);
+            registry.registerMetric(metric);
             metrics.put(metric.metricName(), metric);
             stats.add(new StatAndConfig(Objects.requireNonNull(stat), metric::config));
             return true;
