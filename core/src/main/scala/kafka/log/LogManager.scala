@@ -384,7 +384,7 @@ class LogManager(logDirs: Seq[File],
                 handleIOException(logDirAbsolutePath, e)
               case e: KafkaStorageException if e.getCause.isInstanceOf[IOException] =>
                 // KafkaStorageException might be thrown, ex: during writing LeaderEpochFileCache
-                handleIOException(logDirAbsolutePath, e.getCause.asInstanceOf[IOException])
+                error(s"Error while loading log dir $logDirAbsolutePath", e)
             }
           }
           runnable

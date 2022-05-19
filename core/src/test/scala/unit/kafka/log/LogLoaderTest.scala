@@ -84,6 +84,7 @@ class LogLoaderTest {
     var cleanShutdownInterceptedValue = false
     case class SimulateError(var hasError: Boolean = false, var errorType: ErrorTypes.Errors = ErrorTypes.RuntimeException)
     val simulateError = SimulateError()
+    val logDirFailureChannel = new LogDirFailureChannel(logDirs.size)
 
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = 60 * 60 * 1000
@@ -92,7 +93,6 @@ class LogLoaderTest {
     // flag and to inject an error
     def interceptedLogManager(logConfig: LogConfig,
                               logDirs: Seq[File],
-                              simulateError: SimulateError,
                               logDirFailureChannel: LogDirFailureChannel
                              ): LogManager = {
       new LogManager(
@@ -161,7 +161,7 @@ class LogLoaderTest {
       simulateError.hasError = hasError
       simulateError.errorType = errorType
 
-      val logManager: LogManager = interceptedLogManager(logConfig, logDirs, simulateError, logDirFailureChannel)
+      val logManager: LogManager = interceptedLogManager(logConfig, logDirs, logDirFailureChannel)
       log = logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
 
       assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "log dir should not be offline before load logs")
@@ -197,7 +197,6 @@ class LogLoaderTest {
     }
 
     locally {
-      val logDirFailureChannel = new LogDirFailureChannel(logDirs.size)
       val (logManager, runLoadLogs) = initializeLogManagerForSimulatingErrorTest(true, ErrorTypes.RuntimeException, logDirFailureChannel)
 
       // Simulate Runtime error
@@ -205,45 +204,27 @@ class LogLoaderTest {
       assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not have existed")
       assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "log dir should not turn offline when Runtime Exception thrown")
 
+      // Simulate Kafka storage error with IOException cause
+      // in this case, the logDir will be added into offline list before KafkaStorageThrown. So we don't verify it here
+      simulateError.errorType = ErrorTypes.KafkaStorageExceptionWithIOExceptionCause
+      assertDoesNotThrow(runLoadLogs, "KafkaStorageException with IOException cause should be caught and handled")
+
+      // Simulate Kafka storage error without IOException cause
+      simulateError.errorType = ErrorTypes.KafkaStorageExceptionWithoutIOExceptionCause
+      assertThrows(classOf[KafkaStorageException], runLoadLogs, "should throw exception when KafkaStorageException without IOException cause")
+      assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "log dir should not turn offline when KafkaStorageException without IOException cause thrown")
+
+      // Simulate IO error
+      simulateError.errorType = ErrorTypes.IOException
+      assertDoesNotThrow(runLoadLogs, "IOException should be caught and handled")
+      assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "the log dir should turn offline after IOException thrown")
+
       // Do not simulate error on next call to LogManager#loadLogs. LogManager must understand that log had unclean shutdown the last time.
       simulateError.hasError = false
       cleanShutdownInterceptedValue = true
       val defaultConfig = logManager.currentDefaultConfig
       logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty))
       assertFalse(cleanShutdownInterceptedValue, "Unexpected value for clean shutdown flag")
-      logManager.shutdown()
-    }
-
-    locally {
-      val logDirFailureChannel = new LogDirFailureChannel(logDirs.size)
-      val (logManager, runLoadLogs) = initializeLogManagerForSimulatingErrorTest(true, ErrorTypes.IOException, logDirFailureChannel)
-
-      // Simulate IO error
-      assertDoesNotThrow(runLoadLogs, "IOException should be caught and handled")
-
-      assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "the log dir should turn offline after IOException thrown")
-      logManager.shutdown()
-    }
-
-    locally {
-      val logDirFailureChannel = new LogDirFailureChannel(logDirs.size)
-      val (logManager, runLoadLogs) = initializeLogManagerForSimulatingErrorTest(true, ErrorTypes.KafkaStorageExceptionWithIOExceptionCause, logDirFailureChannel)
-
-      // Simulate Kafka storage error with IOException cause
-      assertDoesNotThrow(runLoadLogs, "KafkaStorageException with IOException cause should be caught and handled")
-
-      // the log dir should turn to offline
-      assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "the log dir should turn offline after KafkaStorageException thrown with IOException cause")
-      logManager.shutdown()
-    }
-
-    locally {
-      val logDirFailureChannel = new LogDirFailureChannel(logDirs.size)
-      val (logManager, runLoadLogs) = initializeLogManagerForSimulatingErrorTest(true, ErrorTypes.KafkaStorageExceptionWithoutIOExceptionCause, logDirFailureChannel)
-
-      // Simulate Kafka storage error without IOException cause
-      assertThrows(classOf[KafkaStorageException], runLoadLogs, "should throw exception when KafkaStorageException without IOException cause")
-      assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "log dir should not turn offline when KafkaStorageException without IOException cause thrown")
       logManager.shutdown()
     }
   }
