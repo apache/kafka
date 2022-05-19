@@ -986,6 +986,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         // We do this only if the deprecated config buffered.records.per.partition is set
+        // JNH: Use this approach to pause the restoreConsumer by partition for P/R in the
+        // StoreChangelogReader
         if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
