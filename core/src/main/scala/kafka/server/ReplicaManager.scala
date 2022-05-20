@@ -231,6 +231,8 @@ class ReplicaManager(val config: KafkaConfig,
   @volatile private[server] var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
     (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
+  @volatile private var isInControlledShutdown = false
+
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
   protected val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
@@ -1878,6 +1880,10 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("PartitionsWithLateTransactionsCount")
   }
 
+  def beginControlledShutdown(): Unit = {
+    isInControlledShutdown = true
+  }
+
   // High watermark do not need to be checkpointed only when under unit tests
   def shutdown(checkpointHW: Boolean = true): Unit = {
     info("Shutting down")
@@ -2124,6 +2130,7 @@ class ReplicaManager(val config: KafkaConfig,
       "local followers.")
     val shuttingDown = isShuttingDown.get()
     val partitionsToMakeFollower = new mutable.HashMap[TopicPartition, Partition]
+    val partitionsToStop = new mutable.HashMap[TopicPartition, Boolean]
     val newFollowerTopicSet = new mutable.HashSet[String]
     newLocalFollowers.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
@@ -2134,10 +2141,13 @@ class ReplicaManager(val config: KafkaConfig,
             stateChangeLogger.trace(s"Unable to start fetching $tp with topic " +
               s"ID ${info.topicId} because the replica manager is shutting down.")
           } else {
-            val leader = info.partition.leader
-            if (newImage.cluster.broker(leader) == null) {
+            if (isInControlledShutdown && !info.partition.isr.contains(config.brokerId)) {
+              // If we are in controlled shutdown and the replica is not in the ISR,
+              // we stop the replica.
+              partitionsToStop.put(tp, false)
+            } else if (newImage.cluster.broker(info.partition.leader) == null) {
               stateChangeLogger.trace(s"Unable to start fetching $tp with topic ID ${info.topicId} " +
-                s"from leader $leader because it is not alive.")
+                s"from leader ${info.partition.leader} because it is not alive.")
 
               // Create the local replica even if the leader is unavailable. This is required
               // to ensure that we include the partition's high watermark in the checkpoint
@@ -2170,33 +2180,40 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    // Stopping the fetchers must be done first in order to initialize the fetch
-    // position correctly.
-    replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.keySet)
-    stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+    if (partitionsToMakeFollower.nonEmpty) {
+      // Stopping the fetchers must be done first in order to initialize the fetch
+      // position correctly.
+      replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.keySet)
+      stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
 
-    val listenerName = config.interBrokerListenerName.value
-    val partitionAndOffsets = new mutable.HashMap[TopicPartition, InitialFetchState]
-    partitionsToMakeFollower.forKeyValue { (topicPartition, partition) =>
-      val node = partition.leaderReplicaIdOpt
-        .flatMap(leaderId => Option(newImage.cluster.broker(leaderId)))
-        .flatMap(_.node(listenerName).asScala)
-        .getOrElse(Node.noNode)
-      val log = partition.localLogOrException
-      partitionAndOffsets.put(topicPartition, InitialFetchState(
-        log.topicId,
-        new BrokerEndPoint(node.id, node.host, node.port),
-        partition.getLeaderEpoch,
-        initialFetchOffset(log)
-      ))
+      val listenerName = config.interBrokerListenerName.value
+      val partitionAndOffsets = new mutable.HashMap[TopicPartition, InitialFetchState]
+      partitionsToMakeFollower.forKeyValue { (topicPartition, partition) =>
+        val node = partition.leaderReplicaIdOpt
+          .flatMap(leaderId => Option(newImage.cluster.broker(leaderId)))
+          .flatMap(_.node(listenerName).asScala)
+          .getOrElse(Node.noNode)
+        val log = partition.localLogOrException
+        partitionAndOffsets.put(topicPartition, InitialFetchState(
+          log.topicId,
+          new BrokerEndPoint(node.id, node.host, node.port),
+          partition.getLeaderEpoch,
+          initialFetchOffset(log)
+        ))
+      }
+
+      replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
+      stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
+      partitionsToMakeFollower.keySet.foreach(completeDelayedFetchOrProduceRequests)
+
+      updateLeaderAndFollowerMetrics(newFollowerTopicSet)
     }
 
-    replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
-    stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
-
-    partitionsToMakeFollower.keySet.foreach(completeDelayedFetchOrProduceRequests)
-
-    updateLeaderAndFollowerMetrics(newFollowerTopicSet)
+    if (partitionsToStop.nonEmpty) {
+      stopPartitions(partitionsToStop)
+      stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStop.size} partitions")
+    }
   }
 
   def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {

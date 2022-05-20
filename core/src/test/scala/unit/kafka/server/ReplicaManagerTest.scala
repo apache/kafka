@@ -64,7 +64,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyInt}
-import org.mockito.Mockito.{mock, reset, times, verify, when}
+import org.mockito.Mockito.{mock, never, reset, times, verify, when}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -3826,8 +3826,8 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getPartitionEpoch)
 
       // Verify that partition's fetcher was not impacted.
-      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set.empty)
-      verify(mockReplicaFetcherManager).addFetcherForPartitions(Map.empty)
+      verify(mockReplicaFetcherManager, never()).removeFetcherForPartitions(any())
+      verify(mockReplicaFetcherManager, never()).addFetcherForPartitions(any())
 
       reset(mockReplicaFetcherManager)
 
@@ -3840,7 +3840,7 @@ class ReplicaManagerTest {
         .setIsr(util.Arrays.asList(localId, localId + 1, localId + 2))
         .setLeader(localId + 2)
       )
-      println(followerTopicsDelta.changedTopic(FOO_UUID).partitionChanges())
+
       followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
@@ -3856,6 +3856,76 @@ class ReplicaManagerTest {
         currentLeaderEpoch = 1,
         initOffset = 0
       )))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testReplicaIsStoppedWhileInControlledShutdownWithKRaft(): Unit = {
+    val localId = 0
+    val topicPartition = new TopicPartition("foo", 0)
+
+    val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      brokerId = localId,
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+    )
+
+    try {
+      when(mockReplicaFetcherManager.removeFetcherForPartitions(
+        Set(topicPartition))
+      ).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
+
+      // Make the local replica the follower.
+      var followerTopicsDelta = new TopicsDelta(TopicsImage.EMPTY)
+      followerTopicsDelta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
+      followerTopicsDelta.replay(new PartitionRecord()
+        .setPartitionId(0)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1))
+        .setIsr(util.Arrays.asList(localId, localId + 1))
+        .setRemovingReplicas(Collections.emptyList())
+        .setAddingReplicas(Collections.emptyList())
+        .setLeader(localId + 1)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+      )
+      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      // Check the state of that partition.
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+      assertEquals(0, followerPartition.getPartitionEpoch)
+
+      reset(mockReplicaFetcherManager)
+
+      // The replica begins the controlled shutdown.
+      replicaManager.beginControlledShutdown()
+
+      // The controller shrinks the ISR.
+      followerTopicsDelta = new TopicsDelta(followerMetadataImage.topics())
+      followerTopicsDelta.replay(new PartitionChangeRecord()
+        .setPartitionId(0)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1))
+        .setIsr(util.Arrays.asList(localId + 1))
+      )
+      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      // The partition state is not updated...
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+      assertEquals(0, followerPartition.getPartitionEpoch)
+
+      // ...but the fetcher is stopped.
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
     } finally {
       replicaManager.shutdown()
     }
