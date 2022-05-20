@@ -41,14 +41,14 @@ import scala.compat.java8.OptionConverters.RichOptionForJava8
  * Facilitates fetches from a remote replica leader.
  *
  * @param logPrefix The log prefix
- * @param endpoint The raw leader endpoint used to communicate with the leader
+ * @param blockingSender The raw leader endpoint used to communicate with the leader
  * @param fetchSessionHandler A FetchSessionHandler to track the partitions in the session
  * @param brokerConfig Broker configuration
  * @param replicaMgr A ReplicaManager
  * @param quota The quota, used when building a fetch request
  */
 class RemoteLeaderEndPoint(logPrefix: String,
-                           endpoint: BrokerBlockingSender,
+                           blockingSender: BlockingSend,
                            private[server] val fetchSessionHandler: FetchSessionHandler, // visible for testing
                            brokerConfig: KafkaConfig,
                            replicaMgr: ReplicaManager,
@@ -63,15 +63,15 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
   override val isTruncationOnFetchSupported = brokerConfig.interBrokerProtocolVersion.isTruncationOnFetchSupported
 
-  override def initiateClose(): Unit = endpoint.initiateClose()
+  override def initiateClose(): Unit = blockingSender.initiateClose()
 
-  override def close(): Unit = endpoint.close()
+  override def close(): Unit = blockingSender.close()
 
-  override def brokerEndPoint(): BrokerEndPoint = endpoint.sourceBroker
+  override def brokerEndPoint(): BrokerEndPoint = blockingSender.brokerEndPoint()
 
   override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchData] = {
     val clientResponse = try {
-      endpoint.sendRequest(fetchRequest)
+      blockingSender.sendRequest(fetchRequest)
     } catch {
       case t: Throwable =>
         fetchSessionHandler.handleError(t)
@@ -109,7 +109,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(brokerConfig.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
-    val clientResponse = endpoint.sendRequest(requestBuilder)
+    val clientResponse = blockingSender.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetsResponse]
     val responsePartition = response.topics.asScala.find(_.name == topicPartition.topic).get
       .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
@@ -145,7 +145,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
     debug(s"Sending offset for leader epoch request $epochRequest")
 
     try {
-      val response = endpoint.sendRequest(epochRequest)
+      val response = blockingSender.sendRequest(epochRequest)
       val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
       debug(s"Received leaderEpoch response $response")
       responseBody.data.topics.asScala.flatMap { offsetForLeaderTopicResult =>
@@ -222,5 +222,5 @@ class RemoteLeaderEndPoint(logPrefix: String,
     !fetchState.isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
-  override def toString: String = s"RemoteLeaderEndPoint with ReplicaFetcherBlockingSend $endpoint"
+  override def toString: String = s"RemoteLeaderEndPoint with ReplicaFetcherBlockingSend $blockingSender"
 }

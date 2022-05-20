@@ -39,7 +39,7 @@ import scala.jdk.CollectionConverters._
 /**
  * Facilitates fetches from a local replica leader.
  *
- * @param brokerEndPoint The broker (host:port) that we want to connect to
+ * @param sourceBroker The broker (host:port) that we want to connect to
  * @param brokerConfig A config file with broker related configurations
  * @param replicaMgr A ReplicaManager
  * @param quota The quota, used when building a fetch request

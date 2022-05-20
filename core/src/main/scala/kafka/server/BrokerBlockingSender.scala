@@ -33,6 +33,8 @@ import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
 
+  def brokerEndPoint(): BrokerEndPoint
+
   def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse
 
   def initiateClose(): Unit
@@ -40,7 +42,7 @@ trait BlockingSend {
   def close(): Unit
 }
 
-class BrokerBlockingSender(private[server] val sourceBroker: BrokerEndPoint,
+class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
                            metrics: Metrics,
                            time: Time,
@@ -98,6 +100,8 @@ class BrokerBlockingSender(private[server] val sourceBroker: BrokerEndPoint,
     )
     (networkClient, reconfigurableChannelBuilder)
   }
+
+  override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
     try {

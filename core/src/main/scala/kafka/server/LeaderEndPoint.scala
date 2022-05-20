@@ -28,7 +28,6 @@ import scala.collection.Map
 
 /**
  * This trait defines the APIs to be used on the client side to access a broker that is a leader.
- * Presently, it is used in the AbstractFetcherThread class to access the leader for fetch APIs.
  */
 trait LeaderEndPoint {
 
