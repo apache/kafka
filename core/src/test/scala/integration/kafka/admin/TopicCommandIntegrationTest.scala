@@ -697,6 +697,19 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     try {
       killBroker(0)
       killBroker(1)
+
+      val aliveServers = brokers.filterNot(brokers => brokers.config.brokerId == 0 || brokers.config.brokerId == 1)
+
+      if (isKRaftTest()) {
+        TestUtils.ensureConsistentKRaftMetadata(aliveServers, controllerServer,
+          "Timeout waiting for topic configs propagating to brokers")
+      } else {
+        TestUtils.waitUntilTrue(
+          () => aliveServers.forall(_.metadataCache.getPartitionInfo(testTopicName, 0).get.isr().size() == 4),
+          s"Timeout waiting for partition metadata propagating to brokers for $testTopicName topic"
+        )
+      }
+
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--at-min-isr-partitions"))))
       val rows = output.split("\n")
