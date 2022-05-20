@@ -1216,6 +1216,15 @@ public final class QuorumController implements Controller {
         queue.cancelDeferred(WRITE_NO_OP_RECORD);
     }
 
+    private void handleFeatureControlChange() {
+        // The feature control maybe have changed. Check if a NoOpRecord should be scheduled or canceled
+        if (featureControl.metadataVersion().isNoOpRecordSupported()) {
+            maybeScheduleNextWriteNoOpRecord();
+        } else {
+            cancelNextWriteNoOpRecord();
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
         try {
@@ -1251,8 +1260,7 @@ public final class QuorumController implements Controller {
                 case FEATURE_LEVEL_RECORD:
                     featureControl.replay((FeatureLevelRecord) message);
 
-                    // The feature control maybe have changed. Check if a NoOpRecord should be scheduled
-                    maybeScheduleNextWriteNoOpRecord();
+                    handleFeatureControlChange();
                     break;
                 case CLIENT_QUOTA_RECORD:
                     clientQuotaControlManager.replay((ClientQuotaRecord) message);
