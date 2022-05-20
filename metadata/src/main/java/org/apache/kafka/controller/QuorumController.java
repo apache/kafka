@@ -1566,7 +1566,7 @@ public final class QuorumController implements Controller {
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
         this.maxIdleIntervalNs = maxIdleIntervalNs;
         this.replicationControl = new ReplicationControlManager.Builder().
-            setMetadataVersion(bootstrapMetadata.metadataVersion()).
+            setMetadataVersion(() -> featureControl.metadataVersion()).
             setSnapshotRegistry(snapshotRegistry).
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).

@@ -165,7 +165,7 @@ public class ReplicationControlManagerTest {
 
         ReplicationControlTestContext(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.replicationControl = new ReplicationControlManager.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_3_IV1).
+                setMetadataVersion(() -> MetadataVersion.IBP_3_3_IV1).
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
