@@ -137,24 +137,24 @@ class LogManager(logDirs: Seq[File],
       Map("logDirectory" -> dir.getAbsolutePath))
   }
 
-  newGauge("remainingLogsToRecovery", () => numRemainingLogs.get())
+//  newGauge("remainingLogsToRecovery", () => numRemainingLogs.get())
 
 //  for (dir <- logDirs) {
 //    Map("dir" -> dir, "remainingSegments" -> numRemainingLogs.get())
 //  }
-  for (dir <- logDirs) {
-    for (i <- 0 until numRecoveryThreadsPerDataDir) {
-      val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
-//      println("!!! threadName is " + threadName)
-//      println("!!! numRemainingSegments is " + numRemainingSegments)
-      newGauge("remainingSegmentsToRecovery", () => {
-        println("!!! threadName is " + threadName)
-        println("!!! numRemainingSegments is " + numRemainingSegments)
-        numRemainingSegments.get(threadName).get
-      },
-        Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
-    }
-  }
+//  for (dir <- logDirs) {
+//    for (i <- 0 until numRecoveryThreadsPerDataDir) {
+//      val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
+////      println("!!! threadName is " + threadName)
+////      println("!!! numRemainingSegments is " + numRemainingSegments)
+//      newGauge("remainingSegmentsToRecovery", () => {
+//        println("!!! threadName is " + threadName)
+//        println("!!! numRemainingSegments is " + numRemainingSegments)
+//        numRemainingSegments.get(threadName).get
+//      },
+//        Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
+//    }
+//  }
 
   /**
    * Create and check validity of the given directories that are not in the given offline directories, specifically:
@@ -215,11 +215,11 @@ class LogManager(logDirs: Seq[File],
    * @param dir        the absolute path of the log directory
    */
   def handleLogDirFailure(dir: String): Unit = {
-    fatal(s"!!! Stopping serving logs in dir $dir")
+    fatal(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
       if (_liveLogDirs.isEmpty) {
-        fatal(s"!!! Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
+        fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
         Exit.halt(1)
       }
 
@@ -401,8 +401,8 @@ class LogManager(logDirs: Seq[File],
           val runnable: Runnable = () => {
             try {
               debug(s"Loading log $logDir, with ${numRemainingLogs.get()} logs remaining")
-              info(s"!!! numRemainingSegments: $numRemainingSegments")
-              info(s"!!! current thread: ${Thread.currentThread().getName}")
+              info(s"numRemainingSegments: $numRemainingSegments")
+              info(s"current thread: ${Thread.currentThread().getName}")
 
               val logLoadStartMs = time.hiResClockMs()
               val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
@@ -430,6 +430,7 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
+      addLogRecoveryMetrics()
       for (dirJobs <- jobs) {
         dirJobs.foreach(_.get)
       }
@@ -442,10 +443,47 @@ class LogManager(logDirs: Seq[File],
         error(s"There was an error in one of the threads during logs loading: ${e.getCause}")
         throw e.getCause
     } finally {
+      removeRecoveryMetrics()
       threadPools.foreach(_.shutdown())
     }
 
     info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
+  }
+
+  def addLogRecoveryMetrics(): Unit = {
+    error("!!! adding")
+    newGauge("remainingLogsToRecovery", () => numRemainingLogs.get())
+
+    //  for (dir <- logDirs) {
+    //    Map("dir" -> dir, "remainingSegments" -> numRemainingLogs.get())
+    //  }
+    for (dir <- logDirs) {
+      for (i <- 0 until numRecoveryThreadsPerDataDir) {
+        val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
+        //      println("!!! threadName is " + threadName)
+        //      println("!!! numRemainingSegments is " + numRemainingSegments)
+        newGauge("remainingSegmentsToRecovery", () => {
+          println("!!! threadName is " + threadName)
+          println("!!! numRemainingSegments is " + numRemainingSegments)
+          numRemainingSegments.get(threadName).get
+        },
+          Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
+      }
+    }
+  }
+
+  def removeRecoveryMetrics(): Unit = {
+    error("!!! removing")
+    removeMetric("remainingLogsToRecovery")
+    for (dir <- logDirs) {
+      for (i <- 0 until numRecoveryThreadsPerDataDir) {
+
+        removeMetric("remainingSegmentsToRecovery", Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
+        //      println("!!! threadName is " + threadName)
+        //      println("!!! numRemainingSegments is " + numRemainingSegments)
+
+      }
+    }
   }
 
   /**
