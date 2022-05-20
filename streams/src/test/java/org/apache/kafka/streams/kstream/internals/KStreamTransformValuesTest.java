@@ -49,7 +49,7 @@ import static org.junit.Assert.assertArrayEquals;
 @RunWith(EasyMockRunner.class)
 public class KStreamTransformValuesTest {
     private final String topicName = "topic";
-    private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
+    private final MockProcessorSupplier<Integer, Integer, Void, Void> supplier = new MockProcessorSupplier<>();
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
     @Mock(MockType.NICE)
     private InternalProcessorContext context;
