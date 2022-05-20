@@ -773,10 +773,18 @@ public class ReplicationControlManager {
         for (CreatableTopic topic : topics) {
             if (topicErrors.containsKey(topic.name())) continue;
             Map<String, Entry<OpType, String>> topicConfigs = new HashMap<>();
+            List<String> nullConfigs = new ArrayList<>();
             for (CreateTopicsRequestData.CreateableTopicConfig config : topic.configs()) {
-                topicConfigs.put(config.name(), new SimpleImmutableEntry<>(SET, config.value()));
+                if (config.value() == null) {
+                    nullConfigs.add(config.name());
+                } else {
+                    topicConfigs.put(config.name(), new SimpleImmutableEntry<>(SET, config.value()));
+                }
             }
-            if (!topicConfigs.isEmpty()) {
+            if (!nullConfigs.isEmpty()) {
+                topicErrors.put(topic.name(), new ApiError(Errors.INVALID_CONFIG,
+                    "Null value not supported for topic configs: " + String.join(",", nullConfigs)));
+            } else if (!topicConfigs.isEmpty()) {
                 configChanges.put(new ConfigResource(TOPIC, topic.name()), topicConfigs);
             }
         }

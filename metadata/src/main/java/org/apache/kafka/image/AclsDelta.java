@@ -44,6 +44,12 @@ public final class AclsDelta {
         this.image = image;
     }
 
+    /**
+     * Returns a Map of deltas from ACL ID to optional StandardAcl. An empty optional value indicates the ACL
+     * is for removal. An optional with a value indicates the ACL is to be added.
+     *
+     * @return Map of deltas.
+     */
     public Map<Uuid, Optional<StandardAcl>> changes() {
         return changes;
     }
@@ -65,8 +71,22 @@ public final class AclsDelta {
         changes.put(aclWithId.id(), Optional.of(aclWithId.acl()));
     }
 
+    /**
+     * This method replays a RemoveAccessControlEntryRecord record. If the current image contains the ACL
+     * the removal is stored as an Optional.empty() value in the Map. If the changes Map contains the ACL
+     * it means the ACL was recently applied and isn't in the image yet, in which case the ACL can be totally removed
+     * from the Map because there is no need to add it then delete it when the changes are applied.
+     *
+     * @param record Log metadata record to replay.
+     */
     public void replay(RemoveAccessControlEntryRecord record) {
-        changes.put(record.id(), Optional.empty());
+        if (image.acls().containsKey(record.id())) {
+            changes.put(record.id(), Optional.empty());
+        } else if (changes.containsKey(record.id())) {
+            changes.remove(record.id());
+        } else {
+            throw new IllegalStateException("Failed to find existing ACL with ID " + record.id() + " in either image or changes");
+        }
     }
 
     public AclsImage apply() {
