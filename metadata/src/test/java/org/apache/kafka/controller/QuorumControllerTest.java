@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Spliterator;
@@ -426,7 +427,8 @@ public class QuorumControllerTest {
 
     @Test
     public void testNoOpRecordWriteAfterTimeout() throws Throwable {
-        long maxIdleIntervalNs = 1_000_000;
+        long maxIdleIntervalNs = 1_000;
+        long maxReplicationDelayMs = 60_000;
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
@@ -441,10 +443,15 @@ public class QuorumControllerTest {
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
 
-            LocalLogManager localLogManager = logEnv.logManagers().get(0);
+            LocalLogManager localLogManager = logEnv
+                .logManagers()
+                .stream()
+                .filter(logManager -> logManager.nodeId().equals(OptionalInt.of(active.nodeId())))
+                .findAny()
+                .get();
             TestUtils.waitForCondition(
                 () -> localLogManager.highWatermark().isPresent(),
-                10_000, // 10 seconds
+                maxReplicationDelayMs,
                 "High watermark was not established"
             );
 
@@ -452,16 +459,16 @@ public class QuorumControllerTest {
             final long firstHighWatermark = localLogManager.highWatermark().getAsLong();
             TestUtils.waitForCondition(
                 () -> localLogManager.highWatermark().getAsLong() > firstHighWatermark,
-                TimeUnit.MILLISECONDS.convert(2 * maxIdleIntervalNs, TimeUnit.MICROSECONDS),
-                "Active controller didn't write NoOpRecord"
+                maxReplicationDelayMs,
+                "Active controller didn't write NoOpRecord the first time"
             );
 
             // Do it again to make sure that we are not counting the leader change record
             final long secondHighWatermark = localLogManager.highWatermark().getAsLong();
             TestUtils.waitForCondition(
                 () -> localLogManager.highWatermark().getAsLong() > secondHighWatermark,
-                TimeUnit.MILLISECONDS.convert(2 * maxIdleIntervalNs, TimeUnit.MICROSECONDS),
-                "Active controller didn't write NoOpRecord"
+                maxReplicationDelayMs,
+                "Active controller didn't write NoOpRecord the second time"
             );
         }
     }

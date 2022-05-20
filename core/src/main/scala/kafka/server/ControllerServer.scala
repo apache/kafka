@@ -180,7 +180,6 @@ class ControllerServer(
         }
 
         new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
-          setMetadataVersion(config.interBrokerProtocolVersion).
           setTime(time).
           setThreadNamePrefix(threadNamePrefixAsString).
           setConfigSchema(configSchema).

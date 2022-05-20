@@ -1036,7 +1036,9 @@ public final class QuorumController implements Controller {
         writeOffset = offset;
         if (isActiveController()) {
             controllerMetrics.setLastAppliedRecordOffset(writeOffset);
-            // This is not truelly the append timestamp but this is good enough for now since this is the leader
+            // This is not truelly the append timestamp. The KRaft client doesn't expose the append time when scheduling a write.
+            // This is good enough because this is called right after the records were given to the KRAft client for appending and
+            // the default append linger for KRaft is 25ms.
             controllerMetrics.setLastAppliedRecordTimestamp(time.milliseconds());
         } else {
             // This is called with an offset of -1 when the active controller renounced leadership
@@ -1182,18 +1184,19 @@ public final class QuorumController implements Controller {
     private static final String WRITE_NO_OP_RECORD = "writeNoOpRecord";
 
     private void maybeScheduleNextWriteNoOpRecord() {
-        // TODO: This code should check if NoOpRecord was already scheduled
-        /* TODO: don't schedule this if IBP and metadata version doesn't support this feature.
-         * When implementing this make sure that it is scheduled when feature is dynamically enabled
-         */
-        if (maxIdleIntervalNs.isPresent() && featureControl.metadataVersion().isNoOpRecordSupported()) {
+        if (!noOpRecordScheduled &&
+            maxIdleIntervalNs.isPresent() &&
+            featureControl.metadataVersion().isNoOpRecordSupported()) {
+
             log.debug(
-                "Scheduling write event for {} because the interval is {} nanoseconds",
+                "Scheduling write event for {} because maxIdleIntervalNs ({}) and metadataVersion ({})",
                 WRITE_NO_OP_RECORD,
-                maxIdleIntervalNs.getAsLong()
+                maxIdleIntervalNs.getAsLong(),
+                featureControl.metadataVersion()
             );
 
             ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(WRITE_NO_OP_RECORD, () -> {
+                noOpRecordScheduled = false;
                 maybeScheduleNextWriteNoOpRecord();
 
                 return ControllerResult.of(
@@ -1204,10 +1207,12 @@ public final class QuorumController implements Controller {
 
             long delayNs = time.nanoseconds() + maxIdleIntervalNs.getAsLong();
             queue.scheduleDeferred(WRITE_NO_OP_RECORD, new EarliestDeadlineFunction(delayNs), event);
+            noOpRecordScheduled = true;
         }
     }
 
     private void cancelNextWriteNoOpRecord() {
+        noOpRecordScheduled = false;
         queue.cancelDeferred(WRITE_NO_OP_RECORD);
     }
 
@@ -1245,6 +1250,9 @@ public final class QuorumController implements Controller {
                     break;
                 case FEATURE_LEVEL_RECORD:
                     featureControl.replay((FeatureLevelRecord) message);
+
+                    // The feature control maybe have changed. Check if a NoOpRecord should be scheduled
+                    maybeScheduleNextWriteNoOpRecord();
                     break;
                 case CLIENT_QUOTA_RECORD:
                     clientQuotaControlManager.replay((ClientQuotaRecord) message);
@@ -1484,6 +1492,11 @@ public final class QuorumController implements Controller {
      * Tracks the scheduling state for partition leader balancing operations.
      */
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
+
+    /**
+     * Tracks if the a write of the NoOpRecord has been scheduled.
+     */
+    private boolean noOpRecordScheduled = false;
 
     private final BootstrapMetadata bootstrapMetadata;
 
