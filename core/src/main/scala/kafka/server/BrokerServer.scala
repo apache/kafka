@@ -484,7 +484,9 @@ class BrokerServer(
       info("shutting down")
 
       if (config.controlledShutdownEnable) {
-        replicaManager.beginControlledShutdown()
+        if (replicaManager != null)
+          replicaManager.beginControlledShutdown()
+
         lifecycleManager.beginControlledShutdown()
         try {
           lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
@@ -495,9 +497,10 @@ class BrokerServer(
             error("Got unexpected exception waiting for controlled shutdown future", e)
         }
       }
-      if (metadataListener != null) {
+
+      if (metadataListener != null)
         metadataListener.beginShutdown()
-      }
+
       lifecycleManager.beginShutdown()
 
       // Stop socket server to stop accepting any more connections and requests.
