@@ -76,10 +76,12 @@ public class DataInputStreamReadable implements Readable, Closeable {
     }
 
     @Override
-    public void readArray(byte[] arr) {
+    public byte[] readArray(final int length) {
         try {
+            byte[] arr = new byte[length];
             input.readFully(arr);
-        } catch (IOException e) {
+            return arr;
+        }  catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -95,8 +97,7 @@ public class DataInputStreamReadable implements Readable, Closeable {
 
     @Override
     public ByteBuffer readByteBuffer(int length) {
-        byte[] arr = new byte[length];
-        readArray(arr);
+        byte[] arr = readArray(length);
         return ByteBuffer.wrap(arr);
     }
 
@@ -113,6 +114,15 @@ public class DataInputStreamReadable implements Readable, Closeable {
     public long readVarlong() {
         try {
             return ByteUtils.readVarlong(input);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public int remaining() {
+        try {
+            return input.available();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
