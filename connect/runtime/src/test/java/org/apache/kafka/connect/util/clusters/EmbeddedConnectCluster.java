@@ -220,6 +220,16 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Set a new timeout for REST requests to each worker in the cluster. Useful if a request
+     * is expected to block, since the time spent awaiting that request can be reduced
+     * and test runtime bloat can be avoided.
+     * @param requestTimeoutMs the new timeout in milliseconds; must be positive
+     */
+    public void requestTimeout(long requestTimeoutMs) {
+        connectCluster.forEach(worker -> worker.requestTimeout(requestTimeoutMs));
+    }
+
+    /**
      * Determine whether the Connect cluster has any workers running.
      *
      * @return true if any worker is running, or false otherwise
