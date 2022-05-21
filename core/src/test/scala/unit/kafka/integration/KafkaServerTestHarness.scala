@@ -353,10 +353,14 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     }
   }
 
+  def aliveBrokers: Seq[KafkaBroker] = {
+    _brokers.filter(broker => alive(broker.config.brokerId)).toSeq
+  }
+
   def ensureConsistentKRaftMetadata(): Unit = {
     if (isKRaftTest()) {
       TestUtils.ensureConsistentKRaftMetadata(
-        brokers,
+        aliveBrokers,
         controllerServer
       )
     }
