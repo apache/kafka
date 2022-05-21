@@ -166,8 +166,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
             nodeId = -1;
         }
         this.data = data.copyWithNewConfig(nodeId, superUsers, defaultResult);
-        this.data.log.info("set super.users=" + String.join(",", superUsers) +
-            ", default result=" + defaultResult);
+        this.data.log.info("set super.users={}, default result={}", String.join(",", superUsers), defaultResult);
     }
 
     // VisibleForTesting
