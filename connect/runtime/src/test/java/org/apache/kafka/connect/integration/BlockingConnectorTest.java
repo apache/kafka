@@ -383,7 +383,8 @@ public class BlockingConnectorTest {
     }
 
     private static class Block {
-        private static CountDownLatch blockLatch;
+        private static CountDownLatch awaitBlockLatch;
+        private static CountDownLatch performBlockLatch;
 
         private final String block;
 
@@ -403,13 +404,13 @@ public class BlockingConnectorTest {
 
         public static void waitForBlock() throws InterruptedException, TimeoutException {
             synchronized (Block.class) {
-                if (blockLatch == null) {
+                if (awaitBlockLatch == null) {
                     throw new IllegalArgumentException("No connector has been created yet");
                 }
             }
 
             log.debug("Waiting for connector to block");
-            if (!blockLatch.await(CONNECTOR_BLOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            if (!awaitBlockLatch.await(CONNECTOR_BLOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                 throw new TimeoutException("Timed out waiting for connector to block.");
             }
             log.debug("Connector should now be blocked");
@@ -421,9 +422,13 @@ public class BlockingConnectorTest {
         // ID, the location of the expected block, or both.
         public static void resetBlockLatch() {
             synchronized (Block.class) {
-                if (blockLatch != null) {
-                    blockLatch.countDown();
-                    blockLatch = null;
+                if (awaitBlockLatch != null) {
+                    awaitBlockLatch.countDown();
+                    awaitBlockLatch = null;
+                }
+                if (performBlockLatch != null) {
+                    performBlockLatch.countDown();
+                    performBlockLatch = null;
                 }
             }
         }
@@ -435,22 +440,22 @@ public class BlockingConnectorTest {
         public Block(String block) {
             this.block = block;
             synchronized (Block.class) {
-                if (blockLatch != null) {
-                    blockLatch.countDown();
-                }
-                blockLatch = new CountDownLatch(1);
+                resetBlockLatch();
+                awaitBlockLatch = new CountDownLatch(1);
+                performBlockLatch = new CountDownLatch(1);
             }
         }
 
         public void maybeBlockOn(String block) {
             if (block.equals(this.block)) {
                 log.info("Will block on {}", block);
-                blockLatch.countDown();
+                awaitBlockLatch.countDown();
                 while (true) {
                     try {
-                        Thread.sleep(Long.MAX_VALUE);
+                        performBlockLatch.await();
+                        log.debug("Instructed to stop blocking; will resume normal execution");
                     } catch (InterruptedException e) {
-                        // No-op. Just keep blocking.
+                        log.debug("Interrupted while blocking; will continue blocking until instructed to stop");
                     }
                 }
             } else {
