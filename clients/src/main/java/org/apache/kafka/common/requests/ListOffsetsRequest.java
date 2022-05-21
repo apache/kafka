@@ -75,7 +75,8 @@ public class ListOffsetsRequest extends AbstractRequest {
             super(ApiKeys.LIST_OFFSETS, oldestAllowedVersion, latestAllowedVersion);
             data = new ListOffsetsRequestData()
                       .setIsolationLevel(isolationLevel.id())
-                      .setReplicaId(replicaId);
+                      .setReplicaId(replicaId)
+                      .setLimitTimeStamp(UNLIMITED_TIMESTAMP);
         }
 
         public Builder setTargetTimes(List<ListOffsetsTopic> topics) {

@@ -1362,7 +1362,7 @@ class Partition(val topicPartition: TopicPartition,
           if (log.logSegments.isEmpty) {
             None
           } else {
-            Option(log.logSegments.head.time.milliseconds())
+            Option(log.logSegments.head.getCreateTime)
           }
         case None =>
           None

@@ -794,6 +794,10 @@ public class Fetcher<K, V> implements Closeable {
         subscriptions.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
 
+    void resetOffsetStrategy(TopicPartition partition, OffsetResetStrategy offsetResetStrategy) {
+        subscriptions.requestOffsetReset(partition, offsetResetStrategy);
+    }
+
     private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps, boolean dealNearest) {
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
@@ -853,8 +857,12 @@ public class Fetcher<K, V> implements Closeable {
                             // if outOfRangeOffset is higher than log size,
                             // we will send a request again to reset to latest.
                             Long outOfRangeOffset = subscriptions.outOfRangeOffset(partition);
-                            if (outOfRangeOffset != null && outOfRangeOffset > offsetData.offset) {
+                            // offsetData.offset definitely is earliest offset
+                            if (outOfRangeOffset != null && outOfRangeOffset < offsetData.offset) {
+                                resetOffsetStrategy(partition, OffsetResetStrategy.EARLIEST);
+                            } else  {
                                 needNewReset.put(partition, ListOffsetsRequest.LATEST_TIMESTAMP);
+                                resetOffsetStrategy(partition, OffsetResetStrategy.LATEST);
                                 continue;
                             }
                         } else {
