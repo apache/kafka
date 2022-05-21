@@ -30,7 +30,7 @@ import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
-import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
+import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
@@ -1968,7 +1968,7 @@ class ReplicaManagerTest {
       purgatoryName = "ElectLeader", timer, reaperEnabled = false)
 
     // Mock network client to show leader offset of 5
-    val blockingSend = new ReplicaFetcherMockBlockingSend(
+    val blockingSend = new MockBlockingSender(
       Map(topicPartitionObj -> new EpochEndOffset()
         .setPartition(topicPartitionObj.partition)
         .setErrorCode(Errors.NONE.code)

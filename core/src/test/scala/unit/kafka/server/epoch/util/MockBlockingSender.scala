@@ -39,9 +39,9 @@ import scala.collection.Map
   * OFFSET_FOR_LEADER_EPOCH with different offsets in response, it should update offsets using
   * setOffsetsForNextResponse
   */
-class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset],
-                                     sourceBroker: BrokerEndPoint,
-                                     time: Time)
+class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
+                         sourceBroker: BrokerEndPoint,
+                         time: Time)
   extends BlockingSend {
 
   private val client = new MockClient(new SystemTime)

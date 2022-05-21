@@ -114,6 +114,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     partitionData.toMap
   }
 
+  /* Returns the local log start offset. */
   override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.localLogOrException.logStartOffset

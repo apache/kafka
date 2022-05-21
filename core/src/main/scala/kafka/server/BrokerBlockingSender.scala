@@ -130,6 +130,6 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
   }
 
   override def toString: String = {
-    s"ReplicaFetcherBlockingSend($sourceBroker, fetcherId=$fetcherId)"
+    s"BrokerBlockingSender($sourceBroker, fetcherId=$fetcherId)"
   }
 }
