@@ -1542,7 +1542,7 @@ public class KafkaStreams implements AutoCloseable {
                 .groupMetadata()
                 .groupInstanceId();
 
-        final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
+        final long remainingTimeMs = Math.max(0, timeoutMs - (time.milliseconds() - startMs));
 
         if (options.leaveGroup && groupInstanceId.isPresent()) {
             log.debug("Sending leave group trigger to removing instance from consumer group");
