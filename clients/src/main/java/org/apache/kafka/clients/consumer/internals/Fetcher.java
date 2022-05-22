@@ -482,6 +482,7 @@ public class Fetcher<K, V> implements Closeable {
             return;
 
         final Map<TopicPartition, Long> offsetResetTimestamps = new HashMap<>();
+        int a = 1;
         for (final TopicPartition partition : partitions) {
             Long timestamp = offsetResetStrategyTimestamp(partition);
             if (timestamp != null)
