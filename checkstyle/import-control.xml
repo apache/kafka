@@ -332,10 +332,6 @@
       <allow pkg="org.apache.kafka.clients.consumer" />
     </subpackage>
 
-    <subpackage name="telemetry">
-      <allow pkg="io.opentelemetry.proto.metrics" />
-    </subpackage>
-
   </subpackage>
 
   <subpackage name="server">

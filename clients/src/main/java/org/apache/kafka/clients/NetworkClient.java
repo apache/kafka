@@ -22,6 +22,7 @@ import org.apache.kafka.clients.ClientInstanceMetricsRegistry.ConnectionErrorRea
 import org.apache.kafka.clients.ClientInstanceMetricsRegistry.RequestErrorReason;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;

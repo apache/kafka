@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.apache.kafka.clients.telemetry.ClientTelemetry.MAX_TERMINAL_PUSH_WAIT_MS;
-import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.create;
-
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
