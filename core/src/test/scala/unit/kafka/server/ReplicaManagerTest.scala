@@ -2597,7 +2597,7 @@ class ReplicaManagerTest {
       // Delete the underlying directory to trigger an KafkaStorageException
       val dir = log.dir.getParentFile
       Utils.delete(dir)
-      dir.createNewFile()
+      Files.createFile(dir.toPath)
     }
 
     val partitionStates = Map(tp0 -> new StopReplicaPartitionState()

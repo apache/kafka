@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
+import java.nio.file.Files
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
@@ -84,7 +85,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       val logDir = new File(kafkaConfig.logDirs.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
       CoreUtils.swallow(Utils.delete(logDir), this)
-      logDir.createNewFile()
+      Files.createFile(logDir.toPath)
       assertTrue(logDir.isFile)
 
       server = TestUtils.createServer(kafkaConfig)
