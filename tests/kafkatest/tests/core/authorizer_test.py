@@ -58,7 +58,6 @@ class AuthorizerTest(Test):
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
                                   topics=topics, controller_num_nodes_override=1,
                                   allow_zk_with_kraft=True)
-        self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = True
 
         broker_security_protocol = "SSL"
         broker_principal = "User:CN=systemtest"
