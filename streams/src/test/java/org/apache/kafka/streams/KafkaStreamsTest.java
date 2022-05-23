@@ -596,6 +596,45 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void testPauseResume() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            streams.pause();
+            Assert.assertTrue(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+        }
+    }
+
+    @Test
+    public void testStartingPaused() {
+        // This test shows that a KafkaStreams instance can be started "paused"
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.pause();
+            streams.start();
+            Assert.assertTrue(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+        }
+    }
+
+    @Test
+    public void testShowPauseResumeAreIdempotent() {
+        // This test shows that a KafkaStreams instance can be started "paused"
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            streams.pause();
+            Assert.assertTrue(streams.isPaused());
+            streams.pause();
+            Assert.assertTrue(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+        }
+    }
+
+    @Test
     public void shouldAddThreadWhenRunning() throws InterruptedException {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
@@ -773,6 +812,28 @@ public class KafkaStreamsTest {
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
                 "Streams never started.");
+
+            try {
+                streams.cleanUp();
+                fail("Should have thrown IllegalStateException");
+            } catch (final IllegalStateException expected) {
+                assertEquals("Cannot clean up while running.", expected.getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void shouldThrowOnCleanupWhilePaused() throws InterruptedException {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING,
+                "Streams never started.");
+
+            streams.pause();
+            waitForCondition(
+                streams::isPaused,
+                "Streams did not paused");
 
             try {
                 streams.cleanUp();
