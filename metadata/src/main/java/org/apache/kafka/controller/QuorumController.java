@@ -1468,6 +1468,7 @@ public final class QuorumController implements Controller {
             setClusterControl(clusterControl).
             setControllerMetrics(controllerMetrics).
             setCreateTopicPolicy(createTopicPolicy).
+            setFeatureControl(featureControl).
             build();
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));

@@ -216,7 +216,7 @@ public class FeatureControlManagerTest {
         checkMetadataVersion(features(), MetadataVersion.IBP_2_7_IV1, Errors.INVALID_UPDATE_VERSION);
 
         // Increased QuorumFeatures
-        QuorumFeatures features = features(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV0.featureLevel());
+        QuorumFeatures features = features(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV1.featureLevel());
         checkMetadataVersion(features, MetadataVersion.IBP_3_0_IV0, Errors.INVALID_UPDATE_VERSION);
 
         // Empty QuorumFeatures
@@ -253,9 +253,9 @@ public class FeatureControlManagerTest {
     public void testDowngradeMetadataVersion() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        QuorumFeatures features = features(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV0.featureLevel());
+        QuorumFeatures features = features(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV1.featureLevel());
         FeatureControlManager manager = new FeatureControlManager(logContext, features, snapshotRegistry);
-        ControllerResult<Map<String, ApiError>> result = manager.initializeMetadataVersion(MetadataVersion.IBP_3_3_IV0.featureLevel());
+        ControllerResult<Map<String, ApiError>> result = manager.initializeMetadataVersion(MetadataVersion.IBP_3_3_IV1.featureLevel());
         RecordTestUtils.replayAll(manager, result.records());
         assertEquals(manager.metadataVersion(), MetadataVersion.latest());
 

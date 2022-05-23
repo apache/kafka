@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.ElectionType;
@@ -63,26 +64,28 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.Lis
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
-import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.metadata.BrokerHeartbeatReply;
-import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -111,12 +114,10 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
-import static org.apache.kafka.common.metadata.MetadataRecordType.FENCE_BROKER_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
-import static org.apache.kafka.common.metadata.MetadataRecordType.UNREGISTER_BROKER_RECORD;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
@@ -148,6 +149,7 @@ public class ReplicationControlManager {
         private ClusterControlManager clusterControl = null;
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
+        private FeatureControlManager featureControl = null;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -199,6 +201,11 @@ public class ReplicationControlManager {
             return this;
         }
 
+        public Builder setFeatureControl(FeatureControlManager featureControl) {
+            this.featureControl = featureControl;
+            return this;
+        }
+
         ReplicationControlManager build() {
             if (configurationControl == null) {
                 throw new RuntimeException("You must specify configurationControl.");
@@ -211,6 +218,15 @@ public class ReplicationControlManager {
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
+            if (featureControl == null) {
+                featureControl = new FeatureControlManager(logContext,
+                new QuorumFeatures(0, new ApiVersions(),
+                    Collections.singletonMap(MetadataVersion.FEATURE_NAME,
+                            VersionRange.of(0, MetadataVersion.latest().featureLevel())),
+                    Collections.singletonList(0)),
+                snapshotRegistry);
+
+            }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,
                 defaultReplicationFactor,
@@ -220,7 +236,8 @@ public class ReplicationControlManager {
                 configurationControl,
                 clusterControl,
                 controllerMetrics,
-                createTopicPolicy);
+                createTopicPolicy,
+                featureControl);
         }
     }
 
@@ -311,6 +328,11 @@ public class ReplicationControlManager {
     private final Optional<CreateTopicPolicy> createTopicPolicy;
 
     /**
+     * The feature control manager.
+     */
+    private final FeatureControlManager featureControl;
+
+    /**
      * Maps topic names to topic UUIDs.
      */
     private final TimelineHashMap<String, Uuid> topicsByName;
@@ -367,7 +389,8 @@ public class ReplicationControlManager {
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         ControllerMetrics controllerMetrics,
-        Optional<CreateTopicPolicy> createTopicPolicy
+        Optional<CreateTopicPolicy> createTopicPolicy,
+        FeatureControlManager featureControl
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
@@ -378,6 +401,7 @@ public class ReplicationControlManager {
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.createTopicPolicy = createTopicPolicy;
+        this.featureControl = featureControl;
         this.clusterControl = clusterControl;
         this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -1087,9 +1111,15 @@ public class ReplicationControlManager {
         }
         generateLeaderAndIsrUpdates("handleBrokerFenced", brokerId, NO_LEADER, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
-        records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
-            setId(brokerId).setEpoch(brokerRegistration.epoch()),
-            FENCE_BROKER_RECORD.highestSupportedVersion()));
+        if (featureControl.metadataVersion().brokerRegistrationChangeRecordSupported()) {
+            records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                    setBrokerId(brokerId).setBrokerEpoch(brokerRegistration.epoch()).setFenced((byte) 1),
+                    (short) 0));
+        } else {
+            records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
+                    setId(brokerId).setEpoch(brokerRegistration.epoch()),
+                    (short) 0));
+        }
     }
 
     /**
@@ -1106,9 +1136,15 @@ public class ReplicationControlManager {
                                   List<ApiMessageAndVersion> records) {
         generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, NO_LEADER, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
-        records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
-            setBrokerId(brokerId).setBrokerEpoch(brokerEpoch),
-            UNREGISTER_BROKER_RECORD.highestSupportedVersion()));
+        if (featureControl.metadataVersion().brokerRegistrationChangeRecordSupported()) {
+            records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                    setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).setFenced((byte) -1),
+                    (short) 0));
+        } else {
+            records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
+                    setId(brokerId).setEpoch(brokerEpoch),
+                    (short) 0));
+        }
     }
 
     /**

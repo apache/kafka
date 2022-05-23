@@ -153,7 +153,10 @@ public enum MetadataVersion {
     IBP_3_2_IV0(4, "3.2", "IV0", false),
 
     // Support for metadata.version feature flag (KIP-778)
-    IBP_3_3_IV0(5, "3.3", "IV0", false);
+    IBP_3_3_IV0(5, "3.3", "IV0", false),
+
+    // In KRaft mode, use BrokerRegistrationChangeRecord instead of UnfenceBrokerRecord and FenceBrokerRecord.
+    IBP_3_3_IV1(6, "3.3", "IV0", false);
 
     public static final String FEATURE_NAME = "metadata.version";
 
@@ -223,6 +226,10 @@ public enum MetadataVersion {
         } else {
             return RecordVersion.V2;
         }
+    }
+
+    public boolean brokerRegistrationChangeRecordSupported() {
+        return this.isAtLeast(IBP_3_3_IV1);
     }
 
     private static final Map<String, MetadataVersion> IBP_VERSIONS;

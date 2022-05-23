@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeatureCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -379,7 +381,7 @@ public class ClusterControlManager {
         if (registration == null) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration found for that id", record.toString()));
-        } else if (registration.epoch() !=  record.brokerEpoch()) {
+        } else if (registration.epoch() != record.brokerEpoch()) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration with that epoch found", record.toString()));
         } else {
@@ -391,41 +393,60 @@ public class ClusterControlManager {
     }
 
     public void replay(FenceBrokerRecord record) {
-        int brokerId = record.id();
-        BrokerRegistration registration = brokerRegistrations.get(brokerId);
-        if (registration == null) {
-            throw new RuntimeException(String.format("Unable to replay %s: no broker " +
-                "registration found for that id", record.toString()));
-        } else if (registration.epoch() !=  record.epoch()) {
-            throw new RuntimeException(String.format("Unable to replay %s: no broker " +
-                "registration with that epoch found", record.toString()));
-        } else {
-            if (heartbeatManager != null) heartbeatManager.register(brokerId, true);
-            brokerRegistrations.put(brokerId, registration.cloneWithFencing(true));
-            updateMetrics(registration, brokerRegistrations.get(brokerId));
-            log.info("Fenced broker: {}", record);
-        }
+        replayRegistrationChange(record, record.id(), record.epoch(), Optional.of(true));
     }
 
     public void replay(UnfenceBrokerRecord record) {
-        int brokerId = record.id();
-        BrokerRegistration registration = brokerRegistrations.get(brokerId);
-        if (registration == null) {
+        replayRegistrationChange(record, record.id(), record.epoch(), Optional.of(false));
+    }
+
+    public void replay(BrokerRegistrationChangeRecord record) {
+        replayRegistrationChange(record, record.brokerId(), record.brokerEpoch(), getFencingChange(record.fenced()));
+    }
+
+    private Optional<Boolean> getFencingChange(byte value) {
+        switch (value) {
+            case -1:
+                return Optional.of(false);
+            case 0:
+                return Optional.empty();
+            case 1:
+                return Optional.of(true);
+            default:
+                throw new RuntimeException(String.format("Invalid value for fenced: %d", value));
+        }
+    }
+
+    private void replayRegistrationChange(
+        ApiMessage record,
+        int brokerId,
+        long brokerEpoch,
+        Optional<Boolean> fenced
+    ) {
+        BrokerRegistration curRegistration = brokerRegistrations.get(brokerId);
+        if (curRegistration == null) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration found for that id", record.toString()));
-        } else if (registration.epoch() !=  record.epoch()) {
+        } else if (curRegistration.epoch() != brokerEpoch) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration with that epoch found", record.toString()));
         } else {
-            if (heartbeatManager != null) heartbeatManager.register(brokerId, false);
-            brokerRegistrations.put(brokerId, registration.cloneWithFencing(false));
-            updateMetrics(registration, brokerRegistrations.get(brokerId));
-            log.info("Unfenced broker: {}", record);
-        }
-        if (readyBrokersFuture.isPresent()) {
-            if (readyBrokersFuture.get().check()) {
-                readyBrokersFuture.get().future.complete(null);
-                readyBrokersFuture = Optional.empty();
+            BrokerRegistration nextRegistration = curRegistration;
+            if (fenced.isPresent()) {
+                nextRegistration = nextRegistration.cloneWithFencing(fenced.get());
+            }
+            if (!curRegistration.equals(nextRegistration)) {
+                brokerRegistrations.put(brokerId, nextRegistration);
+                updateMetrics(curRegistration, nextRegistration);
+            } else {
+                log.info("Ignoring no-op registration change for {}", curRegistration);
+            }
+            if (heartbeatManager != null) heartbeatManager.register(brokerId, nextRegistration.fenced());
+            if (readyBrokersFuture.isPresent()) {
+                if (readyBrokersFuture.get().check()) {
+                    readyBrokersFuture.get().future.complete(null);
+                    readyBrokersFuture = Optional.empty();
+                }
             }
         }
     }
@@ -437,19 +458,24 @@ public class ClusterControlManager {
             } else {
                 controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() - 1);
             }
+            log.info("Removed broker: {}", prevRegistration.id());
         } else if (prevRegistration == null) {
             if (registration.fenced()) {
                 controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
+                log.info("Added new fenced broker: {}", registration.id());
             } else {
                 controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() + 1);
+                log.info("Added new unfenced broker: {}", registration.id());
             }
         } else {
             if (prevRegistration.fenced() && !registration.fenced()) {
                 controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() - 1);
                 controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() + 1);
+                log.info("Unfenced broker: {}", registration.id());
             } else if (!prevRegistration.fenced() && registration.fenced()) {
                 controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
                 controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() - 1);
+                log.info("Fenced broker: {}", registration.id());
             }
         }
     }
