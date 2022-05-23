@@ -2129,7 +2129,7 @@ class ReplicaManager(val config: KafkaConfig,
     stateChangeLogger.info(s"Transitioning ${newLocalFollowers.size} partition(s) to " +
       "local followers.")
     val shuttingDown = isShuttingDown.get()
-    val partitionsToMakeFollower = new mutable.HashMap[TopicPartition, Partition]
+    val partitionsToStart = new mutable.HashMap[TopicPartition, Partition]
     val partitionsToStop = new mutable.HashMap[TopicPartition, Boolean]
     val newFollowerTopicSet = new mutable.HashSet[String]
     newLocalFollowers.forKeyValue { (tp, info) =>
@@ -2156,7 +2156,7 @@ class ReplicaManager(val config: KafkaConfig,
               partitionsToStop.put(tp, false)
             } else if (isNewLeaderEpoch) {
               // Otherwise, fetcher is restarted if the leader epoch has changed.
-              partitionsToMakeFollower.put(tp, partition)
+              partitionsToStart.put(tp, partition)
             }
           }
           changedPartitions.add(partition)
@@ -2179,16 +2179,16 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    if (partitionsToMakeFollower.nonEmpty) {
+    if (partitionsToStart.nonEmpty) {
       // Stopping the fetchers must be done first in order to initialize the fetch
       // position correctly.
-      replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.keySet)
-      stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+      replicaFetcherManager.removeFetcherForPartitions(partitionsToStart.keySet)
+      stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToStart.size} partitions")
 
       val listenerName = config.interBrokerListenerName.value
       val partitionAndOffsets = new mutable.HashMap[TopicPartition, InitialFetchState]
 
-      partitionsToMakeFollower.forKeyValue { (topicPartition, partition) =>
+      partitionsToStart.forKeyValue { (topicPartition, partition) =>
         val nodeOpt = partition.leaderReplicaIdOpt
           .flatMap(leaderId => Option(newImage.cluster.broker(leaderId)))
           .flatMap(_.node(listenerName).asScala)
@@ -2209,9 +2209,9 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
-      stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+      stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStart.size} partitions")
 
-      partitionsToMakeFollower.keySet.foreach(completeDelayedFetchOrProduceRequests)
+      partitionsToStart.keySet.foreach(completeDelayedFetchOrProduceRequests)
 
       updateLeaderAndFollowerMetrics(newFollowerTopicSet)
     }
