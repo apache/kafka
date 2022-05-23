@@ -1,0 +1,461 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.clients;
+
+import static org.apache.kafka.clients.ClientTelemetry.MAX_TERMINAL_PUSH_WAIT_MS;
+import static org.apache.kafka.common.Uuid.ZERO_UUID;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.internals.ProducerMetricsRegistry;
+import org.apache.kafka.clients.producer.internals.ProducerTopicMetricsRegistry;
+import org.apache.kafka.common.telemetry.emitter.Context;
+import org.apache.kafka.common.telemetry.metrics.MetricType;
+import org.apache.kafka.clients.ClientInstanceMetricsRegistry.ConnectionErrorReason;
+import org.apache.kafka.common.telemetry.metrics.InvalidMetricTypeException;
+import org.apache.kafka.common.telemetry.metrics.MetricKeyable;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
+import org.apache.kafka.common.metrics.stats.Histogram;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.DefaultRecord;
+import org.apache.kafka.common.record.LegacyRecord;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionRequest;
+import org.apache.kafka.common.requests.PushTelemetryRequest;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class ClientTelemetryUtils {
+
+    private final static Logger log = LoggerFactory.getLogger(ClientTelemetryUtils.class);
+
+    private final static Map<String, String> PRODUCER_CONFIG_MAPPING = new HashMap<>();
+
+    private final static Map<String, String> CONSUMER_CONFIG_MAPPING = new HashMap<>();
+
+    static {
+        PRODUCER_CONFIG_MAPPING.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, Context.TRANSACTIONAL_ID);
+
+        CONSUMER_CONFIG_MAPPING.put(ConsumerConfig.CLIENT_RACK_CONFIG, Context.CLIENT_RACK);
+        CONSUMER_CONFIG_MAPPING.put(ConsumerConfig.GROUP_ID_CONFIG, Context.GROUP_ID);
+        CONSUMER_CONFIG_MAPPING.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, Context.GROUP_INSTANCE_ID);
+    }
+
+    public final static Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
+
+    public final static Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
+
+    public static Optional<ClientTelemetry> create(ConsumerConfig config, Time time, String clientId) {
+        return create(config, time, clientId, CONSUMER_CONFIG_MAPPING);
+    }
+
+    public static Optional<ClientTelemetry> create(ProducerConfig config, Time time, String clientId) {
+        return create(config, time, clientId, PRODUCER_CONFIG_MAPPING);
+    }
+
+    public static Optional<ClientTelemetry> create(AdminClientConfig config, Time time, String clientId) {
+        return create(config, time, clientId, null);
+    }
+
+    public static Optional<ClientTelemetry> create(boolean enableMetricsPush, Time time, String clientId) {
+        if (enableMetricsPush)
+            return Optional.of(new ClientTelemetry(time, clientId));
+        else
+            return Optional.empty();
+    }
+
+    private static Optional<ClientTelemetry> create(AbstractConfig config,
+        Time time,
+        String clientId,
+        Map<String, String> configToContextNameMapping) {
+        if (config == null) {
+            log.warn("Not able to create client telemetry as config was null");
+            return Optional.empty();
+        }
+
+        Boolean enableMetricsPush = config.getBoolean(CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG);
+
+        if (enableMetricsPush != null && !enableMetricsPush) {
+            log.debug("Not creating client telemetry as {} was disabled", CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG);
+            return Optional.empty();
+        }
+
+        ClientTelemetry clientTelemetry = new ClientTelemetry(time, clientId);
+
+        if (configToContextNameMapping != null) {
+            Context context = clientTelemetry.context();
+
+            for (Map.Entry<String, String> e : configToContextNameMapping.entrySet()) {
+                String configName = e.getKey();
+                String contextName = e.getValue();
+
+                if (config.getString(configName) != null) {
+                    String contextValue = config.getString(configName);
+                    log.debug("Adding key/value pair to client telemetry context: {}={}",
+                        contextName, contextValue);
+                    context.put(contextName, contextValue);
+                }
+            }
+        }
+
+        return Optional.of(clientTelemetry);
+    }
+
+    public static Optional<String> clientInstanceId(Optional<ClientTelemetry> clientTelemetry, Duration timeout) {
+        return clientTelemetry.isPresent() ? clientTelemetry.get().clientInstanceId(timeout) : Optional.empty();
+    }
+
+    public static void initiateTermination(Optional<ClientTelemetry> clientTelemetry, long timeoutMs) {
+        // The clientTelemetry can be null if it is called from a close() that was invoked as
+        // part of a failed constructor.
+        if (clientTelemetry == null)
+            return;
+
+        // This starts the client telemetry termination process which will attempt to send a
+        // terminal telemetry push, if possible.
+        //
+        // This is a separate step from actually closing the instance, which we do further down.
+        Duration d = Duration.ofMillis(Math.min(MAX_TERMINAL_PUSH_WAIT_MS, timeoutMs));
+        clientTelemetry.ifPresent(ct -> ct.initiateClose(d));
+    }
+
+    public static void closeQuietly(Optional<ClientTelemetry> clientTelemetry, String name, AtomicReference<Throwable> firstException) {
+        // The clientTelemetry can be null if it is called from a close() that was invoked as
+        // part of a failed constructor.
+        if (clientTelemetry == null)
+            return;
+
+        clientTelemetry.ifPresent(ct -> Utils.closeQuietly(ct, name, firstException));
+    }
+
+    public static void closeQuietly(Optional<ClientTelemetry> clientTelemetry, String name) {
+        // The clientTelemetry can be null if it is called from a close() that was invoked as
+        // part of a failed constructor.
+        if (clientTelemetry == null)
+            return;
+
+        clientTelemetry.ifPresent(ct -> Utils.closeQuietly(ct, name));
+    }
+
+    @SuppressWarnings("fallthrough")
+    public static long timeToNextUpdate(ClientTelemetryState state, ClientTelemetrySubscription subscription, long requestTimeoutMs, Time time) {
+        final long t;
+
+        switch (state) {
+            case subscription_in_progress:
+            case push_in_progress:
+            case terminating_push_in_progress:
+                // We have network requests in progress, so wait the amount of the requestTimeout
+                // as provided.
+                t = requestTimeoutMs;
+                break;
+
+            case terminating_push_needed:
+                t = 0;
+                break;
+
+            case subscription_needed:
+                if (subscription == null)
+                    t = 0;
+                else
+                    t = timeToNextUpdate(subscription, time);
+
+                break;
+
+            case push_needed:
+                if (subscription != null) {
+                    t = timeToNextUpdate(subscription, time);
+                    break;
+                } else {
+                    log.warn("Telemetry subscription was null when determining time for next update in state {}", state);
+                    // Fall through...
+                }
+
+            default:
+                // Should never get to here
+                t = Long.MAX_VALUE;
+        }
+
+        return t;
+    }
+
+    public static long timeToNextUpdate(ClientTelemetrySubscription subscription, Time time) {
+        long fetchMs = subscription.fetchMs();
+        long pushIntervalMs = subscription.pushIntervalMs();
+        long timeRemainingBeforePush = fetchMs + pushIntervalMs - time.milliseconds();
+
+        final long t;
+
+        if (timeRemainingBeforePush < 0)
+            t = 0;
+        else
+            t = timeRemainingBeforePush;
+
+        return t;
+    }
+
+    public static Predicate<? super MetricKeyable> validateMetricNames(List<String> requestedMetrics) {
+        if (requestedMetrics == null || requestedMetrics.isEmpty()) {
+            log.trace("Telemetry subscription has specified no metric names; telemetry will record no metrics");
+            return SELECTOR_NO_METRICS;
+        } else if (requestedMetrics.size() == 1 && requestedMetrics.get(0).isEmpty()) {
+            log.trace("Telemetry subscription has specified a single empty metric name; using all metrics");
+            return SELECTOR_ALL_METRICS;
+        } else {
+            log.trace("Telemetry subscription has specified to include only metrics that are prefixed with the following strings: {}", requestedMetrics);
+            return k -> requestedMetrics.stream().anyMatch(f -> k.key().name().startsWith(f));
+        }
+    }
+
+    public static List<CompressionType> validateAcceptedCompressionTypes(List<Byte> acceptedCompressionTypes) {
+        List<CompressionType> list = new ArrayList<>();
+
+        if (acceptedCompressionTypes != null && !acceptedCompressionTypes.isEmpty()) {
+            for (Byte b : acceptedCompressionTypes) {
+                int compressionId = b.intValue();
+
+                try {
+                    CompressionType compressionType = CompressionType.forId(compressionId);
+                    list.add(compressionType);
+                } catch (IllegalArgumentException e) {
+                    log.warn("Accepted compression type with ID {} provided by broker is not a known compression type; ignoring", compressionId, e);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    public static Uuid validateClientInstanceId(Uuid clientInstanceId) {
+        if (clientInstanceId == null)
+            throw new IllegalArgumentException("clientInstanceId must be non-null");
+
+        return clientInstanceId;
+    }
+
+    public static int validatePushIntervalMs(int pushIntervalMs) {
+        if (pushIntervalMs <= 0) {
+            log.warn("Telemetry subscription push interval value from broker was invalid ({}), substituting a value of {}", pushIntervalMs, ClientTelemetry.DEFAULT_PUSH_INTERVAL_MS);
+            return ClientTelemetry.DEFAULT_PUSH_INTERVAL_MS;
+        }
+
+        log.debug("Telemetry subscription push interval value from broker was {}", pushIntervalMs);
+        return pushIntervalMs;
+    }
+
+    public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes) {
+        if (acceptedCompressionTypes != null && !acceptedCompressionTypes.isEmpty()) {
+            // Broker is providing the compression types in order of preference. Grab the
+            // first one.
+            return acceptedCompressionTypes.get(0);
+        } else {
+            return CompressionType.NONE;
+        }
+    }
+
+    public static MetricType metricType(KafkaMetric kafkaMetric) {
+        Measurable measurable = kafkaMetric.measurable();
+
+        if (measurable instanceof Gauge) {
+            return MetricType.gauge;
+        } else if (measurable instanceof Histogram) {
+            // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-1876
+            throw new UnsupportedOperationException("Histograms are not yet implemented - see CLIENTS-1876");
+        } else if (measurable instanceof CumulativeSum) {
+            return MetricType.sum;
+        } else {
+            throw new InvalidMetricTypeException("Could not determine metric type from measurable type " + measurable + " of metric " + kafkaMetric);
+        }
+    }
+
+    public static ByteBuffer serialize(byte[] raw, CompressionType compressionType) {
+
+        try {
+            try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(1024)) {
+                try (OutputStream out = compressionType.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
+                    out.write(raw);
+                    out.flush();
+                }
+
+                return (ByteBuffer) compressedOut.buffer().flip();
+            }
+        } catch (IOException e) {
+            throw new KafkaException(e);
+        }
+    }
+
+    public static String convertToReason(Throwable error) {
+        // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2286
+        return String.valueOf(error);
+    }
+
+    public static Optional<ConnectionErrorReason> convertToConnectionErrorReason(Errors errors) {
+        // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2287
+        switch (errors) {
+            case NETWORK_EXCEPTION:
+                return Optional.of(ConnectionErrorReason.disconnect);
+
+            case CLUSTER_AUTHORIZATION_FAILED:
+            case DELEGATION_TOKEN_AUTHORIZATION_FAILED:
+            case DELEGATION_TOKEN_AUTH_DISABLED:
+            case GROUP_AUTHORIZATION_FAILED:
+            case SASL_AUTHENTICATION_FAILED:
+            case TOPIC_AUTHORIZATION_FAILED:
+            case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
+                return Optional.of(ConnectionErrorReason.auth);
+
+            case REQUEST_TIMED_OUT:
+                return Optional.of(ConnectionErrorReason.timeout);
+
+            default:
+                // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2288
+                return Optional.empty();
+        }
+    }
+
+    public static int calculateQueueBytes(ApiVersions apiVersions,
+        long timestamp,
+        byte[] key,
+        byte[] value,
+        Header[] headers) {
+        // TODO: TELEMETRY_TODO: need to know the proper place to call this
+        // TODO: TELEMETRY_TODO: need to know the proper means/place to determine the size
+        int offsetDelta = -1;
+        byte magic = apiVersions.maxUsableProduceMagic();
+
+        if (magic > RecordBatch.MAGIC_VALUE_V1) {
+            return DefaultRecord.sizeInBytes(offsetDelta,
+                timestamp,
+                key != null ? key.length : 0,
+                value != null ? value.length : 0,
+                headers);
+        } else {
+            return LegacyRecord.recordSize(magic,
+                key != null ? key.length : 0,
+                value != null ? value.length : 0);
+        }
+    }
+
+    public static void incrementProducerQueueMetrics(ClientTelemetry clientTelemetry,
+        ApiVersions apiVersions,
+        short acks,
+        TopicPartition tp,
+        long timestamp,
+        byte[] key,
+        byte[] value,
+        Header[] headers) {
+        // TODO: TELEMETRY_TODO: need to know the proper place to call this
+        // TODO: TELEMETRY_TODO: need to know the proper means/place to determine the size
+        int size = calculateQueueBytes(apiVersions, timestamp, key, value, headers);
+
+        ProducerMetricsRegistry producerMetricsRegistry = clientTelemetry.producerMetricsRegistry();
+        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueBytes).record(size);
+        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueCount).record(1);
+
+        ProducerTopicMetricsRegistry producerTopicMetricsRegistry = clientTelemetry.producerTopicMetricsRegistry();
+        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueBytes(tp, acks)).record(size);
+        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueCount(tp, acks)).record(1);
+    }
+
+    public static void decrementProducerQueueMetrics(ClientTelemetry clientTelemetry,
+        short acks,
+        TopicPartition tp,
+        int size) {
+        // TODO: TELEMETRY_TODO: we need an accurate record count passed in. I don't yet know
+        //       how to get it from the RecordBatch or MemoryRecord or ???
+        // TODO: TELEMETRY_TODO: need to know the proper place to call this
+        // TODO: TELEMETRY_TODO: need to know the proper means/place to determine the size
+        int recordCount = 0;
+
+        ProducerMetricsRegistry producerMetricsRegistry = clientTelemetry.producerMetricsRegistry();
+        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueBytes).record(-size);
+        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueCount).record(-recordCount);
+
+        ProducerTopicMetricsRegistry producerTopicMetricsRegistry = clientTelemetry.producerTopicMetricsRegistry();
+        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueBytes(tp, acks)).record(-size);
+        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueCount(tp, acks)).record(-recordCount);
+    }
+
+    public static String formatAcks(short acks) {
+        switch (acks) {
+            case 0:
+                return "none";
+
+            case 1:
+                return "leader";
+
+            default:
+                return "all";
+        }
+    }
+
+    public static GetTelemetrySubscriptionRequest.Builder createGetTelemetrySubscriptionRequest(
+        ClientTelemetrySubscription subscription) {
+        Uuid clientInstanceId;
+
+        // If we've previously retrieved a subscription, it will contain the client instance ID
+        // that the broker assigned. Otherwise, per KIP-714, we send a special "null" UUID to
+        // signal to the broker that we need to have a client instance ID assigned.
+        if (subscription != null)
+            clientInstanceId = subscription.clientInstanceId();
+        else
+            clientInstanceId = ZERO_UUID;
+
+        return new GetTelemetrySubscriptionRequest.Builder(clientInstanceId);
+    }
+
+    public static PushTelemetryRequest.Builder createPushTelemetryRequest(boolean terminating,
+        ClientTelemetrySubscription subscription,
+        byte[] rawPayload) {
+        CompressionType compressionType = preferredCompressionType(subscription.acceptedCompressionTypes());
+
+        ByteBuffer buf = serialize(rawPayload, compressionType);
+        Bytes metricsData =  Bytes.wrap(Utils.readBytes(buf));
+
+        return new PushTelemetryRequest.Builder(subscription.clientInstanceId(),
+            subscription.subscriptionId(),
+            terminating,
+            compressionType,
+            metricsData);
+    }
+
+}

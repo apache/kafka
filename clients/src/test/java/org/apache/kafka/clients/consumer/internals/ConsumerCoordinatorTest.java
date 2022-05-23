@@ -27,7 +27,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.telemetry.NoopClientTelemetry;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -3421,7 +3420,7 @@ public abstract class ConsumerCoordinatorTest {
             subscriptions,
             new Metrics(time),
             consumerId + groupId,
-            new NoopClientTelemetry().consumerMetricRecorder(),
+            Optional.empty(),
             time,
             false,
             autoCommitIntervalMs,
@@ -3576,7 +3575,7 @@ public abstract class ConsumerCoordinatorTest {
                 subscriptionState,
                 metrics,
                 consumerId + groupId,
-                new NoopClientTelemetry().consumerMetricRecorder(),
+                Optional.empty(),
                 time,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
