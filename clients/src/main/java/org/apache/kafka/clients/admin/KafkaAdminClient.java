@@ -27,7 +27,7 @@ import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
+import org.apache.kafka.clients.ClientTelemetry;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
@@ -55,7 +55,7 @@ import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.admin.internals.RemoveMembersFromConsumerGroupHandler;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.clients.telemetry.ClientTelemetryUtils;
+import org.apache.kafka.clients.ClientTelemetryUtils;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
@@ -270,7 +270,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.telemetry.ClientTelemetry.MAX_TERMINAL_PUSH_WAIT_MS;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -346,7 +345,7 @@ public class KafkaAdminClient extends AdminClient {
      */
     private final AdminMetadataManager metadataManager;
 
-    private final ClientTelemetry clientTelemetry;
+    private final Optional<ClientTelemetry> clientTelemetry;
 
     /**
      * The metrics for this KafkaAdminClient.
@@ -521,7 +520,7 @@ public class KafkaAdminClient extends AdminClient {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                     metrics, time, metricGrpPrefix, channelBuilder, logContext);
-            ClientTelemetry clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
+            Optional<ClientTelemetry> clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
             networkClient = new NetworkClient(
                 metadataManager.updater(),
                 null,
@@ -563,7 +562,7 @@ public class KafkaAdminClient extends AdminClient {
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<>(), time);
             LogContext logContext = createLogContext(clientId);
-            ClientTelemetry clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
+            Optional<ClientTelemetry> clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
                 client, null, logContext, clientTelemetry);
         } catch (Throwable exc) {
@@ -584,7 +583,7 @@ public class KafkaAdminClient extends AdminClient {
                              KafkaClient client,
                              TimeoutProcessorFactory timeoutProcessorFactory,
                              LogContext logContext,
-                             ClientTelemetry clientTelemetry) {
+                             Optional<ClientTelemetry> clientTelemetry) {
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
         this.logContext = logContext;
@@ -645,8 +644,7 @@ public class KafkaAdminClient extends AdminClient {
         //
         // This is a separate step from actually closing the instance, which we do in the
         // AdminClientRunnable.run method's finally section.
-        if (clientTelemetry != null)
-            clientTelemetry.initiateClose(Duration.ofMillis(Math.min(MAX_TERMINAL_PUSH_WAIT_MS, waitTimeMs)));
+        ClientTelemetryUtils.initiateTermination(clientTelemetry, waitTimeMs);
 
         long now = time.milliseconds();
         long newHardShutdownTimeMs = now + waitTimeMs;
@@ -1372,7 +1370,7 @@ public class KafkaAdminClient extends AdminClient {
                     log.info("Timed out {} remaining operation(s) during close.", numTimedOut);
                 }
                 closeQuietly(client, "KafkaClient");
-                closeQuietly(clientTelemetry, "client metrics");
+                ClientTelemetryUtils.closeQuietly(clientTelemetry, "ClientTelemetry");
                 closeQuietly(metrics, "Metrics");
                 log.debug("Exiting AdminClientRunnable thread.");
             }
@@ -3437,7 +3435,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public Optional<String> clientInstanceId(Duration timeout) {
-        return clientTelemetry.clientInstanceId(timeout);
+        return ClientTelemetryUtils.clientInstanceId(clientTelemetry, timeout);
     }
 
     @Override

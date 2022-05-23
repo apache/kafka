@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -84,7 +85,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
               client,
               metrics,
               metricGrpPrefix,
-              time);
+              time,
+              Optional.empty());
         this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;

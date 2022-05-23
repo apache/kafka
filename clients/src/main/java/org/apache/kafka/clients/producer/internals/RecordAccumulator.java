@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.decrementProducerQueueMetrics;
-import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.incrementProducerQueueMetrics;
+import static org.apache.kafka.clients.ClientTelemetryUtils.decrementProducerQueueMetrics;
+import static org.apache.kafka.clients.ClientTelemetryUtils.incrementProducerQueueMetrics;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -29,12 +29,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
+import org.apache.kafka.clients.ClientTelemetry;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -89,7 +90,7 @@ public final class RecordAccumulator {
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
     private final short acks;
-    private final ClientTelemetry clientTelemetry;
+    private final Optional<ClientTelemetry> clientTelemetry;
 
     /**
      * Create a new record accumulator
@@ -122,7 +123,7 @@ public final class RecordAccumulator {
                              TransactionManager transactionManager,
                              BufferPool bufferPool,
                              short acks,
-                             ClientTelemetry clientTelemetry) {
+                             Optional<ClientTelemetry> clientTelemetry) {
         this.log = logContext.logger(RecordAccumulator.class);
         this.drainIndex = 0;
         this.closed = false;
@@ -280,14 +281,16 @@ public final class RecordAccumulator {
             if (future == null) {
                 last.closeForRecordAppends();
             } else {
-                incrementProducerQueueMetrics(clientTelemetry,
-                    apiVersions,
-                    acks,
-                    tp,
-                    timestamp,
-                    key,
-                    value,
-                    headers);
+                clientTelemetry.ifPresent(ct ->
+                    incrementProducerQueueMetrics(ct,
+                        apiVersions,
+                        acks,
+                        tp,
+                        timestamp,
+                        key,
+                        value,
+                        headers)
+                );
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false);
             }
         }
@@ -650,10 +653,14 @@ public final class RecordAccumulator {
             // close() is particularly expensive
 
             batch.close();
-            decrementProducerQueueMetrics(clientTelemetry,
+
+            clientTelemetry.ifPresent(ct ->
+                decrementProducerQueueMetrics(ct,
                     acks,
                     tp,
-                    batch.records().sizeInBytes());
+                    batch.records().sizeInBytes())
+            );
+
             size += batch.records().sizeInBytes();
             ready.add(batch);
 

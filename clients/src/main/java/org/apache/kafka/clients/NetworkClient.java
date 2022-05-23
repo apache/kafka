@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.clients;
 
-import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.convertToConnectionErrorReason;
+import static org.apache.kafka.clients.ClientTelemetryUtils.convertToConnectionErrorReason;
 
-import org.apache.kafka.clients.telemetry.ClientInstanceMetricRecorder;
-import org.apache.kafka.clients.telemetry.ClientInstanceMetricRecorder.ConnectionErrorReason;
-import org.apache.kafka.clients.telemetry.ClientInstanceMetricRecorder.RequestErrorReason;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
-import org.apache.kafka.clients.telemetry.NoopClientTelemetry;
+import org.apache.kafka.clients.ClientInstanceMetricsRegistry.ConnectionErrorReason;
+import org.apache.kafka.clients.ClientInstanceMetricsRegistry.RequestErrorReason;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -135,11 +133,11 @@ public class NetworkClient implements KafkaClient {
 
     private final Sensor throttleTimeSensor;
 
-    private final ClientInstanceMetricRecorder clientInstanceMetricRecorder;
+    private final Optional<ClientInstanceMetricsRegistry> clientInstanceMetricsRegistry;
 
     private final AtomicReference<State> state;
 
-    private final TelemetryUpdater telemetryUpdater;
+    private final Optional<TelemetryUpdater> telemetryUpdater;
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -157,22 +155,22 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          LogContext logContext) {
         this(selector,
-             metadata,
-             clientId,
-             maxInFlightRequestsPerConnection,
-             reconnectBackoffMs,
-             reconnectBackoffMax,
-             socketSendBuffer,
-             socketReceiveBuffer,
-             defaultRequestTimeoutMs,
-             connectionSetupTimeoutMs,
-             connectionSetupTimeoutMaxMs,
-             time,
-             discoverBrokerVersions,
-             apiVersions,
-             null,
-             new NoopClientTelemetry(),
-             logContext);
+            metadata,
+            clientId,
+            maxInFlightRequestsPerConnection,
+            reconnectBackoffMs,
+            reconnectBackoffMax,
+            socketSendBuffer,
+            socketReceiveBuffer,
+            defaultRequestTimeoutMs,
+            connectionSetupTimeoutMs,
+            connectionSetupTimeoutMaxMs,
+            time,
+            discoverBrokerVersions,
+            apiVersions,
+            null,
+            Optional.empty(),
+            logContext);
     }
 
     public NetworkClient(Selectable selector,
@@ -190,7 +188,7 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
-                         ClientTelemetry clientTelemetry,
+                         Optional<ClientTelemetry> clientTelemetry,
                          LogContext logContext) {
         this(null,
              metadata,
@@ -229,24 +227,24 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          LogContext logContext) {
         this(metadataUpdater,
-             null,
-             selector,
-             clientId,
-             maxInFlightRequestsPerConnection,
-             reconnectBackoffMs,
-             reconnectBackoffMax,
-             socketSendBuffer,
-             socketReceiveBuffer,
-             defaultRequestTimeoutMs,
-             connectionSetupTimeoutMs,
-             connectionSetupTimeoutMaxMs,
-             time,
-             discoverBrokerVersions,
-             apiVersions,
-             null,
-             new NoopClientTelemetry(),
-             logContext,
-             new DefaultHostResolver());
+            null,
+            selector,
+            clientId,
+            maxInFlightRequestsPerConnection,
+            reconnectBackoffMs,
+            reconnectBackoffMax,
+            socketSendBuffer,
+            socketReceiveBuffer,
+            defaultRequestTimeoutMs,
+            connectionSetupTimeoutMs,
+            connectionSetupTimeoutMaxMs,
+            time,
+            discoverBrokerVersions,
+            apiVersions,
+            null,
+            Optional.empty(),
+            logContext,
+            new DefaultHostResolver());
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
@@ -265,7 +263,7 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
-                         ClientTelemetry clientTelemetry,
+                         Optional<ClientTelemetry> clientTelemetry,
                          LogContext logContext,
                          HostResolver hostResolver) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
@@ -297,8 +295,15 @@ public class NetworkClient implements KafkaClient {
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
-        this.clientInstanceMetricRecorder = clientTelemetry.clientInstanceMetricRecorder();
-        this.telemetryUpdater = new TelemetryUpdater(clientTelemetry);
+
+        if (clientTelemetry.isPresent()) {
+            ClientTelemetry ct = clientTelemetry.get();
+            this.clientInstanceMetricsRegistry = Optional.of(ct.clientInstanceMetricsRegistry());
+            this.telemetryUpdater = Optional.of(new TelemetryUpdater(ct));
+        } else {
+            this.clientInstanceMetricsRegistry = Optional.empty();
+            this.telemetryUpdater = Optional.empty();
+        }
     }
 
     /**
@@ -351,7 +356,7 @@ public class NetworkClient implements KafkaClient {
     private void cancelInFlightRequests(String nodeId, long now, Collection<ClientResponse> responses) {
         Iterable<InFlightRequest> inFlightRequests = this.inFlightRequests.clearAll(nodeId);
         for (InFlightRequest request : inFlightRequests) {
-            decrementQueueCountTelemetry(request);
+            updateQueueCountTelemetry(request, -1);
 
             if (log.isDebugEnabled()) {
                 log.debug("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
@@ -372,10 +377,10 @@ public class NetworkClient implements KafkaClient {
                     responses.add(request.disconnected(now, null));
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
-            } else if (telemetryUpdater != null && request.header.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS) {
-                telemetryUpdater.handleFailedGetTelemetrySubscriptionRequest(null);
-            } else if (telemetryUpdater != null && request.header.apiKey() == ApiKeys.PUSH_TELEMETRY) {
-                telemetryUpdater.handleFailedPushTelemetryRequest(null);
+            } else if (telemetryUpdater.isPresent() && request.header.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS) {
+                telemetryUpdater.get().subscriptionFailed(null);
+            } else if (telemetryUpdater.isPresent() && request.header.apiKey() == ApiKeys.PUSH_TELEMETRY) {
+                telemetryUpdater.get().pushFailed(null);
             }
         }
     }
@@ -389,7 +394,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void close(String nodeId) {
-        clientInstanceMetricRecorder.addConnectionErrors(ConnectionErrorReason.close, 1);
+        incrementConnectionErrorsTelemetry(ConnectionErrorReason.close);
 
         log.info("Client requested connection close from node {}", nodeId);
         selector.close(nodeId);
@@ -539,10 +544,10 @@ public class NetworkClient implements KafkaClient {
                 abortedSends.add(clientResponse);
             else if (clientRequest.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleFailedRequest(now, Optional.of(unsupportedVersionException));
-            else if (telemetryUpdater != null && clientRequest.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS)
-                telemetryUpdater.handleFailedGetTelemetrySubscriptionRequest(unsupportedVersionException);
-            else if (telemetryUpdater != null && clientRequest.apiKey() == ApiKeys.PUSH_TELEMETRY)
-                telemetryUpdater.handleFailedPushTelemetryRequest(unsupportedVersionException);
+            else if (telemetryUpdater.isPresent() && clientRequest.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS)
+                telemetryUpdater.get().subscriptionFailed(unsupportedVersionException);
+            else if (telemetryUpdater.isPresent() && clientRequest.apiKey() == ApiKeys.PUSH_TELEMETRY)
+                telemetryUpdater.get().pushFailed(unsupportedVersionException);
         }
     }
 
@@ -562,7 +567,7 @@ public class NetworkClient implements KafkaClient {
                 send,
                 now);
         this.inFlightRequests.add(inFlightRequest);
-        incrementQueueCountTelemetry(inFlightRequest);
+        updateQueueCountTelemetry(inFlightRequest, 1);
         selector.send(new NetworkSend(clientRequest.destination(), send));
     }
 
@@ -589,7 +594,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
-        long telemetryTimeout = telemetryUpdater != null ? telemetryUpdater.maybeUpdate(now) : Integer.MAX_VALUE;
+        long telemetryTimeout = telemetryUpdater.isPresent() ? telemetryUpdater.get().maybeUpdate(now) : Integer.MAX_VALUE;
         try {
             this.selector.poll(Utils.min(timeout, metadataTimeout, telemetryTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
@@ -830,7 +835,7 @@ public class NetworkClient implements KafkaClient {
             this.selector.close(nodeId);
             log.info("Disconnecting from node {} due to request timeout.", nodeId);
             processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
-            incrementRequestErrorsTelemetry(nodeId, RequestErrorReason.timeout);
+            incrementRequestErrorsTelemetry(nodeId, responses, RequestErrorReason.timeout);
             incrementConnectionErrorsTelemetry(ConnectionErrorReason.timeout);
         }
     }
@@ -874,7 +879,7 @@ public class NetworkClient implements KafkaClient {
             InFlightRequest request = this.inFlightRequests.lastSent(send.destinationId());
             if (!request.expectResponse) {
                 this.inFlightRequests.completeLastSent(send.destinationId());
-                decrementQueueCountTelemetry(request);
+                updateQueueCountTelemetry(request, -1);
                 incrementRequestSuccessTelemetry(request);
                 responses.add(request.completed(null, now));
             }
@@ -909,7 +914,7 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            decrementQueueCountTelemetry(req);
+            updateQueueCountTelemetry(req, -1);
             incrementRequestSuccessTelemetry(req);
 
             AbstractResponse response = parseResponse(receive.payload(), req.header);
@@ -927,10 +932,10 @@ public class NetworkClient implements KafkaClient {
                 metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
             else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) response);
-            else if (req.isInternalRequest && telemetryUpdater != null && response instanceof GetTelemetrySubscriptionResponse)
-                telemetryUpdater.handleSuccessfulGetTelemetrySubscriptionResponse((GetTelemetrySubscriptionResponse) response);
-            else if (req.isInternalRequest && telemetryUpdater != null && response instanceof PushTelemetryResponse)
-                telemetryUpdater.handleSuccessfulPushTelemetryResponse((PushTelemetryResponse) response);
+            else if (req.isInternalRequest && telemetryUpdater.isPresent() && response instanceof GetTelemetrySubscriptionResponse)
+                telemetryUpdater.get().subscriptionResponseReceived((GetTelemetrySubscriptionResponse) response);
+            else if (req.isInternalRequest && telemetryUpdater.isPresent() && response instanceof PushTelemetryResponse)
+                telemetryUpdater.get().pushResponseReceived((PushTelemetryResponse) response);
             else
                 responses.add(req.completed(response, now));
         }
@@ -946,10 +951,8 @@ public class NetworkClient implements KafkaClient {
                     errors, node, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
-                ConnectionErrorReason reason = convertToConnectionErrorReason(errors);
-
-                if (reason != null)
-                    incrementConnectionErrorsTelemetry(reason);
+                Optional<ConnectionErrorReason> reason = convertToConnectionErrorReason(errors);
+                reason.ifPresent(this::incrementConnectionErrorsTelemetry);
             } else {
                 // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
@@ -985,7 +988,7 @@ public class NetworkClient implements KafkaClient {
             log.info("Node {} disconnected.", node);
             processDisconnection(responses, node, now, entry.getValue());
             incrementConnectionErrorsTelemetry(ConnectionErrorReason.disconnect);
-            incrementRequestErrorsTelemetry(node, RequestErrorReason.disconnect);
+            incrementRequestErrorsTelemetry(node, responses, RequestErrorReason.disconnect);
         }
     }
 
@@ -1028,30 +1031,55 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
-    private void incrementQueueCountTelemetry(InFlightRequest inFlightRequest) {
-        String brokerId = inFlightRequest.destination;
-        clientInstanceMetricRecorder.incrementRequestQueueCount(brokerId, 1);
-    }
+    private void updateQueueCountTelemetry(InFlightRequest inFlightRequest, int value) {
+        clientInstanceMetricsRegistry.ifPresent(cimr -> {
+            String brokerId = inFlightRequest.destination;
 
-    private void decrementQueueCountTelemetry(InFlightRequest inFlightRequest) {
-        String brokerId = inFlightRequest.destination;
-        clientInstanceMetricRecorder.decrementRequestQueueCount(brokerId, -1);
+            MetricName mn = cimr.requestQueueCount(brokerId);
+            cimr.gaugeSensor(mn).record(value);
+        });
     }
 
     private void incrementRequestSuccessTelemetry(InFlightRequest inFlightRequest) {
-        String brokerId = inFlightRequest.destination;
-        String requestType = inFlightRequest.request.apiKey().messageType.name;
-        clientInstanceMetricRecorder.addRequestSuccess(brokerId, requestType, 1);
+        clientInstanceMetricsRegistry.ifPresent(cimr -> {
+            String brokerId = inFlightRequest.destination;
+            String requestType = inFlightRequest.request.apiKey().messageType.name;
+
+            MetricName mn = cimr.requestSuccess(brokerId, requestType);
+            cimr.sumSensor(mn).record(1);
+        });
     }
 
-    private void incrementRequestErrorsTelemetry(String brokerId, RequestErrorReason reason) {
-        // TODO: TELEMETRY_TODO: Need to be able to determine the request type somehow...
-        String requestType = "requestType TBA";
-        clientInstanceMetricRecorder.addRequestErrors(brokerId, requestType, reason, 1);
+    private void incrementRequestErrorsTelemetry(String brokerId, List<ClientResponse> responses, RequestErrorReason reason) {
+        clientInstanceMetricsRegistry.ifPresent(cimr -> {
+            Map<ApiKeys, Integer> requestErrorCounts = new HashMap<>();
+
+            for (ClientResponse cr : responses) {
+                ApiKeys requestType = cr.requestHeader().apiKey();
+                Integer count = requestErrorCounts.get(requestType);
+
+                if (count == null)
+                    count = 1;
+                else
+                    count++;
+
+                requestErrorCounts.put(requestType, count);
+            }
+
+            for (Map.Entry<ApiKeys, Integer> entry : requestErrorCounts.entrySet()) {
+                String requestType = entry.getKey().name();
+                int count = entry.getValue();
+                MetricName mn = cimr.requestErrors(brokerId, requestType, reason);
+                cimr.sumSensor(mn).record(count);
+            }
+        });
     }
 
     private void incrementConnectionErrorsTelemetry(ConnectionErrorReason reason) {
-        clientInstanceMetricRecorder.addConnectionErrors(reason, 1);
+        clientInstanceMetricsRegistry.ifPresent(cimr -> {
+            MetricName mn = cimr.connectionErrors(reason);
+            cimr.sumSensor(mn).record(1);
+        });
     }
 
     /**
@@ -1070,8 +1098,13 @@ public class NetworkClient implements KafkaClient {
                     this.socketSendBuffer,
                     this.socketReceiveBuffer);
 
-            clientInstanceMetricRecorder.addConnectionCreations(nodeConnectionId, 1);
-            clientInstanceMetricRecorder.incrementConnectionActive(1);
+            clientInstanceMetricsRegistry.ifPresent(cimr -> {
+                MetricName mn = cimr.connectionCreations(nodeConnectionId);
+                cimr.sumSensor(mn).record(1);
+                cimr.gaugeSensor(cimr.connectionActive).record(1);
+            });
+
+
         } catch (IOException e) {
             log.warn("Error connecting to node {}", node, e);
             // Attempt failed, we'll try again after the backoff
@@ -1166,7 +1199,7 @@ public class NetworkClient implements KafkaClient {
             // The disconnect may be the result of stale metadata, so request an update
             metadata.requestUpdate();
 
-            clientInstanceMetricRecorder.decrementConnectionActive(1);
+            clientInstanceMetricsRegistry.ifPresent(cimr -> cimr.gaugeSensor(cimr.connectionActive).record(-1));
         }
 
         @Override
@@ -1274,13 +1307,10 @@ public class NetworkClient implements KafkaClient {
         }
 
         public long maybeUpdate(long now) {
-            Optional<Long> timeToNextUpdateOpt = clientTelemetry.timeToNextUpdate(defaultRequestTimeoutMs);
+            long timeToNextUpdate = clientTelemetry.timeToNextUpdate(defaultRequestTimeoutMs);
 
-            if (!timeToNextUpdateOpt.isPresent())
-                return Long.MAX_VALUE;
-
-            if (timeToNextUpdateOpt.get() > 0)
-                return timeToNextUpdateOpt.get();
+            if (timeToNextUpdate > 0)
+                return timeToNextUpdate;
 
             // Per KIP-714, let's continue to re-use the same broker for as long as possible.
             if (stickyNode == null) {
@@ -1335,20 +1365,20 @@ public class NetworkClient implements KafkaClient {
             return Long.MAX_VALUE;
         }
 
-        public void handleFailedGetTelemetrySubscriptionRequest(KafkaException maybeFatalException) {
-            clientTelemetry.telemetrySubscriptionFailed(maybeFatalException);
+        public void subscriptionFailed(KafkaException maybeFatalException) {
+            clientTelemetry.subscriptionFailed(maybeFatalException);
         }
 
-        public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
-            clientTelemetry.pushTelemetryFailed(maybeFatalException);
+        public void pushFailed(KafkaException maybeFatalException) {
+            clientTelemetry.pushFailed(maybeFatalException);
         }
 
-        public void handleSuccessfulGetTelemetrySubscriptionResponse(GetTelemetrySubscriptionResponse response) {
-            clientTelemetry.telemetrySubscriptionReceived(response.data());
+        public void subscriptionResponseReceived(GetTelemetrySubscriptionResponse response) {
+            clientTelemetry.subscriptionResponseReceived(response.data());
         }
 
-        public void handleSuccessfulPushTelemetryResponse(PushTelemetryResponse response) {
-            clientTelemetry.pushTelemetryReceived(response.data());
+        public void pushResponseReceived(PushTelemetryResponse response) {
+            clientTelemetry.pushResponseReceived(response.data());
         }
 
     }

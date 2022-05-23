@@ -20,15 +20,13 @@ import kafka.metrics.clientmetrics.ClientMetricsConfig.ClientMatchingParams.{CLI
 import kafka.metrics.clientmetrics.ClientMetricsConfig.SubscriptionInfo
 import kafka.metrics.clientmetrics.{ClientMetricsConfig, ClientMetricsReceiverPlugin, CmClientInformation, CmClientInstanceState}
 import kafka.server.ClientMetricsManager
-import org.apache.kafka.clients.telemetry.{ClientTelemetryUtils, MetricType, StringTelemetrySerializer, TelemetryMetric}
-import org.apache.kafka.common.{MetricName, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.{ClientTelemetryPayload, ClientTelemetryReceiver}
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext
 
 import java.nio.ByteBuffer
-import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 
 object ClientMetricsTestUtils {
   val defaultPushInterval = 30 * 1000 // 30 seconds
@@ -96,19 +94,19 @@ object ClientMetricsTestUtils {
   }
 
   def getSerializedMetricsData(compressionType: CompressionType, metrics: Map[String, Int]): (ByteBuffer, String) = {
-    def newMetricName(name: String) = new MetricName(name, "g_" + name, "desc_" + name, Collections.emptyMap())
-    def newTelemetryMetric(metricName: MetricName,  value: Long) = new TelemetryMetric(metricName, MetricType.sum, value)
-    val telemetryMetrics = new util.ArrayList[TelemetryMetric]
-    val metricsStr = new StringBuilder()
-    for ((k, v) <- metrics) {
-     val name = newMetricName(k)
-      val metric = newTelemetryMetric(name, v)
-      val tmpStr = name.toString + ": " + v + "\n"
-      metricsStr.append(tmpStr)
-      telemetryMetrics.add(metric)
-    }
-    val telemetrySerializer = new StringTelemetrySerializer
-    val buffer = ClientTelemetryUtils.serialize(telemetryMetrics, compressionType, telemetrySerializer)
-    (buffer, metricsStr.toString().trim)
+//    def newMetricName(name: String) = new MetricName(name, "g_" + name, "desc_" + name, Collections.emptyMap())
+//    def newTelemetryMetric(metricName: MetricName,  value: Long) = new TelemetryMetric(metricName, MetricType.sum, value)
+//    val telemetryMetrics = new util.ArrayList[TelemetryMetric]
+//    val metricsStr = new StringBuilder()
+//    for ((k, v) <- metrics) {
+//     val name = newMetricName(k)
+//      val metric = newTelemetryMetric(name, v)
+//      val tmpStr = name.toString + ": " + v + "\n"
+//      metricsStr.append(tmpStr)
+//      telemetryMetrics.add(metric)
+//    }
+//    val telemetrySerializer = new StringTelemetryMetricConverter
+//    val buffer = ClientTelemetryUtils.serialize(telemetryMetrics, compressionType, telemetrySerializer)
+    (ByteBuffer.allocate(10), "change me")
   }
 }

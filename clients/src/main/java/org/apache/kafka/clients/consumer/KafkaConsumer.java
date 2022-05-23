@@ -16,16 +16,13 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.apache.kafka.clients.telemetry.ClientTelemetry.MAX_TERMINAL_PUSH_WAIT_MS;
-import static org.apache.kafka.clients.telemetry.ClientTelemetryUtils.create;
-
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
+import org.apache.kafka.clients.ClientTelemetry;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -36,8 +33,8 @@ import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.clients.telemetry.ClientTelemetryUtils;
-import org.apache.kafka.clients.telemetry.ConsumerMetricRecorder;
+import org.apache.kafka.clients.ClientTelemetryUtils;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetricsRegistry;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -573,8 +570,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // Visible for testing
     final Metrics metrics;
-    final ClientTelemetry clientTelemetry;
-    final ConsumerMetricRecorder consumerMetricRecorder;
+    final Optional<ClientTelemetry> clientTelemetry;
     final KafkaConsumerMetrics kafkaConsumerMetrics;
 
     private Logger log;
@@ -708,7 +704,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.time = Time.SYSTEM;
             this.metrics = buildMetrics(config, time, clientId);
             this.clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
-            this.consumerMetricRecorder = clientTelemetry.consumerMetricRecorder();
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
@@ -794,7 +789,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         this.subscriptions,
                         metrics,
                         metricGrpPrefix,
-                        consumerMetricRecorder,
+                        clientTelemetry,
                         this.time,
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
@@ -821,7 +816,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.requestTimeoutMs,
                     isolationLevel,
                     apiVersions,
-                    consumerMetricRecorder);
+                    clientTelemetry.map(ClientTelemetry::consumerMetricsRegistry));
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
 
@@ -868,8 +863,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
         this.client = client;
-        this.clientTelemetry = create(enableMetricsPush, time, clientId);
-        this.consumerMetricRecorder = clientTelemetry.consumerMetricRecorder();
+        this.clientTelemetry = ClientTelemetryUtils.create(enableMetricsPush, time, clientId);
         this.metrics = metrics;
         this.subscriptions = subscriptions;
         this.metadata = metadata;
@@ -1141,7 +1135,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metadata.requestUpdateForNewTopics();
             }
 
-            consumerMetricRecorder.setAssignmentPartitionCount(partitions.size());
+            clientTelemetry.ifPresent(ct -> {
+                ConsumerMetricsRegistry cmr = ct.consumerMetricsRegistry();
+                cmr.gaugeSensor(cmr.assignmentPartitionCount).record(partitions.size());
+            });
         } finally {
             release();
         }
@@ -1241,7 +1238,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
             Duration timeSinceLastPollMs = Duration.ofMillis(this.kafkaConsumerMetrics.timeSinceLastPollMs());
-            this.consumerMetricRecorder.setPollLast(timeSinceLastPollMs.getSeconds());
+
+            clientTelemetry.ifPresent(ct -> {
+                ConsumerMetricsRegistry cmr = ct.consumerMetricsRegistry();
+                cmr.gaugeSensor(cmr.pollLast).record(timeSinceLastPollMs.getSeconds());
+            });
 
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
@@ -1524,7 +1525,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
         } finally {
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
-            consumerMetricRecorder.addCommitCount(offsets.size());
+
+            clientTelemetry.ifPresent(ct -> {
+                ConsumerMetricsRegistry cmr = ct.consumerMetricsRegistry();
+                cmr.sumSensor(cmr.commitCount).record(offsets.size());
+            });
             release();
         }
     }
@@ -1951,7 +1956,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Optional<String> clientInstanceId(Duration timeout) {
-        return clientTelemetry.clientInstanceId(timeout);
+        return ClientTelemetryUtils.clientInstanceId(clientTelemetry, timeout);
     }
 
     /**
@@ -2463,8 +2468,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // terminal telemetry push, if possible.
         //
         // This is a separate step from actually closing the instance, which we do further down.
-        if (clientTelemetry != null)
-            clientTelemetry.initiateClose(Duration.ofMillis(Math.min(MAX_TERMINAL_PUSH_WAIT_MS, timeoutMs)));
+        ClientTelemetryUtils.initiateTermination(clientTelemetry, timeoutMs);
 
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         try {
@@ -2477,7 +2481,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         Utils.closeQuietly(fetcher, "fetcher", firstException);
         Utils.closeQuietly(interceptors, "consumer interceptors", firstException);
         Utils.closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
-        Utils.closeQuietly(clientTelemetry, "client telemetry", firstException);
+        ClientTelemetryUtils.closeQuietly(clientTelemetry, "client telemetry", firstException);
         Utils.closeQuietly(metrics, "consumer metrics", firstException);
         Utils.closeQuietly(client, "consumer network client", firstException);
         Utils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);

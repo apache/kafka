@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
-import org.apache.kafka.clients.telemetry.DefaultClientTelemetry;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -342,11 +341,10 @@ public class RecordAccumulatorTest {
         int batchSize = 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
         String metricGrpName = "producer-metrics";
 
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
-            (short) -1, clientTelemetry);
+            (short) -1, Optional.empty());
 
         long now = time.milliseconds();
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
@@ -713,11 +711,10 @@ public class RecordAccumulatorTest {
 
         apiVersions.update("foobar", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
         TransactionManager transactionManager = new TransactionManager(new LogContext(), null, 0, retryBackoffMs, apiVersions);
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
-            (short) -1, clientTelemetry);
+            (short) -1, Optional.empty());
         assertThrows(UnsupportedVersionException.class,
             () -> accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds()));
     }
@@ -1156,7 +1153,6 @@ public class RecordAccumulatorTest {
     ) {
         long retryBackoffMs = 100L;
         String metricGrpName = "producer-metrics";
-        ClientTelemetry clientTelemetry = new DefaultClientTelemetry(time, "mock-client-id");
 
         return new RecordAccumulator(
             logContext,
@@ -1172,6 +1168,6 @@ public class RecordAccumulatorTest {
             txnManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
             (short) -1,
-            clientTelemetry);
+            Optional.empty());
     }
 }

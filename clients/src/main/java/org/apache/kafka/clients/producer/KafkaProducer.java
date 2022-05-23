@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.clients.producer;
 
-import static org.apache.kafka.clients.telemetry.ClientTelemetry.MAX_TERMINAL_PUSH_WAIT_MS;
-
 import java.util.Optional;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.telemetry.ClientTelemetry;
+import org.apache.kafka.clients.ClientTelemetry;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -34,7 +32,7 @@ import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerMetrics;
-import org.apache.kafka.clients.telemetry.ClientTelemetryUtils;
+import org.apache.kafka.clients.ClientTelemetryUtils;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
@@ -263,7 +261,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
 
-    private final ClientTelemetry clientTelemetry;
+    private final Optional<ClientTelemetry> clientTelemetry;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -1194,11 +1192,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public Optional<String> clientInstanceId(Duration timeout) {
-        return clientTelemetry.clientInstanceId(timeout);
+        return ClientTelemetryUtils.clientInstanceId(clientTelemetry, timeout);
     }
 
     /** For testing **/
-    public ClientTelemetry clientTelemetry() {
+    public Optional<ClientTelemetry> clientTelemetry() {
         return clientTelemetry;
     }
 
@@ -1262,8 +1260,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         // terminal telemetry push, if possible.
         //
         // This is a separate step from actually closing the instance, which we do further down.
-        if (clientTelemetry != null)
-            clientTelemetry.initiateClose(Duration.ofMillis(Math.min(MAX_TERMINAL_PUSH_WAIT_MS, timeoutMs)));
+        ClientTelemetryUtils.initiateTermination(clientTelemetry, timeoutMs);
 
         // this will keep track of the first encountered exception
         AtomicReference<Throwable> firstException = new AtomicReference<>();
@@ -1304,7 +1301,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         Utils.closeQuietly(interceptors, "producer interceptors", firstException);
         Utils.closeQuietly(producerMetrics, "producer metrics wrapper", firstException);
-        Utils.closeQuietly(clientTelemetry, "client telemetry", firstException);
+        ClientTelemetryUtils.closeQuietly(clientTelemetry, "client telemetry", firstException);
         Utils.closeQuietly(metrics, "producer metrics", firstException);
         Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
