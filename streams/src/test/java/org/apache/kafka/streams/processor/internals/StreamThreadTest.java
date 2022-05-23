@@ -1761,7 +1761,7 @@ public class StreamThreadTest {
         thread.taskManager().shutdown(true);
     }
 
-    //@Test
+    @Test
     public void shouldNotUpdateStandbyTaskWhenPaused() throws Exception {
         final String storeName1 = "count-one";
         final String storeName2 = "table-two";
@@ -1834,6 +1834,14 @@ public class StreamThreadTest {
                 ("V" + i).getBytes()));
         }
 
+        // Simulate pause
+        thread.taskManager().topologyMetadata().pauseTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
+        thread.runOnce();
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        // Simulate resume
+        thread.taskManager().topologyMetadata().resumeTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
         thread.runOnce();
 
         assertEquals(10L, store1.approximateNumEntries());
