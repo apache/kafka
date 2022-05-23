@@ -66,7 +66,7 @@ class DynamicConfigTest extends QuorumTestHarness {
 
   @Test
   def shouldFailIpConfigsWithBadHost(): Unit = {
-    assertThrows(classOf[AdminOperationException], () => adminZkClient.changeIpConfig("ip",
+    assertThrows(classOf[AdminOperationException], () => adminZkClient.changeIpConfig("name-that-should-be-unresolvable",
       propsWith(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "2")))
   }
 }
