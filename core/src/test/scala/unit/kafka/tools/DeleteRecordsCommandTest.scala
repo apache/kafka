@@ -18,85 +18,106 @@
 
 package kafka.tools
 
-import org.junit.jupiter.api.Assertions._
+import com.fasterxml.jackson.databind.JsonMappingException
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{Test, Timeout}
+import kafka.utils.Exit
+import kafka.admin.{AdminOperationException, DeleteRecordsCommand}
 
-import kafka.utils.{Exit, TestUtils}
-
-import kafka.admin.DeleteRecordsCommand
+import java.io.{ByteArrayOutputStream, IOException, PrintStream}
 
 @Timeout(value = 60)
 class DeleteRecordsCommandTest {
+
+  private[this] val brokerList = "localhost:9092"
+  private[this] val offsetJsonFilePath = "/tmp/non-existent-file.json"
+  private[this] val commandConfig = "/tmp/command.config"
+
   @Test
-  def testMissingBootStrap(): Unit = {
-
-    var exitStatus: Option[Int] = None
-    var exitMessage: Option[String] = None
-    Exit.setExitProcedure { (status, err) =>
-      exitStatus = Some(status)
-      exitMessage = err
-      throw new RuntimeException
-    }
-
-    val deleteRecordsArgs = Array("--offset-json-file", "non-existent-file.json")
-    try {
-      val _ = new DeleteRecordsCommand.DeleteRecordsCommandOptions(deleteRecordsArgs)
-    } catch {
-      case e: RuntimeException => // Expected
-    } finally {
-      Exit.resetExitProcedure()
-    }
-    assertEquals(Some(1), exitStatus)
-    assertTrue(exitMessage.get.contains("Missing required argument \"[bootstrap-server]\""))
+  def testRequiredCommandConfigShouldSucceed(): Unit = {
+    val deleteRecordArgs = Array("--bootstrap-server", brokerList, "--offset-json-file", offsetJsonFilePath)
+    val _ = new DeleteRecordsCommand.DeleteRecordsCommandOptions(deleteRecordArgs)
   }
 
+  @Test
+  def testIncludingCommandConfigPathShouldSucceed(): Unit = {
+    val deleteRecordArgs = Array("--bootstrap-server", brokerList, "--offset-json-file", offsetJsonFilePath, "--command-config", commandConfig)
+    val _ = new DeleteRecordsCommand.DeleteRecordsCommandOptions(deleteRecordArgs)
+  }
+
+  @Test
+  def testParseJsonDataShouldSucceed(): Unit = {
+    val validParseJsonData = "{\"partitions\": [{\"topic\":\"my-topic\",\"partition\":0,\"offset\":3}," +
+                             "{\"topic\":\"my-topic\",\"partition\":1,\"offset\":2}" +
+                             "],\"version\": 1}"
+    // Place holder for now. Likely should read back the output and confirm it aligns with expectations.
+    val _ = DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(validParseJsonData)
+
+  }
+
+  @Test
+  def testMissingBootStrap(): Unit = {
+    val deleteRecordsArgs = Array("--offset-json-file", offsetJsonFilePath)
+    assertCheckArgsExitCode(1, deleteRecordsArgs)
+  }
 
   @Test
   def testMissingJsonFile(): Unit = {
-    var exitStatus: Option[Int] = None
-    var exitMessage: Option[String] = None
-    Exit.setExitProcedure { (status, err) =>
-      exitStatus = Some(status)
-      exitMessage = err
-      throw new RuntimeException
-    }
-
-    val deleteRecordArgs = Array("--bootstrap-server", "")
-    try {
-      val _ = new DeleteRecordsCommand.DeleteRecordsCommandOptions(deleteRecordArgs)
-    } catch {
-      case e: RuntimeException => // expected
-    } finally {
-      Exit.resetExitProcedure()
-    }
-
-    assertEquals(Some(1), exitStatus)
-    assertTrue(exitMessage.get.contains("Missing required argument \"[offset-json-file]\""))
+    val deleteRecordArgs = Array("--bootstrap-server", brokerList)
+    assertCheckArgsExitCode(1, deleteRecordArgs)
   }
-
 
   @Test
-  def testIncludingCommandConfigPath(): Unit = {
-    var exitStatus: Option[Int] = None
-    var exitMessage: Option[String] = None
-    Exit.setExitProcedure { (status, err) =>
-      exitStatus = Some(status)
-      exitMessage = err
+  def testParseInvalidJsonData(): Unit = {
+    val invalidParseJsonData = "{\"partitions\": [{\"topic\":\"my-topic\",\"partition\":0,\"offset\":3}," +
+      "{\"topic\":\"my-topic\",\"partition\":1,\"offset\":2}" +
+      "]," +
+      "\"version\": 1"
+      try assertThrows(classOf[AdminOperationException],
+        () => DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(invalidParseJsonData)) catch {case _ : AdminOperationException => }
+  }
+
+  @Test
+  def testMissingPartitionsInJsonData(): Unit = {
+    val missingPartitionsParseJsonData = "{\"partitions\": [{\"topic\":\"my-topic\",\"offset\":3}," +
+      "{\"topic\":\"my-topic\",\"partition\":1,\"offset\":2}" +
+      "],\"version\": 1}"
+    try assertThrows(classOf[JsonMappingException],
+      () => DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(missingPartitionsParseJsonData)) catch {case _ : JsonMappingException => }
+  }
+
+  @Test
+  def testMissingTopicInJsonData(): Unit = {
+    val missingTopicParseJsonData = "{\"partitions\": [{\"partition\":0,\"offset\":3}," +
+      "{\"topic\":\"my-topic\",\"partition\":1,\"offset\":2}" +
+      "],\"version\": 1}"
+    try assertThrows(classOf[JsonMappingException],
+      () => DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(missingTopicParseJsonData)) catch {case _ : JsonMappingException => }
+  }
+
+  @Test
+  def testIncorrectVersionFieldInJsonData(): Unit = {
+    val incorrectVersionParseJsonData = "{\"partitions\": [{\"topic\":\"my-topic\",\"partition\":0,\"offset\":3}," +
+      "{\"topic\":\"my-topic\",\"partition\":1,\"offset\":2}" +
+      "],\"version\": 2}"
+    try assertThrows(classOf[AdminOperationException],
+      () => DeleteRecordsCommand.parseOffsetJsonStringWithoutDedup(incorrectVersionParseJsonData)) catch {case _ : AdminOperationException => }
+  }
+
+  @Test
+  def testExecuteWithNonexistentJsonPath(): Unit = {
+    val deleteRecordArgs = Array("--bootstrap-server", brokerList, "--offset-json-file", offsetJsonFilePath)
+    val printStream = new PrintStream(new ByteArrayOutputStream())
+    assertThrows(classOf[IOException], () => DeleteRecordsCommand.execute(deleteRecordArgs, printStream))
+  }
+
+  private[this] def assertCheckArgsExitCode(expected: Int, options: Array[String]): Unit = {
+    Exit.setExitProcedure { (exitCode: Int, _: Option[String]) =>
+      assertEquals(expected,exitCode)
       throw new RuntimeException
     }
 
-    val deleteRecordArgs = Array("--bootstrap-server", "", "--offset-json-file", "", "--command-config", "")
-    var output = ""
-    try {
-      output = TestUtils.grabConsoleOutput(new DeleteRecordsCommand.DeleteRecordsCommandOptions(deleteRecordArgs))
-    } catch {
-      case e: RuntimeException => // expected
-    } finally {
-      Exit.resetExitProcedure()
-    }
-
-    assertEquals(None, exitStatus)
-    assertTrue(output.equals(""))
+    try assertThrows(classOf[RuntimeException],
+      () => new DeleteRecordsCommand.DeleteRecordsCommandOptions(options)) finally Exit.resetExitProcedure();
   }
-
 }
