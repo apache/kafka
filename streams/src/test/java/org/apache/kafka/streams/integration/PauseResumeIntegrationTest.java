@@ -112,6 +112,7 @@ public class PauseResumeIntegrationTest {
     public final TestName testName = new TestName();
     private String appId;
     private KafkaStreams kafkaStreams;
+    private KafkaStreamsNamedTopologyWrapper streamsNamedTopologyWrapper;
 
     @Before
     public void createTopics() throws InterruptedException {
@@ -141,6 +142,9 @@ public class PauseResumeIntegrationTest {
     public void shutdown() throws InterruptedException {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
+        }
+        if (streamsNamedTopologyWrapper != null) {
+            streamsNamedTopologyWrapper.close(Duration.ofSeconds(30));
         }
         CLUSTER.deleteTopicsAndWait(INPUT_STREAM_1);
         CLUSTER.deleteTopicsAndWait(INPUT_STREAM_2);
@@ -221,11 +225,9 @@ public class PauseResumeIntegrationTest {
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
         // Verify that consumers read new data -- AKA, there is no lag.
-        /*
         final Map<String, Map<Integer, LagInfo>> lagMap =
             kafkaStreams.allLocalStorePartitionLags();
         assertNoLag(lagMap);
-        */
 
         // Verify no output
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 0),
@@ -243,12 +245,11 @@ public class PauseResumeIntegrationTest {
     @Test
     public void shouldPauseAndResumeKafkaStreamsWithNamedTopologies() throws Exception {
         // Create KafkaStream / NamedTopologyBuilders
-        final KafkaStreamsNamedTopologyWrapper streams =
-            new KafkaStreamsNamedTopologyWrapper(props());
-        final NamedTopologyBuilder builder1 = streams.newNamedTopologyBuilder(TOPOLOGY1);
+        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
+        final NamedTopologyBuilder builder1 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY1);
         builder1.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
 
-        final NamedTopologyBuilder builder2 = streams.newNamedTopologyBuilder(TOPOLOGY2);
+        final NamedTopologyBuilder builder2 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY2);
         builder2.stream(INPUT_STREAM_2)
             .groupBy((k, v) -> k)
             .count(IN_MEMORY_STORE)
@@ -256,8 +257,8 @@ public class PauseResumeIntegrationTest {
             .to(OUTPUT_STREAM_2);
 
         // Start KafkaStreams instance
-        streams.start(asList(builder1.build(), builder2.build()));
-        waitForApplicationState(singletonList(streams), State.RUNNING, STARTUP_TIMEOUT);
+        streamsNamedTopologyWrapper.start(asList(builder1.build(), builder2.build()));
+        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.RUNNING, STARTUP_TIMEOUT);
 
         // Write data for topology1
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
@@ -270,19 +271,19 @@ public class PauseResumeIntegrationTest {
             CoreMatchers.equalTo(COUNT_OUTPUT_DATA));
 
         // Pause topology1
-        streams.pauseNamedTopology(TOPOLOGY1);
+        streamsNamedTopologyWrapper.pauseNamedTopology(TOPOLOGY1);
 
         // Assert the topology1 is paused and topology2 is not paused
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY1));
-        assertFalse(streams.isNamedTopologyPaused(TOPOLOGY2));
-        assertFalse(streams.isPaused());
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
+        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
+        assertFalse(streamsNamedTopologyWrapper.isPaused());
 
         // Write more data for topology 1 and topology 2
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
 
         // Verify that consumers read new data -- AKA, there is no lag.
-        final Map<String, Map<Integer, LagInfo>> lagMap = streams.allLocalStorePartitionLags();
+        final Map<String, Map<Integer, LagInfo>> lagMap = streamsNamedTopologyWrapper.allLocalStorePartitionLags();
         assertNoLag(lagMap);
 
         // Verify no output for topology1 somehow? (Hard to prove negative)
@@ -295,8 +296,8 @@ public class PauseResumeIntegrationTest {
 
 
         // Resume topology1 and show that it processes data.
-        streams.resumeNamedTopology(TOPOLOGY1);
-        assertFalse(streams.isNamedTopologyPaused(TOPOLOGY1));
+        streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
+        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
 
         // Verify that the input written during the pause is processed.
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3),
@@ -306,11 +307,11 @@ public class PauseResumeIntegrationTest {
     @Test
     public void shouldPauseAndResumeAllKafkaStreamsWithNamedTopologies() throws Exception {
         // Create KafkaStreams instance / NamedTopologyBuilders
-        final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(props());
-        final NamedTopologyBuilder builder1 = streams.newNamedTopologyBuilder(TOPOLOGY1);
+        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
+        final NamedTopologyBuilder builder1 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY1);
         builder1.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
 
-        final NamedTopologyBuilder builder2 = streams.newNamedTopologyBuilder(TOPOLOGY2);
+        final NamedTopologyBuilder builder2 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY2);
         builder2.stream(INPUT_STREAM_2)
             .groupBy((k, v) -> k)
             .count(IN_MEMORY_STORE)
@@ -318,8 +319,8 @@ public class PauseResumeIntegrationTest {
             .to(OUTPUT_STREAM_2);
 
         // Start KafkaStream
-        streams.start(asList(builder1.build(), builder2.build()));
-        waitForApplicationState(singletonList(streams), State.RUNNING, STARTUP_TIMEOUT);
+        streamsNamedTopologyWrapper.start(asList(builder1.build(), builder2.build()));
+        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.RUNNING, STARTUP_TIMEOUT);
 
         // Write data for topology1
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
@@ -332,10 +333,10 @@ public class PauseResumeIntegrationTest {
             CoreMatchers.equalTo(COUNT_OUTPUT_DATA));
 
         // Pause KafkaStreams instance.  This will pause all named/module topologies.
-        streams.pause();
-        assertTrue(streams.isPaused());
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY2));
+        streamsNamedTopologyWrapper.pause();
+        assertTrue(streamsNamedTopologyWrapper.isPaused());
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
 
 
         // Write more data for topology 1 and topology 2
@@ -343,7 +344,7 @@ public class PauseResumeIntegrationTest {
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
 
         // Verify that consumers read new data -- AKA, there is no lag.
-        final Map<String, Map<Integer, LagInfo>> lagMap = streams.allLocalStorePartitionLags();
+        final Map<String, Map<Integer, LagInfo>> lagMap = streamsNamedTopologyWrapper.allLocalStorePartitionLags();
         assertNoLag(lagMap);
 
         // Verify no output for topology1 somehow? (Hard to prove negative)
@@ -356,10 +357,10 @@ public class PauseResumeIntegrationTest {
 
         // Resume topology1.  This will cause us to see that the instance is not paused since there
         // is at least one topology being processed.
-        streams.resumeNamedTopology(TOPOLOGY1);
-        assertFalse(streams.isPaused());
-        assertFalse(streams.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY2));  // Still paused
+        streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
+        assertFalse(streamsNamedTopologyWrapper.isPaused());
+        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));  // Still paused
 
         // Verify that the input written during the pause is processed.
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3),
@@ -369,11 +370,11 @@ public class PauseResumeIntegrationTest {
     @Test
     public void shouldAllowForNamedTopologiesToStartPaused() throws Exception {
         // Create KafkaStreams instance / NamedTopologyBuilders
-        final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(props());
-        final NamedTopologyBuilder builder1 = streams.newNamedTopologyBuilder(TOPOLOGY1);
+        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
+        final NamedTopologyBuilder builder1 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY1);
         builder1.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
 
-        final NamedTopologyBuilder builder2 = streams.newNamedTopologyBuilder(TOPOLOGY2);
+        final NamedTopologyBuilder builder2 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY2);
         builder2.stream(INPUT_STREAM_2)
             .groupBy((k, v) -> k)
             .count(IN_MEMORY_STORE)
@@ -381,13 +382,13 @@ public class PauseResumeIntegrationTest {
             .to(OUTPUT_STREAM_2);
 
         // Start KafkaStream with topology1 paused.
-        streams.pauseNamedTopology(TOPOLOGY1);
-        streams.start(asList(builder1.build(), builder2.build()));
-        waitForApplicationState(singletonList(streams), State.RUNNING, STARTUP_TIMEOUT);
+        streamsNamedTopologyWrapper.pauseNamedTopology(TOPOLOGY1);
+        streamsNamedTopologyWrapper.start(asList(builder1.build(), builder2.build()));
+        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.RUNNING, STARTUP_TIMEOUT);
 
-        assertFalse(streams.isPaused());
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY1));
-        assertFalse(streams.isNamedTopologyPaused(TOPOLOGY2));
+        assertFalse(streamsNamedTopologyWrapper.isPaused());
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
+        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
 
         // Write data for topology1
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
@@ -400,18 +401,18 @@ public class PauseResumeIntegrationTest {
             CoreMatchers.equalTo(COUNT_OUTPUT_DATA));
 
         // Pause KafkaStreams instance
-        streams.pause();
+        streamsNamedTopologyWrapper.pause();
 
-        assertTrue(streams.isPaused());
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY2));
+        assertTrue(streamsNamedTopologyWrapper.isPaused());
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
 
         // Write more data for topology 1 and topology 2
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
 
         // Verify that consumers read new data -- AKA, there is no lag.
-        final Map<String, Map<Integer, LagInfo>> lagMap = streams.allLocalStorePartitionLags();
+        final Map<String, Map<Integer, LagInfo>> lagMap = streamsNamedTopologyWrapper.allLocalStorePartitionLags();
         assertNoLag(lagMap);
 
         // Verify no output for topology1 somehow? (Hard to prove negative)
@@ -423,10 +424,10 @@ public class PauseResumeIntegrationTest {
             CoreMatchers.equalTo(Collections.emptyList()));
 
         // Resume topology 1; assert that it is running.
-        streams.resumeNamedTopology(TOPOLOGY1);
-        assertFalse(streams.isPaused()); // Are all paused?  No.
-        assertFalse(streams.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streams.isNamedTopologyPaused(TOPOLOGY2));  // Still paused
+        streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
+        assertFalse(streamsNamedTopologyWrapper.isPaused()); // Are all paused?  No.
+        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
+        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));  // Still paused
 
         // Verify that the input written during the pause is processed.
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3),
