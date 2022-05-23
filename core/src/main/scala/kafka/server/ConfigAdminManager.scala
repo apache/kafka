@@ -130,7 +130,7 @@ class ConfigAdminManager(nodeId: Int,
             }
           }
           if (!nullUpdates.isEmpty()) {
-            throw new InvalidRequestException("Null value not supported for : " +
+            throw new InvalidConfigurationException("Null value not supported for : " +
               String.join(", ", nullUpdates))
           }
           resourceType match {
@@ -200,11 +200,7 @@ class ConfigAdminManager(nodeId: Int,
       conf.dynamicConfig.validate(props, !configResource.name().isEmpty)
     } catch {
       case e: ApiException => throw e
-      //KAFKA-13609: InvalidRequestException is not really the right exception here if the
-      // configuration fails validation. The configuration is still well-formed, but just
-      // can't be applied. It should probably throw InvalidConfigurationException. However,
-      // we should probably only change this in a KIP since it has compatibility implications.
-      case e: Throwable => throw new InvalidRequestException(e.getMessage)
+      case e: Throwable => throw new InvalidConfigurationException(e.getMessage)
     }
  }
 
@@ -242,7 +238,7 @@ class ConfigAdminManager(nodeId: Int,
             }
           }
           if (!nullUpdates.isEmpty()) {
-            throw new InvalidRequestException("Null value not supported for : " +
+            throw new InvalidConfigurationException("Null value not supported for : " +
               String.join(", ", nullUpdates))
           }
           resourceType match {

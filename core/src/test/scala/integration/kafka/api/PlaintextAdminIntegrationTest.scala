@@ -2185,8 +2185,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testLongTopicNames(quorum: String): Unit = {
     val client = Admin.create(createConfig)
-    val longTopicName = String.join("", Collections.nCopies(249, "x"));
-    val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
+    val longTopicName = String.join("", Collections.nCopies(249, "x"))
+    val invalidTopicName = String.join("", Collections.nCopies(250, "x"))
     val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3.toShort),
                          new NewTopic(longTopicName, 3, 3.toShort))
     val results = client.createTopics(newTopics2.asJava).values()
@@ -2243,7 +2243,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     )
     assertFutureExceptionTypeEquals(
       client.incrementalAlterConfigs(Map(topicResource -> alterOps.asJavaCollection).asJava).all,
-      classOf[InvalidRequestException],
+      classOf[InvalidConfigurationException],
       Some("Null value not supported for : retention.bytes")
     )
     validateLogConfig(compressionType = "producer")
@@ -2665,7 +2665,7 @@ object PlaintextAdminIntegrationTest {
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])
     alterResult.values.get(topicResource2).get
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidConfigurationException])
 
     // Verify that first and third resources were not updated and second was updated
     test.ensureConsistentKRaftMetadata()
@@ -2694,7 +2694,7 @@ object PlaintextAdminIntegrationTest {
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])
     alterResult.values.get(topicResource2).get
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidConfigurationException])
 
     // Verify that no resources are updated since validate_only = true
     test.ensureConsistentKRaftMetadata()

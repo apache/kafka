@@ -26,7 +26,6 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
@@ -50,7 +49,7 @@ import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.SslConfigs._
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
-import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
+import org.apache.kafka.common.errors.{AuthenticationException, InvalidConfigurationException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -1014,7 +1013,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val props = new Properties
     props.put(KafkaConfig.InterBrokerListenerNameProp, SecureExternal)
     val e = assertThrows(classOf[ExecutionException], () => reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.InterBrokerListenerNameProp, SecureExternal)))
-    assertTrue(e.getCause.isInstanceOf[InvalidRequestException], s"Unexpected exception ${e.getCause}")
+    assertTrue(e.getCause.isInstanceOf[InvalidConfigurationException], s"Unexpected exception ${e.getCause}")
     servers.foreach(server => assertEquals(SecureInternal, server.config.interBrokerListenerName.value))
   }
 
@@ -1432,7 +1431,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
         Seq(new ConfigResource(ConfigResource.Type.BROKER, ""))
       brokerResources.foreach { brokerResource =>
         val exception = assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get)
-        assertEquals(classOf[InvalidRequestException], exception.getCause().getClass())
+        assertEquals(classOf[InvalidConfigurationException], exception.getCause().getClass())
       }
       servers.foreach { server =>
         assertEquals(oldProps, server.config.values.asScala.filter { case (k, _) => newProps.containsKey(k) })

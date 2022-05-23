@@ -23,7 +23,7 @@ import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
+import org.apache.kafka.common.errors.{InvalidConfigurationException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
@@ -146,7 +146,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidConfigurationException])
 
     // Verify that the second resource was updated and the others were not
     ensureConsistentKRaftMetadata()
@@ -175,7 +175,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidConfigurationException])
 
     // Verify that no resources are updated since validate_only = true
     ensureConsistentKRaftMetadata()

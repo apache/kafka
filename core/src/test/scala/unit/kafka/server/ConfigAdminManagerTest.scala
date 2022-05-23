@@ -38,7 +38,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, NONE}
+import org.apache.kafka.common.protocol.Errors.{INVALID_CONFIG, INVALID_REQUEST, NONE}
 import org.apache.kafka.common.requests.ApiError
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
@@ -333,7 +333,7 @@ class ConfigAdminManagerTest {
     val manager = newConfigAdminManager(2)
     val brokerLogger2 = brokerLogger2Incremental()
     assertEquals(Collections.singletonMap(brokerLogger2,
-      new ApiError(INVALID_REQUEST, s"Null value not supported for : ${logger.getName}")),
+      new ApiError(INVALID_CONFIG, s"Null value not supported for : ${logger.getName}")),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
           brokerLogger2).iterator())),
@@ -397,7 +397,7 @@ class ConfigAdminManagerTest {
     val manager = newConfigAdminManager(2)
     val brokerLogger2 = broker2Legacy()
     assertEquals(Collections.singletonMap(brokerLogger2,
-      new ApiError(INVALID_REQUEST, s"Null value not supported for : ${logger.getName}")),
+      new ApiError(INVALID_CONFIG, s"Null value not supported for : ${logger.getName}")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
           brokerLogger2).iterator()))))

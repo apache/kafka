@@ -4085,7 +4085,7 @@ class KafkaApisTest {
     val capturedResponse = verifyNoThrottling(request)
     assertEquals(new AlterConfigsResponseData().setResponses(asList(
       new LAlterConfigsResourceResponse().
-        setErrorCode(Errors.INVALID_REQUEST.code()).
+        setErrorCode(Errors.INVALID_CONFIG.code()).
         setErrorMessage("Null value not supported for : foo").
         setResourceName(brokerId.toString).
         setResourceType(BROKER.id()))),
