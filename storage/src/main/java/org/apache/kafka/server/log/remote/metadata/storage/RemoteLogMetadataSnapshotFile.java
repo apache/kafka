@@ -71,8 +71,11 @@ public class RemoteLogMetadataSnapshotFile {
 
         // Create an empty file if it does not exist.
         try {
-            Files.createFile(metadataStoreFile.toPath());
-            log.info("Remote log metadata snapshot file: [{}], newFileCreated: [{}]", metadataStoreFile, true);
+            final boolean fileExists = Files.exists(metadataStoreFile.toPath());
+            if (!fileExists) {
+                Files.createFile(metadataStoreFile.toPath());
+            }
+            log.info("Remote log metadata snapshot file: [{}], newFileCreated: [{}]", metadataStoreFile, !fileExists);
         } catch (IOException e) {
             throw new KafkaException(e);
         }
