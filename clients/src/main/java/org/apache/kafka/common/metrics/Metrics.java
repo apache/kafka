@@ -509,8 +509,8 @@ public class Metrics implements Closeable {
                                         Objects.requireNonNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
-        KafkaMetric maybeMetric = registerMetric(m);
-        if (maybeMetric != null) {
+        KafkaMetric existingMetric = registerMetric(m);
+        if (existingMetric != null) {
             throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
         }
     }
@@ -543,8 +543,8 @@ public class Metrics implements Closeable {
                 config == null ? this.config : config,
                 time);
 
-        KafkaMetric maybeMetric = registerMetric(metric);
-        return maybeMetric == null ? metric : maybeMetric;
+        KafkaMetric existingMetric = registerMetric(metric);
+        return existingMetric == null ? metric : existingMetric;
     }
 
     /**
@@ -586,6 +586,13 @@ public class Metrics implements Closeable {
         }
     }
 
+    /**
+     * Register a metric if not present or return an already existing metric otherwise.
+     * When a metric is newly registered, this method returns null
+     *
+     * @param metric The KafkaMetric to register
+     * @return KafkaMetric if the metric already exists, null otherwise
+     */
     synchronized KafkaMetric registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
         if (this.metrics.containsKey(metricName)) {
