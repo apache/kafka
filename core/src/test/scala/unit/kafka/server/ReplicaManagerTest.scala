@@ -53,6 +53,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, ProducerIdsImage, TopicsDelta, TopicsImage}
+import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.raft.{OffsetAndEpoch => RaftOffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
@@ -3864,9 +3865,11 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testReplicaIsStoppedWhileInControlledShutdownWithKRaft(): Unit = {
+  def testReplicasAreStoppedWhileInControlledShutdownWithKRaft(): Unit = {
     val localId = 0
-    val topicPartition = new TopicPartition("foo", 0)
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+    val foo2 = new TopicPartition("foo", 2)
 
     val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
@@ -3877,56 +3880,114 @@ class ReplicaManagerTest {
 
     try {
       when(mockReplicaFetcherManager.removeFetcherForPartitions(
-        Set(topicPartition))
+        Set(foo0, foo1))
       ).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
 
-      // Make the local replica the follower.
-      var followerTopicsDelta = new TopicsDelta(TopicsImage.EMPTY)
-      followerTopicsDelta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
-      followerTopicsDelta.replay(new PartitionRecord()
+      var topicsDelta = new TopicsDelta(TopicsImage.EMPTY)
+      topicsDelta.replay(new TopicRecord()
+        .setName("foo")
+        .setTopicId(FOO_UUID)
+      )
+
+      // foo0 is a follower in the ISR.
+      topicsDelta.replay(new PartitionRecord()
         .setPartitionId(0)
         .setTopicId(FOO_UUID)
         .setReplicas(util.Arrays.asList(localId, localId + 1))
         .setIsr(util.Arrays.asList(localId, localId + 1))
-        .setRemovingReplicas(Collections.emptyList())
-        .setAddingReplicas(Collections.emptyList())
         .setLeader(localId + 1)
         .setLeaderEpoch(0)
         .setPartitionEpoch(0)
       )
-      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
-      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
-      // Check the state of that partition.
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
-      assertFalse(followerPartition.isLeader)
-      assertEquals(0, followerPartition.getLeaderEpoch)
-      assertEquals(0, followerPartition.getPartitionEpoch)
+      // foo1 is a leader with only himself in the ISR.
+      topicsDelta.replay(new PartitionRecord()
+        .setPartitionId(1)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1))
+        .setIsr(util.Arrays.asList(localId))
+        .setLeader(localId)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+      )
+
+      // foo2 is a follower NOT in the ISR.
+      topicsDelta.replay(new PartitionRecord()
+        .setPartitionId(2)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1))
+        .setIsr(util.Arrays.asList(localId + 1))
+        .setLeader(localId + 1)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+      )
+
+      // Apply the delta.
+      var metadataImage = imageFromTopics(topicsDelta.apply())
+      replicaManager.applyDelta(topicsDelta, metadataImage)
+
+      // Check the state of the partitions.
+      val HostedPartition.Online(fooPartition0) = replicaManager.getPartition(foo0)
+      assertFalse(fooPartition0.isLeader)
+      assertEquals(0, fooPartition0.getLeaderEpoch)
+      assertEquals(0, fooPartition0.getPartitionEpoch)
+
+      val HostedPartition.Online(fooPartition1) = replicaManager.getPartition(foo1)
+      assertTrue(fooPartition1.isLeader)
+      assertEquals(0, fooPartition1.getLeaderEpoch)
+      assertEquals(0, fooPartition1.getPartitionEpoch)
+
+      val HostedPartition.Online(fooPartition2) = replicaManager.getPartition(foo2)
+      assertFalse(fooPartition2.isLeader)
+      assertEquals(0, fooPartition2.getLeaderEpoch)
+      assertEquals(0, fooPartition2.getPartitionEpoch)
 
       reset(mockReplicaFetcherManager)
 
       // The replica begins the controlled shutdown.
       replicaManager.beginControlledShutdown()
 
-      // The controller shrinks the ISR.
-      followerTopicsDelta = new TopicsDelta(followerMetadataImage.topics())
-      followerTopicsDelta.replay(new PartitionChangeRecord()
+      // When the controller receives the controlled shutdown
+      // request, it does the following:
+      // - Shrinks the ISR of foo0 to remove this replica.
+      // - Sets the leader of foo1 to NO_LEADER because it cannot elect another leader.
+      // - Does nothing for foo2 because this replica is not in the ISR.
+      topicsDelta = new TopicsDelta(metadataImage.topics())
+      topicsDelta.replay(new PartitionChangeRecord()
         .setPartitionId(0)
         .setTopicId(FOO_UUID)
         .setReplicas(util.Arrays.asList(localId, localId + 1))
         .setIsr(util.Arrays.asList(localId + 1))
+        .setLeader(localId + 1)
       )
-      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
-      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+      topicsDelta.replay(new PartitionChangeRecord()
+        .setPartitionId(1)
+        .setTopicId(FOO_UUID)
+        .setReplicas(util.Arrays.asList(localId, localId + 1))
+        .setIsr(util.Arrays.asList(localId))
+        .setLeader(NO_LEADER)
+      )
+      metadataImage = imageFromTopics(topicsDelta.apply())
+      replicaManager.applyDelta(topicsDelta, metadataImage)
 
-      // The partition state is not updated...
-      assertFalse(followerPartition.isLeader)
-      assertEquals(0, followerPartition.getLeaderEpoch)
-      assertEquals(0, followerPartition.getPartitionEpoch)
+      // Partition foo0 and foo1 are updated.
+      assertFalse(fooPartition0.isLeader)
+      assertEquals(1, fooPartition0.getLeaderEpoch)
+      assertEquals(1, fooPartition0.getPartitionEpoch)
+      assertFalse(fooPartition1.isLeader)
+      assertEquals(1, fooPartition1.getLeaderEpoch)
+      assertEquals(1, fooPartition1.getPartitionEpoch)
 
-      // ...but the fetcher is stopped.
-      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
+      // Partition foo2 is not.
+      assertFalse(fooPartition2.isLeader)
+      assertEquals(0, fooPartition2.getLeaderEpoch)
+      assertEquals(0, fooPartition2.getPartitionEpoch)
+
+      // Fetcher for foo0 and foo1 are stopped.
+      verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(foo0, foo1))
     } finally {
+      // Fetcher for foo2 is stopped when the replica manager shuts down
+      // because this replica was not in the ISR.
       replicaManager.shutdown()
     }
 

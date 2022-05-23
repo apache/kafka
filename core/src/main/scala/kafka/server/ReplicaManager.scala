@@ -21,7 +21,6 @@ import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
-
 import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
@@ -60,6 +59,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
+import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 
 import scala.jdk.CollectionConverters._
@@ -2141,23 +2141,22 @@ class ReplicaManager(val config: KafkaConfig,
             stateChangeLogger.trace(s"Unable to start fetching $tp with topic " +
               s"ID ${info.topicId} because the replica manager is shutting down.")
           } else {
-            if (isInControlledShutdown && !info.partition.isr.contains(config.brokerId)) {
-              // If we are in controlled shutdown and the replica is not in the ISR,
-              // we stop the replica.
-              partitionsToStop.put(tp, false)
-            } else if (newImage.cluster.broker(info.partition.leader) == null) {
-              stateChangeLogger.trace(s"Unable to start fetching $tp with topic ID ${info.topicId} " +
-                s"from leader ${info.partition.leader} because it is not alive.")
+            // We always update the follower state.
+            // - This ensure that a replica with no leader can step down;
+            // - This also ensures that the local replica is created even if the leader
+            //   is unavailable. This is required to ensure that we include the partition's
+            //   high watermark in the checkpoint file (see KAFKA-1647).
+            val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
+            val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))
 
-              // Create the local replica even if the leader is unavailable. This is required
-              // to ensure that we include the partition's high watermark in the checkpoint
-              // file (see KAFKA-1647).
-              partition.createLogIfNotExists(isNew, false, offsetCheckpoints, Some(info.topicId))
-            } else {
-              val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-              if (partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))) {
-                partitionsToMakeFollower.put(tp, partition)
-              }
+            if (isInControlledShutdown && (info.partition.leader == NO_LEADER ||
+                !info.partition.isr.contains(config.brokerId))) {
+              // During controlled shutdown, replica with no leaders and replica
+              // where this broker is not in the ISR are stopped.
+              partitionsToStop.put(tp, false)
+            } else if (isNewLeaderEpoch) {
+              // Otherwise, fetcher is restarted if the leader epoch has changed.
+              partitionsToMakeFollower.put(tp, partition)
             }
           }
           changedPartitions.add(partition)
@@ -2188,18 +2187,25 @@ class ReplicaManager(val config: KafkaConfig,
 
       val listenerName = config.interBrokerListenerName.value
       val partitionAndOffsets = new mutable.HashMap[TopicPartition, InitialFetchState]
+
       partitionsToMakeFollower.forKeyValue { (topicPartition, partition) =>
-        val node = partition.leaderReplicaIdOpt
+        val nodeOpt = partition.leaderReplicaIdOpt
           .flatMap(leaderId => Option(newImage.cluster.broker(leaderId)))
           .flatMap(_.node(listenerName).asScala)
-          .getOrElse(Node.noNode)
-        val log = partition.localLogOrException
-        partitionAndOffsets.put(topicPartition, InitialFetchState(
-          log.topicId,
-          new BrokerEndPoint(node.id, node.host, node.port),
-          partition.getLeaderEpoch,
-          initialFetchOffset(log)
-        ))
+
+        nodeOpt match {
+          case Some(node) =>
+            val log = partition.localLogOrException
+            partitionAndOffsets.put(topicPartition, InitialFetchState(
+              log.topicId,
+              new BrokerEndPoint(node.id, node.host, node.port),
+              partition.getLeaderEpoch,
+              initialFetchOffset(log)
+            ))
+          case None =>
+            stateChangeLogger.trace(s"Unable to start fetching $topicPartition with topic ID ${partition.topicId} " +
+              s"from leader ${partition.leaderReplicaIdOpt} because it is not alive.")
+        }
       }
 
       replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)

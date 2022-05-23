@@ -706,7 +706,7 @@ class Partition(val topicPartition: TopicPartition,
           s"and partition state $partitionState since it is already a follower with leader epoch $leaderEpoch.")
       }
 
-      leaderReplicaIdOpt = Some(partitionState.leader)
+      leaderReplicaIdOpt = Option(partitionState.leader)
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
       partitionEpoch = partitionState.partitionEpoch
