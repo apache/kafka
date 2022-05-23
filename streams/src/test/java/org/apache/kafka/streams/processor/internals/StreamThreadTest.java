@@ -1761,6 +1761,7 @@ public class StreamThreadTest {
         thread.taskManager().shutdown(true);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldNotUpdateStandbyTaskWhenPaused() throws Exception {
         final String storeName1 = "count-one";
