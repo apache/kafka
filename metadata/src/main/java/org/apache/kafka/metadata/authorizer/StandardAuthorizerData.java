@@ -22,6 +22,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.AuthorizerNotReadyException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -93,6 +94,11 @@ public class StandardAuthorizerData {
     final AclMutator aclMutator;
 
     /**
+     * True if the authorizer loading process is complete.
+     */
+    final boolean loadingComplete;
+
+    /**
      * A statically configured set of users that are authorized to do anything.
      */
     private final Set<String> superUsers;
@@ -123,6 +129,7 @@ public class StandardAuthorizerData {
     static StandardAuthorizerData createEmpty() {
         return new StandardAuthorizerData(createLogger(-1),
             null,
+            false,
             Collections.emptySet(),
             DENIED,
             new ConcurrentSkipListSet<>(), new ConcurrentHashMap<>());
@@ -130,6 +137,7 @@ public class StandardAuthorizerData {
 
     private StandardAuthorizerData(Logger log,
                                    AclMutator aclMutator,
+                                   boolean loadingComplete,
                                    Set<String> superUsers,
                                    AuthorizationResult defaultResult,
                                    ConcurrentSkipListSet<StandardAcl> aclsByResource,
@@ -137,6 +145,7 @@ public class StandardAuthorizerData {
         this.log = log;
         this.auditLog = auditLogger();
         this.aclMutator = aclMutator;
+        this.loadingComplete = loadingComplete;
         this.superUsers = superUsers;
         this.defaultRule = new DefaultRule(defaultResult);
         this.aclsByResource = aclsByResource;
@@ -147,6 +156,17 @@ public class StandardAuthorizerData {
         return new StandardAuthorizerData(
             log,
             newAclMutator,
+            loadingComplete,
+            superUsers,
+            defaultRule.result,
+            aclsByResource,
+            aclsById);
+    }
+
+    StandardAuthorizerData copyWithNewLoadingComplete(boolean newLoadingComplete) {
+        return new StandardAuthorizerData(log,
+            aclMutator,
+            newLoadingComplete,
             superUsers,
             defaultRule.result,
             aclsByResource,
@@ -159,6 +179,7 @@ public class StandardAuthorizerData {
         return new StandardAuthorizerData(
             createLogger(nodeId),
             aclMutator,
+            loadingComplete,
             newSuperUsers,
             newDefaultResult,
             aclsByResource,
@@ -169,6 +190,7 @@ public class StandardAuthorizerData {
         StandardAuthorizerData newData = new StandardAuthorizerData(
             log,
             aclMutator,
+            loadingComplete,
             superUsers,
             defaultRule.result,
             new ConcurrentSkipListSet<>(),
@@ -176,7 +198,7 @@ public class StandardAuthorizerData {
         for (Entry<Uuid, StandardAcl> entry : aclEntries) {
             newData.addAcl(entry.getKey(), entry.getValue());
         }
-        log.info("Applied " + aclEntries.size() + "acl(s) from image.");
+        log.info("Applied {} acl(s) from image.", aclEntries.size());
         return newData;
     }
 
@@ -191,9 +213,7 @@ public class StandardAuthorizerData {
                 throw new RuntimeException("Unable to add the ACL with ID " + id +
                     " to aclsByResource");
             }
-            if (log.isTraceEnabled()) {
-                log.trace("Added ACL " + id + ": " + acl);
-            }
+            log.trace("Added ACL {}: {}", id, acl);
         } catch (Throwable e) {
             log.error("addAcl error", e);
             throw e;
@@ -210,9 +230,7 @@ public class StandardAuthorizerData {
                 throw new RuntimeException("Unable to remove the ACL with ID " + id +
                     " from aclsByResource");
             }
-            if (log.isTraceEnabled()) {
-                log.trace("Removed ACL " + id + ": " + acl);
-            }
+            log.trace("Removed ACL {}: {}", id, acl);
         } catch (Throwable e) {
             log.error("removeAcl error", e);
             throw e;
@@ -250,6 +268,8 @@ public class StandardAuthorizerData {
         // Superusers are authorized to do anything.
         if (superUsers.contains(principal.toString())) {
             rule = SuperUserRule.INSTANCE;
+        } else if (!loadingComplete) {
+            throw new AuthorizerNotReadyException();
         } else {
             MatchingAclRule aclRule = findAclRule(
                 matchingPrincipals(requestContext),

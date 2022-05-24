@@ -213,7 +213,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                 materializedInternal.valueSerde());
     }
 
-    //@Override
+    @Override
     public TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
         if (this.windows instanceof UnlimitedWindows
             && emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {

@@ -24,7 +24,7 @@ import kafka.log.LogConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 
 import scala.collection.mutable
@@ -104,7 +104,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
           }
         })
         if (nullTopicConfigs.nonEmpty) {
-          throw new InvalidRequestException("Null value not supported for topic configs : " +
+          throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
         LogConfig.validate(properties)

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,6 +67,7 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -81,9 +83,11 @@ import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -91,6 +95,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
@@ -207,7 +212,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty());
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), MetadataVersion.latest());
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -299,7 +304,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs));
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), MetadataVersion.latest());
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -436,7 +441,7 @@ public class QuorumControllerTest {
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                         setFeatures(brokerFeatures()).
                         setListeners(listeners));
-                assertEquals(0L, reply.get().epoch());
+                assertEquals(2L, reply.get().epoch());
                 CreateTopicsRequestData createTopicsRequestData =
                     new CreateTopicsRequestData().setTopics(
                         new CreatableTopicCollection(Collections.singleton(
@@ -452,7 +457,7 @@ public class QuorumControllerTest {
                             get().topics().find("foo").errorMessage());
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                            setWantFence(false).setBrokerEpoch(0L).setBrokerId(0).
+                            setWantFence(false).setBrokerEpoch(2L).setBrokerId(0).
                             setCurrentMetadataOffset(100000L)).get());
                 assertEquals(Errors.NONE.code(), active.createTopics(ANONYMOUS_CONTEXT,
                     createTopicsRequestData, Collections.singleton("foo")).
@@ -480,6 +485,10 @@ public class QuorumControllerTest {
 
     private BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
+        features.add(new BrokerRegistrationRequestData.Feature()
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV0.featureLevel())
+            .setMaxSupportedVersion(MetadataVersion.latest().featureLevel()));
         return features;
     }
 
@@ -677,6 +686,9 @@ public class QuorumControllerTest {
 
     private List<ApiMessageAndVersion> expectedSnapshotContent(Uuid fooId, Map<Integer, Long> brokerEpochs) {
         return Arrays.asList(
+            new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(MetadataVersion.latest().featureLevel()), (short) 0),
             new ApiMessageAndVersion(new TopicRecord().
                 setName("foo").setTopicId(fooId), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
@@ -1069,6 +1081,52 @@ public class QuorumControllerTest {
                 assertThrows(UnknownTopicOrPartitionException.class,
                     () -> checker.accept(new ConfigResource(TOPIC, "bar")));
             }
+        }
+    }
+
+    private static final Uuid FOO_ID = Uuid.fromString("igRktLOnR8ektWHr79F8mw");
+
+    private static final Map<Integer, Long> ALL_ZERO_BROKER_EPOCHS =
+        IntStream.of(0, 1, 2, 3).boxed().collect(Collectors.toMap(identity(), __ -> 0L));
+
+    @Test
+    public void testQuorumControllerCompletesAuthorizerInitialLoad() throws Throwable {
+        final int numControllers = 3;
+        List<StandardAuthorizer> authorizers = new ArrayList<>(numControllers);
+        for (int i = 0; i < numControllers; i++) {
+            StandardAuthorizer authorizer = new StandardAuthorizer();
+            authorizer.configure(Collections.emptyMap());
+            authorizers.add(authorizer);
+        }
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(
+            numControllers,
+            Optional.empty(),
+            shared -> {
+                shared.setInitialMaxReadOffset(2);
+            }
+        )) {
+            logEnv.appendInitialRecords(expectedSnapshotContent(FOO_ID, ALL_ZERO_BROKER_EPOCHS));
+            logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2));
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setAuthorizer(authorizers.get(b.nodeId()));
+            })) {
+                assertInitialLoadFuturesNotComplete(authorizers);
+                logEnv.logManagers().get(0).setMaxReadOffset(Long.MAX_VALUE);
+                QuorumController active = controlEnv.activeController();
+                active.unregisterBroker(ANONYMOUS_CONTEXT, 3).get();
+                assertInitialLoadFuturesNotComplete(authorizers.stream().skip(1).collect(Collectors.toList()));
+                logEnv.logManagers().forEach(m -> m.setMaxReadOffset(Long.MAX_VALUE));
+                TestUtils.waitForCondition(() -> {
+                    return authorizers.stream().allMatch(a -> a.initialLoadFuture().isDone());
+                }, "Failed to complete initial authorizer load for all controllers.");
+            }
+        }
+    }
+
+    private static void assertInitialLoadFuturesNotComplete(List<StandardAuthorizer> authorizers) {
+        for (int i = 0; i < authorizers.size(); i++) {
+            assertFalse(authorizers.get(i).initialLoadFuture().isDone(),
+                "authorizer " + i + " should not have completed loading.");
         }
     }
 }

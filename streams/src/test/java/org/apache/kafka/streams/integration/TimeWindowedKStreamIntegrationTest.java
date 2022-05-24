@@ -41,12 +41,12 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.kstream.internals.TimeWindowedKStreamImpl;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -176,12 +176,10 @@ public class TimeWindowedKStreamIntegrationTest {
         );
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);
-        // TODO: remove this cast https://issues.apache.org/jira/browse/KAFKA-13800
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)));
-        windowedStream.emitStrategy(emitStrategy)
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -243,11 +241,10 @@ public class TimeWindowedKStreamIntegrationTest {
         );
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(5)).advanceBy(ofMillis(5L)));
-        windowedStream.emitStrategy(emitStrategy)
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(5)).advanceBy(ofMillis(5L)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -327,11 +324,9 @@ public class TimeWindowedKStreamIntegrationTest {
             .join(streamTwo, (v1, v2) -> v1 + "," + v2,
                 JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(2)));
 
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) joinedStream
-            .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)));
-
-        windowedStream.emitStrategy(emitStrategy)
+        joinedStream.groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -432,9 +427,7 @@ public class TimeWindowedKStreamIntegrationTest {
 
     @Test
     public void shouldThrowUnlimitedWindows() {
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
+        final TimeWindowedKStream<String, String> windowedStream = builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(
             UnlimitedWindows.of().startOn(ofEpochMilli(0))

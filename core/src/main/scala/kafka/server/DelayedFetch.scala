@@ -158,15 +158,16 @@ class DelayedFetch(
    * Upon completion, read whatever data is available and pass to the complete callback
    */
   override def onComplete(): Unit = {
+    val fetchInfos = fetchPartitionStatus.map { case (tp, status) =>
+      tp -> status.fetchInfo
+    }
+
     val logReadResults = replicaManager.readFromLocalLog(
-      replicaId = params.replicaId,
-      fetchOnlyFromLeader = params.fetchOnlyLeader,
-      fetchIsolation = params.isolation,
-      fetchMaxBytes = params.maxBytes,
-      hardMaxBytesLimit = params.hardMaxBytesLimit,
-      readPartitionInfo = fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
-      clientMetadata = params.clientMetadata,
-      quota = quota)
+      params,
+      fetchInfos,
+      quota,
+      readFromPurgatory = true
+    )
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
       val isReassignmentFetch = params.isFromFollower &&

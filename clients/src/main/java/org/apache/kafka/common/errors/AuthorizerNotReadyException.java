@@ -14,10 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.mirror.integration;
+package org.apache.kafka.common.errors;
 
-import org.junit.jupiter.api.Tag;
+/**
+ * An exception that indicates that the authorizer is not ready to receive the request yet.
+ */
+public class AuthorizerNotReadyException extends RetriableException {
+    private static final long serialVersionUID = 1L;
 
-@Tag("integration")
-public class MirrorConnectorsIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
+    public AuthorizerNotReadyException() {
+        super();
+    }
 }

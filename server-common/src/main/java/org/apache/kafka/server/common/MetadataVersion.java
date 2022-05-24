@@ -43,6 +43,8 @@ import org.apache.kafka.common.record.RecordVersion;
  * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
  */
 public enum MetadataVersion {
+    UNINITIALIZED(-1, "0.0", ""),
+
     IBP_0_8_0(-1, "0.8.0", ""),
     IBP_0_8_1(-1, "0.8.1", ""),
     IBP_0_8_2(-1, "0.8.2", ""),
@@ -138,38 +140,46 @@ public enum MetadataVersion {
     IBP_2_8_IV1(-1, "2.8", "IV1"),
 
     // Introduce AllocateProducerIds (KIP-730)
-    IBP_3_0_IV0(1, "3.0", "IV0"),
+    IBP_3_0_IV0(1, "3.0", "IV0", true),
 
     // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
     // Assume message format version is 3.0 (KIP-724)
-    IBP_3_0_IV1(2, "3.0", "IV1"),
+    IBP_3_0_IV1(2, "3.0", "IV1", false),
 
     // Adds topic IDs to Fetch requests/responses (KIP-516)
-    IBP_3_1_IV0(3, "3.1", "IV0"),
+    IBP_3_1_IV0(3, "3.1", "IV0", false),
 
     // Support for leader recovery for unclean leader election (KIP-704)
-    IBP_3_2_IV0(4, "3.2", "IV0");
+    IBP_3_2_IV0(4, "3.2", "IV0", false),
 
-    public static final MetadataVersion[] VALUES = MetadataVersion.values();
-    private final Optional<Short> featureLevel;
+    // Support for metadata.version feature flag (KIP-778)
+    IBP_3_3_IV0(5, "3.3", "IV0", false);
+
+    public static final String FEATURE_NAME = "metadata.version";
+
+    public static final MetadataVersion[] VERSIONS;
+
+    private final short featureLevel;
     private final String release;
     private final String ibpVersion;
+    private final boolean didMetadataChange;
 
     MetadataVersion(int featureLevel, String release, String subVersion) {
-        if (featureLevel > 0) {
-            this.featureLevel = Optional.of((short) featureLevel);
-        } else {
-            this.featureLevel = Optional.empty();
-        }
+        this(featureLevel, release, subVersion, true);
+    }
+
+    MetadataVersion(int featureLevel, String release, String subVersion, boolean didMetadataChange) {
+        this.featureLevel = (short) featureLevel;
         this.release = release;
         if (subVersion.isEmpty()) {
             this.ibpVersion = release;
         } else {
             this.ibpVersion = String.format("%s-%s", release, subVersion);
         }
+        this.didMetadataChange = didMetadataChange;
     }
 
-    public Optional<Short> featureLevel() {
+    public short featureLevel() {
         return featureLevel;
     }
 
@@ -201,6 +211,9 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_0_IV0);
     }
 
+    public boolean isKRaftSupported() {
+        return this.featureLevel > 0;
+    }
 
     public RecordVersion highestSupportedRecordVersion() {
         if (this.isLessThan(IBP_0_10_0_IV0)) {
@@ -215,9 +228,13 @@ public enum MetadataVersion {
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
     static {
         {
+            // Make a copy of values() and omit UNINITIALIZED
+            MetadataVersion[] enumValues = MetadataVersion.values();
+            VERSIONS = Arrays.copyOfRange(enumValues, 1, enumValues.length);
+
             IBP_VERSIONS = new HashMap<>();
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
-            for (MetadataVersion metadataVersion : VALUES) {
+            for (MetadataVersion metadataVersion : VERSIONS) {
                 maxInterVersion.put(metadataVersion.release, metadataVersion);
                 IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
             }
@@ -231,6 +248,19 @@ public enum MetadataVersion {
 
     public String version() {
         return ibpVersion;
+    }
+
+    public boolean didMetadataChange() {
+        return didMetadataChange;
+    }
+
+    Optional<MetadataVersion> previous() {
+        int idx = this.ordinal();
+        if (idx > 1) {
+            return Optional.of(VERSIONS[idx - 2]);
+        } else {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -253,6 +283,15 @@ public enum MetadataVersion {
         );
     }
 
+    public static MetadataVersion fromFeatureLevel(short version) {
+        for (MetadataVersion metadataVersion: MetadataVersion.values()) {
+            if (metadataVersion.featureLevel() == version) {
+                return metadataVersion;
+            }
+        }
+        throw new IllegalArgumentException("No MetadataVersion with metadata version " + version);
+    }
+
     /**
      * Return the minimum `MetadataVersion` that supports `RecordVersion`.
      */
@@ -270,7 +309,36 @@ public enum MetadataVersion {
     }
 
     public static MetadataVersion latest() {
-        return VALUES[VALUES.length - 1];
+        return VERSIONS[VERSIONS.length - 1];
+    }
+
+    public static boolean checkIfMetadataChanged(MetadataVersion sourceVersion, MetadataVersion targetVersion) {
+        if (sourceVersion == targetVersion) {
+            return false;
+        }
+
+        final MetadataVersion highVersion, lowVersion;
+        if (sourceVersion.compareTo(targetVersion) < 0) {
+            highVersion = targetVersion;
+            lowVersion = sourceVersion;
+        } else {
+            highVersion = sourceVersion;
+            lowVersion = targetVersion;
+        }
+        return checkIfMetadataChangedOrdered(highVersion, lowVersion);
+    }
+
+    private static boolean checkIfMetadataChangedOrdered(MetadataVersion highVersion, MetadataVersion lowVersion) {
+        MetadataVersion version = highVersion;
+        while (!version.didMetadataChange() && version != lowVersion) {
+            Optional<MetadataVersion> prev = version.previous();
+            if (prev.isPresent()) {
+                version = prev.get();
+            } else {
+                break;
+            }
+        }
+        return version != lowVersion;
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {

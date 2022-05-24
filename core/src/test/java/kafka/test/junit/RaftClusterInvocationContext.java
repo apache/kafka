@@ -18,6 +18,7 @@
 package kafka.test.junit;
 
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.test.ClusterConfig;
@@ -29,6 +30,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
@@ -38,6 +40,7 @@ import scala.compat.java8.OptionConverters;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -83,6 +86,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
+                        setBootstrapMetadataVersion(clusterConfig.metadataVersion().orElse(MetadataVersion.latest())).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
@@ -166,6 +170,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 .map(ControllerServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+        }
+
+        @Override
+        public Map<Integer, BrokerFeatures> brokerFeatures() {
+            return brokers().collect(Collectors.toMap(
+                brokerServer -> brokerServer.config().nodeId(),
+                BrokerServer::brokerFeatures
+            ));
         }
 
         @Override

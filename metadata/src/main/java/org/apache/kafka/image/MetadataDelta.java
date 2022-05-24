@@ -37,9 +37,11 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 
 /**
@@ -141,6 +143,14 @@ public final class MetadataDelta {
     public AclsDelta getOrCreateAclsDelta() {
         if (aclsDelta == null) aclsDelta = new AclsDelta(image.acls());
         return aclsDelta;
+    }
+
+    public Optional<MetadataVersion> metadataVersionChanged() {
+        if (featuresDelta == null) {
+            return Optional.empty();
+        } else {
+            return featuresDelta.metadataVersionChange();
+        }
     }
 
     public void read(long highestOffset, int highestEpoch, Iterator<List<ApiMessageAndVersion>> reader) {
@@ -253,6 +263,15 @@ public final class MetadataDelta {
 
     public void replay(FeatureLevelRecord record) {
         getOrCreateFeaturesDelta().replay(record);
+        featuresDelta.metadataVersionChange().ifPresent(changedMetadataVersion -> {
+            // If any feature flags change, need to immediately check if any metadata needs to be downgraded.
+            getOrCreateClusterDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateConfigsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateTopicsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateClientQuotasDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateProducerIdsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateAclsDelta().handleMetadataVersionChange(changedMetadataVersion);
+        });
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {

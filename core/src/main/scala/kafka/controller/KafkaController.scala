@@ -468,14 +468,6 @@ class KafkaController(val config: KafkaConfig,
 
     // shutdown leader rebalance scheduler
     kafkaScheduler.shutdown()
-    offlinePartitionCount = 0
-    preferredReplicaImbalanceCount = 0
-    globalTopicCount = 0
-    globalPartitionCount = 0
-    topicsToDeleteCount = 0
-    replicasToDeleteCount = 0
-    ineligibleTopicsToDeleteCount = 0
-    ineligibleReplicasToDeleteCount = 0
 
     // stop token expiry check scheduler
     if (tokenCleanScheduler.isStarted)
@@ -1435,43 +1427,37 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def updateMetrics(): Unit = {
-    offlinePartitionCount =
-      if (!isActive) {
-        0
-      } else {
-        controllerContext.offlinePartitionCount
-      }
-
-    preferredReplicaImbalanceCount =
-      if (!isActive) {
-        0
-      } else {
-        controllerContext.preferredReplicaImbalanceCount
-      }
-
-    globalTopicCount = if (!isActive) 0 else controllerContext.allTopics.size
-
-    globalPartitionCount = if (!isActive) 0 else controllerContext.partitionWithLeadersCount
-
-    topicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.size
-
-    replicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
-      // For each enqueued topic, count the number of replicas that are not yet deleted
-      controllerContext.replicasForTopic(topic).count { replica =>
-        controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
-      }
-    }.sum
-
-    ineligibleTopicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsIneligibleForDeletion.size
-
-    ineligibleReplicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
-      // For each enqueued topic, count the number of replicas that are ineligible
-      controllerContext.replicasForTopic(topic).count { replica =>
-        controllerContext.replicaState(replica) == ReplicaDeletionIneligible
-      }
-    }.sum
-
-    activeBrokerCount = if (isActive) controllerContext.liveOrShuttingDownBrokerIds.size else 0
+    if (isActive) {
+      offlinePartitionCount = controllerContext.offlinePartitionCount
+      preferredReplicaImbalanceCount = controllerContext.preferredReplicaImbalanceCount
+      globalTopicCount = controllerContext.allTopics.size
+      globalPartitionCount = controllerContext.partitionWithLeadersCount
+      topicsToDeleteCount = controllerContext.topicsToBeDeleted.size
+      replicasToDeleteCount = controllerContext.topicsToBeDeleted.map { topic =>
+        // For each enqueued topic, count the number of replicas that are not yet deleted
+        controllerContext.replicasForTopic(topic).count { replica =>
+          controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
+        }
+      }.sum
+      ineligibleTopicsToDeleteCount = controllerContext.topicsIneligibleForDeletion.size
+      ineligibleReplicasToDeleteCount = controllerContext.topicsToBeDeleted.map { topic =>
+        // For each enqueued topic, count the number of replicas that are ineligible
+        controllerContext.replicasForTopic(topic).count { replica =>
+          controllerContext.replicaState(replica) == ReplicaDeletionIneligible
+        }
+      }.sum
+      activeBrokerCount = controllerContext.liveOrShuttingDownBrokerIds.size
+    } else {
+      offlinePartitionCount = 0
+      preferredReplicaImbalanceCount = 0
+      globalTopicCount = 0
+      globalPartitionCount = 0
+      topicsToDeleteCount = 0
+      replicasToDeleteCount = 0
+      ineligibleTopicsToDeleteCount = 0
+      ineligibleReplicasToDeleteCount = 0
+      activeBrokerCount = 0
+    }
   }
 
   // visible for testing

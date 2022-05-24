@@ -88,6 +88,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -134,6 +135,10 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * the fact that the controller may have several operations in progress at any given
  * point.  The future associated with each operation will not be completed until the
  * results of the operation have been made durable to the metadata log.
+ *
+ * The QuorumController uses the "metadata.version" feature flag as a mechanism to control
+ * the usage of new log record schemas. Starting with 3.3, this version must be set before
+ * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
     /**
@@ -161,10 +166,15 @@ public final class QuorumController implements Controller {
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
         private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
+        private BootstrapMetadata bootstrapMetadata = null;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
             this.clusterId = clusterId;
+        }
+
+        public int nodeId() {
+            return nodeId;
         }
 
         public Builder setTime(Time time) {
@@ -237,6 +247,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
+            return this;
+        }
+
         public Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.createTopicPolicy = createTopicPolicy;
             return this;
@@ -267,6 +282,9 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
+            if (bootstrapMetadata == null || bootstrapMetadata.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+                throw new RuntimeException("You must specify an initial metadata.version using the kafka-storage tool.");
+            }
             if (quorumFeatures == null) {
                 throw new RuntimeException("You must specify the quorum features");
             }
@@ -289,7 +307,7 @@ public final class QuorumController implements Controller {
                     defaultNumPartitions, isLeaderRecoverySupported, replicaPlacer, snapshotMaxNewRecordBytes,
                     leaderImbalanceCheckIntervalNs, sessionTimeoutNs, controllerMetrics,
                     createTopicPolicy, alterConfigPolicy, configurationValidator, authorizer,
-                    staticConfig);
+                    staticConfig, bootstrapMetadata);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -753,11 +771,11 @@ public final class QuorumController implements Controller {
     }
 
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
-
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
+                    maybeCompleteAuthorizerInitialLoad();
                     boolean isActiveController = curClaimEpoch != -1;
                     long processedRecordsSize = 0;
                     while (reader.hasNext()) {
@@ -882,15 +900,57 @@ public final class QuorumController implements Controller {
                             newEpoch + ", but we never renounced controller epoch " +
                             curEpoch);
                     }
-                    log.info(
-                        "Becoming the active controller at epoch {}, committed offset {} and committed epoch {}.",
-                        newEpoch, lastCommittedOffset, lastCommittedEpoch
-                    );
+
 
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
+
+                    // Check if we need to bootstrap metadata into the log. This must happen before we can
+                    // write any other records to the log since we need the metadata.version to determine the correct
+                    // record version
+                    final MetadataVersion metadataVersion;
+                    if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+                        final CompletableFuture<Map<String, ApiError>> future;
+                        if (!bootstrapMetadata.metadataVersion().isKRaftSupported()) {
+                            metadataVersion = MetadataVersion.UNINITIALIZED;
+                            future = new CompletableFuture<>();
+                            future.completeExceptionally(
+                                new IllegalStateException("Cannot become leader without an initial metadata.version of " +
+                                    "at least 1. Got " + bootstrapMetadata.metadataVersion().featureLevel()));
+                        } else {
+                            metadataVersion = bootstrapMetadata.metadataVersion();
+                            future = appendWriteEvent("bootstrapMetadata", OptionalLong.empty(), () -> {
+                                if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
+                                    log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
+                                } else {
+                                    log.info("Upgrading from KRaft preview. Initializing metadata.version to {}",
+                                        metadataVersion.featureLevel());
+                                }
+                                return ControllerResult.atomicOf(bootstrapMetadata.records(), null);
+                            });
+                        }
+                        future.whenComplete((result, exception) -> {
+                            if (exception != null) {
+                                log.error("Failed to bootstrap metadata.", exception);
+                                appendRaftEvent("bootstrapMetadata[" + curClaimEpoch + "]", () -> {
+                                    log.warn("Renouncing the leadership at oldEpoch {} since we could not bootstrap " +
+                                             "metadata. Reverting to last committed offset {}.",
+                                        curClaimEpoch, lastCommittedOffset);
+                                    renounce();
+                                });
+                            }
+                        });
+                    } else {
+                        metadataVersion = featureControl.metadataVersion();
+                    }
+
+
+                    log.info(
+                        "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
+                        newEpoch, lastCommittedOffset, lastCommittedEpoch, metadataVersion.featureLevel()
+                    );
 
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is
                     // required because the active controller assumes that there is always an in-memory snapshot at the
@@ -904,7 +964,7 @@ public final class QuorumController implements Controller {
             } else if (curClaimEpoch != -1) {
                 appendRaftEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
                     log.warn("Renouncing the leadership at oldEpoch {} due to a metadata " +
-                            "log event. Reverting to last committed offset {}.", curClaimEpoch,
+                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
                         lastCommittedOffset);
                     renounce();
                 });
@@ -921,9 +981,32 @@ public final class QuorumController implements Controller {
                 if (this != metaLogListener) {
                     log.debug("Ignoring {} raft event from an old registration", name);
                 } else {
-                    runnable.run();
+                    try {
+                        runnable.run();
+                    } finally {
+                        maybeCompleteAuthorizerInitialLoad();
+                    }
                 }
             });
+        }
+    }
+
+    private void maybeCompleteAuthorizerInitialLoad() {
+        if (!needToCompleteAuthorizerLoad) return;
+        OptionalLong highWatermark = raftClient.highWatermark();
+        if (highWatermark.isPresent()) {
+            if (lastCommittedOffset + 1 >= highWatermark.getAsLong()) {
+                log.info("maybeCompleteAuthorizerInitialLoad: completing authorizer " +
+                    "initial load at last committed offset {}.", lastCommittedOffset);
+                authorizer.get().completeInitialLoad();
+                needToCompleteAuthorizerLoad = false;
+            } else {
+                log.trace("maybeCompleteAuthorizerInitialLoad: can't proceed because " +
+                    "lastCommittedOffset  = {}, but highWatermark = {}.",
+                    lastCommittedOffset, highWatermark.getAsLong());
+            }
+        } else {
+            log.trace("maybeCompleteAuthorizerInitialLoad: highWatermark not set.");
         }
     }
 
@@ -1277,6 +1360,12 @@ public final class QuorumController implements Controller {
     private long lastCommittedTimestamp = -1;
 
     /**
+     * True if we need to complete the authorizer initial load.
+     * This must be accessed only by the event queue thread.
+     */
+    private boolean needToCompleteAuthorizerLoad;
+
+    /**
      * If we have called scheduleWrite, this is the last offset we got back from it.
      */
     private long writeOffset;
@@ -1310,6 +1399,8 @@ public final class QuorumController implements Controller {
      */
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
+    private final BootstrapMetadata bootstrapMetadata;
+
     private QuorumController(LogContext logContext,
                              int nodeId,
                              String clusterId,
@@ -1330,7 +1421,8 @@ public final class QuorumController implements Controller {
                              Optional<AlterConfigPolicy> alterConfigPolicy,
                              ConfigurationValidator configurationValidator,
                              Optional<ClusterMetadataAuthorizer> authorizer,
-                             Map<String, Object> staticConfig) {
+                             Map<String, Object> staticConfig,
+                             BootstrapMetadata bootstrapMetadata) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1381,11 +1473,15 @@ public final class QuorumController implements Controller {
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
         this.raftClient = raftClient;
+        this.bootstrapMetadata = bootstrapMetadata;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.writeOffset = -1L;
+        this.needToCompleteAuthorizerLoad = authorizer.isPresent();
 
         resetState();
+
+        log.info("Creating new QuorumController with clusterId {}, authorizer {}.", clusterId, authorizer);
 
         this.raftClient.register(metaLogListener);
     }

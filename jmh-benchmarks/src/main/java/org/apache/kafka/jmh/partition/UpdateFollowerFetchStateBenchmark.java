@@ -20,6 +20,7 @@ package org.apache.kafka.jmh.partition;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
+import kafka.cluster.Replica;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
@@ -79,6 +80,8 @@ public class UpdateFollowerFetchStateBenchmark {
     private long nextOffset = 0;
     private LogManager logManager;
     private Partition partition;
+    private Replica replica1;
+    private Replica replica2;
 
     @Setup(Level.Trial)
     public void setUp() {
@@ -127,6 +130,8 @@ public class UpdateFollowerFetchStateBenchmark {
                 alterPartitionListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
         partition.makeLeader(partitionState, offsetCheckpoints, topicId);
+        replica1 = partition.getReplica(1).get();
+        replica2 = partition.getReplica(2).get();
     }
 
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
@@ -166,9 +171,9 @@ public class UpdateFollowerFetchStateBenchmark {
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void updateFollowerFetchStateBench() {
         // measure the impact of two follower fetches on the leader
-        partition.updateFollowerFetchState(1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
+        partition.updateFollowerFetchState(replica1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
                 0, 1, nextOffset);
-        partition.updateFollowerFetchState(2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
+        partition.updateFollowerFetchState(replica2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
                 0, 1, nextOffset);
         nextOffset++;
     }
@@ -178,9 +183,9 @@ public class UpdateFollowerFetchStateBenchmark {
     public void updateFollowerFetchStateBenchNoChange() {
         // measure the impact of two follower fetches on the leader when the follower didn't
         // end up fetching anything
-        partition.updateFollowerFetchState(1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
+        partition.updateFollowerFetchState(replica1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
                 0, 1, 100);
-        partition.updateFollowerFetchState(2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
+        partition.updateFollowerFetchState(replica2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
                 0, 1, 100);
     }
 }
