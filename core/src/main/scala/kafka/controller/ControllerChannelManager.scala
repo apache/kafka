@@ -731,6 +731,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
       else 0
 
+    /**
+     * For StopReplica request version < 4, we rely on the isPartitionDeleted function to check a partition's delete flag,
+     * this may not be always correct considering a later request's callback may overwrite an earlier
+     * request's callback inside the {@link ControllerRequestMerger#addStopReplicaRequest) method.
+     * For StopReplica request version 4 and above, we rely on the delete field inside the StopReplica response to
+     * check a partition's delete flag, which should be always correct.
+     */
     def responseCallback(brokerId: Int, isPartitionDeleted: TopicPartition => Boolean)
                         (response: AbstractResponse): Unit = {
       val stopReplicaResponse = response.asInstanceOf[StopReplicaResponse]
@@ -738,7 +745,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       stopReplicaResponse.partitionErrors.forEach { pe =>
         val tp = new TopicPartition(pe.topicName, pe.partitionIndex)
         if (controllerContext.isTopicDeletionInProgress(pe.topicName) &&
-            isPartitionDeleted(tp)) {
+          (isPartitionDeleted(tp) || pe.deletePartition())) {
           partitionErrorsForDeletingTopics += tp -> Errors.forCode(pe.errorCode)
         }
       }

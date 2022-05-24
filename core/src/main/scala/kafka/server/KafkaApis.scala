@@ -3583,7 +3583,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     stopReplicaRequests.foreach{ stopReplicaRequest => {
       val stopReplicaResponse = doHandleStopReplicaRequest(request, stopReplicaRequest)
       responseData.setStopReplicaErrorCode(stopReplicaResponse.errorCode())
-      stopReplicaPartitionErrors.addAll(LiCombinedControlTransformer.transformStopReplicaPartitionErrors(stopReplicaResponse.partitionErrors()))
+      stopReplicaPartitionErrors.addAll(LiCombinedControlTransformer.transformStopReplicaPartitionErrors(
+        stopReplicaRequest.partitionStates(),
+        stopReplicaResponse.partitionErrors(), liCombinedControlRequest.version()))
     }}
     responseData.setStopReplicaPartitionErrors(stopReplicaPartitionErrors)
 

@@ -49,6 +49,8 @@
         "about": "The topic name." },
       { "name": "PartitionIndex", "type": "int32", "versions": "0+",
         "about": "The partition index." },
+      { "name": "DeletePartition", "type": "bool", "versions": "1+",
+        "tag": 0, "taggedVersions": "1+","about": "Whether this partition should be deleted." },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The partition error code, or 0 if there was no partition error." }
     ]}

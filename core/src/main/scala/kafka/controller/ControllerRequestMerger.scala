@@ -194,6 +194,9 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
       }
     }}
 
+    // Here a later request's callback may be overwriting a previous request's callback.
+    // To preserve correctness, we require that the later callback and the earlier callback
+    // must have the same sideeffects when they are provided with the same StopReplica response.
     stopReplicaCallback = callback
   }
   private def clearStopReplicaPartitionState(topicIdPartition: TopicIdPartition): Unit = {
