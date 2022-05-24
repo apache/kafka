@@ -232,6 +232,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
                     if (config.isDefault()) {
                         config.setConfigSource(ConfigSource.DEFAULT_CONFIG.id);
                     } else {
+                        System.out.println("ResourceType:\t" + result.resourceType());
                         if (result.resourceType() == ConfigResource.Type.BROKER.id()) {
                             config.setConfigSource(ConfigSource.STATIC_BROKER_CONFIG.id);
                         } else if (result.resourceType() == ConfigResource.Type.TOPIC.id()) {
