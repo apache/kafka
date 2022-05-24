@@ -39,6 +39,13 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  */
 public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
 
+    // TODO: javadoc; both ends are inclusive
+    default KeyValueIterator<Windowed<K>, AGG> findSessions(final Instant earliestSessionEndTime,
+                                                            final Instant latestSessionEndTime) {
+        throw new UnsupportedOperationException(
+                "This API is not supported by this implementation of SessionStore.");
+    }
+
     @Override
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                             final Instant earliestSessionEndTime,

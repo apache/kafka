@@ -27,6 +27,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -69,7 +70,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-
 public class KStreamSessionWindowAggregateProcessorTest {
 
     private static final long GAP_MS = 5 * 60 * 1000L;
@@ -83,6 +83,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapWithNoGrace(ofMillis(GAP_MS)),
             STORE_NAME,
+            EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
             sessionMerger);
@@ -399,6 +400,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(0L)),
             STORE_NAME,
+            EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
             sessionMerger
@@ -464,6 +466,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1L)),
             STORE_NAME,
+            EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
             sessionMerger

@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.time.Instant;
 import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -28,6 +30,8 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.TimeFirstSessionKeySchema;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 public class RocksDBTimeOrderedSessionStore
     extends WrappedStateStore<RocksDBTimeOrderedSessionSegmentedBytesStore, Object, Object>
@@ -59,6 +63,18 @@ public class RocksDBTimeOrderedSessionStore
             getPosition(),
             stateStoreContext
         );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Instant earliestSessionEndTime,
+                                                                  final Instant latestSessionEndTime) {
+        final long earliestEndTime = ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
+                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime"));
+        final long latestEndTime = ApiUtils.validateMillisecondInstant(latestSessionEndTime,
+                prepareMillisCheckFailMsgPrefix(latestSessionEndTime, "latestSessionEndTime"));
+
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchAll(earliestEndTime, latestEndTime);
+        return new WrappedSessionStoreIterator(bytesIterator, TimeFirstSessionKeySchema::from);
     }
 
     @Override
