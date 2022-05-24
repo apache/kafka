@@ -1036,7 +1036,7 @@ public final class QuorumController implements Controller {
         writeOffset = offset;
         if (isActiveController()) {
             controllerMetrics.setLastAppliedRecordOffset(writeOffset);
-            // This is not truelly the append timestamp. The KRaft client doesn't expose the append time when scheduling a write.
+            // This is not truly the append timestamp. The KRaft client doesn't expose the append time when scheduling a write.
             // This is good enough because this is called right after the records were given to the KRAft client for appending and
             // the default append linger for KRaft is 25ms.
             controllerMetrics.setLastAppliedRecordTimestamp(time.milliseconds());
