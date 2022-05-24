@@ -2094,12 +2094,12 @@ class ReplicaManager(val config: KafkaConfig,
     changedPartitions: mutable.Set[Partition],
     delta: TopicsDelta,
     offsetCheckpoints: OffsetCheckpoints,
-    newLocalLeaders: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
+    localLeaders: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
   ): Unit = {
-    stateChangeLogger.info(s"Transitioning ${newLocalLeaders.size} partition(s) to " +
+    stateChangeLogger.info(s"Transitioning ${localLeaders.size} partition(s) to " +
       "local leaders.")
-    replicaFetcherManager.removeFetcherForPartitions(newLocalLeaders.keySet)
-    newLocalLeaders.forKeyValue { (tp, info) =>
+    replicaFetcherManager.removeFetcherForPartitions(localLeaders.keySet)
+    localLeaders.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
@@ -2124,18 +2124,18 @@ class ReplicaManager(val config: KafkaConfig,
     newImage: MetadataImage,
     delta: TopicsDelta,
     offsetCheckpoints: OffsetCheckpoints,
-    newLocalFollowers: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
+    localFollowers: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
   ): Unit = {
-    stateChangeLogger.info(s"Transitioning ${newLocalFollowers.size} partition(s) to " +
+    stateChangeLogger.info(s"Transitioning ${localFollowers.size} partition(s) to " +
       "local followers.")
     val shuttingDown = isShuttingDown.get()
-    val partitionsToStart = new mutable.HashMap[TopicPartition, Partition]
-    val partitionsToStop = new mutable.HashMap[TopicPartition, Boolean]
-    val newFollowerTopicSet = new mutable.HashSet[String]
-    newLocalFollowers.forKeyValue { (tp, info) =>
+    val partitionsToStartFetching = new mutable.HashMap[TopicPartition, Partition]
+    val partitionsToStopFetching = new mutable.HashMap[TopicPartition, Boolean]
+    val followerTopicSet = new mutable.HashSet[String]
+    localFollowers.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
-          newFollowerTopicSet.add(tp.topic)
+          followerTopicSet.add(tp.topic)
 
           if (shuttingDown) {
             stateChangeLogger.trace(s"Unable to start fetching $tp with topic " +
@@ -2153,10 +2153,10 @@ class ReplicaManager(val config: KafkaConfig,
                 !info.partition.isr.contains(config.brokerId))) {
               // During controlled shutdown, replica with no leaders and replica
               // where this broker is not in the ISR are stopped.
-              partitionsToStop.put(tp, false)
+              partitionsToStopFetching.put(tp, false)
             } else if (isNewLeaderEpoch) {
               // Otherwise, fetcher is restarted if the leader epoch has changed.
-              partitionsToStart.put(tp, partition)
+              partitionsToStartFetching.put(tp, partition)
             }
           }
           changedPartitions.add(partition)
@@ -2179,16 +2179,16 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    if (partitionsToStart.nonEmpty) {
+    if (partitionsToStartFetching.nonEmpty) {
       // Stopping the fetchers must be done first in order to initialize the fetch
       // position correctly.
-      replicaFetcherManager.removeFetcherForPartitions(partitionsToStart.keySet)
-      stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToStart.size} partitions")
+      replicaFetcherManager.removeFetcherForPartitions(partitionsToStartFetching.keySet)
+      stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
       val listenerName = config.interBrokerListenerName.value
       val partitionAndOffsets = new mutable.HashMap[TopicPartition, InitialFetchState]
 
-      partitionsToStart.forKeyValue { (topicPartition, partition) =>
+      partitionsToStartFetching.forKeyValue { (topicPartition, partition) =>
         val nodeOpt = partition.leaderReplicaIdOpt
           .flatMap(leaderId => Option(newImage.cluster.broker(leaderId)))
           .flatMap(_.node(listenerName).asScala)
@@ -2209,16 +2209,16 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
-      stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStart.size} partitions")
+      stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
-      partitionsToStart.keySet.foreach(completeDelayedFetchOrProduceRequests)
+      partitionsToStartFetching.keySet.foreach(completeDelayedFetchOrProduceRequests)
 
-      updateLeaderAndFollowerMetrics(newFollowerTopicSet)
+      updateLeaderAndFollowerMetrics(followerTopicSet)
     }
 
-    if (partitionsToStop.nonEmpty) {
-      stopPartitions(partitionsToStop)
-      stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStop.size} partitions")
+    if (partitionsToStopFetching.nonEmpty) {
+      stopPartitions(partitionsToStopFetching)
+      stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStopFetching.size} partitions")
     }
   }
 

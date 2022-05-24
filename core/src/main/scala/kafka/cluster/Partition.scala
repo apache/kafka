@@ -700,7 +700,8 @@ class Partition(val topicPartition: TopicPartition,
         val leaderEpochEndOffset = followerLog.logEndOffset
         stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
           s"offset $leaderEpochEndOffset with partition epoch ${partitionState.partitionEpoch} and " +
-          s"high watermark ${followerLog.highWatermark}. Previous leader epoch was $leaderEpoch.")
+          s"high watermark ${followerLog.highWatermark}. Current leader is ${partitionState.leader}. " +
+          s"Previous leader epoch was $leaderEpoch.")
       } else {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
           s"and partition state $partitionState since it is already a follower with leader epoch $leaderEpoch.")
