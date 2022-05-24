@@ -294,8 +294,9 @@ class BrokerMetadataListener(
     eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
   }
 
-  class ShutdownEvent() extends EventQueue.FailureLoggingEvent(log) {
+  class ShutdownEvent extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
+      brokerMetrics.close()
       removeMetric(BrokerMetadataListener.MetadataBatchProcessingTimeUs)
       removeMetric(BrokerMetadataListener.MetadataBatchSizes)
     }
