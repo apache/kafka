@@ -63,6 +63,8 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.QuorumInfo;
+import org.apache.kafka.common.QuorumInfo.ReplicaState;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicCollection.TopicIdCollection;
 import org.apache.kafka.common.TopicCollection.TopicNameCollection;
@@ -135,6 +137,7 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
@@ -208,6 +211,9 @@ import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
+import org.apache.kafka.common.requests.DescribeQuorumRequest;
+import org.apache.kafka.common.requests.DescribeQuorumRequest.Builder;
+import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
@@ -268,6 +274,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -317,6 +324,11 @@ public class KafkaAdminClient extends AdminClient {
 
     private final Logger log;
     private final LogContext logContext;
+
+    /**
+     * The name of the internal raft metadata topic
+     */
+    private static final String METADATA_TOPIC_NAME = "__cluster_metadata";
 
     /**
      * The default timeout to use for an operation.
@@ -4179,6 +4191,61 @@ public class KafkaAdminClient extends AdminClient {
     private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int iterations) throws NoSuchAlgorithmException, InvalidKeyException {
         return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.mechanismName()))
                 .hi(password, salt, iterations);
+    }
+
+    @Override
+    public DescribeQuorumResult describeQuorum(DescribeQuorumOptions options) {
+      NodeProvider provider = new LeastLoadedNodeProvider();
+
+      final KafkaFutureImpl<QuorumInfo> future = new KafkaFutureImpl<>();
+      final long now = time.milliseconds();
+        final Call call = new Call(
+            "describeQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            private QuorumInfo createQuorumResult(final DescribeQuorumResponse response) {
+                Integer partition = 0;
+                String topicName = response.getTopicNameByIndex(partition);
+                Integer leaderId = response.getPartitionLeaderId(topicName, partition);
+                List<ReplicaState> voters = new ArrayList<>();
+                for (Map.Entry<Integer, Long> entry: response.getVoterOffsets(topicName, partition).entrySet()) {
+                    voters.add(new ReplicaState(entry.getKey(), entry.getValue()));
+                }
+                List<ReplicaState> observers = new ArrayList<>();
+                for (Map.Entry<Integer, Long> entry: response.getObserverOffsets(topicName, partition).entrySet()) {
+                    observers.add(new ReplicaState(entry.getKey(), entry.getValue()));
+                }
+                QuorumInfo info = new QuorumInfo(topicName, leaderId, voters, observers);
+               return info;
+            }
+
+            @Override
+            DescribeQuorumRequest.Builder createRequest(int timeoutMs) {
+                DescribeQuorumRequestData data = new DescribeQuorumRequestData()
+                    .setTopics(singletonList(new DescribeQuorumRequestData.TopicData()
+                        .setPartitions(singletonList(new DescribeQuorumRequestData.PartitionData()
+                            .setPartitionIndex(0)))
+                        .setTopicName(METADATA_TOPIC_NAME)));
+                return new Builder(data);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
+                if (quorumResponse.data().errorCode() == Errors.NONE.code()) {
+                    future.complete(createQuorumResult(quorumResponse));
+                } else {
+                    future.completeExceptionally(Errors.forCode(quorumResponse.data().errorCode()).exception());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(Collections.singletonList(future), throwable);
+            }
+        };
+
+      runnable.call(call, now);
+      return new DescribeQuorumResult(future);
     }
 
     @Override
