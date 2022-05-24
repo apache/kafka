@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.TopicData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -93,4 +94,51 @@ public class DescribeQuorumResponse extends AbstractResponse {
     public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {
         return new DescribeQuorumResponse(new DescribeQuorumResponseData(new ByteBufferAccessor(buffer), version));
     }
+
+    public String getTopicNameByIndex(Integer index) {
+        return data.topics().get(index).topicName();
+    }
+
+    public Integer getPartitionLeaderId(String topicName, Integer partition) {
+        Integer leaderId = -1;
+        TopicData topic = data.topics().stream()
+            .filter(t -> t.topicName().equals(topicName))
+            .findFirst()
+            .orElse(null);
+        if (topic != null) {
+           leaderId = Integer.valueOf(topic.partitions().get(partition).leaderId());
+        }
+        return leaderId;
+    }
+
+    public Map<Integer, Long> getVoterOffsets(String topicName, Integer partition) {
+        Map<Integer, Long> voterOffsets = new HashMap<>();
+        TopicData topic = data.topics().stream()
+            .filter(t -> t.topicName().equals(topicName))
+            .findFirst()
+            .orElse(null);
+        if(topic != null) {
+            topic.partitions().get(partition).currentVoters().forEach(
+                v -> {
+                    voterOffsets.put(v.replicaId(), v.logEndOffset());
+                }
+            );
+        }
+        return voterOffsets;
+    }
+
+    public Map<Integer, Long> getObserverOffsets(String topicName, Integer partition) {
+        Map<Integer, Long> observerOffsets = new HashMap<>();
+        TopicData topic = data.topics().stream()
+            .filter(t -> t.topicName().equals(topicName))
+            .findFirst()
+            .orElse(null);
+        topic.partitions().get(partition).observers().forEach(
+            o -> {
+                observerOffsets.put(o.replicaId(), o.logEndOffset());
+            }
+        );
+        return observerOffsets;
+    }
+
 }
