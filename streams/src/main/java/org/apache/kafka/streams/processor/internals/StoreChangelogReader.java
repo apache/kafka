@@ -430,8 +430,7 @@ public class StoreChangelogReader implements ChangelogReader {
             final ConsumerRecords<byte[], byte[]> polledRecords;
 
             try {
-                // We add special handling for standby tasks.
-                pauseResumePartitions(tasks, restoringChangelogs);
+                updateStandbyPartitions(tasks, restoringChangelogs);
 
                 // for restoring active and updating standby we may prefer different poll time
                 // in order to make sure we call the main consumer#poll in time.
@@ -486,21 +485,21 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void pauseResumePartitions(final Map<TaskId, Task> tasks,
+    private void updateStandbyPartitions(final Map<TaskId, Task> tasks,
         final Set<TopicPartition> restoringChangelogs) {
-        if (state == ChangelogReaderState.ACTIVE_RESTORING) {
-            return;
-        }
-
-        for (final TopicPartition partition : restoringChangelogs) {
-            final ProcessorStateManager manager = changelogs.get(partition).stateManager;
-            final  TaskId taskId = manager.taskId();
-            final Task task = tasks.get(taskId);
-            if (manager.taskType() == TaskType.STANDBY) {
-                if (task != null) {
-                    restoreConsumer.resume(Collections.singleton(partition));
-                } else {
-                    restoreConsumer.pause(Collections.singleton(partition));
+        // For standby tasks in the `tasks` map, we make sure that the `restoreConsumer`'s state
+        // is correct.
+        if (state == ChangelogReaderState.STANDBY_UPDATING) {
+            for (final TopicPartition partition : restoringChangelogs) {
+                final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+                final TaskId taskId = manager.taskId();
+                final Task task = tasks.get(taskId);
+                if (manager.taskType() == TaskType.STANDBY) {
+                    if (task != null) {
+                        restoreConsumer.resume(Collections.singleton(partition));
+                    } else {
+                        restoreConsumer.pause(Collections.singleton(partition));
+                    }
                 }
             }
         }
