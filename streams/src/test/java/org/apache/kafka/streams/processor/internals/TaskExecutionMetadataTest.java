@@ -33,6 +33,9 @@ public class TaskExecutionMetadataTest {
     final static String TOPOLOGY1 = "topology1";
     final static String TOPOLOGY2 = "topology2";
     final static Set<String> NAMED_TOPOLOGIES = new HashSet<>(Arrays.asList(TOPOLOGY1, TOPOLOGY2));
+    final static int TIME_ZERO = 0;
+    final static int ONE_SECOND = 1000;
+    final static int CONSTANT_BACKOFF_MS = 5000;
 
     @Test
     public void testCanProcessWithoutNamedTopologies() {
@@ -44,11 +47,11 @@ public class TaskExecutionMetadataTest {
 
         final Task mockTask = createMockTask(UNNAMED_TOPOLOGY);
 
-        Assert.assertTrue(metadata.canProcessTask(mockTask, 0));
+        Assert.assertTrue(metadata.canProcessTask(mockTask, TIME_ZERO));
         // This pauses an UNNAMED_TOPOLOGY / a KafkaStreams instance without named/modular
         // topologies.
         pausedTopologies.add(UNNAMED_TOPOLOGY);
-        Assert.assertFalse(metadata.canProcessTask(mockTask, 0));
+        Assert.assertFalse(metadata.canProcessTask(mockTask, TIME_ZERO));
     }
 
     @Test
@@ -60,16 +63,16 @@ public class TaskExecutionMetadataTest {
         final Task mockTask1 = createMockTask(TOPOLOGY1);
         final Task mockTask2 = createMockTask(TOPOLOGY2);
 
-        Assert.assertTrue(metadata.canProcessTask(mockTask1, 0));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 0));
+        Assert.assertTrue(metadata.canProcessTask(mockTask1, TIME_ZERO));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, TIME_ZERO));
 
         pausedTopologies.add(TOPOLOGY1);
-        Assert.assertFalse(metadata.canProcessTask(mockTask1, 0));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 0));
+        Assert.assertFalse(metadata.canProcessTask(mockTask1, TIME_ZERO));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, TIME_ZERO));
 
         pausedTopologies.remove(TOPOLOGY1);
-        Assert.assertTrue(metadata.canProcessTask(mockTask1, 0));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 0));
+        Assert.assertTrue(metadata.canProcessTask(mockTask1, TIME_ZERO));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, TIME_ZERO));
     }
 
     @Test
@@ -83,12 +86,12 @@ public class TaskExecutionMetadataTest {
         final Task mockTask1 = createMockTask(TOPOLOGY1);
         final Task mockTask2 = createMockTask(TOPOLOGY2);
 
-        Assert.assertFalse(metadata.canProcessTask(mockTask1, 0));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 0));
+        Assert.assertFalse(metadata.canProcessTask(mockTask1, TIME_ZERO));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, TIME_ZERO));
 
         pausedTopologies.remove(TOPOLOGY1);
-        Assert.assertTrue(metadata.canProcessTask(mockTask1, 0));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 0));
+        Assert.assertTrue(metadata.canProcessTask(mockTask1, TIME_ZERO));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, TIME_ZERO));
     }
 
     @Test
@@ -101,17 +104,18 @@ public class TaskExecutionMetadataTest {
         final Task mockTask1 = createMockTask(TOPOLOGY1);
         final Task mockTask2 = createMockTask(TOPOLOGY2);
 
-        Assert.assertTrue(metadata.canProcessTask(mockTask1, 0));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 0));
+        Assert.assertTrue(metadata.canProcessTask(mockTask1, TIME_ZERO));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, TIME_ZERO));
 
-        metadata.registerTaskError(mockTask1, new Throwable("Error"), 0);
-        // One second after the error, task1 cannot process, task2 can.
-        Assert.assertFalse(metadata.canProcessTask(mockTask1, 1000));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 1000));
+        metadata.registerTaskError(mockTask1, new Throwable("Error"), TIME_ZERO);
+        Assert.assertFalse(metadata.canProcessTask(mockTask1, ONE_SECOND));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, ONE_SECOND));
 
-        // Ten secondsa after the error, both can process again.
-        Assert.assertTrue(metadata.canProcessTask(mockTask1, 10000));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, 10000));
+        Assert.assertFalse(metadata.canProcessTask(mockTask1, CONSTANT_BACKOFF_MS));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, CONSTANT_BACKOFF_MS));
+
+        Assert.assertTrue(metadata.canProcessTask(mockTask1, CONSTANT_BACKOFF_MS + 1));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, CONSTANT_BACKOFF_MS + 1));
     }
 
     private static Task createMockTask(final String topologyName) {

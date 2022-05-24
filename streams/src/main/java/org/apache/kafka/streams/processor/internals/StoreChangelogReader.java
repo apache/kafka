@@ -414,7 +414,6 @@ public class StoreChangelogReader implements ChangelogReader {
     // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
     @Override
     public void restore(final Map<TaskId, Task> tasks) {
-        //log.info("JNH: " + new ArrayList<>(tasks.values()));
         initializeChangelogs(tasks, registeredChangelogs());
 
         if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {

@@ -833,7 +833,7 @@ public class KafkaStreamsTest {
             streams.pause();
             waitForCondition(
                 streams::isPaused,
-                "Streams did not paused");
+                "Streams did not pause.");
 
             try {
                 streams.cleanUp();
