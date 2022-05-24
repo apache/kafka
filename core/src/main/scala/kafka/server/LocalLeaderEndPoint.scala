@@ -73,7 +73,6 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
       topicNames.put(topic.topicId, topic.topic)
     }
 
-
     def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
