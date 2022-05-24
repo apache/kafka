@@ -27,6 +27,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
 
 import java.security.Principal;
+import java.util.Arrays;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
@@ -100,6 +101,7 @@ public class PlaintextTransportLayer implements TransportLayer {
     */
     @Override
     public int read(ByteBuffer dst) throws IOException {
+        System.out.println("@@@@@ MATHIEU" + Arrays.toString(dst.array()));
         return socketChannel.read(dst);
     }
 
@@ -112,6 +114,7 @@ public class PlaintextTransportLayer implements TransportLayer {
      */
     @Override
     public long read(ByteBuffer[] dsts) throws IOException {
+        System.out.println("@@@@@ MATHIEU" + Arrays.toString(dsts));
         return socketChannel.read(dsts);
     }
 
@@ -125,6 +128,8 @@ public class PlaintextTransportLayer implements TransportLayer {
      */
     @Override
     public long read(ByteBuffer[] dsts, int offset, int length) throws IOException {
+        System.out.println("@@@@@ MATHIEU" + Arrays.toString(dsts));
+
         return socketChannel.read(dsts, offset, length);
     }
 
