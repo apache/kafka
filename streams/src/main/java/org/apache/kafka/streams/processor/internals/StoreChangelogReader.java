@@ -36,6 +36,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -413,113 +414,97 @@ public class StoreChangelogReader implements ChangelogReader {
     // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
     @Override
     public void restore(final Map<TaskId, Task> tasks) {
+        //log.info("JNH: " + new ArrayList<>(tasks.values()));
         initializeChangelogs(tasks, registeredChangelogs());
 
-        if (!activeRestoringChangelogs().isEmpty()
-            && state == ChangelogReaderState.STANDBY_UPDATING) {
-            throw new IllegalStateException(
-                "Should not be in standby updating state if there are still un-completed active changelogs");
+        if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
+            throw new IllegalStateException("Should not be in standby updating state if there are still un-completed active changelogs");
         }
 
         if (allChangelogsCompleted()) {
             log.debug("Finished restoring all changelogs {}", changelogs.keySet());
-        } else {
-            final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
-            if (!restoringChangelogs.isEmpty()) {
-                final ConsumerRecords<byte[], byte[]> polledRecords;
-
-                try {
-                    // for restoring active and updating standby we may prefer different poll time
-                    // in order to make sure we call the main consumer#poll in time.
-                    // TODO: once we move ChangelogReader to a separate thread this may no longer be a concern
-                    // JNH: Fix this?
-                    // Update state based on paused/resumed status.
-                    for (final TopicPartition partition : restoringChangelogs) {
-                        final TaskId taskId = changelogs.get(partition).stateManager.taskId();
-                        final Task task = tasks.get(taskId);
-                        if (task != null) {
-                            restoreConsumer.resume(Collections.singleton(partition));
-                        } else {
-                            restoreConsumer.pause(Collections.singleton(partition));
-                        }
-                    }
-
-                    polledRecords = restoreConsumer.poll(
-                        state == ChangelogReaderState.STANDBY_UPDATING ? Duration.ZERO : pollTime);
-
-                    // TODO (?) If we cannot fetch records during restore, should we trigger `task.timeout.ms` ?
-                    // TODO (?) If we cannot fetch records for standby task, should we trigger `task.timeout.ms` ?
-                } catch (final InvalidOffsetException e) {
-                    log.warn("Encountered " + e.getClass().getName() +
-                        " fetching records from restore consumer for partitions " + e.partitions()
-                        + ", it is likely that " +
-                        "the consumer's position has fallen out of the topic partition offset range because the topic was "
-                        +
-                        "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing"
-                        +
-                        " it later.", e);
-
-                    final Set<TaskId> corruptedTasks = new HashSet<>();
-                    e.partitions().forEach(partition -> corruptedTasks.add(
-                        changelogs.get(partition).stateManager.taskId()));
-                    throw new TaskCorruptedException(corruptedTasks, e);
-                } catch (final KafkaException e) {
-                    throw new StreamsException(
-                        "Restore consumer get unexpected error polling records.", e);
-                }
-
-                // JNH: Fix this?
-                for (final TopicPartition partition : polledRecords.partitions()) {
-                    bufferChangelogRecords(restoringChangelogByPartition(partition),
-                        polledRecords.records(partition));
-                }
-
-                for (final TopicPartition partition : restoringChangelogs) {
-                    // even if some partition do not have any accumulated data, we still trigger
-                    // restoring since some changelog may not need to restore any at all, and the
-                    // restore to end check needs to be executed still.
-                    // TODO: we always try to restore as a batch when some records are accumulated, which may result in
-                    //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
-                    final TaskId taskId = changelogs.get(partition).stateManager.taskId();
-                    // JNH: Need to revisit
-                /* Skip over paused tasks
-                final Task task = tasks.get(taskId);
-                if (task != null) {
-                    try {
-                        if (restoreChangelog(changelogs.get(partition))) {
-                            task.clearTaskTimeout();
-                        }
-                    } catch (final TimeoutException timeoutException) {
-                        tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
-                            time.milliseconds(),
-                            timeoutException
-                        );
-                    }
-                }
-                */
-
-                    // Read from all topics.
-                    try {
-                        if (restoreChangelog(changelogs.get(partition))) {
-                            final Task task = tasks.get(taskId);
-                            if (task != null) {
-                                task.clearTaskTimeout();
-                            }
-                        }
-                    } catch (final TimeoutException timeoutException) {
-                        tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
-                            time.milliseconds(),
-                            timeoutException
-                        );
-                    }
-                }
-
-                maybeUpdateLimitOffsetsForStandbyChangelogs(tasks);
-
-                maybeLogRestorationProgress();
-            }
+            return;
         }
 
+        final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
+        if (!restoringChangelogs.isEmpty()) {
+            final ConsumerRecords<byte[], byte[]> polledRecords;
+
+            try {
+                // We add special handling for standby tasks.
+                pauseResumePartitions(tasks, restoringChangelogs);
+
+                // for restoring active and updating standby we may prefer different poll time
+                // in order to make sure we call the main consumer#poll in time.
+                // TODO: once we move ChangelogReader to a separate thread this may no longer be a concern
+                polledRecords = restoreConsumer.poll(state == ChangelogReaderState.STANDBY_UPDATING ? Duration.ZERO : pollTime);
+
+                // TODO (?) If we cannot fetch records during restore, should we trigger `task.timeout.ms` ?
+                // TODO (?) If we cannot fetch records for standby task, should we trigger `task.timeout.ms` ?
+            } catch (final InvalidOffsetException e) {
+                log.warn("Encountered " + e.getClass().getName() +
+                    " fetching records from restore consumer for partitions " + e.partitions() + ", it is likely that " +
+                    "the consumer's position has fallen out of the topic partition offset range because the topic was " +
+                    "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing" +
+                    " it later.", e);
+
+                final Set<TaskId> corruptedTasks = new HashSet<>();
+                e.partitions().forEach(partition -> corruptedTasks.add(changelogs.get(partition).stateManager.taskId()));
+                throw new TaskCorruptedException(corruptedTasks, e);
+            } catch (final KafkaException e) {
+                throw new StreamsException("Restore consumer get unexpected error polling records.", e);
+            }
+
+            for (final TopicPartition partition : polledRecords.partitions()) {
+                bufferChangelogRecords(restoringChangelogByPartition(partition), polledRecords.records(partition));
+            }
+
+            for (final TopicPartition partition : restoringChangelogs) {
+                // even if some partition do not have any accumulated data, we still trigger
+                // restoring since some changelog may not need to restore any at all, and the
+                // restore to end check needs to be executed still.
+                // TODO: we always try to restore as a batch when some records are accumulated, which may result in
+                //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
+                final TaskId taskId = changelogs.get(partition).stateManager.taskId();
+                try {
+                    if (restoreChangelog(changelogs.get(partition))) {
+                        final Task task = tasks.get(taskId);
+                        if (task != null) {
+                            task.clearTaskTimeout();
+                        }
+                    }
+                } catch (final TimeoutException timeoutException) {
+                    tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
+                        time.milliseconds(),
+                        timeoutException
+                    );
+                }
+            }
+
+            maybeUpdateLimitOffsetsForStandbyChangelogs(tasks);
+
+            maybeLogRestorationProgress();
+        }
+    }
+
+    private void pauseResumePartitions(final Map<TaskId, Task> tasks,
+        final Set<TopicPartition> restoringChangelogs) {
+        if (state == ChangelogReaderState.ACTIVE_RESTORING) {
+            return;
+        }
+
+        for (final TopicPartition partition : restoringChangelogs) {
+            final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+            final  TaskId taskId = manager.taskId();
+            final Task task = tasks.get(taskId);
+            if (manager.taskType() == TaskType.STANDBY) {
+                if (task != null) {
+                    restoreConsumer.resume(Collections.singleton(partition));
+                } else {
+                    restoreConsumer.pause(Collections.singleton(partition));
+                }
+            }
+        }
     }
 
     private void maybeLogRestorationProgress() {
