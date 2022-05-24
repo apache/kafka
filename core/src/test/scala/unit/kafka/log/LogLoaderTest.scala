@@ -154,13 +154,8 @@ class LogLoaderTest {
       }
     }
 
-    def initializeLogManagerForSimulatingErrorTest(hasError: Boolean = false,
-                                                 errorType: ErrorTypes.Errors = null,
-                                                 logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(logDirs.size)
-                                                ): (LogManager, Executable) = {
-      simulateError.hasError = hasError
-      simulateError.errorType = errorType
-
+    def initializeLogManagerForSimulatingErrorTest(logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(logDirs.size)
+                                                  ): (LogManager, Executable) = {
       val logManager: LogManager = interceptedLogManager(logConfig, logDirs, logDirFailureChannel)
       log = logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
 
@@ -197,7 +192,9 @@ class LogLoaderTest {
     }
 
     locally {
-      val (logManager, runLoadLogs) = initializeLogManagerForSimulatingErrorTest(true, ErrorTypes.RuntimeException, logDirFailureChannel)
+      val (logManager, runLoadLogs) = initializeLogManagerForSimulatingErrorTest(logDirFailureChannel)
+      simulateError.hasError = true
+      simulateError.errorType = ErrorTypes.RuntimeException
 
       // Simulate Runtime error
       assertThrows(classOf[RuntimeException], runLoadLogs)
