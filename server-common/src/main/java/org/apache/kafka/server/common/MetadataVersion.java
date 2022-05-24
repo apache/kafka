@@ -156,7 +156,7 @@ public enum MetadataVersion {
     IBP_3_3_IV0(5, "3.3", "IV0", false),
 
     // In KRaft mode, use BrokerRegistrationChangeRecord instead of UnfenceBrokerRecord and FenceBrokerRecord.
-    IBP_3_3_IV1(6, "3.3", "IV0", false);
+    IBP_3_3_IV1(6, "3.3", "IV1", false);
 
     public static final String FEATURE_NAME = "metadata.version";
 

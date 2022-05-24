@@ -221,8 +221,7 @@ public class ReplicationControlManager {
             if (featureControl == null) {
                 featureControl = new FeatureControlManager(logContext,
                 new QuorumFeatures(0, new ApiVersions(),
-                    Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-                            VersionRange.of(0, MetadataVersion.latest().featureLevel())),
+                    QuorumFeatures.defaultFeatureMap(),
                     Collections.singletonList(0)),
                 snapshotRegistry);
 
