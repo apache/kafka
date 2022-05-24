@@ -232,5 +232,5 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     }
   }
 
-  override def toString: String = s"LocalLeaderEndPoint with ReplicaManager"
+  override def toString: String = s"LocalLeaderEndPoint"
 }

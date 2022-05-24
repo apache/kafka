@@ -222,5 +222,5 @@ class RemoteLeaderEndPoint(logPrefix: String,
     !fetchState.isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
-  override def toString: String = s"RemoteLeaderEndPoint with ReplicaFetcherBlockingSend $blockingSender"
+  override def toString: String = s"RemoteLeaderEndPoint with $blockingSender"
 }
