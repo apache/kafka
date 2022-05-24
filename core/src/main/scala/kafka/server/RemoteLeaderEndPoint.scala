@@ -90,7 +90,6 @@ class RemoteLeaderEndPoint(logPrefix: String,
     }
   }
 
-  /* Returns the remote log start offset. */
   override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
     fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP)
   }

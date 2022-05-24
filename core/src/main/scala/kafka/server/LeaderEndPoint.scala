@@ -27,7 +27,7 @@ import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochR
 import scala.collection.Map
 
 /**
- * This trait defines the APIs to be used on the client side to access a broker that is a leader.
+ * This trait defines the APIs to be used to access a broker that is a leader.
  */
 trait LeaderEndPoint {
 
@@ -66,8 +66,7 @@ trait LeaderEndPoint {
   def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData]
 
   /**
-   * Fetches the log start offset of the given topic partition, at a specific
-   * leader epoch, from the leader.
+   * Fetches the log start offset of the given topic partition from the leader.
    *
    * @param topicPartition The topic partition that we want to fetch from
    * @param currentLeaderEpoch An int representing the current leader epoch of the requester
@@ -77,8 +76,7 @@ trait LeaderEndPoint {
   def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
   /**
-   * Fetches the log end offset of the given topic partition, at a specific
-   * leader epoch, from the leader.
+   * Fetches the log end offset of the given topic partition from the leader.
    *
    * @param topicPartition The topic partition that we want to fetch from
    * @param currentLeaderEpoch An int representing the current leader epoch of the requester
