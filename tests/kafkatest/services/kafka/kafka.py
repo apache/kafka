@@ -185,7 +185,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             "collect_default": False},
         "kafka_cluster_metadata": {
             "path": METADATA_LOG_DIR,
-            "collect_default": True},
+            "collect_default": False},
         "kafka_heap_dump_file": {
             "path": HEAP_DUMP_FILE,
             "collect_default": True}
