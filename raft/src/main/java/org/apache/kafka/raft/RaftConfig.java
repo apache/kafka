@@ -256,21 +256,6 @@ public class RaftConfig {
             .collect(Collectors.toList());
     }
 
-    public static String nodesToVoterConnections(List<Node> nodes) {
-        StringBuilder voterConnections = new StringBuilder("");
-        nodes.forEach(node -> {
-            if (!voterConnections.toString().isEmpty()) {
-                voterConnections.append(",");
-            }
-            voterConnections.append(node.idString());
-            voterConnections.append("@");
-            voterConnections.append(node.host());
-            voterConnections.append(":");
-            voterConnections.append(node.port());
-        });
-        return voterConnections.toString();
-    }
-
     public static class ControllerQuorumVotersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {

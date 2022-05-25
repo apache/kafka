@@ -31,6 +31,7 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.QuorumInfo;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -69,6 +70,7 @@ import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
@@ -100,6 +102,7 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
@@ -161,6 +164,8 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
+import org.apache.kafka.common.requests.DescribeQuorumRequest;
+import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
@@ -576,6 +581,26 @@ public class KafkaAdminClientTest {
         return new ApiVersionsResponse(
             new ApiVersionsResponseData()
                 .setThrottleTimeMs(0)
+                .setErrorCode(error.code()));
+    }
+
+    private static QuorumInfo defaultQuorumInfo() {
+        return new QuorumInfo(Topic.METADATA_TOPIC_NAME, 0,
+                singletonList(new QuorumInfo.ReplicaState()),
+                singletonList(new QuorumInfo.ReplicaState()));
+    }
+
+    private static DescribeQuorumResponse prepareDescribeQuorumResponse(Errors error) {
+        if (error == Errors.NONE) {
+            return new DescribeQuorumResponse(DescribeQuorumResponse.singletonResponse(
+                        new TopicPartition(Topic.METADATA_TOPIC_NAME, 0),
+                        0, 0, 0,
+                        singletonList(new DescribeQuorumResponseData.ReplicaState()),
+                        singletonList(new DescribeQuorumResponseData.ReplicaState()))
+                    );
+        }
+        return new DescribeQuorumResponse(
+                new DescribeQuorumResponseData()
                 .setErrorCode(error.code()));
     }
 
@@ -4828,6 +4853,32 @@ public class KafkaAdminClientTest {
             final DescribeFeaturesOptions options = new DescribeFeaturesOptions();
             options.timeoutMs(10000);
             final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(options).featureMetadata();
+            final ExecutionException e = assertThrows(ExecutionException.class, future::get);
+            assertEquals(e.getCause().getClass(), Errors.INVALID_REQUEST.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testDescribeMetadataQuorumSuccess() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create((short) 55, (short) 0, (short) 1));
+            env.kafkaClient().prepareResponse(
+                    body -> body instanceof DescribeQuorumRequest,
+                    prepareDescribeQuorumResponse(Errors.NONE));
+            final KafkaFuture<QuorumInfo> future = env.adminClient().describeMetadataQuorum().quorumInfo();
+            final QuorumInfo quorumInfo = future.get();
+            assertEquals(defaultQuorumInfo(), quorumInfo);
+        }
+    }
+
+    @Test
+    public void testDescribeMetadataQuorumFailure() {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create((short) 55, (short) 0, (short) 1));
+            env.kafkaClient().prepareResponse(
+                    body -> body instanceof DescribeQuorumRequest,
+                    prepareDescribeQuorumResponse(Errors.INVALID_REQUEST));
+            final KafkaFuture<QuorumInfo> future = env.adminClient().describeMetadataQuorum().quorumInfo();
             final ExecutionException e = assertThrows(ExecutionException.class, future::get);
             assertEquals(e.getCause().getClass(), Errors.INVALID_REQUEST.exception().getClass());
         }
