@@ -20,21 +20,21 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.QuorumInfo;
 
 /**
- * The result of {@link Admin#describeQuorum(DescribeQuorumOptions)}
+ * The result of {@link Admin#describeMetadataQuorum(DescribeMetadataQuorumOptions)}
  *
  */
-public class DescribeQuorumResult {
+public class DescribeMetadataQuorumResult {
 
-  private final KafkaFuture<QuorumInfo> quorumInfo;
+    private final KafkaFuture<QuorumInfo> quorumInfo;
 
-  public DescribeQuorumResult(KafkaFuture<QuorumInfo> quorumInfo) {
-    this.quorumInfo = quorumInfo;
-  }
+    public DescribeMetadataQuorumResult(KafkaFuture<QuorumInfo> quorumInfo) {
+        this.quorumInfo = quorumInfo;
+    }
 
-  /**
-   * Returns a future QuorumInfo
-   */
-  public KafkaFuture<QuorumInfo> quorumInfo() {
-    return quorumInfo;
-  }
+    /**
+     * Returns a future QuorumInfo
+     */
+    public KafkaFuture<QuorumInfo> quorumInfo() {
+        return quorumInfo;
+    }
 }

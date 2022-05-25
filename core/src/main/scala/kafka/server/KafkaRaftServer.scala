@@ -25,6 +25,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.controller.BootstrapMetadata
@@ -135,7 +136,7 @@ class KafkaRaftServer(
 }
 
 object KafkaRaftServer {
-  val MetadataTopic = "__cluster_metadata"
+  val MetadataTopic = Topic.METADATA_TOPIC_NAME
   val MetadataPartition = new TopicPartition(MetadataTopic, 0)
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 

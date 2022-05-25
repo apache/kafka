@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.admin;
 
 /**
- * Options for {@link ConfluentAdmin#describeQuorum(DescribeQuorumOptions)}.
+ * Options for {@link ConfluentAdmin#describeQuorum(DescribeMetadataQuorumOptions)}.
  *
  */
-public class DescribeQuorumOptions extends AbstractOptions<DescribeQuorumOptions> {
+public class DescribeMetadataQuorumOptions extends AbstractOptions<DescribeMetadataQuorumOptions> {
 
 }

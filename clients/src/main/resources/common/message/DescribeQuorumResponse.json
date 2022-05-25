@@ -20,6 +20,7 @@
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
+    // Version 1 adds LastFetchTimeStamp and LastCaughtUpTimestamp in ReplicaState
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top level error code."},
     { "name": "Topics", "type": "[]TopicData",

@@ -17,25 +17,30 @@
 package kafka.server
 
 import java.io.IOException
-
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.utils.NotNothing
+import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import kafka.utils.{NotNothing, TestUtils}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, DescribeMetadataQuorumOptions}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, DescribeQuorumRequest, DescribeQuorumResponse}
+import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
+import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
+@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")
-class DescribeQuorumRequestTest(cluster: ClusterInstance) {
+class DescribeQuorumIntegrationTest(cluster: ClusterInstance) {
+  val log = LoggerFactory.getLogger(classOf[DescribeQuorumIntegrationTest])
 
   @ClusterTest(clusterType = Type.ZK)
   def testDescribeQuorumNotSupportedByZkBrokers(): Unit = {
@@ -78,6 +83,36 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
     val leaderState = partitionData.currentVoters.asScala.find(_.replicaId == leaderId)
       .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
     assertTrue(leaderState.logEndOffset > 0)
+  }
+
+  @ClusterTest
+  def testDescribeQuorumRequestToBrokers() = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format
+      cluster.startup
+      for (i <- 0 to 3) {
+        TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
+          "Broker Never started up")
+      }
+      val props = cluster.clientProperties()
+      props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName)
+      val admin = Admin.create(props)
+      try {
+        val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
+        val quorumInfo = quorumState.quorumInfo().get()
+
+        assertEquals(KafkaRaftServer.MetadataTopic, quorumInfo.topic())
+        assertEquals(3, quorumInfo.voters.size())
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close
+    }
   }
 
   private def connectAndReceive[T <: AbstractResponse](

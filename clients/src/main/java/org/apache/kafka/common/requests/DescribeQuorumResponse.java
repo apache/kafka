@@ -106,7 +106,7 @@ public class DescribeQuorumResponse extends AbstractResponse {
             .findFirst()
             .orElse(null);
         if (topic != null) {
-           leaderId = Integer.valueOf(topic.partitions().get(partition).leaderId());
+            leaderId = Integer.valueOf(topic.partitions().get(partition).leaderId());
         }
         return leaderId;
     }
@@ -117,7 +117,7 @@ public class DescribeQuorumResponse extends AbstractResponse {
             .filter(t -> t.topicName().equals(topicName))
             .findFirst()
             .orElse(null);
-        if(topic != null) {
+        if (topic != null) {
             topic.partitions().get(partition).currentVoters().forEach(
                 v -> {
                     voterOffsets.put(v.replicaId(), v.logEndOffset());

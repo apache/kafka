@@ -263,6 +263,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -275,6 +276,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_NAME;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -324,11 +326,6 @@ public class KafkaAdminClient extends AdminClient {
 
     private final Logger log;
     private final LogContext logContext;
-
-    /**
-     * The name of the internal raft metadata topic
-     */
-    private static final String METADATA_TOPIC_NAME = "__cluster_metadata";
 
     /**
      * The default timeout to use for an operation.
@@ -4194,61 +4191,6 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeQuorumResult describeQuorum(DescribeQuorumOptions options) {
-      NodeProvider provider = new LeastLoadedNodeProvider();
-
-      final KafkaFutureImpl<QuorumInfo> future = new KafkaFutureImpl<>();
-      final long now = time.milliseconds();
-        final Call call = new Call(
-            "describeQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
-
-            private QuorumInfo createQuorumResult(final DescribeQuorumResponse response) {
-                Integer partition = 0;
-                String topicName = response.getTopicNameByIndex(partition);
-                Integer leaderId = response.getPartitionLeaderId(topicName, partition);
-                List<ReplicaState> voters = new ArrayList<>();
-                for (Map.Entry<Integer, Long> entry: response.getVoterOffsets(topicName, partition).entrySet()) {
-                    voters.add(new ReplicaState(entry.getKey(), entry.getValue()));
-                }
-                List<ReplicaState> observers = new ArrayList<>();
-                for (Map.Entry<Integer, Long> entry: response.getObserverOffsets(topicName, partition).entrySet()) {
-                    observers.add(new ReplicaState(entry.getKey(), entry.getValue()));
-                }
-                QuorumInfo info = new QuorumInfo(topicName, leaderId, voters, observers);
-               return info;
-            }
-
-            @Override
-            DescribeQuorumRequest.Builder createRequest(int timeoutMs) {
-                DescribeQuorumRequestData data = new DescribeQuorumRequestData()
-                    .setTopics(singletonList(new DescribeQuorumRequestData.TopicData()
-                        .setPartitions(singletonList(new DescribeQuorumRequestData.PartitionData()
-                            .setPartitionIndex(0)))
-                        .setTopicName(METADATA_TOPIC_NAME)));
-                return new Builder(data);
-            }
-
-            @Override
-            void handleResponse(AbstractResponse response) {
-                final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
-                if (quorumResponse.data().errorCode() == Errors.NONE.code()) {
-                    future.complete(createQuorumResult(quorumResponse));
-                } else {
-                    future.completeExceptionally(Errors.forCode(quorumResponse.data().errorCode()).exception());
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(Collections.singletonList(future), throwable);
-            }
-        };
-
-      runnable.call(call, now);
-      return new DescribeQuorumResult(future);
-    }
-
-    @Override
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
@@ -4386,6 +4328,61 @@ public class KafkaAdminClient extends AdminClient {
 
         runnable.call(call, now);
         return new UpdateFeaturesResult(new HashMap<>(updateFutures));
+    }
+
+    @Override
+    public DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options) {
+        NodeProvider provider = new LeastLoadedNodeProvider();
+
+        final KafkaFutureImpl<QuorumInfo> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call(
+                "describeQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            private QuorumInfo createQuorumResult(final DescribeQuorumResponse response) {
+                Integer partition = 0;
+                String topicName = response.getTopicNameByIndex(partition);
+                Integer leaderId = response.getPartitionLeaderId(topicName, partition);
+                List<ReplicaState> voters = new ArrayList<>();
+                for (Map.Entry<Integer, Long> entry: response.getVoterOffsets(topicName, partition).entrySet()) {
+                    voters.add(new ReplicaState(entry.getKey(), entry.getValue(), OptionalLong.empty(), OptionalLong.empty()));
+                }
+                List<ReplicaState> observers = new ArrayList<>();
+                for (Map.Entry<Integer, Long> entry: response.getObserverOffsets(topicName, partition).entrySet()) {
+                    observers.add(new ReplicaState(entry.getKey(), entry.getValue(), OptionalLong.empty(), OptionalLong.empty()));
+                }
+                QuorumInfo info = new QuorumInfo(topicName, leaderId, voters, observers);
+                return info;
+            }
+
+            @Override
+            DescribeQuorumRequest.Builder createRequest(int timeoutMs) {
+                DescribeQuorumRequestData data = new DescribeQuorumRequestData()
+                        .setTopics(singletonList(new DescribeQuorumRequestData.TopicData()
+                                .setPartitions(singletonList(new DescribeQuorumRequestData.PartitionData()
+                                        .setPartitionIndex(0)))
+                                .setTopicName(METADATA_TOPIC_NAME)));
+                return new Builder(data);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
+                if (quorumResponse.data().errorCode() == Errors.NONE.code()) {
+                    future.complete(createQuorumResult(quorumResponse));
+                } else {
+                    future.completeExceptionally(Errors.forCode(quorumResponse.data().errorCode()).exception());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(Collections.singletonList(future), throwable);
+            }
+        };
+
+        runnable.call(call, now);
+        return new DescribeMetadataQuorumResult(future);
     }
 
     @Override

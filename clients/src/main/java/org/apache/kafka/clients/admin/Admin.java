@@ -1383,23 +1383,6 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Describe the state of the raft quorum
-     * <p>
-     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
-     * the returned {@code DescribeQuorumResult}:
-     * <ul>
-     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
-     *   If the authenticated user didn't have {@code DESCRIBE} access to the cluster.</li>
-     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     *   If the request timed out before the controller could list the cluster links.</li>
-     * </ul>
-     *
-     * @param options The options to use when describing the quorum.
-     * @return The DescribeQuorumResult.
-     */
-    DescribeQuorumResult describeQuorum(DescribeQuorumOptions options);
-
-    /**
      * Describes finalized as well as supported features. The request is issued to any random
      * broker.
      * <p>
@@ -1462,6 +1445,35 @@ public interface Admin extends AutoCloseable {
      * @return the {@link UpdateFeaturesResult} containing the result
      */
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
+
+    /**
+     * Describes the state of the metadata quorum.
+     * <p>
+     * This is a convenience method for {@link #describeMetadataQuorum(DescribeMetadataQuorumOptions)}  with default options.
+     * See the overload for more details.
+     *
+     * @return the {@link DescribeMetadataQuorumResult} containing the result
+     */
+    default DescribeMetadataQuorumResult describeMetadataQuorum() {
+        return describeMetadataQuorum(new DescribeMetadataQuorumOptions());
+    }
+
+    /**
+     * Describes the state of the metadata quorum.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code DescribeMetadataQuorumResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have {@code DESCRIBE} access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the controller could list the cluster links.</li>
+     * </ul>
+     *
+     * @param options The {@link DescribeMetadataQuorumOptions} to use when describing the quorum.
+     * @return the {@link DescribeMetadataQuorumResult} containing the result
+     */
+    DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options);
 
     /**
      * Unregister a broker.
