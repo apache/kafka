@@ -243,11 +243,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         public synchronized long append(LocalBatch batch) {
-            try {
-                throw new RuntimeException("foo");
-            } catch (Exception e) {
-                log.info("WATERMELON: appending {}", batch, e);
-            }
             prevOffset += batch.size();
             log.debug("append(batch={}, prevOffset={})", batch, prevOffset);
             batches.put(prevOffset, batch);

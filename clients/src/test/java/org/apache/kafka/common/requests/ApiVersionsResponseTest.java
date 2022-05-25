@@ -17,9 +17,9 @@
 
 package org.apache.kafka.common.requests;
 
+import java.util.Collections;
 import java.util.HashSet;
 import org.apache.kafka.common.feature.Features;
-import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiMessageType.ListenerType;
@@ -116,7 +116,7 @@ public class ApiVersionsResponseTest {
             10,
             RecordVersion.V1,
             Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
+            Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER
@@ -135,8 +135,7 @@ public class ApiVersionsResponseTest {
             RecordVersion.V1,
             Features.supportedFeatures(
                 Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4)))),
-            Features.finalizedFeatures(
-                Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange((short) 2, (short) 3)))),
+            Utils.mkMap(Utils.mkEntry("feature", (short) 3)),
             10L,
             null,
             ListenerType.ZK_BROKER
@@ -152,7 +151,7 @@ public class ApiVersionsResponseTest {
         assertEquals(1, response.data().finalizedFeatures().size());
         FinalizedFeatureKey fKey = response.data().finalizedFeatures().find("feature");
         assertNotNull(fKey);
-        assertEquals(2, fKey.minVersionLevel());
+        assertEquals(3, fKey.minVersionLevel());
         assertEquals(3, fKey.maxVersionLevel());
         assertEquals(10, response.data().finalizedFeaturesEpoch());
     }
@@ -163,7 +162,7 @@ public class ApiVersionsResponseTest {
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
+            Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER
@@ -181,7 +180,7 @@ public class ApiVersionsResponseTest {
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
             Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
+            Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER

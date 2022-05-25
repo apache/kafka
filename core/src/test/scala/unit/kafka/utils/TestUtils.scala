@@ -32,7 +32,7 @@ import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, AlterPartitionListener}
+import kafka.cluster.{AlterPartitionListener, Broker, EndPoint}
 import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
 import kafka.log._
 import kafka.network.RequestChannel
@@ -66,7 +66,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaFuture, TopicPartition}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition, Uuid}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
@@ -382,6 +382,34 @@ object TestUtils extends Logging {
     Admin.create(adminClientProperties)
   }
 
+  def createTopicWithAdminRaw[B <: KafkaBroker](
+    admin: Admin,
+    topic: String,
+    numPartitions: Int = 1,
+    replicationFactor: Int = 1,
+    replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
+    topicConfig: Properties = new Properties,
+  ): Uuid = {
+    val configsMap = new util.HashMap[String, String]()
+    topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
+
+    val result = if (replicaAssignment.isEmpty) {
+      admin.createTopics(Collections.singletonList(new NewTopic(
+        topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+    } else {
+      val assignment = new util.HashMap[Integer, util.List[Integer]]()
+      replicaAssignment.forKeyValue { case (k, v) =>
+        val replicas = new util.ArrayList[Integer]
+        v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
+        assignment.put(k.asInstanceOf[Integer], replicas)
+      }
+      admin.createTopics(Collections.singletonList(new NewTopic(
+        topic, assignment).configs(configsMap)))
+    }
+
+    result.topicId(topic).get()
+}
+
   def createTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
     topic: String,
@@ -397,23 +425,15 @@ object TestUtils extends Logging {
       replicaAssignment.size
     }
 
-    val configsMap = new util.HashMap[String, String]()
-    topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
     try {
-      val result = if (replicaAssignment.isEmpty) {
-        admin.createTopics(Collections.singletonList(new NewTopic(
-          topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
-      } else {
-        val assignment = new util.HashMap[Integer, util.List[Integer]]()
-        replicaAssignment.forKeyValue { case (k, v) =>
-          val replicas = new util.ArrayList[Integer]
-          v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
-          assignment.put(k.asInstanceOf[Integer], replicas)
-        }
-        admin.createTopics(Collections.singletonList(new NewTopic(
-          topic, assignment).configs(configsMap)))
-      }
-      result.all().get()
+      createTopicWithAdminRaw(
+        admin,
+        topic,
+        numPartitions,
+        replicationFactor,
+        replicaAssignment,
+        topicConfig
+      )
     } catch {
       case e: ExecutionException => if (!(e.getCause != null &&
           e.getCause.isInstanceOf[TopicExistsException] &&
@@ -432,16 +452,24 @@ object TestUtils extends Logging {
     }.toMap
   }
 
+  def describeTopic(
+    admin: Admin,
+    topic: String
+  ): TopicDescription = {
+    val describedTopics = admin.describeTopics(
+      Collections.singleton(topic)
+    ).allTopicNames().get()
+    describedTopics.get(topic)
+  }
+
   def topicHasSameNumPartitionsAndReplicationFactor(adminClient: Admin,
                                                     topic: String,
                                                     numPartitions: Int,
                                                     replicationFactor: Int): Boolean = {
-    val describedTopics = adminClient.describeTopics(Collections.
-      singleton(topic)).allTopicNames().get()
-    val description = describedTopics.get(topic)
-    (description != null &&
+    val description = describeTopic(adminClient, topic)
+    description != null &&
       description.partitions().size() == numPartitions &&
-      description.partitions().iterator().next().replicas().size() == replicationFactor)
+      description.partitions().iterator().next().replicas().size() == replicationFactor
   }
 
   def createOffsetsTopicWithAdmin[B <: KafkaBroker](

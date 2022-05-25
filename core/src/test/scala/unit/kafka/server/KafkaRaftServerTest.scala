@@ -19,11 +19,11 @@ package kafka.server
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException}
 import kafka.log.UnifiedLog
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.controller.BootstrapMetadata
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -44,7 +44,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
 
-    val (loadedMetaProperties, offlineDirs) =
+    val (loadedMetaProperties, _, offlineDirs) =
       invokeLoadMetaProperties(metaProperties, configProperties)
 
     assertEquals(metaProperties, loadedMetaProperties)
@@ -72,7 +72,7 @@ class KafkaRaftServerTest {
   private def invokeLoadMetaProperties(
     metaProperties: MetaProperties,
     configProperties: Properties
-  ): (MetaProperties, collection.Seq[String]) = {
+  ): (MetaProperties, BootstrapMetadata, collection.Seq[String]) = {
     val tempLogDir = TestUtils.tempDirectory()
     try {
       writeMetaProperties(tempLogDir, metaProperties)
@@ -159,7 +159,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
 
-    val (loadedProperties, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
+    val (loadedProperties, _, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
     assertEquals(nodeId, loadedProperties.nodeId)
     assertEquals(Seq(invalidDir.getAbsolutePath), offlineDirs)
   }

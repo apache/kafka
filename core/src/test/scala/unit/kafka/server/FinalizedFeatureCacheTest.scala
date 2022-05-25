@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -37,9 +37,7 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(1, 4))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 4)
 
     val cache = new FinalizedFeatureCache(brokerFeatures)
     cache.updateOrThrow(finalizedFeatures, 10)
@@ -62,9 +60,7 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(1, 2))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 2)
 
     val cache = new FinalizedFeatureCache(brokerFeatures)
     assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateOrThrow(finalizedFeatures, 12))
@@ -80,9 +76,7 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 
     val cache = new FinalizedFeatureCache(brokerFeatures)
     cache.updateOrThrow(finalizedFeatures, 12)
@@ -98,9 +92,7 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 
     val cache = new FinalizedFeatureCache(brokerFeatures)
     cache.updateOrThrow(finalizedFeatures, 12)

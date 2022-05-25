@@ -34,7 +34,7 @@ public class MetadataVersionValidator implements Validator {
 
     @Override
     public String toString() {
-        return "[" + Arrays.stream(MetadataVersion.VALUES).map(MetadataVersion::version).collect(
+        return "[" + Arrays.stream(MetadataVersion.VERSIONS).map(MetadataVersion::version).collect(
              Collectors.joining(", ")) + "]";
     }
 }

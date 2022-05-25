@@ -18,8 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.{Collections, Optional, Properties}
-
-import kafka.cluster.Partition
+import kafka.cluster.{Partition, PartitionTest}
 import kafka.log.{LogManager, LogOffsetSnapshot, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
@@ -32,9 +31,9 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
 import org.mockito.Mockito.{mock, when}
+import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 
 import scala.jdk.CollectionConverters._
 
@@ -65,18 +64,10 @@ class ReplicaManagerQuotasTest {
       .thenReturn(false)
       .thenReturn(true)
 
-    val fetch = replicaManager.readFromLocalLog(
-      replicaId = followerReplicaId,
-      fetchOnlyFromLeader = true,
-      fetchIsolation = FetchHighWatermark,
-      fetchMaxBytes = Int.MaxValue,
-      hardMaxBytesLimit = false,
-      readPartitionInfo = fetchInfo,
-      quota = quota,
-      clientMetadata = None)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
+    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with only one throttled, we should get the first")
-
     assertEquals(0, fetch.find(_._1 == topicIdPartition2).get._2.info.records.batches.asScala.size,
       "But we shouldn't get the second")
   }
@@ -91,15 +82,8 @@ class ReplicaManagerQuotasTest {
       .thenReturn(true)
       .thenReturn(true)
 
-    val fetch = replicaManager.readFromLocalLog(
-      replicaId = followerReplicaId,
-      fetchOnlyFromLeader = true,
-      fetchIsolation = FetchHighWatermark,
-      fetchMaxBytes = Int.MaxValue,
-      hardMaxBytesLimit = false,
-      readPartitionInfo = fetchInfo,
-      quota = quota,
-      clientMetadata = None)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
+    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(0, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with both throttled, we should get no messages")
     assertEquals(0, fetch.find(_._1 == topicIdPartition2).get._2.info.records.batches.asScala.size,
@@ -116,15 +100,8 @@ class ReplicaManagerQuotasTest {
       .thenReturn(false)
       .thenReturn(false)
 
-    val fetch = replicaManager.readFromLocalLog(
-      replicaId = followerReplicaId,
-      fetchOnlyFromLeader = true,
-      fetchIsolation = FetchHighWatermark,
-      fetchMaxBytes = Int.MaxValue,
-      hardMaxBytesLimit = false,
-      readPartitionInfo = fetchInfo,
-      quota = quota,
-      clientMetadata = None)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
+    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with both non-throttled, we should get both messages")
     assertEquals(1, fetch.find(_._1 == topicIdPartition2).get._2.info.records.batches.asScala.size,
@@ -141,15 +118,8 @@ class ReplicaManagerQuotasTest {
       .thenReturn(false)
       .thenReturn(true)
 
-    val fetch = replicaManager.readFromLocalLog(
-      replicaId = followerReplicaId,
-      fetchOnlyFromLeader = true,
-      fetchIsolation = FetchHighWatermark,
-      fetchMaxBytes = Int.MaxValue,
-      hardMaxBytesLimit = false,
-      readPartitionInfo = fetchInfo,
-      quota = quota,
-      clientMetadata = None)
+    val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
+    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with only one throttled, we should get the first")
 
@@ -164,19 +134,10 @@ class ReplicaManagerQuotasTest {
     val quota = mockQuota()
     when(quota.isQuotaExceeded).thenReturn(true)
 
-    val fetch = replicaManager.readFromLocalLog(
-      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-      fetchOnlyFromLeader = true,
-      fetchIsolation = FetchHighWatermark,
-      fetchMaxBytes = Int.MaxValue,
-      hardMaxBytesLimit = false,
-      readPartitionInfo = fetchInfo,
-      quota = quota,
-      clientMetadata = None).toMap
-
+    val fetchParams = PartitionTest.consumerFetchParams()
+    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false).toMap
     assertEquals(1, fetch(topicIdPartition1).info.records.batches.asScala.size,
       "Replication throttled partitions should return data for consumer fetch")
-
     assertEquals(1, fetch(topicIdPartition2).info.records.batches.asScala.size,
       "Replication throttled partitions should return data for consumer fetch")
   }
@@ -315,6 +276,10 @@ class ReplicaManagerQuotasTest {
         MemoryRecords.EMPTY
       ))
 
+    when(log.maybeIncrementHighWatermark(
+      any[LogOffsetMetadata]
+    )).thenReturn(None)
+
     //Create log manager
     val logManager: LogManager = mock(classOf[LogManager])
 
@@ -345,7 +310,8 @@ class ReplicaManagerQuotasTest {
       partition.setLog(log, isFutureLog = false)
 
       partition.updateAssignmentAndIsr(
-        assignment = Seq(leaderBrokerId, configs.last.brokerId),
+        replicas = Seq(leaderBrokerId, configs.last.brokerId),
+        isLeader = true,
         isr = if (bothReplicasInSync) Set(leaderBrokerId, configs.last.brokerId) else Set(leaderBrokerId),
         addingReplicas = Seq.empty,
         removingReplicas = Seq.empty,
@@ -366,4 +332,5 @@ class ReplicaManagerQuotasTest {
     when(quota.isThrottled(any[TopicPartition])).thenReturn(true)
     quota
   }
+
 }

@@ -115,6 +115,7 @@ class StreamsBrokerCompatibility(Test):
         self.consumer.stop()
         self.kafka.stop()
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_2_8))
     @parametrize(broker_version=str(LATEST_2_7))
     @parametrize(broker_version=str(LATEST_2_6))

@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,16 +38,23 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
  * This class is thread-safe.
  */
 public final class FeaturesImage {
-    public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap());
+    public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap(), MetadataVersion.UNINITIALIZED);
 
     private final Map<String, Short> finalizedVersions;
 
-    public FeaturesImage(Map<String, Short> finalizedVersions) {
+    private final MetadataVersion metadataVersion;
+
+    public FeaturesImage(Map<String, Short> finalizedVersions, MetadataVersion metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {
         return finalizedVersions.isEmpty();
+    }
+
+    public MetadataVersion metadataVersion() {
+        return metadataVersion;
     }
 
     Map<String, Short> finalizedVersions() {
@@ -59,7 +67,16 @@ public final class FeaturesImage {
 
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
         List<ApiMessageAndVersion> batch = new ArrayList<>();
+        // Write out the metadata.version record first, and then the rest of the finalized features
+        if (!metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+            batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+        }
         for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
+            if (entry.getKey().equals(MetadataVersion.FEATURE_NAME)) {
+                continue;
+            }
             batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(entry.getKey()).
                 setFeatureLevel(entry.getValue()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
@@ -84,6 +101,7 @@ public final class FeaturesImage {
     public String toString() {
         return "FeaturesImage{" +
                 "finalizedVersions=" + finalizedVersions +
+                ", metadataVersion=" + metadataVersion +
                 '}';
     }
 }

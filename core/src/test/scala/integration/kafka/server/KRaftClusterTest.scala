@@ -30,18 +30,19 @@ import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, Descr
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
-import java.util
-import java.util.concurrent.ExecutionException
-import java.util.{Arrays, Collections, Optional}
 
+import java.util
+import java.util.{Arrays, Collections, Optional}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.server.common.MetadataVersion
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
 import scala.collection.mutable
+import scala.concurrent.ExecutionException
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
@@ -69,8 +70,8 @@ class KRaftClusterTest {
   def testCreateClusterAndWaitForBrokerInRunningState(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumBrokerNodes(3).
-        setNumControllerNodes(3).build()).build()
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
     try {
       cluster.format()
       cluster.startup()
@@ -290,6 +291,17 @@ class KRaftClusterTest {
           assertEquals(broker.id + 100, broker.port, "Did not advertise configured advertised port")
         }
     }
+  }
+
+  @Test
+  def testCreateClusterInvalidMetadataVersion(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => {
+      new KafkaClusterTestKit.Builder(
+        new TestKitNodes.Builder().
+          setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
+          setNumBrokerNodes(1).
+          setNumControllerNodes(1).build()).build()
+    })
   }
 
   private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,

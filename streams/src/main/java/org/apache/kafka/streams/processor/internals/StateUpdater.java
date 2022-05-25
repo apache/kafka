@@ -65,14 +65,24 @@ public interface StateUpdater {
     /**
      * Get all tasks (active and standby) that are managed by the state updater.
      *
-     * @return list of tasks managed by the state updater
+     * @return set of tasks managed by the state updater
      */
     Set<Task> getAllTasks();
+
+    /**
+     * Get standby tasks that are managed by the state updater.
+     *
+     * @return set of standby tasks managed by the state updater
+     */
+    Set<StandbyTask> getStandbyTasks();
 
     /**
      * Shuts down the state updater.
      *
      * @param timeout duration how long to wait until the state updater is shut down
+     *
+     * @throws
+     *     org.apache.kafka.streams.errors.StreamsException if the state updater thread cannot shutdown within the timeout
      */
     void shutdown(final Duration timeout);
 }
