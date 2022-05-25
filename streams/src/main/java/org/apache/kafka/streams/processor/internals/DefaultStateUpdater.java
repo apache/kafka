@@ -37,12 +37,14 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class DefaultStateUpdater implements StateUpdater {
@@ -54,13 +56,13 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private final ChangelogReader changelogReader;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
-        private final java.util.function.Consumer<Set<TopicPartition>> offsetResetter;
+        private final Consumer<Set<TopicPartition>> offsetResetter;
         private final Map<TaskId, Task> updatingTasks = new HashMap<>();
         private final Logger log;
 
         public StateUpdaterThread(final String name,
                                   final ChangelogReader changelogReader,
-                                  final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+                                  final Consumer<Set<TopicPartition>> offsetResetter) {
             super(name);
             this.changelogReader = changelogReader;
             this.offsetResetter = offsetResetter;
@@ -74,30 +76,44 @@ public class DefaultStateUpdater implements StateUpdater {
             return updatingTasks.values();
         }
 
+        public Collection<StandbyTask> getUpdatingStandbyTasks() {
+            return updatingTasks.values().stream()
+                .filter(t -> !t.isActive())
+                .map(t -> (StandbyTask) t)
+                .collect(Collectors.toList());
+        }
+
+        public boolean onlyStandbyTasksLeft() {
+            return !updatingTasks.isEmpty() && updatingTasks.values().stream().allMatch(t -> !t.isActive());
+        }
+
         @Override
         public void run() {
+            log.info("State updater thread started");
             try {
                 while (isRunning.get()) {
                     try {
-                        performActionsOnTasks();
-                        restoreTasks();
-                        waitIfAllChangelogsCompletelyRead();
+                        runOnce();
                     } catch (final InterruptedException interruptedException) {
                         return;
                     }
                 }
             } catch (final RuntimeException anyOtherException) {
-                log.error("An unexpected error occurred within the state updater thread: " + anyOtherException);
-                final ExceptionAndTasks exceptionAndTasks = new ExceptionAndTasks(new HashSet<>(updatingTasks.values()), anyOtherException);
-                updatingTasks.clear();
-                failedTasks.add(exceptionAndTasks);
-                isRunning.set(false);
+                handleRuntimeException(anyOtherException);
             } finally {
                 clear();
+                shutdownGate.countDown();
+                log.info("State updater thread shutdown");
             }
         }
 
-        private void performActionsOnTasks() throws InterruptedException {
+        private void runOnce() throws InterruptedException {
+            performActionsOnTasks();
+            restoreTasks();
+            waitIfAllChangelogsCompletelyRead();
+        }
+
+        private void performActionsOnTasks() {
             tasksAndActionsLock.lock();
             try {
                 for (final TaskAndAction taskAndAction : getTasksAndActions()) {
@@ -114,10 +130,8 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void restoreTasks() throws InterruptedException {
+        private void restoreTasks() {
             try {
-                // ToDo: Prioritize restoration of active tasks over standby tasks
-                //                changelogReader.enforceRestoreActive();
                 changelogReader.restore(updatingTasks);
             } catch (final TaskCorruptedException taskCorruptedException) {
                 handleTaskCorruptedException(taskCorruptedException);
@@ -127,11 +141,20 @@ public class DefaultStateUpdater implements StateUpdater {
             final Set<TopicPartition> completedChangelogs = changelogReader.completedChangelogs();
             final List<Task> activeTasks = updatingTasks.values().stream().filter(Task::isActive).collect(Collectors.toList());
             for (final Task task : activeTasks) {
-                endRestorationIfChangelogsCompletelyRead(task, completedChangelogs);
+                maybeCompleteRestoration((StreamTask) task, completedChangelogs);
             }
         }
 
+        private void handleRuntimeException(final RuntimeException runtimeException) {
+            log.error("An unexpected error occurred within the state updater thread: " + runtimeException);
+            final ExceptionAndTasks exceptionAndTasks = new ExceptionAndTasks(new HashSet<>(updatingTasks.values()), runtimeException);
+            updatingTasks.clear();
+            failedTasks.add(exceptionAndTasks);
+            isRunning.set(false);
+        }
+
         private void handleTaskCorruptedException(final TaskCorruptedException taskCorruptedException) {
+            log.info("Encountered task corrupted exception: ", taskCorruptedException);
             final Set<TaskId> corruptedTaskIds = taskCorruptedException.corruptedTasks();
             final Set<Task> corruptedTasks = new HashSet<>();
             for (final TaskId taskId : corruptedTaskIds) {
@@ -145,6 +168,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void handleStreamsException(final StreamsException streamsException) {
+            log.info("Encountered streams exception: ", streamsException);
             final ExceptionAndTasks exceptionAndTasks;
             if (streamsException.taskId().isPresent()) {
                 exceptionAndTasks = handleStreamsExceptionWithTask(streamsException);
@@ -191,8 +215,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 tasksAndActions.clear();
                 restoredActiveTasks.clear();
             } finally {
-                tasksAndActionsLock.unlock();
                 restoredActiveTasksLock.unlock();
+                tasksAndActionsLock.unlock();
             }
             changelogReader.clear();
             updatingTasks.clear();
@@ -206,9 +230,20 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void addTask(final Task task) {
             if (isStateless(task)) {
+                log.debug("Stateless active task " + task.id() + " was added to the state updater");
                 addTaskToRestoredTasks((StreamTask) task);
             } else {
-                updatingTasks.put(task.id(), task);
+                if (task.isActive()) {
+                    updatingTasks.put(task.id(), task);
+                    log.debug("Stateful active task " + task.id() + " was added to the state updater");
+                    changelogReader.enforceRestoreActive();
+                } else {
+                    updatingTasks.put(task.id(), task);
+                    log.debug("Standby task " + task.id() + " was added to the state updater");
+                    if (updatingTasks.size() == 1) {
+                        changelogReader.transitToUpdateStandby();
+                    }
+                }
             }
         }
 
@@ -216,13 +251,17 @@ public class DefaultStateUpdater implements StateUpdater {
             return task.changelogPartitions().isEmpty() && task.isActive();
         }
 
-        private void endRestorationIfChangelogsCompletelyRead(final Task task,
-                                                              final Set<TopicPartition> restoredChangelogs) {
+        private void maybeCompleteRestoration(final StreamTask task,
+                                              final Set<TopicPartition> restoredChangelogs) {
             final Collection<TopicPartition> taskChangelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(taskChangelogPartitions)) {
                 task.completeRestoration(offsetResetter);
-                addTaskToRestoredTasks((StreamTask) task);
+                log.debug("Stateful active task " + task.id() + " completed restoration");
+                addTaskToRestoredTasks(task);
                 updatingTasks.remove(task.id());
+                if (onlyStandbyTasksLeft()) {
+                    changelogReader.transitToUpdateStandby();
+                }
             }
         }
 
@@ -230,6 +269,7 @@ public class DefaultStateUpdater implements StateUpdater {
             restoredActiveTasksLock.lock();
             try {
                 restoredActiveTasks.add(task);
+                log.debug("Active task " + task.id() + " was added to the restored tasks");
                 restoredActiveTasksCondition.signalAll();
             } finally {
                 restoredActiveTasksLock.unlock();
@@ -253,7 +293,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
     private final Time time;
     private final ChangelogReader changelogReader;
-    private final java.util.function.Consumer<Set<TopicPartition>> offsetResetter;
+    private final Consumer<Set<TopicPartition>> offsetResetter;
     private final Queue<TaskAndAction> tasksAndActions = new LinkedList<>();
     private final Lock tasksAndActionsLock = new ReentrantLock();
     private final Condition tasksAndActionsCondition = tasksAndActionsLock.newCondition();
@@ -261,11 +301,12 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Lock restoredActiveTasksLock = new ReentrantLock();
     private final Condition restoredActiveTasksCondition = restoredActiveTasksLock.newCondition();
     private final BlockingQueue<ExceptionAndTasks> failedTasks = new LinkedBlockingQueue<>();
+    private CountDownLatch shutdownGate;
 
     private StateUpdaterThread stateUpdaterThread = null;
 
     public DefaultStateUpdater(final ChangelogReader changelogReader,
-                               final java.util.function.Consumer<Set<TopicPartition>> offsetResetter,
+                               final Consumer<Set<TopicPartition>> offsetResetter,
                                final Time time) {
         this.changelogReader = changelogReader;
         this.offsetResetter = offsetResetter;
@@ -277,6 +318,7 @@ public class DefaultStateUpdater implements StateUpdater {
         if (stateUpdaterThread == null) {
             stateUpdaterThread = new StateUpdaterThread("state-updater", changelogReader, offsetResetter);
             stateUpdaterThread.start();
+            shutdownGate = new CountDownLatch(1);
         }
 
         verifyStateFor(task);
@@ -293,6 +335,9 @@ public class DefaultStateUpdater implements StateUpdater {
     private void verifyStateFor(final Task task) {
         if (task.isActive() && task.state() != State.RESTORING) {
             throw new IllegalStateException("Active task " + task.id() + " is not in state RESTORING. " + BUG_ERROR_MESSAGE);
+        }
+        if (!task.isActive() && task.state() != State.RUNNING) {
+            throw new IllegalStateException("Standby task " + task.id() + " is not in state RUNNING. " + BUG_ERROR_MESSAGE);
         }
     }
 
@@ -315,9 +360,8 @@ public class DefaultStateUpdater implements StateUpdater {
                         final boolean elapsed = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
                         now = time.milliseconds();
                     }
-                    while (!restoredActiveTasks.isEmpty()) {
-                        result.add(restoredActiveTasks.poll());
-                    }
+                    result.addAll(restoredActiveTasks);
+                    restoredActiveTasks.clear();
                 } finally {
                     restoredActiveTasksLock.unlock();
                 }
@@ -352,9 +396,31 @@ public class DefaultStateUpdater implements StateUpdater {
             allTasks.addAll(restoredActiveTasks);
             return Collections.unmodifiableSet(allTasks);
         } finally {
-            tasksAndActionsLock.unlock();
             restoredActiveTasksLock.unlock();
+            tasksAndActionsLock.unlock();
         }
+    }
+
+    @Override
+    public Set<StandbyTask> getStandbyTasks() {
+        tasksAndActionsLock.lock();
+        try {
+            final Set<StandbyTask> standbyTasks = new HashSet<>();
+            standbyTasks.addAll(tasksAndActions.stream()
+                .filter(t -> t.action == Action.ADD)
+                .filter(t -> !t.task.isActive())
+                .map(t -> (StandbyTask) t.task)
+                .collect(Collectors.toList())
+            );
+            standbyTasks.addAll(getUpdatingStandbyTasks());
+            return Collections.unmodifiableSet(standbyTasks);
+        } finally {
+            tasksAndActionsLock.unlock();
+        }
+    }
+
+    public Set<StandbyTask> getUpdatingStandbyTasks() {
+        return Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingStandbyTasks()));
     }
 
     @Override
@@ -363,10 +429,11 @@ public class DefaultStateUpdater implements StateUpdater {
             stateUpdaterThread.isRunning.set(false);
             stateUpdaterThread.interrupt();
             try {
-                stateUpdaterThread.join(timeout.toMillis());
+                if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                    throw new StreamsException("State updater thread did not shutdown within the timeout");
+                }
                 stateUpdaterThread = null;
-            } catch (final InterruptedException e) {
-                // ignore
+            } catch (final InterruptedException ignored) {
             }
         }
     }
