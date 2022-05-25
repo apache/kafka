@@ -25,18 +25,20 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.{mock, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
+
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
-
 import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
 
+@Timeout(300)
 class LogOffsetTest extends BaseRequestTest {
 
   private lazy val time = new MockTime
