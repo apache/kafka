@@ -25,8 +25,10 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -43,6 +45,8 @@ import static java.time.Duration.ofSeconds;
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
 
