@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.QuorumInfo;
 
 /**
  * The result of {@link Admin#describeMetadataQuorum(DescribeMetadataQuorumOptions)}
@@ -27,7 +26,7 @@ public class DescribeMetadataQuorumResult {
 
     private final KafkaFuture<QuorumInfo> quorumInfo;
 
-    public DescribeMetadataQuorumResult(KafkaFuture<QuorumInfo> quorumInfo) {
+    DescribeMetadataQuorumResult(KafkaFuture<QuorumInfo> quorumInfo) {
         this.quorumInfo = quorumInfo;
     }
 

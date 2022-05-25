@@ -31,7 +31,6 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.QuorumInfo;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -586,22 +585,30 @@ public class KafkaAdminClientTest {
 
     private static QuorumInfo defaultQuorumInfo() {
         return new QuorumInfo(Topic.METADATA_TOPIC_NAME, 0,
-                singletonList(new QuorumInfo.ReplicaState()),
-                singletonList(new QuorumInfo.ReplicaState()));
+                singletonList(new QuorumInfo.ReplicaState(1, 100,
+                        OptionalLong.of(1000), OptionalLong.of(1000))),
+                singletonList(new QuorumInfo.ReplicaState(1, 100,
+                        OptionalLong.of(1000), OptionalLong.of(1000))));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(Errors error) {
         if (error == Errors.NONE) {
             return new DescribeQuorumResponse(DescribeQuorumResponse.singletonResponse(
-                        new TopicPartition(Topic.METADATA_TOPIC_NAME, 0),
-                        0, 0, 0,
-                        singletonList(new DescribeQuorumResponseData.ReplicaState()),
-                        singletonList(new DescribeQuorumResponseData.ReplicaState()))
-                    );
+                    new TopicPartition(Topic.METADATA_TOPIC_NAME, 0),
+                    0, 0, 0,
+                    singletonList(new DescribeQuorumResponseData.ReplicaState()
+                            .setReplicaId(1)
+                            .setLogEndOffset(100)
+                            .setLastFetchTimestamp(1000)
+                            .setLastCaughtUpTimestamp(1000)),
+                    singletonList(new DescribeQuorumResponseData.ReplicaState()
+                            .setReplicaId(1)
+                            .setLogEndOffset(100)
+                            .setLastFetchTimestamp(1000)
+                            .setLastCaughtUpTimestamp(1000)))
+            );
         }
-        return new DescribeQuorumResponse(
-                new DescribeQuorumResponseData()
-                .setErrorCode(error.code()));
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData().setErrorCode(error.code()));
     }
 
     /**
@@ -4879,8 +4886,7 @@ public class KafkaAdminClientTest {
                     body -> body instanceof DescribeQuorumRequest,
                     prepareDescribeQuorumResponse(Errors.INVALID_REQUEST));
             final KafkaFuture<QuorumInfo> future = env.adminClient().describeMetadataQuorum().quorumInfo();
-            final ExecutionException e = assertThrows(ExecutionException.class, future::get);
-            assertEquals(e.getCause().getClass(), Errors.INVALID_REQUEST.exception().getClass());
+            TestUtils.assertFutureThrows(future, Errors.INVALID_REQUEST.exception().getClass());
         }
     }
 

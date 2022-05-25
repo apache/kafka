@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
@@ -25,10 +26,12 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 
 /**
  * Possible error codes.
@@ -111,8 +114,8 @@ public class DescribeQuorumResponse extends AbstractResponse {
         return leaderId;
     }
 
-    public Map<Integer, Long> getVoterOffsets(String topicName, Integer partition) {
-        Map<Integer, Long> voterOffsets = new HashMap<>();
+    public List<QuorumInfo.ReplicaState> getVoterInfo(String topicName, Integer partition) {
+        List<QuorumInfo.ReplicaState> voterInfo = new ArrayList<>();
         TopicData topic = data.topics().stream()
             .filter(t -> t.topicName().equals(topicName))
             .findFirst()
@@ -120,25 +123,31 @@ public class DescribeQuorumResponse extends AbstractResponse {
         if (topic != null) {
             topic.partitions().get(partition).currentVoters().forEach(
                 v -> {
-                    voterOffsets.put(v.replicaId(), v.logEndOffset());
-                }
-            );
+                    voterInfo.add(new QuorumInfo.ReplicaState(v.replicaId(),
+                            v.logEndOffset(),
+                            OptionalLong.of(v.lastFetchTimestamp()),
+                            OptionalLong.of(v.lastCaughtUpTimestamp())));
+                });
         }
-        return voterOffsets;
+        return voterInfo;
     }
 
-    public Map<Integer, Long> getObserverOffsets(String topicName, Integer partition) {
-        Map<Integer, Long> observerOffsets = new HashMap<>();
+    public List<QuorumInfo.ReplicaState> getObserverInfo(String topicName, Integer partition) {
+        List<QuorumInfo.ReplicaState> observerInfo = new ArrayList<>();
         TopicData topic = data.topics().stream()
-            .filter(t -> t.topicName().equals(topicName))
-            .findFirst()
-            .orElse(null);
-        topic.partitions().get(partition).observers().forEach(
-            o -> {
-                observerOffsets.put(o.replicaId(), o.logEndOffset());
-            }
-        );
-        return observerOffsets;
+                .filter(t -> t.topicName().equals(topicName))
+                .findFirst()
+                .orElse(null);
+        if (topic != null) {
+            topic.partitions().get(partition).observers().forEach(
+                    v -> {
+                        observerInfo.add(new QuorumInfo.ReplicaState(v.replicaId(),
+                                v.logEndOffset(),
+                                OptionalLong.of(v.lastFetchTimestamp()),
+                                OptionalLong.of(v.lastCaughtUpTimestamp())));
+                    });
+        }
+        return observerInfo;
     }
 
 }

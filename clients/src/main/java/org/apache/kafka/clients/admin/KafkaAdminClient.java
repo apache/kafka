@@ -63,8 +63,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.QuorumInfo;
-import org.apache.kafka.common.QuorumInfo.ReplicaState;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicCollection.TopicIdCollection;
 import org.apache.kafka.common.TopicCollection.TopicNameCollection;
@@ -263,7 +261,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -4337,20 +4334,16 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<QuorumInfo> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final Call call = new Call(
-                "describeQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
+                "describeMetadataQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
 
             private QuorumInfo createQuorumResult(final DescribeQuorumResponse response) {
                 Integer partition = 0;
                 String topicName = response.getTopicNameByIndex(partition);
                 Integer leaderId = response.getPartitionLeaderId(topicName, partition);
-                List<ReplicaState> voters = new ArrayList<>();
-                for (Map.Entry<Integer, Long> entry: response.getVoterOffsets(topicName, partition).entrySet()) {
-                    voters.add(new ReplicaState(entry.getKey(), entry.getValue(), OptionalLong.empty(), OptionalLong.empty()));
-                }
-                List<ReplicaState> observers = new ArrayList<>();
-                for (Map.Entry<Integer, Long> entry: response.getObserverOffsets(topicName, partition).entrySet()) {
-                    observers.add(new ReplicaState(entry.getKey(), entry.getValue(), OptionalLong.empty(), OptionalLong.empty()));
-                }
+                List<QuorumInfo.ReplicaState> voters = new ArrayList<>();
+                List<QuorumInfo.ReplicaState> observers = new ArrayList<>();
+                response.getVoterInfo(topicName, partition).forEach(voters::add);
+                response.getObserverInfo(topicName, partition).forEach(observers::add);
                 QuorumInfo info = new QuorumInfo(topicName, leaderId, voters, observers);
                 return info;
             }
@@ -4377,7 +4370,8 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                completeAllExceptionally(Collections.singletonList(future), throwable);
+                future.completeExceptionally(throwable);
+                //completeAllExceptionally(Collections.singletonList(future), throwable);
             }
         };
 

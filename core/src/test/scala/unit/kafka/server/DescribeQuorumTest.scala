@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiV
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
+import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -35,7 +36,8 @@ import scala.reflect.ClassTag
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")
-class DescribeQuorumTest(cluster: ClusterInstance) {
+class DescribeQuorumIntegrationTest(cluster: ClusterInstance) {
+  val log = LoggerFactory.getLogger(classOf[DescribeQuorumIntegrationTest])
 
   @ClusterTest(clusterType = Type.ZK)
   def testDescribeQuorumNotSupportedByZkBrokers(): Unit = {
@@ -54,30 +56,39 @@ class DescribeQuorumTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testDescribeQuorum(): Unit = {
-    val request = new DescribeQuorumRequest.Builder(
-      singletonRequest(KafkaRaftServer.MetadataPartition)
-    ).build()
+    for (version <- ApiKeys.DESCRIBE_QUORUM.oldestVersion to ApiKeys.DESCRIBE_QUORUM.latestVersion) {
+      val request = new DescribeQuorumRequest.Builder(
+        singletonRequest(KafkaRaftServer.MetadataPartition)
+      ).build(version.asInstanceOf[Short])
+      val response = connectAndReceive[DescribeQuorumResponse](request)
 
-    val response = connectAndReceive[DescribeQuorumResponse](request)
+      assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
+      assertEquals(1, response.data.topics.size)
 
-    assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
-    assertEquals(1, response.data.topics.size)
+      val topicData = response.data.topics.get(0)
+      assertEquals(KafkaRaftServer.MetadataTopic, topicData.topicName)
+      assertEquals(1, topicData.partitions.size)
 
-    val topicData = response.data.topics.get(0)
-    assertEquals(KafkaRaftServer.MetadataTopic, topicData.topicName)
-    assertEquals(1, topicData.partitions.size)
+      val partitionData = topicData.partitions.get(0)
+      assertEquals(KafkaRaftServer.MetadataPartition.partition, partitionData.partitionIndex)
+      assertEquals(Errors.NONE, Errors.forCode(partitionData.errorCode))
+      assertTrue(partitionData.leaderEpoch > 0)
 
-    val partitionData = topicData.partitions.get(0)
-    assertEquals(KafkaRaftServer.MetadataPartition.partition, partitionData.partitionIndex)
-    assertEquals(Errors.NONE, Errors.forCode(partitionData.errorCode))
-    assertTrue(partitionData.leaderEpoch > 0)
+      val leaderId = partitionData.leaderId
+      assertTrue(leaderId > 0)
 
-    val leaderId = partitionData.leaderId
-    assertTrue(leaderId > 0)
+      val leaderState = partitionData.currentVoters.asScala.find(_.replicaId == leaderId)
+        .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
+        assertTrue(leaderState.logEndOffset > 0)
 
-    val leaderState = partitionData.currentVoters.asScala.find(_.replicaId == leaderId)
-      .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
-    assertTrue(leaderState.logEndOffset > 0)
+        val voterData = partitionData.currentVoters().asScala
+        if (version == 0) {
+          voterData.foreach( state => {
+            assertTrue(state.lastFetchTimestamp() == -1)
+            assertTrue(state.lastCaughtUpTimestamp() == -1)
+          })
+        }
+    }
   }
 
   private def connectAndReceive[T <: AbstractResponse](
