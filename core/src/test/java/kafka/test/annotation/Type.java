@@ -46,13 +46,6 @@ public enum Type {
             invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
         }
     },
-    BOTH {
-        @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), false));
-            invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
-        }
-    },
     ALL {
         @Override
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
