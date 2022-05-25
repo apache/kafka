@@ -128,8 +128,6 @@ class BrokerServer(
 
   var forwardingManager: ForwardingManager = null
 
-  @volatile var featureCache: FinalizedFeatureCache = null
-
   var alterIsrManager: AlterPartitionManager = null
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
@@ -226,14 +224,13 @@ class BrokerServer(
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
-      featureCache = new FinalizedFeatureCache(brokerFeatures)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
         config,
         Some(forwardingManager),
         brokerFeatures,
-        featureCache
+        metadataCache
       )
 
       // Create and start the socket server acceptor threads so that the bound port is known.
@@ -258,7 +255,7 @@ class BrokerServer(
         time = time,
         brokerId = config.nodeId,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        ibpVersion = config.interBrokerProtocolVersion
+        metadataVersionSupplier = () => metadataCache.metadataVersion()
       )
       alterIsrManager.start()
 
@@ -429,7 +426,6 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         clientQuotaMetadataManager,
-        featureCache,
         dynamicConfigHandlers.toMap,
         authorizer)
 

@@ -79,7 +79,7 @@ object AlterPartitionManager {
     time: Time,
     metrics: Metrics,
     threadNamePrefix: Option[String],
-    brokerEpochSupplier: () => Long
+    brokerEpochSupplier: () => Long,
   ): AlterPartitionManager = {
     val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
 
@@ -98,7 +98,7 @@ object AlterPartitionManager {
       time = time,
       brokerId = config.brokerId,
       brokerEpochSupplier = brokerEpochSupplier,
-      ibpVersion = config.interBrokerProtocolVersion
+      metadataVersionSupplier = () => metadataCache.metadataVersion()
     )
   }
 
@@ -121,7 +121,7 @@ class DefaultAlterPartitionManager(
   val time: Time,
   val brokerId: Int,
   val brokerEpochSupplier: () => Long,
-  ibpVersion: MetadataVersion
+  val metadataVersionSupplier: () => MetadataVersion
 ) extends AlterPartitionManager with Logging with KafkaMetricsGroup {
 
   // Used to allow only one pending ISR update per partition (visible for testing)
@@ -233,7 +233,7 @@ class DefaultAlterPartitionManager(
           .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
-        if (ibpVersion.isAtLeast(MetadataVersion.IBP_3_2_IV0)) {
+        if (metadataVersionSupplier().isAtLeast(MetadataVersion.IBP_3_2_IV0)) {
           partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
         }
 

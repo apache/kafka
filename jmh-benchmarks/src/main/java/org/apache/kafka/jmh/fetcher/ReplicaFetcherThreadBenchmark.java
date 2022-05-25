@@ -27,6 +27,7 @@ import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
+import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
@@ -212,7 +213,7 @@ public class ReplicaFetcherThreadBenchmark {
                 0, 0, 0, updatePartitionState, Collections.emptyList(), topicIds).build();
 
         // TODO: fix to support raft
-        ZkMetadataCache metadataCache = new ZkMetadataCache(0);
+        ZkMetadataCache metadataCache = new ZkMetadataCache(0, config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty());
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManagerBuilder().
