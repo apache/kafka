@@ -149,12 +149,12 @@ public class LeaderStateTest {
         assertFalse(state.updateLocalState(0, new LogOffsetMetadata(13L)));
         assertEquals(singleton(otherNodeId), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(10L)));
+        assertFalse(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(10L), -1L));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(11L)));
+        assertTrue(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(11L), -1L));
         assertEquals(Optional.of(new LogOffsetMetadata(11L)), state.highWatermark());
-        assertTrue(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(13L)));
+        assertTrue(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(13L), -1L));
         assertEquals(Optional.of(new LogOffsetMetadata(13L)), state.highWatermark());
     }
 
@@ -166,19 +166,19 @@ public class LeaderStateTest {
         assertFalse(state.updateLocalState(0, new LogOffsetMetadata(15L)));
         assertEquals(mkSet(node1, node2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(10L)));
+        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(10L), -1L));
         assertEquals(singleton(node2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L)));
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L), -1L));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
+        assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L), -1L));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertFalse(state.updateLocalState(0, new LogOffsetMetadata(20L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
-        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(20L)));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(20L), -1L));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
-        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(20L)));
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(20L), -1L));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
     }
 
@@ -188,12 +188,12 @@ public class LeaderStateTest {
         int node1 = 1;
         LeaderState<?> state = newLeaderState(mkSet(localId, node1), 0L);
         state.updateLocalState(time.milliseconds(), new LogOffsetMetadata(10L));
-        state.updateReplicaState(node1, time.milliseconds(), new LogOffsetMetadata(10L));
+        state.updateReplicaState(node1, time.milliseconds(), new LogOffsetMetadata(10L), -1L);
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
         // Follower crashes and disk is lost. It fetches an earlier offset to rebuild state.
         // The leader will report an error in the logs, but will not let the high watermark rewind
-        assertFalse(state.updateReplicaState(node1, time.milliseconds(), new LogOffsetMetadata(5L)));
+        assertFalse(state.updateReplicaState(node1, time.milliseconds(), new LogOffsetMetadata(5L), -1L));
         assertEquals(5L, state.getVoterEndOffsets().get(node1));
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
     }
@@ -234,8 +234,8 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(mkSet(localId, follower1, follower2), leaderStartOffset);
         state.updateLocalState(0, new LogOffsetMetadata(leaderEndOffset));
         assertEquals(Optional.empty(), state.highWatermark());
-        state.updateReplicaState(follower1, 0, new LogOffsetMetadata(leaderStartOffset));
-        state.updateReplicaState(follower2, 0, new LogOffsetMetadata(leaderEndOffset));
+        state.updateReplicaState(follower1, 0, new LogOffsetMetadata(leaderStartOffset), -1L);
+        state.updateReplicaState(follower2, 0, new LogOffsetMetadata(leaderEndOffset), -1L);
         return state;
     }
 
@@ -246,7 +246,7 @@ public class LeaderStateTest {
 
         LeaderState<?> state = newLeaderState(mkSet(localId), epochStartOffset);
         long timestamp = 20L;
-        assertFalse(state.updateReplicaState(observerId, timestamp, new LogOffsetMetadata(epochStartOffset)));
+        assertFalse(state.updateReplicaState(observerId, timestamp, new LogOffsetMetadata(epochStartOffset), -1L));
 
         assertEquals(Collections.singletonMap(observerId, epochStartOffset), state.getObserverStates(timestamp));
     }
@@ -257,7 +257,7 @@ public class LeaderStateTest {
         long epochStartOffset = 10L;
 
         LeaderState<?> state = newLeaderState(mkSet(localId), epochStartOffset);
-        assertFalse(state.updateReplicaState(observerId, 0, new LogOffsetMetadata(epochStartOffset)));
+        assertFalse(state.updateReplicaState(observerId, 0, new LogOffsetMetadata(epochStartOffset), -1L));
 
         assertEquals(Collections.emptyMap(), state.getObserverStates(10));
     }
@@ -269,7 +269,7 @@ public class LeaderStateTest {
         long epochStartOffset = 10L;
         LeaderState<?> state = newLeaderState(mkSet(localId), epochStartOffset);
 
-        state.updateReplicaState(observerId, time.milliseconds(), new LogOffsetMetadata(epochStartOffset));
+        state.updateReplicaState(observerId, time.milliseconds(), new LogOffsetMetadata(epochStartOffset), -1L);
         assertEquals(singleton(observerId), state.getObserverStates(time.milliseconds()).keySet());
 
         time.sleep(LeaderState.OBSERVER_SESSION_TIMEOUT_MS);

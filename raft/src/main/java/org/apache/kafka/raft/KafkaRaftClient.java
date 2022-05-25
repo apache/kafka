@@ -1011,7 +1011,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
+                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata, fetchOffset)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 
@@ -1174,8 +1174,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             leaderState.localId(),
             leaderState.epoch(),
             leaderState.highWatermark().isPresent() ? leaderState.highWatermark().get().offset : -1,
-            convertToReplicaStates(leaderState.getVoterEndOffsets()),
-            convertToReplicaStates(leaderState.getObserverStates(currentTimeMs))
+            convertToReplicaStates(leaderState, true, currentTimeMs),
+            convertToReplicaStates(leaderState, false, currentTimeMs)
         );
     }
 
@@ -1412,12 +1412,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         state.resetFetchTimeout(currentTimeMs);
         return true;
     }
-
-    List<ReplicaState> convertToReplicaStates(Map<Integer, Long> replicaEndOffsets) {
+    @SuppressWarnings("unchecked")
+    List<ReplicaState> convertToReplicaStates(LeaderState leaderState, boolean voterOrObserver, long currentTimeMs) {
+        Map<Integer, Long> replicaEndOffsets = leaderState.getVoterEndOffsets();
+        if (!voterOrObserver) {
+            replicaEndOffsets = leaderState.getObserverStates(currentTimeMs);
+        }
         return replicaEndOffsets.entrySet().stream()
                    .map(entry -> new ReplicaState()
                                      .setReplicaId(entry.getKey())
                                      .setLogEndOffset(entry.getValue()))
+                    .peek(rep -> rep.setLastFetchTimestamp(leaderState.getReplicaLastFetchTimestamp(rep.replicaId())))
                    .collect(Collectors.toList());
     }
 
