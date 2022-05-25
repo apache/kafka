@@ -23,6 +23,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -51,7 +52,7 @@ public class AclsImageTest {
             StandardAclWithId aclWithId = TEST_ACLS.get(i);
             map.put(aclWithId.id(), aclWithId.acl());
         }
-        IMAGE1 = new AclsImage(map);
+        IMAGE1 = new AclsImage(map, MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveAccessControlEntryRecord().
@@ -67,7 +68,7 @@ public class AclsImageTest {
             StandardAclWithId aclWithId = TEST_ACLS.get(i);
             map2.put(aclWithId.id(), aclWithId.acl());
         }
-        IMAGE2 = new AclsImage(map2);
+        IMAGE2 = new AclsImage(map2, MetadataVersion.latest());
     }
 
     @Test
@@ -82,7 +83,7 @@ public class AclsImageTest {
 
     @Test
     public void testApplyDelta1() throws Throwable {
-        assertEquals(IMAGE2, DELTA1.apply());
+        assertEquals(IMAGE2, DELTA1.apply(MetadataVersion.latest()));
     }
 
     @Test
@@ -95,7 +96,7 @@ public class AclsImageTest {
         image.write(writer);
         AclsDelta delta = new AclsDelta(AclsImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
-        AclsImage nextImage = delta.apply();
+        AclsImage nextImage = delta.apply(MetadataVersion.latest());
         assertEquals(image, nextImage);
     }
 }

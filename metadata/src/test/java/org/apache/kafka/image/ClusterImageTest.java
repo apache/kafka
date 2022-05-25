@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -77,7 +78,7 @@ public class ClusterImageTest {
             Collections.emptyMap(),
             Optional.of("arack"),
             false));
-        IMAGE1 = new ClusterImage(map1);
+        IMAGE1 = new ClusterImage(map1, MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
@@ -106,7 +107,7 @@ public class ClusterImageTest {
             Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
             true));
-        IMAGE2 = new ClusterImage(map2);
+        IMAGE2 = new ClusterImage(map2, MetadataVersion.latest());
     }
 
     @Test
@@ -121,7 +122,7 @@ public class ClusterImageTest {
 
     @Test
     public void testApplyDelta1() throws Throwable {
-        assertEquals(IMAGE2, DELTA1.apply());
+        assertEquals(IMAGE2, DELTA1.apply(MetadataVersion.latest()));
     }
 
     @Test
@@ -134,7 +135,7 @@ public class ClusterImageTest {
         image.write(writer);
         ClusterDelta delta = new ClusterDelta(ClusterImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
-        ClusterImage nextImage = delta.apply();
+        ClusterImage nextImage = delta.apply(MetadataVersion.latest());
         assertEquals(image, nextImage);
     }
 }

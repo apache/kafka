@@ -20,7 +20,6 @@ package unit.kafka.server.metadata
 import java.util.Collections.{singleton, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.server.metadata.BrokerMetadataPublisher
@@ -35,6 +34,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -165,7 +165,7 @@ class BrokerMetadataPublisherTest {
         0
       )
     }
-    new TopicImage(topic, topicId, partitionRegistrations.asJava)
+    new TopicImage(topic, topicId, partitionRegistrations.asJava, MetadataVersion.latest())
   }
 
   private def topicsImage(
@@ -173,7 +173,7 @@ class BrokerMetadataPublisherTest {
   ): TopicsImage = {
     val idsMap = topics.map(t => t.id -> t).toMap
     val namesMap = topics.map(t => t.name -> t).toMap
-    new TopicsImage(idsMap.asJava, namesMap.asJava)
+    new TopicsImage(idsMap.asJava, namesMap.asJava, MetadataVersion.latest())
   }
 
   @Test

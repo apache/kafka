@@ -89,7 +89,7 @@ public final class AclsDelta {
         }
     }
 
-    public AclsImage apply() {
+    public AclsImage apply(MetadataVersion metadataVersion) {
         Map<Uuid, StandardAcl> newAcls = new HashMap<>();
         if (!isSnapshotDelta) {
             for (Entry<Uuid, StandardAcl> entry : image.acls().entrySet()) {
@@ -108,7 +108,7 @@ public final class AclsDelta {
                 }
             }
         }
-        return new AclsImage(newAcls);
+        return new AclsImage(newAcls, metadataVersion);
     }
 
     @Override

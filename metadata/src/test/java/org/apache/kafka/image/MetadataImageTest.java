@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -36,6 +37,7 @@ public class MetadataImageTest {
     static {
         IMAGE1 = new MetadataImage(
             new OffsetAndEpoch(100, 4),
+            MetadataVersion.latest(),
             FeaturesImageTest.IMAGE1,
             ClusterImageTest.IMAGE1,
             TopicsImageTest.IMAGE1,
@@ -55,6 +57,7 @@ public class MetadataImageTest {
 
         IMAGE2 = new MetadataImage(
             new OffsetAndEpoch(200, 5),
+            MetadataVersion.latest(),
             FeaturesImageTest.IMAGE2,
             ClusterImageTest.IMAGE2,
             TopicsImageTest.IMAGE2,

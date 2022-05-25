@@ -61,7 +61,7 @@ public final class FeaturesImage {
         return finalizedVersions;
     }
 
-    private Optional<Short> finalizedVersion(String feature) {
+    public Optional<Short> finalizedVersion(String feature) {
         return Optional.ofNullable(finalizedVersions.get(feature));
     }
 

@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityDa
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,12 +52,15 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
  * This class is thread-safe.
  */
 public final class ClientQuotasImage {
-    public final static ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
+    public final static ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap(), MetadataVersion.UNINITIALIZED);
 
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 
-    public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
+    private final MetadataVersion metadataVersion;
+
+    public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities, MetadataVersion metadataVersion) {
         this.entities = Collections.unmodifiableMap(entities);
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {

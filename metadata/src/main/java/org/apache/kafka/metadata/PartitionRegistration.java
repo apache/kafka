@@ -171,8 +171,8 @@ public class PartitionRegistration {
         return replicas.length == 0 ? LeaderConstants.NO_LEADER : replicas[0];
     }
 
-    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId) {
-        return new ApiMessageAndVersion(new PartitionRecord().
+    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, boolean includeLeaderRecovery) {
+        PartitionRecord record = new PartitionRecord().
             setPartitionId(partitionId).
             setTopicId(topicId).
             setReplicas(Replicas.toList(replicas)).
@@ -180,9 +180,12 @@ public class PartitionRegistration {
             setRemovingReplicas(Replicas.toList(removingReplicas)).
             setAddingReplicas(Replicas.toList(addingReplicas)).
             setLeader(leader).
-            setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
-            setPartitionEpoch(partitionEpoch), PARTITION_RECORD.highestSupportedVersion());
+            setPartitionEpoch(partitionEpoch);
+        if (includeLeaderRecovery) {
+            record.setLeaderRecoveryState(leaderRecoveryState.value());
+        }
+        return new ApiMessageAndVersion(record, PARTITION_RECORD.highestSupportedVersion());
     }
 
     public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,

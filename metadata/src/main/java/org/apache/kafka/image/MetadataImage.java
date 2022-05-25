@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.List;
 import java.util.Objects;
@@ -33,6 +34,7 @@ import java.util.function.Consumer;
 public final class MetadataImage {
     public final static MetadataImage EMPTY = new MetadataImage(
         new OffsetAndEpoch(0, 0),
+        MetadataVersion.UNINITIALIZED,
         FeaturesImage.EMPTY,
         ClusterImage.EMPTY,
         TopicsImage.EMPTY,
@@ -42,6 +44,8 @@ public final class MetadataImage {
         AclsImage.EMPTY);
 
     private final OffsetAndEpoch highestOffsetAndEpoch;
+
+    private final MetadataVersion metadataVersion;
 
     private final FeaturesImage features;
 
@@ -59,6 +63,7 @@ public final class MetadataImage {
 
     public MetadataImage(
         OffsetAndEpoch highestOffsetAndEpoch,
+        MetadataVersion metadataVersion,
         FeaturesImage features,
         ClusterImage cluster,
         TopicsImage topics,
@@ -68,6 +73,7 @@ public final class MetadataImage {
         AclsImage acls
     ) {
         this.highestOffsetAndEpoch = highestOffsetAndEpoch;
+        this.metadataVersion = metadataVersion;
         this.features = features;
         this.cluster = cluster;
         this.topics = topics;
@@ -160,6 +166,7 @@ public final class MetadataImage {
     @Override
     public String toString() {
         return "MetadataImage(highestOffsetAndEpoch=" + highestOffsetAndEpoch +
+            ", metadataVersion=" + metadataVersion +
             ", features=" + features +
             ", cluster=" + cluster +
             ", topics=" + topics +

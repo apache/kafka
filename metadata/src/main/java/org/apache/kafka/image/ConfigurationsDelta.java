@@ -77,7 +77,7 @@ public final class ConfigurationsDelta {
         delta.deleteAll();
     }
 
-    public ConfigurationsImage apply() {
+    public ConfigurationsImage apply(MetadataVersion metadataVersion) {
         Map<ConfigResource, ConfigurationImage> newData = new HashMap<>();
         for (Entry<ConfigResource, ConfigurationImage> entry : image.resourceData().entrySet()) {
             ConfigResource resource = entry.getKey();
@@ -99,7 +99,7 @@ public final class ConfigurationsDelta {
                 }
             }
         }
-        return new ConfigurationsImage(newData);
+        return new ConfigurationsImage(newData, metadataVersion);
     }
 
     @Override

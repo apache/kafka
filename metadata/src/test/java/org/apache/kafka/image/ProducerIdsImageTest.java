@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -40,7 +41,7 @@ public class ProducerIdsImageTest {
     final static ProducerIdsImage IMAGE2;
 
     static {
-        IMAGE1 = new ProducerIdsImage(123);
+        IMAGE1 = new ProducerIdsImage(123, MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
@@ -55,7 +56,7 @@ public class ProducerIdsImageTest {
         DELTA1 = new ProducerIdsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        IMAGE2 = new ProducerIdsImage(789);
+        IMAGE2 = new ProducerIdsImage(789, MetadataVersion.latest());
     }
 
     @Test
@@ -70,7 +71,7 @@ public class ProducerIdsImageTest {
 
     @Test
     public void testApplyDelta1() throws Throwable {
-        assertEquals(IMAGE2, DELTA1.apply());
+        assertEquals(IMAGE2, DELTA1.apply(MetadataVersion.latest()));
     }
 
     @Test
@@ -83,7 +84,7 @@ public class ProducerIdsImageTest {
         image.write(writer);
         ProducerIdsDelta delta = new ProducerIdsDelta(ProducerIdsImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
-        ProducerIdsImage nextImage = delta.apply();
+        ProducerIdsImage nextImage = delta.apply(MetadataVersion.latest());
         assertEquals(image, nextImage);
     }
 }

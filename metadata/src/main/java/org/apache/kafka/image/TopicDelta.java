@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -73,7 +74,7 @@ public final class TopicDelta {
         partitionChanges.put(record.partitionId(), partition.merge(record));
     }
 
-    public TopicImage apply() {
+    public TopicImage apply(MetadataVersion metadataVersion) {
         Map<Integer, PartitionRegistration> newPartitions = new HashMap<>();
         for (Entry<Integer, PartitionRegistration> entry : image.partitions().entrySet()) {
             int partitionId = entry.getKey();
@@ -89,7 +90,7 @@ public final class TopicDelta {
                 newPartitions.put(entry.getKey(), entry.getValue());
             }
         }
-        return new TopicImage(image.name(), image.id(), newPartitions);
+        return new TopicImage(image.name(), image.id(), newPartitions, metadataVersion);
     }
 
     /**

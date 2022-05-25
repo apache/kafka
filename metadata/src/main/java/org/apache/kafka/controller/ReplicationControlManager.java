@@ -83,6 +83,7 @@ import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -143,7 +144,7 @@ public class ReplicationControlManager {
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
-        private boolean isLeaderRecoverySupported = true;
+        private FeatureControlManager featureControlManager;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private ControllerMetrics controllerMetrics = null;
@@ -174,8 +175,8 @@ public class ReplicationControlManager {
             return this;
         }
 
-        Builder setIsLeaderRecoverySupported(boolean isLeaderRecoverySupported) {
-            this.isLeaderRecoverySupported = isLeaderRecoverySupported;
+        Builder setFeatureControlManager(FeatureControlManager featureControlManager) {
+            this.featureControlManager = featureControlManager;
             return this;
         }
 
@@ -209,6 +210,9 @@ public class ReplicationControlManager {
             if (controllerMetrics == null) {
                 throw new RuntimeException("You must specify controllerMetrics.");
             }
+            if (featureControlManager == null) {
+                throw new RuntimeException("You must specify featureControlManager.");
+            }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
             return new ReplicationControlManager(snapshotRegistry,
@@ -216,7 +220,7 @@ public class ReplicationControlManager {
                 defaultReplicationFactor,
                 defaultNumPartitions,
                 maxElectionsPerImbalance,
-                isLeaderRecoverySupported,
+                featureControlManager,
                 configurationControl,
                 clusterControl,
                 controllerMetrics,
@@ -276,9 +280,9 @@ public class ReplicationControlManager {
     private final int defaultNumPartitions;
 
     /**
-     * If the cluster supports leader recovery state from KIP-704.
+     * A reference to the controller's feature control manager.
      */
-    private final boolean isLeaderRecoverySupported;
+    private final FeatureControlManager featureControlManager;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -363,7 +367,7 @@ public class ReplicationControlManager {
         short defaultReplicationFactor,
         int defaultNumPartitions,
         int maxElectionsPerImbalance,
-        boolean isLeaderRecoverySupported,
+        FeatureControlManager featureControlManager,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         ControllerMetrics controllerMetrics,
@@ -374,7 +378,7 @@ public class ReplicationControlManager {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
-        this.isLeaderRecoverySupported = isLeaderRecoverySupported;
+        this.featureControlManager = featureControlManager;
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.createTopicPolicy = createTopicPolicy;
@@ -724,10 +728,11 @@ public class ReplicationControlManager {
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
             setTopicId(topicId), TOPIC_RECORD.highestSupportedVersion()));
+        MetadataVersion metadataVersion = featureControlManager.metadataVersion();
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex));
+            records.add(info.toRecord(topicId, partitionIndex, metadataVersion.isLeaderRecoverySupported()));
         }
         return ApiError.NONE;
     }
@@ -929,7 +934,7 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     r -> clusterControl.unfenced(r),
-                    isLeaderRecoverySupported);
+                    featureControlManager.metadataVersion().isLeaderRecoverySupported());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1223,7 +1228,7 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             r -> clusterControl.unfenced(r),
-            isLeaderRecoverySupported);
+            featureControlManager.metadataVersion().isLeaderRecoverySupported());
         builder.setElection(election);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
@@ -1339,7 +1344,7 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 r -> clusterControl.unfenced(r),
-                isLeaderRecoverySupported
+                featureControlManager.metadataVersion().isLeaderRecoverySupported()
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
             builder.build().ifPresent(records::add);
@@ -1542,7 +1547,7 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
-                isLeaderRecoverySupported);
+                featureControlManager.metadataVersion().isLeaderRecoverySupported());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -1652,7 +1657,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             r -> clusterControl.unfenced(r),
-            isLeaderRecoverySupported);
+            featureControlManager.metadataVersion().isLeaderRecoverySupported());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -1704,7 +1709,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             r -> clusterControl.unfenced(r),
-            isLeaderRecoverySupported);
+            featureControlManager.metadataVersion().isLeaderRecoverySupported());
         if (!reassignment.merged().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.merged());
         }
@@ -1773,10 +1778,12 @@ public class ReplicationControlManager {
     class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
         private final long epoch;
         private final Iterator<TopicControlInfo> iterator;
+        private final MetadataVersion metadataVersion;
 
         ReplicationControlIterator(long epoch) {
             this.epoch = epoch;
             this.iterator = topics.values(epoch).iterator();
+            this.metadataVersion = featureControlManager.metadataVersion(epoch);
         }
 
         @Override
@@ -1793,7 +1800,7 @@ public class ReplicationControlManager {
                 setName(topic.name).
                 setTopicId(topic.id), TOPIC_RECORD.highestSupportedVersion()));
             for (Entry<Integer, PartitionRegistration> entry : topic.parts.entrySet(epoch)) {
-                records.add(entry.getValue().toRecord(topic.id, entry.getKey()));
+                records.add(entry.getValue().toRecord(topic.id, entry.getKey(), metadataVersion.isLeaderRecoverySupported()));
             }
             return records;
         }

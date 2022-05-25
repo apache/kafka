@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collections;
 import java.util.List;
@@ -37,12 +38,15 @@ import java.util.stream.Collectors;
  */
 public final class ConfigurationsImage {
     public static final ConfigurationsImage EMPTY =
-        new ConfigurationsImage(Collections.emptyMap());
+        new ConfigurationsImage(Collections.emptyMap(), MetadataVersion.UNINITIALIZED);
 
     private final Map<ConfigResource, ConfigurationImage> data;
 
-    public ConfigurationsImage(Map<ConfigResource, ConfigurationImage> data) {
+    private final MetadataVersion metadataVersion;
+
+    public ConfigurationsImage(Map<ConfigResource, ConfigurationImage> data, MetadataVersion metadataVersion) {
         this.data = Collections.unmodifiableMap(data);
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {

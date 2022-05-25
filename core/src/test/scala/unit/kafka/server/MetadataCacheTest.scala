@@ -64,6 +64,7 @@ object MetadataCacheTest {
         val image = c.currentImage()
         val partialImage = new MetadataImage(
           new RaftOffsetAndEpoch(100, 10),
+          MetadataVersion.latest(),
           image.features(),
           ClusterImage.EMPTY,
           image.topics(),

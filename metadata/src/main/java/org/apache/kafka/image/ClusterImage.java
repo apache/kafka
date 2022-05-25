@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,12 +35,15 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class ClusterImage {
-    public static final ClusterImage EMPTY = new ClusterImage(Collections.emptyMap());
+    public static final ClusterImage EMPTY = new ClusterImage(Collections.emptyMap(), MetadataVersion.UNINITIALIZED);
 
     private final Map<Integer, BrokerRegistration> brokers;
 
-    public ClusterImage(Map<Integer, BrokerRegistration> brokers) {
+    private final MetadataVersion metadataVersion;
+
+    public ClusterImage(Map<Integer, BrokerRegistration> brokers, MetadataVersion metadataVersion) {
         this.brokers = Collections.unmodifiableMap(brokers);
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {

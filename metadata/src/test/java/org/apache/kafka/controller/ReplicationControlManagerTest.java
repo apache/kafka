@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -139,6 +140,7 @@ public class ReplicationControlManagerTest {
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
         final ControllerMetrics metrics = new MockControllerMetrics();
+        final QuorumFeatures quorumFeatures = QuorumFeatures.create(1, new ApiVersions(), QuorumFeatures.defaultFeatureMap(), Collections.emptyList());
         final ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
             setTime(time).
@@ -150,6 +152,7 @@ public class ReplicationControlManagerTest {
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             build();
+        final FeatureControlManager featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
         final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
@@ -171,6 +174,7 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setControllerMetrics(metrics).
                 setCreateTopicPolicy(createTopicPolicy).
+                setFeatureControlManager(featureControl).
                 build();
             clusterControl.activate();
         }

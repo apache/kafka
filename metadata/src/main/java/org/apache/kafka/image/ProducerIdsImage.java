@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collections;
 import java.util.List;
@@ -32,12 +33,15 @@ import java.util.function.Consumer;
  * This class is thread-safe.
  */
 public final class ProducerIdsImage {
-    public final static ProducerIdsImage EMPTY = new ProducerIdsImage(-1L);
+    public final static ProducerIdsImage EMPTY = new ProducerIdsImage(-1L, MetadataVersion.UNINITIALIZED);
 
     private final long nextProducerId;
 
-    public ProducerIdsImage(long nextProducerId) {
+    private final MetadataVersion metadataVersion;
+
+    public ProducerIdsImage(long nextProducerId, MetadataVersion metadataVersion) {
         this.nextProducerId = nextProducerId;
+        this.metadataVersion = metadataVersion;
     }
 
     public long highestSeenProducerId() {

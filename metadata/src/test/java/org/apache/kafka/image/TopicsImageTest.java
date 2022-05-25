@@ -28,6 +28,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -68,7 +69,7 @@ public class TopicsImageTest {
         for (PartitionRegistration partition : partitions) {
             partitionMap.put(i++, partition);
         }
-        return new TopicImage(name, id, partitionMap);
+        return new TopicImage(name, id, partitionMap, MetadataVersion.latest());
     }
 
     private static Map<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
@@ -106,7 +107,7 @@ public class TopicsImageTest {
                 new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
                     new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 0, LeaderRecoveryState.RECOVERED, 1, 345)));
 
-        IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
+        IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1), MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveTopicRecord().
@@ -140,7 +141,7 @@ public class TopicsImageTest {
             newTopicImage("baz", BAZ_UUID,
                 new PartitionRegistration(new int[] {1, 2, 3, 4},
                     new int[] {3, 4}, new int[] {2}, new int[] {1}, 3, LeaderRecoveryState.RECOVERED, 2, 1)));
-        IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
+        IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2), MetadataVersion.latest());
     }
 
     private ApiMessageAndVersion newPartitionRecord(Uuid topicId, int partitionId, List<Integer> replicas) {
@@ -230,7 +231,7 @@ public class TopicsImageTest {
                 newPartition(new int[] {localId, 1, 2})
             )
         );
-        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics), MetadataVersion.latest());
 
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
         // leader to follower
@@ -275,7 +276,7 @@ public class TopicsImageTest {
                 newPartition(new int[] {0, 1, 2})
             )
         );
-        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics), MetadataVersion.latest());
 
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
         // zoo-0 - follower to leader
@@ -369,7 +370,7 @@ public class TopicsImageTest {
 
     @Test
     public void testApplyDelta1() throws Throwable {
-        assertEquals(IMAGE2, DELTA1.apply());
+        assertEquals(IMAGE2, DELTA1.apply(MetadataVersion.latest()));
     }
 
     @Test
@@ -382,7 +383,7 @@ public class TopicsImageTest {
         image.write(writer);
         TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
-        TopicsImage nextImage = delta.apply();
+        TopicsImage nextImage = delta.apply(MetadataVersion.latest());
         assertEquals(image, nextImage);
     }
 

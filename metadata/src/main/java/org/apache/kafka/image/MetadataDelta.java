@@ -319,44 +319,47 @@ public final class MetadataDelta {
         } else {
             newFeatures = featuresDelta.apply();
         }
+        MetadataVersion newMetadataVersion = newFeatures.metadataVersion();
+
         ClusterImage newCluster;
         if (clusterDelta == null) {
             newCluster = image.cluster();
         } else {
-            newCluster = clusterDelta.apply();
+            newCluster = clusterDelta.apply(newMetadataVersion);
         }
         TopicsImage newTopics;
         if (topicsDelta == null) {
             newTopics = image.topics();
         } else {
-            newTopics = topicsDelta.apply();
+            newTopics = topicsDelta.apply(newMetadataVersion);
         }
         ConfigurationsImage newConfigs;
         if (configsDelta == null) {
             newConfigs = image.configs();
         } else {
-            newConfigs = configsDelta.apply();
+            newConfigs = configsDelta.apply(newMetadataVersion);
         }
         ClientQuotasImage newClientQuotas;
         if (clientQuotasDelta == null) {
             newClientQuotas = image.clientQuotas();
         } else {
-            newClientQuotas = clientQuotasDelta.apply();
+            newClientQuotas = clientQuotasDelta.apply(newMetadataVersion);
         }
         ProducerIdsImage newProducerIds;
         if (producerIdsDelta == null) {
             newProducerIds = image.producerIds();
         } else {
-            newProducerIds = producerIdsDelta.apply();
+            newProducerIds = producerIdsDelta.apply(newMetadataVersion);
         }
         AclsImage newAcls;
         if (aclsDelta == null) {
             newAcls = image.acls();
         } else {
-            newAcls = aclsDelta.apply();
+            newAcls = aclsDelta.apply(newMetadataVersion);
         }
         return new MetadataImage(
             new OffsetAndEpoch(highestOffset, highestEpoch),
+            newMetadataVersion,
             newFeatures,
             newCluster,
             newTopics,

@@ -66,7 +66,7 @@ public class PartitionRegistrationTest {
             new int[]{1, 2, 3}, new int[]{1, 2}, new int[]{1}, Replicas.NONE, 1, LeaderRecoveryState.RECOVERED, 0, 0);
         Uuid topicId = Uuid.fromString("OGdAI5nxT_m-ds3rJMqPLA");
         int partitionId = 4;
-        ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId);
+        ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId, true);
         PartitionRegistration registrationB =
             new PartitionRegistration((PartitionRecord) record.message());
         assertEquals(registrationA, registrationB);

@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,12 +46,18 @@ public final class TopicImage {
 
     private final Map<Integer, PartitionRegistration> partitions;
 
-    public TopicImage(String name,
-                      Uuid id,
-                      Map<Integer, PartitionRegistration> partitions) {
+    final MetadataVersion metadataVersion;
+
+    public TopicImage(
+        String name,
+        Uuid id,
+        Map<Integer, PartitionRegistration> partitions,
+        MetadataVersion metadataVersion
+    ) {
         this.name = name;
         this.id = id;
         this.partitions = partitions;
+        this.metadataVersion = metadataVersion;
     }
 
     public String name() {
@@ -73,7 +80,7 @@ public final class TopicImage {
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
-            batch.add(partition.toRecord(id, partitionId));
+            batch.add(partition.toRecord(id, partitionId, metadataVersion.isLeaderRecoverySupported()));
         }
         out.accept(batch);
     }

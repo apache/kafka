@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -60,7 +61,7 @@ public class ClientQuotasImageTest {
         barUserAndIpQuotas.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 456.0);
         entities1.put(new ClientQuotaEntity(barUserAndIp),
             new ClientQuotaImage(barUserAndIpQuotas));
-        IMAGE1 = new ClientQuotasImage(entities1);
+        IMAGE1 = new ClientQuotasImage(entities1, MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
@@ -83,7 +84,7 @@ public class ClientQuotasImageTest {
         fooUserQuotas2.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 123.0);
         fooUserQuotas2.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 999.0);
         entities2.put(new ClientQuotaEntity(fooUser), new ClientQuotaImage(fooUserQuotas2));
-        IMAGE2 = new ClientQuotasImage(entities2);
+        IMAGE2 = new ClientQuotasImage(entities2, MetadataVersion.latest());
     }
 
     @Test
@@ -98,7 +99,7 @@ public class ClientQuotasImageTest {
 
     @Test
     public void testApplyDelta1() throws Throwable {
-        assertEquals(IMAGE2, DELTA1.apply());
+        assertEquals(IMAGE2, DELTA1.apply(MetadataVersion.latest()));
     }
 
     @Test
@@ -111,7 +112,7 @@ public class ClientQuotasImageTest {
         image.write(writer);
         ClientQuotasDelta delta = new ClientQuotasDelta(ClientQuotasImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
-        ClientQuotasImage nextImage = delta.apply();
+        ClientQuotasImage nextImage = delta.apply(MetadataVersion.latest());
         assertEquals(image, nextImage);
     }
 }

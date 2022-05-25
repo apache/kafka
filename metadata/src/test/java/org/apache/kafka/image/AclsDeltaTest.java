@@ -26,6 +26,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -41,7 +42,7 @@ public class AclsDeltaTest {
 
     @Test
     public void testRemovesDeleteIfNotInImage() {
-        AclsImage image = new AclsImage(Collections.emptyMap());
+        AclsImage image = new AclsImage(Collections.emptyMap(), MetadataVersion.latest());
         AclsDelta delta = new AclsDelta(image);
         AccessControlEntryRecord inputAclRecord = testAccessControlEntryRecord();
 
@@ -60,7 +61,7 @@ public class AclsDeltaTest {
     public void testKeepsDeleteIfInImage() {
         Map<Uuid, StandardAcl> initialImageMap = new HashMap<>();
         initialImageMap.put(aclId, testStandardAcl());
-        AclsImage image = new AclsImage(initialImageMap);
+        AclsImage image = new AclsImage(initialImageMap, MetadataVersion.latest());
         AclsDelta delta = new AclsDelta(image);
 
         assertEquals(0, delta.changes().size());
@@ -74,7 +75,7 @@ public class AclsDeltaTest {
 
     @Test
     public void testThrowsExceptionOnInvalidStateWhenImageIsEmpty() {
-        AclsImage image = new AclsImage(Collections.emptyMap());
+        AclsImage image = new AclsImage(Collections.emptyMap(), MetadataVersion.latest());
         AclsDelta delta = new AclsDelta(image);
 
         RemoveAccessControlEntryRecord removeAccessControlEntryRecord = testRemoveAccessControlEntryRecord();
@@ -96,7 +97,7 @@ public class AclsDeltaTest {
 
         Map<Uuid, StandardAcl> initialImageMap = new HashMap<>();
         initialImageMap.put(id, StandardAcl.fromRecord(record));
-        AclsImage image = new AclsImage(initialImageMap);
+        AclsImage image = new AclsImage(initialImageMap, MetadataVersion.latest());
         AclsDelta delta = new AclsDelta(image);
 
         RemoveAccessControlEntryRecord removeAccessControlEntryRecord = testRemoveAccessControlEntryRecord();
