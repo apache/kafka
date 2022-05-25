@@ -77,4 +77,10 @@ public final class MessageUtilTest {
             Arrays.asList(new RawTaggedField(1, new byte[] {1}),
                 new RawTaggedField(2, new byte[] {}))));
     }
+
+    @Test
+    public void testConstants() {
+        assertEquals(MessageUtil.UNSIGNED_SHORT_MAX, 0xFFFF);
+        assertEquals(MessageUtil.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
+    }
 }
