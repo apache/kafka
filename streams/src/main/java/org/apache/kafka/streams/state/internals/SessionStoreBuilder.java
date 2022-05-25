@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -52,7 +53,23 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
         if (!enableCaching) {
             return inner;
         }
+
+        // do not enable cache if the underlying store is time ordered
+        if (isTimeOrderedStore(inner)) {
+            return inner;
+        }
+
         return new CachingSessionStore(inner, storeSupplier.segmentIntervalMs());
+    }
+
+    private boolean isTimeOrderedStore(final StateStore stateStore) {
+        if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
+            return true;
+        }
+        if (stateStore instanceof WrappedStateStore) {
+            return isTimeOrderedStore(((WrappedStateStore) stateStore).wrapped());
+        }
+        return false;
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapLogging(final SessionStore<Bytes, byte[]> inner) {
