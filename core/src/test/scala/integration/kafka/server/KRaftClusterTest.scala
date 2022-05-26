@@ -780,7 +780,7 @@ class KRaftClusterTest {
   }
 
   @Test
-  def testDescribeQuorumRequestToBrokers() = {
+  def testDescribeQuorumRequestToBrokers() : Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(4).
@@ -801,6 +801,7 @@ class KRaftClusterTest {
 
         assertEquals(KafkaRaftServer.MetadataTopic, quorumInfo.topic())
         assertEquals(3, quorumInfo.voters.size())
+        assertEquals(0, quorumInfo.observers.size())
       } finally {
         admin.close()
       }

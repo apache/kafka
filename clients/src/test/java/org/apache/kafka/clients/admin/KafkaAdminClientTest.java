@@ -4869,8 +4869,8 @@ public class KafkaAdminClientTest {
     public void testDescribeMetadataQuorumSuccess() throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,
-                    ApiKeys.DESCRIBE_QUORUM.latestVersion(),
-                    ApiKeys.DESCRIBE_QUORUM.oldestVersion()));
+                    ApiKeys.DESCRIBE_QUORUM.oldestVersion(),
+                    ApiKeys.DESCRIBE_QUORUM.latestVersion()));
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
                     prepareDescribeQuorumResponse(Errors.NONE));
@@ -4884,8 +4884,8 @@ public class KafkaAdminClientTest {
     public void testDescribeMetadataQuorumFailure() {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,
-                        ApiKeys.DESCRIBE_QUORUM.latestVersion(),
-                        ApiKeys.DESCRIBE_QUORUM.oldestVersion()));
+                        ApiKeys.DESCRIBE_QUORUM.oldestVersion(),
+                        ApiKeys.DESCRIBE_QUORUM.latestVersion()));
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
                     prepareDescribeQuorumResponse(Errors.INVALID_REQUEST));
