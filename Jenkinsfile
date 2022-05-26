@@ -183,9 +183,11 @@ pipeline {
               options {
                 timeout(time: 2, unit: 'HOURS')
               }
-              doValidation()
-              doTest(env, 'unitTest')
-              echo 'Skipping Kafka Streams archetype test for ARM build'
+              steps {
+                doValidation()
+                doTest(env, 'unitTest')
+                echo 'Skipping Kafka Streams archetype test for ARM build'
+              }
             }
           }
         }
