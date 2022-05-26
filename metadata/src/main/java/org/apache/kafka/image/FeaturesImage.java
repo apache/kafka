@@ -57,7 +57,7 @@ public final class FeaturesImage {
         return metadataVersion;
     }
 
-    Map<String, Short> finalizedVersions() {
+    public Map<String, Short> finalizedVersions() {
         return finalizedVersions;
     }
 

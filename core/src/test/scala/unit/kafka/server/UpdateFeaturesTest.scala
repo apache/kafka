@@ -87,7 +87,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     val newNode = FeatureZNode(IBP_2_7_IV0, FeatureZNodeStatus.Enabled, features)
     val newVersion = server.zkClient.updateFeatureZNode(newNode)
     servers.foreach(s => {
-      s.featureCache.waitUntilEpochOrThrow(newVersion, s.config.zkConnectionTimeoutMs)
+      s.metadataCache.waitUntilFeatureEpochOrThrow(newVersion, s.config.zkConnectionTimeoutMs)
     })
     newVersion
   }

@@ -81,7 +81,7 @@ class ReplicaFetcherThreadTest {
   private val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
     0, 0, 0, partitionStates, Collections.emptyList(), topicIds.asJava).build()
   // TODO: support raft code?
-  private val metadataCache = new ZkMetadataCache(0)
+  private var metadataCache = new ZkMetadataCache(0, MetadataVersion.latest(), BrokerFeatures.createEmpty())
   metadataCache.updateMetadata(0, updateMetadataRequest)
 
   private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
@@ -264,6 +264,9 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.version)
     val config = KafkaConfig.fromProps(props)
+
+    metadataCache = new ZkMetadataCache(0, ibp, BrokerFeatures.createEmpty())
+    metadataCache.updateMetadata(0, updateMetadataRequest)
 
     //Setup all dependencies
     val logManager: LogManager = mock(classOf[LogManager])
