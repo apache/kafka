@@ -70,12 +70,12 @@ public class QuorumInfo {
 
     @Override
     public String toString() {
-        return "QuorumInfo{" +
+        return "QuorumInfo(" +
             "topic='" + topic + '\'' +
             ", leaderId=" + leaderId +
             ", voters=" + voters.toString() +
             ", observers=" + observers.toString() +
-            '}';
+            ')';
     }
 
     public static class ReplicaState {
@@ -84,11 +84,11 @@ public class QuorumInfo {
         private final OptionalLong lastFetchTimeMs;
         private final OptionalLong lastCaughtUpTimeMs;
 
-        public ReplicaState() {
+        ReplicaState() {
             this(0, 0, OptionalLong.empty(), OptionalLong.empty());
         }
 
-        public ReplicaState(int replicaId, long logEndOffset,
+        ReplicaState(int replicaId, long logEndOffset,
                 OptionalLong lastFetchTimeMs, OptionalLong lastCaughtUpTimeMs) {
             this.replicaId = replicaId;
             this.logEndOffset = logEndOffset;
@@ -138,12 +138,12 @@ public class QuorumInfo {
 
         @Override
         public String toString() {
-            return "ReplicaState{" +
+            return "ReplicaState(" +
                 "replicaId=" + replicaId +
                 ", logEndOffset=" + logEndOffset +
                 ", lastFetchTimeMs=" + lastFetchTimeMs +
                 ", lastCaughtUpTimeMs=" + lastCaughtUpTimeMs +
-                '}';
+                ')';
         }
     }
 }

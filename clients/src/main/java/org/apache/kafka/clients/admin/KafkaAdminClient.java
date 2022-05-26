@@ -136,6 +136,7 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
@@ -261,6 +262,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -274,6 +276,7 @@ import java.util.stream.Stream;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_NAME;
+import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -4338,12 +4341,22 @@ public class KafkaAdminClient extends AdminClient {
 
             private QuorumInfo createQuorumResult(final DescribeQuorumResponse response) {
                 Integer partition = 0;
-                String topicName = response.getTopicNameByIndex(partition);
+                String topicName = response.getTopicNameByIndex(0);
                 Integer leaderId = response.getPartitionLeaderId(topicName, partition);
                 List<QuorumInfo.ReplicaState> voters = new ArrayList<>();
                 List<QuorumInfo.ReplicaState> observers = new ArrayList<>();
-                response.getVoterInfo(topicName, partition).forEach(voters::add);
-                response.getObserverInfo(topicName, partition).forEach(observers::add);
+                response.getVoterInfo(topicName, partition).forEach(v -> {
+                    voters.add(new QuorumInfo.ReplicaState(v.replicaId(),
+                                v.logEndOffset(),
+                                OptionalLong.of(v.lastFetchTimestamp()),
+                                OptionalLong.of(v.lastCaughtUpTimestamp())));
+                });
+                response.getObserverInfo(topicName, partition).forEach(o -> {
+                    observers.add(new QuorumInfo.ReplicaState(o.replicaId(),
+                                o.logEndOffset(),
+                                OptionalLong.of(o.lastFetchTimestamp()),
+                                OptionalLong.of(o.lastCaughtUpTimestamp())));
+                });
                 QuorumInfo info = new QuorumInfo(topicName, leaderId, voters, observers);
                 return info;
             }
@@ -4362,7 +4375,13 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
                 if (quorumResponse.data().errorCode() == Errors.NONE.code()) {
-                    future.complete(createQuorumResult(quorumResponse));
+                    DescribeQuorumResponseData.PartitionData partition = quorumResponse.data().topics().
+                            get(0).partitions().get(METADATA_TOPIC_PARTITION.partition());
+                    if (partition.errorCode() == Errors.NONE.code()) {
+                        future.complete(createQuorumResult(quorumResponse));
+                    } else {
+                        future.completeExceptionally(Errors.forCode(partition.errorCode()).exception());
+                    }
                 } else {
                     future.completeExceptionally(Errors.forCode(quorumResponse.data().errorCode()).exception());
                 }
@@ -4371,7 +4390,6 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleFailure(Throwable throwable) {
                 future.completeExceptionally(throwable);
-                //completeAllExceptionally(Collections.singletonList(future), throwable);
             }
         };
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
@@ -26,12 +25,10 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 
 /**
  * Possible error codes.
@@ -114,40 +111,40 @@ public class DescribeQuorumResponse extends AbstractResponse {
         return leaderId;
     }
 
-    public List<QuorumInfo.ReplicaState> getVoterInfo(String topicName, Integer partition) {
-        List<QuorumInfo.ReplicaState> voterInfo = new ArrayList<>();
-        TopicData topic = data.topics().stream()
-            .filter(t -> t.topicName().equals(topicName))
-            .findFirst()
-            .orElse(null);
-        if (topic != null) {
-            topic.partitions().get(partition).currentVoters().forEach(
-                v -> {
-                    voterInfo.add(new QuorumInfo.ReplicaState(v.replicaId(),
-                            v.logEndOffset(),
-                            OptionalLong.of(v.lastFetchTimestamp()),
-                            OptionalLong.of(v.lastCaughtUpTimestamp())));
-                });
-        }
-        return voterInfo;
-    }
-
-    public List<QuorumInfo.ReplicaState> getObserverInfo(String topicName, Integer partition) {
-        List<QuorumInfo.ReplicaState> observerInfo = new ArrayList<>();
+    /**
+     * Get the replica info for the given topic name and partition.
+     * @param topicName Name of the topic to fetch
+     * @param partition Index of the parition to fetch
+     * @param getVoterInfo Return the voter information if true, return observers otherwise
+     * @return List of {@link ReplicaState}
+     */
+    private List<ReplicaState> getReplicaInfo(String topicName, Integer partition, boolean getVoterInfo) {
+        //List<QuorumInfo.ReplicaState> replicaInfo = new ArrayList<>();
         TopicData topic = data.topics().stream()
                 .filter(t -> t.topicName().equals(topicName))
                 .findFirst()
                 .orElse(null);
         if (topic != null) {
-            topic.partitions().get(partition).observers().forEach(
-                    v -> {
-                        observerInfo.add(new QuorumInfo.ReplicaState(v.replicaId(),
-                                v.logEndOffset(),
-                                OptionalLong.of(v.lastFetchTimestamp()),
-                                OptionalLong.of(v.lastCaughtUpTimestamp())));
-                    });
+            List<ReplicaState> replicaStates = getVoterInfo ? topic.partitions().get(partition).currentVoters()
+                    : topic.partitions().get(partition).observers();
+            //replicaStates.forEach(
+            //        v -> {
+            //            replicaInfo.add(new QuorumInfo.ReplicaState(v.replicaId(),
+            //                    v.logEndOffset(),
+            //                    OptionalLong.of(v.lastFetchTimestamp()),
+            //                    OptionalLong.of(v.lastCaughtUpTimestamp())));
+            //        });
+            return replicaStates;
         }
-        return observerInfo;
+        return null;
+    }
+
+    public List<ReplicaState> getVoterInfo(String topicName, Integer partition) {
+        return getReplicaInfo(topicName, partition, true);
+    }
+
+    public List<ReplicaState> getObserverInfo(String topicName, Integer partition) {
+        return getReplicaInfo(topicName, partition, false);
     }
 
 }

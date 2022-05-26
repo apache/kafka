@@ -594,7 +594,7 @@ public class KafkaAdminClientTest {
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(Errors error) {
         if (error == Errors.NONE) {
             return new DescribeQuorumResponse(DescribeQuorumResponse.singletonResponse(
-                    new TopicPartition(Topic.METADATA_TOPIC_NAME, 0),
+                    new TopicPartition(Topic.METADATA_TOPIC_NAME, Topic.METADATA_TOPIC_PARTITION.partition()),
                     0, 0, 0,
                     singletonList(new DescribeQuorumResponseData.ReplicaState()
                             .setReplicaId(1)
@@ -4868,7 +4868,9 @@ public class KafkaAdminClientTest {
     @Test
     public void testDescribeMetadataQuorumSuccess() throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create((short) 55, (short) 0, (short) 1));
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,
+                    ApiKeys.DESCRIBE_QUORUM.latestVersion(),
+                    ApiKeys.DESCRIBE_QUORUM.oldestVersion()));
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
                     prepareDescribeQuorumResponse(Errors.NONE));
@@ -4881,7 +4883,9 @@ public class KafkaAdminClientTest {
     @Test
     public void testDescribeMetadataQuorumFailure() {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create((short) 55, (short) 0, (short) 1));
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,
+                        ApiKeys.DESCRIBE_QUORUM.latestVersion(),
+                        ApiKeys.DESCRIBE_QUORUM.oldestVersion()));
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
                     prepareDescribeQuorumResponse(Errors.INVALID_REQUEST));

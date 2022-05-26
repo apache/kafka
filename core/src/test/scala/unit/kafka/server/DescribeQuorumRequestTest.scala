@@ -36,8 +36,8 @@ import scala.reflect.ClassTag
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")
-class DescribeQuorumIntegrationTest(cluster: ClusterInstance) {
-  val log = LoggerFactory.getLogger(classOf[DescribeQuorumIntegrationTest])
+class DescribeQuorumRequestTest(cluster: ClusterInstance) {
+  val log = LoggerFactory.getLogger(classOf[DescribeQuorumRequestTest])
 
   @ClusterTest(clusterType = Type.ZK)
   def testDescribeQuorumNotSupportedByZkBrokers(): Unit = {
@@ -82,8 +82,13 @@ class DescribeQuorumIntegrationTest(cluster: ClusterInstance) {
         assertTrue(leaderState.logEndOffset > 0)
 
         val voterData = partitionData.currentVoters().asScala
+        val observerData = partitionData.observers().asScala
         if (version == 0) {
           voterData.foreach( state => {
+            assertTrue(state.lastFetchTimestamp() == -1)
+            assertTrue(state.lastCaughtUpTimestamp() == -1)
+          })
+          observerData.foreach( state => {
             assertTrue(state.lastFetchTimestamp() == -1)
             assertTrue(state.lastCaughtUpTimestamp() == -1)
           })
