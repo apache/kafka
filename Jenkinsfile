@@ -164,7 +164,6 @@ pipeline {
         stage('ARM') {
           agent { label 'arm4' }
           options {
-            timeout(time: 2, unit: 'HOURS') 
             timestamps()
           }
           environment {
@@ -173,7 +172,9 @@ pipeline {
           steps {
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE', catchInterruptions: true) {
-              doTest(env, 'unitTest')
+              timeout(time: 5, unit: 'MINUTES') {
+                doTest(env, 'unitTest')
+              } 
             }
             echo 'Skipping Kafka Streams archetype test for ARM build'
           }
