@@ -162,38 +162,72 @@ pipeline {
         }
 
         stage('ARM') {
-          agent { label 'arm4' }
+          // Remove this once infra is fixed. See INFRA-23305 and KAFKA-13941
+          when {
+            expression { false }
+          }
           options {
-            timeout(time: 2, unit: 'HOURS') 
             timestamps()
           }
           environment {
             SCALA_VERSION=2.12
           }
-          steps {
-            doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest(env, 'unitTest')
+          stages {
+            stage('Check ARM Agent') {
+              agent { label 'arm4' }
+              options {
+                timeout(time: 5, unit: 'MINUTES')
+              }
+              steps {
+                echo 'ARM ok'
+              }
             }
-            echo 'Skipping Kafka Streams archetype test for ARM build'
+            stage('Run ARM Build') {
+              agent { label 'arm4' }
+              options {
+                timeout(time: 2, unit: 'HOURS')
+              }
+              steps {
+                doValidation()
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                  doTest(env, 'unitTest')
+                }
+                echo 'Skipping Kafka Streams archetype test for ARM build'
+              }
+            }
           }
         }
 
         stage('PowerPC') {
-          agent { label 'ppc64le' }
           options {
-            timeout(time: 2, unit: 'HOURS')
             timestamps()
           }
           environment {
             SCALA_VERSION=2.12
           }
-          steps {
-            doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest(env, 'unitTest')
+          stages {
+            stage('Check PowerPC Agent') {
+              agent { label 'ppc64le' }
+              options {
+                timeout(time: 5, unit: 'MINUTES')
+              }
+              steps {
+                echo 'PowerPC ok'
+              }
             }
-            echo 'Skipping Kafka Streams archetype test for PowerPC build'
+            stage('Run PowerPC Build') {
+              agent { label 'ppc64le' }
+              options {
+                timeout(time: 2, unit: 'HOURS')
+              }
+              steps {
+                doValidation()
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                  doTest(env, 'unitTest')
+                }
+                echo 'Skipping Kafka Streams archetype test for PowerPC build'
+              }
+            }
           }
         }
         
