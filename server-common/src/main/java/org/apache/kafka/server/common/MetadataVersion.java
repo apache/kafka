@@ -152,7 +152,7 @@ public enum MetadataVersion {
     // Support for leader recovery for unclean leader election (KIP-704)
     IBP_3_2_IV0(4, "3.2", "IV0", false),
 
-    // Support for metadata.version feature flag (KIP-778)
+    // Support for metadata.version feature flag and Removes min_version_level from the finalized version range that is written to ZooKeeper (KIP-778)
     IBP_3_3_IV0(5, "3.3", "IV0", false);
 
     public static final String FEATURE_NAME = "metadata.version";

@@ -67,4 +67,10 @@ public class MessageGeneratorTest {
         } catch (RuntimeException e) {
         }
     }
+
+    @Test
+    public void testConstants() {
+        assertEquals(MessageGenerator.UNSIGNED_SHORT_MAX, 0xFFFF);
+        assertEquals(MessageGenerator.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
+    }
 }
