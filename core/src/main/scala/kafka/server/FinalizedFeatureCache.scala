@@ -17,23 +17,22 @@
 
 package kafka.server
 
-import java.util
-import java.util.Collections
 import kafka.utils.Logging
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.image.FeaturesDelta
 import org.apache.kafka.server.common.MetadataVersion
 
-import scala.concurrent.TimeoutException
-import scala.math.max
+import java.util
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.TimeoutException
+import scala.jdk.CollectionConverters._
+import scala.math.max
 
 // Raised whenever there was an error in updating the FinalizedFeatureCache with features.
 class FeatureCacheUpdateException(message: String) extends RuntimeException(message) {
 }
 
 // Helper class that represents finalized features along with an epoch value.
-case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], epoch: Long) {
+case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) {
   override def toString(): String = {
     s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
   }
@@ -107,7 +106,7 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
    *                         supported features. In such a case, the existing cache contents are
    *                         not modified.
    */
-  def updateOrThrow(latestFeatures: Features[FinalizedVersionRange], latestEpoch: Long): Unit = {
+  def updateOrThrow(latestFeatures: Map[String, Short], latestEpoch: Long): Unit = {
     val latest = FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch)
     val existing = featuresAndEpoch.map(item => item.toString()).getOrElse("<empty>")
     if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {
@@ -116,7 +115,7 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = brokerFeatures.incompatibleFeatures(latest.features)
-      if (!incompatibleFeatures.empty) {
+      if (incompatibleFeatures.nonEmpty) {
         val errorMsg = "FinalizedFeatureCache update failed since feature compatibility" +
           s" checks failed! Supported ${brokerFeatures.supportedFeatures} has incompatibilities" +
           s" with the latest $latest."
@@ -134,21 +133,19 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
 
   def update(featuresDelta: FeaturesDelta, highestMetadataOffset: Long): Unit = {
     val features = featuresAndEpoch.getOrElse(
-      FinalizedFeaturesAndEpoch(Features.emptyFinalizedFeatures(), -1))
-    val newFeatures = new util.HashMap[String, FinalizedVersionRange]()
-    newFeatures.putAll(features.features.features())
+      FinalizedFeaturesAndEpoch(Map.empty, -1))
+    val newFeatures = new util.HashMap[String, Short]()
+    newFeatures.putAll(features.features.asJava)
     featuresDelta.changes().entrySet().forEach { e =>
       e.getValue.asScala match {
         case None => newFeatures.remove(e.getKey)
-        case Some(version) => newFeatures.put(e.getKey,
-          new FinalizedVersionRange(version, version))
+        case Some(version) => newFeatures.put(e.getKey, version)
       }
     }
     featuresDelta.metadataVersionChange().ifPresent { metadataVersion =>
-      newFeatures.put(MetadataVersion.FEATURE_NAME, new FinalizedVersionRange(metadataVersion.featureLevel(), metadataVersion.featureLevel()))
+      newFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel())
     }
-    featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(Features.finalizedFeatures(
-      Collections.unmodifiableMap(newFeatures)), highestMetadataOffset))
+    featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(newFeatures.asScala.toMap, highestMetadataOffset))
   }
 
   /**

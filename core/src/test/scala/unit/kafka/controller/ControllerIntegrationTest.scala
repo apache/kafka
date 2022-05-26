@@ -19,7 +19,6 @@ package kafka.controller
 
 import java.util.Properties
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
-
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.controller.KafkaController.AlterPartitionCallback
@@ -27,13 +26,12 @@ import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0, IBP_3_2_IV0}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
@@ -637,12 +635,12 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), IBP_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short])), IBP_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), IBP_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short])), IBP_2_7_IV0)
   }
 
   @Test
@@ -652,12 +650,12 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), IBP_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short])), IBP_2_6_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), IBP_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short])), IBP_2_6_IV0)
   }
 
   @Test
@@ -812,7 +810,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
     val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
     if (interBrokerProtocolVersion.isAtLeast(IBP_2_7_IV0)) {
-      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures)
+      val emptyZNode = FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short])
       initialZNode match {
         case Some(node) => {
           node.status match {
@@ -826,10 +824,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         }
         case None =>
           assertEquals(0, versionAfter)
-          assertEquals(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures), newZNode)
+          assertEquals(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short]), newZNode)
       }
     } else {
-      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures)
+      val emptyZNode = FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short])
       initialZNode match {
         case Some(node) => {
           node.status match {
@@ -843,7 +841,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         }
         case None =>
           assertEquals(0, versionAfter)
-          assertEquals(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures), newZNode)
+          assertEquals(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short]), newZNode)
       }
     }
   }
