@@ -51,7 +51,7 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         .define(ConfigName.REGEX, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new GroupRegexValidator(), ConfigDef.Importance.MEDIUM,
             "String Regex Group Pattern.")
         .define(ConfigName.MAPPING_KEY, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
-            "Ordered Regex Group Mapping Keys ( with :{TYPE} )");
+            "Ordered Regex Group Mapping Keys");
 
     private static final String PURPOSE = "Transform Struct by regex group mapping";
 
