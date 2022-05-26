@@ -1217,11 +1217,14 @@ public final class QuorumController implements Controller {
     }
 
     private void handleFeatureControlChange() {
-        // The feature control maybe have changed. Check if a NoOpRecord should be scheduled or canceled
-        if (featureControl.metadataVersion().isNoOpRecordSupported()) {
-            maybeScheduleNextWriteNoOpRecord();
-        } else {
-            cancelNextWriteNoOpRecord();
+        // The feature control maybe have changed. On the active controller cancel or schedule noop
+        // record writes accordingly.
+        if (isActiveController()) {
+            if (featureControl.metadataVersion().isNoOpRecordSupported()) {
+                maybeScheduleNextWriteNoOpRecord();
+            } else {
+                cancelNextWriteNoOpRecord();
+            }
         }
     }
 
