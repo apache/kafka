@@ -162,21 +162,31 @@ pipeline {
         }
 
         stage('ARM') {
-          agent { label 'arm4' }
           options {
             timestamps()
           }
           environment {
             SCALA_VERSION=2.12
           }
-          steps {
-            doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE', catchInterruptions: true) {
-              timeout(time: 5, unit: 'MINUTES') {
-                doTest(env, 'unitTest')
-              } 
+          stages {
+            stage('Check ARM') {
+              agent { label 'arm4' }
+              options {
+                timeout(time: 5, unit: 'MINUTES')
+              }
+              steps {
+                echo 'ok'
+              }
             }
-            echo 'Skipping Kafka Streams archetype test for ARM build'
+            stage('Run ARM Build') {
+              agent { label 'arm4' }
+              options {
+                timeout(time: 2, unit: 'HOURS')
+              }
+              doValidation()
+              doTest(env, 'unitTest')
+              echo 'Skipping Kafka Streams archetype test for ARM build'
+            }
           }
         }
 
