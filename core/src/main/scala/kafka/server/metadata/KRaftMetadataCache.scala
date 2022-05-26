@@ -372,9 +372,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val image = _currentImage
     val features = image.features().finalizedVersions().asScala.map {
       case (name: String, level: java.lang.Short) => name -> Short2short(level)
-    }.toMap
+    }
+    features.put(MetadataVersion.FEATURE_NAME, image.features().metadataVersion().featureLevel())
+
     FinalizedFeaturesAndEpoch(
-      features,
+      features.toMap,
       image.highestOffsetAndEpoch().offset)
   }
 }
