@@ -25,6 +25,7 @@ import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.common.message.{SnapshotFooterRecord, SnapshotFooterRecordJsonConverter, SnapshotHeaderRecord, SnapshotHeaderRecordJsonConverter}
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
@@ -250,7 +251,10 @@ object DumpLogSegments {
                       maxBytes: Int): Unit = {
     if (file.getName.endsWith(UnifiedLog.LogFileSuffix)) {
       val startOffset = file.getName.split("\\.")(0).toLong
-      println("Starting offset: " + startOffset)
+      println(s"Log starting offset: $startOffset")
+    } else if (file.getName.endsWith(Snapshots.SUFFIX)) {
+      val path = Snapshots.parse(file.toPath).get()
+      println(s"Snapshot end offset: ${path.snapshotId.offset}, epoch: ${path.snapshotId.epoch}")
     }
     val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
     try {
@@ -292,10 +296,10 @@ object DumpLogSegments {
                     print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
                   case ControlRecordType.SNAPSHOT_HEADER =>
                     val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(record)
-                    print(s" SnapshotHeader version: ${header.version()} lastContainedLogTimestamp: ${header.lastContainedLogTimestamp()}")
+                    print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, SnapshotHeaderRecord.HIGHEST_SUPPORTED_VERSION)}")
                   case ControlRecordType.SNAPSHOT_FOOTER =>
                     val footer = ControlRecordUtils.deserializedSnapshotFooterRecord(record)
-                    print(s" SnapshotFooter version: ${footer.version()}")
+                    print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, SnapshotFooterRecord.HIGHEST_SUPPORTED_VERSION)}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")
                 }

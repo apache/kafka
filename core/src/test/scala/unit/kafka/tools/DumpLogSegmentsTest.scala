@@ -21,6 +21,7 @@ import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
+
 import kafka.log.{AppendOrigin, Defaults, LogConfig, LogManager, LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, FetchLogEnd, KafkaRaftServer, LogDirFailureChannel}
@@ -260,11 +261,12 @@ class DumpLogSegmentsTest {
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
     log.flush(false)
 
-    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "false", "--files", logFilePath))
+    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
+    assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
 
-    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "false", "--files", logFilePath))
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
 
@@ -276,7 +278,7 @@ class DumpLogSegmentsTest {
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 2)
 
-    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "false", "--files", logFilePath))
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
     assertTrue(output.contains("skipping"))
@@ -317,33 +319,36 @@ class DumpLogSegmentsTest {
 
     val lastContainedLogTimestamp = 10000
 
-    val snapshotWriter = RecordsSnapshotWriter.createWithHeader(
-      () => metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)),
-      1024,
-      MemoryPool.NONE,
-      new MockTime,
-      lastContainedLogTimestamp,
-      CompressionType.NONE,
-      new MetadataRecordSerde
-    ).get()
+    TestUtils.resource(
+      RecordsSnapshotWriter.createWithHeader(
+        () => metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)),
+        1024,
+        MemoryPool.NONE,
+        new MockTime,
+        lastContainedLogTimestamp,
+        CompressionType.NONE,
+        new MetadataRecordSerde
+      ).get()
+    ) { snapshotWriter =>
+      snapshotWriter.append(metadataRecords.asJava)
+      snapshotWriter.freeze()
+    }
 
-    snapshotWriter.append(metadataRecords.asJava)
-    snapshotWriter.freeze()
-    snapshotWriter.close()
-
-    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "false", "--files", snapshotPath))
+    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", snapshotPath))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
     assertTrue(output.contains("SnapshotHeader"))
     assertTrue(output.contains("SnapshotFooter"))
-    assertTrue(output.contains(s"lastContainedLogTimestamp: $lastContainedLogTimestamp"))
+    assertTrue(output.contains(s"\"lastContainedLogTimestamp\":$lastContainedLogTimestamp"))
 
-    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "false", "--files", snapshotPath))
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", snapshotPath))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
     assertFalse(output.contains("SnapshotHeader"))
     assertFalse(output.contains("SnapshotFooter"))
-    assertFalse(output.contains(s"lastContainedLogTimestamp: $lastContainedLogTimestamp"))
+    assertFalse(output.contains(s"\"lastContainedLogTimestamp\": $lastContainedLogTimestamp"))
   }
 
   @Test
