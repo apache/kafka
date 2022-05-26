@@ -22,17 +22,17 @@ import org.apache.kafka.common.config.ConfigException;
 
 import java.util.regex.Pattern;
 
-public class GroupRegexValidator implements ConfigDef.Validator{
+public class GroupRegexValidator implements ConfigDef.Validator {
 
     @Override
     public void ensureValid(String name, Object value) {
         try {
             Pattern p = Pattern.compile((String) value);
-            if(p.matcher("dummy").groupCount() < 1){
+            if (p.matcher("dummy").groupCount() < 1) {
                 throw new ConfigException(name, value, "Regex contain at least one group syntax Required  ex) ^a(.*)c");
             }
 
-        }catch (Exception e){
+        } catch (Exception e) {
             throw new ConfigException(name, value, "Invalid Regex");
         }
     }

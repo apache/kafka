@@ -17,51 +17,47 @@
 
 package org.apache.kafka.connect.transforms;
 
-import static org.apache.kafka.connect.transforms.util.Requirements.*;
-
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.*;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.GroupRegexValidator;
+import org.apache.kafka.connect.transforms.util.Requirements;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 
-import java.util.*;
-import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> implements Transformation<R> {
     public static final String OVERVIEW_DOC = "Generate key/value Struct objects supported by ordered Regex Group"
-            + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
-            + "or value (<code>" + Value.class.getName() + "</code>).";
-
-    private static final String TYPE_DELIMITER = ":";
+        + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
+        + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private interface ConfigName {
         String REGEX = "regex";
         String MAPPING_KEY = "mapping";
-        String STURCT_INPUT_KEY_NAME = "struct.field";
     }
 
-
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(ConfigName.REGEX, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new GroupRegexValidator(), ConfigDef.Importance.MEDIUM,
-                    "String Regex Group Pattern.")
-            .define(ConfigName.MAPPING_KEY, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
-                    "Ordered Regex Group Mapping Keys ( with :{TYPE} )")
-            .define(ConfigName.STURCT_INPUT_KEY_NAME, ConfigDef.Type.STRING, "message", ConfigDef.Importance.MEDIUM,
-                    "target fieldName In Case struct input");
-
+        .define(ConfigName.REGEX, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new GroupRegexValidator(), ConfigDef.Importance.MEDIUM,
+            "String Regex Group Pattern.")
+        .define(ConfigName.MAPPING_KEY, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
+            "Ordered Regex Group Mapping Keys ( with :{TYPE} )");
 
     private static final String PURPOSE = "Transform Struct by regex group mapping";
 
     private String pattern;
-    private List<KeyData> fieldKeys;
-    private String structField;
+    private List<String> fieldKeys;
+    private String structField = "message";
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
@@ -69,19 +65,9 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
     public void configure(Map<String, ?> configs) {
         final AbstractConfig config = new AbstractConfig(CONFIG_DEF, configs, false);
         pattern = config.getString(ConfigName.REGEX);
-        fieldKeys = toKeyDataList(config.getList(ConfigName.MAPPING_KEY));
-        structField = config.getString(ConfigName.STURCT_INPUT_KEY_NAME);
+        fieldKeys = config.getList(ConfigName.MAPPING_KEY);
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
-    }
-
-    private List<KeyData> toKeyDataList(List<String> mappingKeyList){
-        List<KeyData> resultList = new ArrayList<>();
-        for(String keyWithType : mappingKeyList){
-            String[] keyWithTypeArr = keyWithType.split(TYPE_DELIMITER);
-            resultList.add(new KeyData(keyWithTypeArr[0], keyWithTypeArr.length > 1 ? keyWithTypeArr[1] : null));
-        }
-        return resultList;
     }
 
     @Override
@@ -97,13 +83,13 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         Map<String, Object> resultMap;
 
         String inputTargetStr;
-        if(operatingValue(record) instanceof String){
-            inputTargetStr = (String)operatingValue(record);
+        if (operatingValue(record) instanceof String) {
+            inputTargetStr = (String) operatingValue(record);
             resultMap = parseRegexGroupToStringMap(inputTargetStr);
-        }else {
-            Map<String, Object> inputMap = requireMap(operatingValue(record), PURPOSE);
+        } else {
+            Map<String, Object> inputMap = Requirements.requireMap(operatingValue(record), PURPOSE);
             resultMap = new HashMap<>(inputMap);
-            inputTargetStr = (String)inputMap.get(structField);
+            inputTargetStr = (String) inputMap.get(structField);
             resultMap.putAll(parseRegexGroupToStringMap(inputTargetStr));
 
             //remove orginal field
@@ -118,15 +104,15 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         Struct updatedStruct;
 
         String inputTargetStr;
-        if(operatingValue(record) instanceof String){
-            inputTargetStr = (String)operatingValue(record);
-            Map<KeyData, Object> newEntryMap = parseRegexGroup(inputTargetStr);
-            updatedSchema = newSchema( newEntryMap);
-            updatedStruct = newStruct( newEntryMap, updatedSchema );
-        }else {
-            final Struct inputStruct = requireStruct(operatingValue(record), PURPOSE);
+        if (operatingValue(record) instanceof String) {
+            inputTargetStr = (String) operatingValue(record);
+            Map<String, Object> newEntryMap = parseRegexGroupToStringMap(inputTargetStr);
+            updatedSchema = newSchema(newEntryMap);
+            updatedStruct = newStruct(newEntryMap, updatedSchema);
+        } else {
+            final Struct inputStruct = Requirements.requireStruct(operatingValue(record), PURPOSE);
             inputTargetStr = inputStruct.getString(structField);
-            Map<KeyData, Object> newEntryMap = parseRegexGroup(inputTargetStr);
+            Map<String, Object> newEntryMap = parseRegexGroupToStringMap(inputTargetStr);
 
             updatedSchema = mergeSchema(inputStruct, newEntryMap);
             updatedStruct = mergeStruct(inputStruct, newEntryMap, updatedSchema);
@@ -135,61 +121,49 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         return newRecord(record, updatedSchema, updatedStruct);
     }
 
-
-    private Map<String, Object> parseRegexGroupToStringMap(String inputTargetStr){
+    private Map<String, Object> parseRegexGroupToStringMap(String inputTargetStr) {
         Map<String, Object> newEntryMap = new HashMap<>();
+
+        if (inputTargetStr == null) {
+            return newEntryMap;
+        }
+
         Pattern p = Pattern.compile(pattern);
         Matcher m = p.matcher(inputTargetStr);
-        if(m.find()){
-            for(int i=0; i < m.groupCount(); i++){
-                String value = m.group(i+1);
-                newEntryMap.put(fieldKeys.get(i).getName(), fieldKeys.get(i).castJavaType(value));
+        if (m.find()) {
+            for (int i = 0; i < m.groupCount(); i++) {
+                String value = m.group(i + 1);
+                newEntryMap.put(fieldKeys.get(i), value);
             }
         }
         return newEntryMap;
     }
 
-    private Map<KeyData, Object> parseRegexGroup(String inputTargetStr){
-        Map<KeyData, Object> newEntryMap = new HashMap<>();
-        Pattern p = Pattern.compile(pattern);
-        Matcher m = p.matcher(inputTargetStr);
-        if(m.find()){
-            for(int i=0; i < m.groupCount(); i++){
-                String value = m.group(i+1);
-                newEntryMap.put(fieldKeys.get(i), fieldKeys.get(i).castJavaType(value));
-            }
-        }
-        return newEntryMap;
-    }
-
-
-
-    private Struct newStruct(Map<KeyData, Object> newEntryMap, Schema updatedSchema){
+    private Struct newStruct(Map<String, Object> newEntryMap, Schema updatedSchema) {
         final Struct updatedValue = new Struct(updatedSchema);
-        for (Map.Entry<KeyData, Object> entry : newEntryMap.entrySet()) {
-            updatedValue.put(entry.getKey().getName(), entry.getValue());
+        for (Map.Entry<String, Object> entry : newEntryMap.entrySet()) {
+            updatedValue.put(entry.getKey(), entry.getValue());
         }
 
         return updatedValue;
     }
 
-
-    private Struct mergeStruct(Struct orgStruct, Map<KeyData, Object> newEntryMap, Schema updatedSchema){
+    private Struct mergeStruct(Struct orgStruct, Map<String, Object> newEntryMap, Schema updatedSchema) {
         final Struct updatedValue = new Struct(updatedSchema);
         for (Field f : orgStruct.schema().fields()) {
-            if(!structField.equals(f.name())) {
+            if (!structField.equals(f.name())) {
                 updatedValue.put(f.name(), orgStruct.get(f.name()));
             }
         }
 
-        for (Map.Entry<KeyData, Object> entry : newEntryMap.entrySet()) {
-            updatedValue.put(entry.getKey().getName(), entry.getValue());
+        for (Map.Entry<String, Object> entry : newEntryMap.entrySet()) {
+            updatedValue.put(entry.getKey(), entry.getValue());
         }
 
         return updatedValue;
     }
 
-    private Schema mergeSchema(Struct orgStruct, Map<KeyData, Object> newEntryMap ) {
+    private Schema mergeSchema(Struct orgStruct, Map<String, Object> newEntryMap) {
         Schema updatedSchema = schemaUpdateCache.get(orgStruct.schema());
         if (updatedSchema == null) {
             final SchemaBuilder builder = SchemaUtil.copySchemaBasics(orgStruct.schema(), SchemaBuilder.struct());
@@ -197,8 +171,8 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
                 builder.field(orgField.name(), orgField.schema());
             }
 
-            for (Map.Entry<KeyData, Object> entry : newEntryMap.entrySet()) {
-                builder.field(entry.getKey().getName(),entry.getKey().getTypeSchema());
+            for (Map.Entry<String, Object> entry : newEntryMap.entrySet()) {
+                builder.field(entry.getKey(), Schema.STRING_SCHEMA);
             }
             updatedSchema = builder.build();
             schemaUpdateCache.put(orgStruct.schema(), updatedSchema);
@@ -207,10 +181,10 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         return updatedSchema;
     }
 
-    private Schema newSchema(Map<KeyData, Object> newEntryMap) {
+    private Schema newSchema(Map<String, Object> newEntryMap) {
         final SchemaBuilder builder = SchemaBuilder.struct();
-        for (Map.Entry<KeyData, Object> entry : newEntryMap.entrySet()) {
-            builder.field(entry.getKey().getName(),entry.getKey().getTypeSchema());
+        for (Map.Entry<String, Object> entry : newEntryMap.entrySet()) {
+            builder.field(entry.getKey(), Schema.STRING_SCHEMA);
         }
         Schema schema = builder.build();
         schemaUpdateCache.put(schema, schema);
@@ -270,58 +244,4 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         }
 
     }
-
-    public enum TYPE{
-        STRING
-        ,NUMBER
-        ,FLOAT
-        ,BOOLEAN
-        ,TIMEMILLIS
-    }
-
-    private static class KeyData{
-        private String name;
-        private TYPE type;
-
-        private KeyData(String name, String type){
-            this.name = name;
-            this.type = type != null ? TYPE.valueOf(type) : TYPE.STRING;
-        }
-
-        public String getName(){
-            return this.name;
-        }
-
-        public TYPE type(){
-            return this.type;
-        }
-
-        private Object castJavaType(String value){
-            try {
-                switch (this.type) {
-                    case STRING: return value;
-                    case NUMBER: return Long.valueOf(value);
-                    case FLOAT: return Float.valueOf(value);
-                    case BOOLEAN: return Boolean.valueOf(value);
-                    case TIMEMILLIS: return new Date(Long.valueOf(value));
-                    default: return value;
-                }
-            }catch (Exception e){
-                return value;
-            }
-        }
-
-
-        private Schema getTypeSchema(){
-            switch (this.type){
-                case STRING: return Schema.STRING_SCHEMA;
-                case NUMBER: return Schema.INT64_SCHEMA;
-                case FLOAT: return Schema.FLOAT64_SCHEMA;
-                case BOOLEAN: return Schema.BOOLEAN_SCHEMA;
-                case TIMEMILLIS: return Timestamp.SCHEMA;
-                default: return Schema.STRING_SCHEMA;
-            }
-        }
-    }
-
 }
