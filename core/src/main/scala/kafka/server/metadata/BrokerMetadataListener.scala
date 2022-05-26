@@ -40,7 +40,7 @@ class BrokerMetadataListener(
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
   val snapshotter: Option[MetadataSnapshotter],
-  brokerMetrics: BrokerMetrics
+  brokerMetrics: BrokerServerMetrics
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])

@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.concurrent.TimeUnit
 import java.util.{Collections, Locale, Properties}
 
 import kafka.cluster.EndPoint
@@ -715,8 +716,8 @@ object KafkaConfig {
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest snapshot and the high-watermark needed before generating a new snapshot."
   val MetadataMaxIdleIntervalMsDoc = "This configuration controls how often the active " +
-    "controller should write no op records to the metadata log. If the value is 0 or negative then the no op records " +
-    s"is not produced. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";
+    "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
+    s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
     "if running in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.\n " +
     "Note: The ZK-based controller should not set this configuration."
@@ -1153,7 +1154,7 @@ object KafkaConfig {
       .define(MetadataLogSegmentMillisProp, LONG, Defaults.LogRollHours * 60 * 60 * 1000L, null, HIGH, MetadataLogSegmentMillisDoc)
       .define(MetadataMaxRetentionBytesProp, LONG, Defaults.LogRetentionBytes, null, HIGH, MetadataMaxRetentionBytesDoc)
       .define(MetadataMaxRetentionMillisProp, LONG, Defaults.LogRetentionHours * 60 * 60 * 1000L, null, HIGH, MetadataMaxRetentionMillisDoc)
-      .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.MetadataMaxIdleIntervalMs, null, LOW, MetadataMaxIdleIntervalMsDoc)
+      .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.MetadataMaxIdleIntervalMs, atLeast(0), LOW, MetadataMaxIdleIntervalMsDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, new ConfigDef.NonNullValidator(), LOW, AuthorizerClassNameDoc)
@@ -1666,8 +1667,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /************* Metadata Configuration ***********/
   val metadataSnapshotMaxNewRecordBytes = getLong(KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp)
-  val metadataMaxIdleIntervalMs: Option[Int] = {
-    val value = getInt(KafkaConfig.MetadataMaxIdleIntervalMsProp)
+  val metadataMaxIdleIntervalNs: Option[Long] = {
+    val value = TimeUnit.NANOSECONDS.convert(getLong(KafkaConfig.MetadataMaxIdleIntervalMsProp), TimeUnit.MILLISECONDS)
     if (value > 0) Some(value) else None
   }
 

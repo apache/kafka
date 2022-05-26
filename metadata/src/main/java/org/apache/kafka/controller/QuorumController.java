@@ -1041,8 +1041,8 @@ public final class QuorumController implements Controller {
             // the default append linger for KRaft is 25ms.
             controllerMetrics.setLastAppliedRecordTimestamp(time.milliseconds());
         } else {
-            // This is called with an offset of -1 when the active controller renounced leadership
-            // Change the offset back to the last committed state
+            // Change the last applied record metrics back to the last committed state. Inactive controllers report the last committed
+            // state while active controllers report the latest state which may include uncommitted data.
             controllerMetrics.setLastAppliedRecordOffset(lastCommittedOffset);
             controllerMetrics.setLastAppliedRecordTimestamp(lastCommittedTimestamp);
         }

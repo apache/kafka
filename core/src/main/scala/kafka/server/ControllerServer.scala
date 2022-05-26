@@ -174,10 +174,7 @@ class ControllerServer(
           OptionalLong.empty()
         }
 
-        val maxIdleIntervalNs = config.metadataMaxIdleIntervalMs match {
-          case Some(value) => OptionalLong.of(TimeUnit.NANOSECONDS.convert(value, TimeUnit.MILLISECONDS))
-          case None => OptionalLong.empty()
-        }
+        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
         new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
           setTime(time).

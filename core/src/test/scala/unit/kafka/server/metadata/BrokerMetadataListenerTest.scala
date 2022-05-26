@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
   private def newBrokerMetadataListener(
-    metrics: BrokerMetrics = BrokerMetrics(new Metrics()),
+    metrics: BrokerServerMetrics = BrokerServerMetrics(new Metrics()),
     snapshotter: Option[MetadataSnapshotter] = None,
     maxBytesBetweenSnapshots: Long = 1000000L,
   ): BrokerMetadataListener = {
@@ -57,7 +57,7 @@ class BrokerMetadataListenerTest {
 
   @Test
   def testPublish(): Unit = {
-    val metrics = BrokerMetrics(new Metrics())
+    val metrics = BrokerServerMetrics(new Metrics())
     val listener = newBrokerMetadataListener(metrics = metrics)
     try {
       val unfencedTimestamp = 300L

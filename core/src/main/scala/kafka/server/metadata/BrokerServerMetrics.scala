@@ -23,8 +23,8 @@ import org.apache.kafka.common.metrics.Gauge
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.MetricConfig
 
-final class BrokerMetrics private (metrics: Metrics) extends AutoCloseable {
-  import BrokerMetrics._
+final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable {
+  import BrokerServerMetrics._
 
   val lastAppliedRecordOffset: AtomicLong = new AtomicLong(0)
   val lastAppliedRecordTimestamp: AtomicLong = new AtomicLong(0)
@@ -69,7 +69,7 @@ final class BrokerMetrics private (metrics: Metrics) extends AutoCloseable {
 }
 
 
-final object BrokerMetrics {
+final object BrokerServerMetrics {
   private val metricGroupName = "broker-metadata-metrics"
 
   private def addMetric[T](metrics: Metrics, name: MetricName)(func: Long => T): Unit = {
@@ -82,7 +82,7 @@ final object BrokerMetrics {
     }
   }
 
-  def apply(metrics: Metrics): BrokerMetrics = {
-    new BrokerMetrics(metrics)
+  def apply(metrics: Metrics): BrokerServerMetrics = {
+    new BrokerServerMetrics(metrics)
   }
 }

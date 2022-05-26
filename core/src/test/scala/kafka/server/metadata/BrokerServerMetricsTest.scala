@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import scala.jdk.CollectionConverters._
 
-final class BrokerMetricsTest {
+final class BrokerServerMetricsTest {
   @Test
   def testMetricsExported(): Unit = {
     val metrics = new Metrics()
@@ -40,7 +40,7 @@ final class BrokerMetricsTest {
       new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap())
     )
      
-    TestUtils.resource(BrokerMetrics(metrics)) { brokerMetrics =>
+    TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
       val metricsMap = metrics.metrics().asScala.filter{ case (name, _) => name.group == expectedGroup }
       assertEquals(3, metricsMap.size)
       metricsMap.foreach { case (name, metric) =>
@@ -55,7 +55,7 @@ final class BrokerMetricsTest {
   @Test
   def testLastAppliedRecordOffset(): Unit = {
     val metrics = new Metrics()
-    TestUtils.resource(BrokerMetrics(metrics)) { brokerMetrics =>
+    TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
       val offsetMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordOffsetName)
       assertEquals(0, offsetMetric.metricValue.asInstanceOf[Long])
 
@@ -70,7 +70,7 @@ final class BrokerMetricsTest {
   def testLastAppliedRecordTimestamp(): Unit = {
     val time = new MockTime()
     val metrics = new Metrics(time)
-    TestUtils.resource(BrokerMetrics(metrics)) { brokerMetrics =>
+    TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
       time.sleep(1000)
       val timestampMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordTimestampName)
       val lagMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordLagMsName)

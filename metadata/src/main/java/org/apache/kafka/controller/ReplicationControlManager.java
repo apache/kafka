@@ -139,7 +139,7 @@ public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
     static class Builder {
-        private Supplier<MetadataVersion> metadataVersion;
+        private Supplier<MetadataVersion> metadataVersion = MetadataVersion::latest;
         private SnapshotRegistry snapshotRegistry = null;
         private LogContext logContext = null;
         private short defaultReplicationFactor = (short) 3;
@@ -201,9 +201,7 @@ public class ReplicationControlManager {
         }
 
         ReplicationControlManager build() {
-            if (metadataVersion == null) {
-                throw new IllegalStateException("Metadata version must be set before building");
-            } else if (configurationControl == null) {
+            if (configurationControl == null) {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
                 throw new IllegalStateException("Cluster controller must be set before building");
