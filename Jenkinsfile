@@ -172,7 +172,7 @@ pipeline {
           }
           steps {
             doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE', catchInterruptions: true) {
               doTest(env, 'unitTest')
             }
             echo 'Skipping Kafka Streams archetype test for ARM build'
