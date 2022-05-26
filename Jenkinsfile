@@ -162,6 +162,9 @@ pipeline {
         }
 
         stage('ARM') {
+          when {
+            false
+          }
           options {
             timestamps()
           }
