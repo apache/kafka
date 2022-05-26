@@ -163,7 +163,7 @@ pipeline {
 
         stage('ARM') {
           when {
-            false
+            expression { false }
           }
           options {
             timestamps()
