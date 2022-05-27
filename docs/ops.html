@@ -1506,22 +1506,22 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Message validation failure rate due to no key specified for compacted topic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to invalid magic number</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to incorrect crc checksum</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to non-continuous offset or sequence number in batch</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Log flush rate and time</td>
@@ -1765,12 +1765,12 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Outgoing byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
-        <td></td>
+        <td>0; non-zero when the partition reassignment is in progress.</td>
       </tr>
       <tr>
         <td>Incoming byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
-        <td></td>
+        <td>0; non-zero when the partition reassignment is in progress.</td>
       </tr>
       <tr>
         <td>Size of a partition on disk (in bytes)</td>
