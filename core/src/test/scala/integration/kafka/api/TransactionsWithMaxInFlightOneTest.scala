@@ -115,7 +115,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   }
 
   private def createReadCommittedConsumer(group: String) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
       groupId = group,
       enableAutoCommit = false,
       readCommitted = true)

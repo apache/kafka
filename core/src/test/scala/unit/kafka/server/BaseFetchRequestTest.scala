@@ -69,7 +69,7 @@ class BaseFetchRequestTest extends BaseRequestTest {
   }
 
   protected def initProducer(): Unit = {
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 

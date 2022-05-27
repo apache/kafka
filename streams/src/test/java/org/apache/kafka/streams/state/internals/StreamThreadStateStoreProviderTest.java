@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -45,7 +46,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -405,7 +406,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
-            StreamThread.eosEnabled(streamsConfig),
+            StreamsConfigUtils.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
             new StoreChangelogReader(

@@ -33,17 +33,27 @@ import org.junit.jupiter.api.Test
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
+  private def newBrokerMetadataListener(
+    snapshotter: Option[MetadataSnapshotter] = None,
+    maxBytesBetweenSnapshots: Long = 1000000L,
+  ): BrokerMetadataListener = {
+    new BrokerMetadataListener(
+      brokerId = 0,
+      time = Time.SYSTEM,
+      threadNamePrefix = None,
+      maxBytesBetweenSnapshots = maxBytesBetweenSnapshots,
+      snapshotter = snapshotter)
+  }
+
   @Test
   def testCreateAndClose(): Unit = {
-    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
-      snapshotter = None)
+    val listener = newBrokerMetadataListener()
     listener.close()
   }
 
   @Test
   def testPublish(): Unit = {
-    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
-      snapshotter = None)
+    val listener = newBrokerMetadataListener()
     try {
       listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
         util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -74,6 +84,8 @@ class BrokerMetadataListenerTest {
             Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true),
             delta.clusterDelta().broker(1))
         }
+
+        override def publishedOffset: Long = -1
       }).get()
     } finally {
       listener.close()
@@ -115,6 +127,8 @@ class BrokerMetadataListenerTest {
     override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
       image = newImage
     }
+
+    override def publishedOffset: Long = -1
   }
 
   private val FOO_ID = Uuid.fromString("jj1G9utnTuCegi_gpnRgYw")
@@ -137,8 +151,7 @@ class BrokerMetadataListenerTest {
 
   @Test
   def testHandleCommitsWithNoSnapshotterDefined(): Unit = {
-    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L,
-      snapshotter = None)
+    val listener = newBrokerMetadataListener(maxBytesBetweenSnapshots = 1000L)
     try {
       val brokerIds = 0 to 3
 
@@ -157,7 +170,8 @@ class BrokerMetadataListenerTest {
   @Test
   def testCreateSnapshot(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
-    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L, Some(snapshotter))
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
     try {
       val brokerIds = 0 to 3
 

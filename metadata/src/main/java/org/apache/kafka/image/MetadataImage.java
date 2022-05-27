@@ -38,7 +38,8 @@ public final class MetadataImage {
         TopicsImage.EMPTY,
         ConfigurationsImage.EMPTY,
         ClientQuotasImage.EMPTY,
-        ProducerIdsImage.EMPTY);
+        ProducerIdsImage.EMPTY,
+        AclsImage.EMPTY);
 
     private final OffsetAndEpoch highestOffsetAndEpoch;
 
@@ -54,6 +55,8 @@ public final class MetadataImage {
 
     private final ProducerIdsImage producerIds;
 
+    private final AclsImage acls;
+
     public MetadataImage(
         OffsetAndEpoch highestOffsetAndEpoch,
         FeaturesImage features,
@@ -61,7 +64,8 @@ public final class MetadataImage {
         TopicsImage topics,
         ConfigurationsImage configs,
         ClientQuotasImage clientQuotas,
-        ProducerIdsImage producerIds
+        ProducerIdsImage producerIds,
+        AclsImage acls
     ) {
         this.highestOffsetAndEpoch = highestOffsetAndEpoch;
         this.features = features;
@@ -70,6 +74,7 @@ public final class MetadataImage {
         this.configs = configs;
         this.clientQuotas = clientQuotas;
         this.producerIds = producerIds;
+        this.acls = acls;
     }
 
     public boolean isEmpty() {
@@ -78,7 +83,8 @@ public final class MetadataImage {
             topics.isEmpty() &&
             configs.isEmpty() &&
             clientQuotas.isEmpty() &&
-            producerIds.isEmpty();
+            producerIds.isEmpty() &&
+            acls.isEmpty();
     }
 
     public OffsetAndEpoch highestOffsetAndEpoch() {
@@ -109,13 +115,20 @@ public final class MetadataImage {
         return producerIds;
     }
 
+    public AclsImage acls() {
+        return acls;
+    }
+
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
+        // Features should be written out first so we can include the metadata.version at the beginning of the
+        // snapshot
         features.write(out);
         cluster.write(out);
         topics.write(out);
         configs.write(out);
         clientQuotas.write(out);
         producerIds.write(out);
+        acls.write(out);
     }
 
     @Override
@@ -128,7 +141,8 @@ public final class MetadataImage {
             topics.equals(other.topics) &&
             configs.equals(other.configs) &&
             clientQuotas.equals(other.clientQuotas) &&
-            producerIds.equals(other.producerIds);
+            producerIds.equals(other.producerIds) &&
+            acls.equals(other.acls);
     }
 
     @Override
@@ -139,7 +153,8 @@ public final class MetadataImage {
             topics,
             configs,
             clientQuotas,
-            producerIds);
+            producerIds,
+            acls);
     }
 
     @Override
@@ -151,6 +166,7 @@ public final class MetadataImage {
             ", configs=" + configs +
             ", clientQuotas=" + clientQuotas +
             ", producerIdsImage=" + producerIds +
+            ", acls=" + acls +
             ")";
     }
 }

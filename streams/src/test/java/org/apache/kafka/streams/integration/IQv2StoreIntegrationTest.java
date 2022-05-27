@@ -101,6 +101,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -133,6 +135,8 @@ public class IQv2StoreIntegrationTest {
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final Position POSITION_0 =
+        Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 1L)))));
 
     public static class UnknownQuery implements Query<Void> { }
 
@@ -756,45 +760,50 @@ public class IQv2StoreIntegrationTest {
 
     @Test
     public void verifyStore() {
-        if (storeToTest.global()) {
-            // See KAFKA-13523
-            globalShouldRejectAllQueries();
-        } else {
-            shouldRejectUnknownQuery();
-            shouldCollectExecutionInfo();
-            shouldCollectExecutionInfoUnderFailure();
+        try {
+            if (storeToTest.global()) {
+                // See KAFKA-13523
+                globalShouldRejectAllQueries();
+            } else {
+                shouldRejectUnknownQuery();
+                shouldCollectExecutionInfo();
+                shouldCollectExecutionInfoUnderFailure();
 
-            if (storeToTest.keyValue()) {
-                if (storeToTest.timestamped()) {
-                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
-                        ValueAndTimestamp::value;
-                    shouldHandleKeyQuery(2, valueExtractor, 2);
-                    shouldHandleRangeQueries(valueExtractor);
-                } else {
-                    final Function<Integer, Integer> valueExtractor = Function.identity();
-                    shouldHandleKeyQuery(2, valueExtractor, 2);
-                    shouldHandleRangeQueries(valueExtractor);
-                }
-            }
-
-            if (storeToTest.isWindowed()) {
-                if (storeToTest.timestamped()) {
-                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                if (storeToTest.keyValue()) {
+                    if (storeToTest.timestamped()) {
+                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
                             ValueAndTimestamp::value;
-                    shouldHandleWindowKeyQueries(valueExtractor);
-                    shouldHandleWindowRangeQueries(valueExtractor);
-                } else {
-                    final Function<Integer, Integer> valueExtractor = Function.identity();
-                    shouldHandleWindowKeyQueries(valueExtractor);
-                    shouldHandleWindowRangeQueries(valueExtractor);
+                        shouldHandleKeyQuery(2, valueExtractor, 2);
+                        shouldHandleRangeQueries(valueExtractor);
+                    } else {
+                        final Function<Integer, Integer> valueExtractor = Function.identity();
+                        shouldHandleKeyQuery(2, valueExtractor, 2);
+                        shouldHandleRangeQueries(valueExtractor);
+                    }
+                }
+
+                if (storeToTest.isWindowed()) {
+                    if (storeToTest.timestamped()) {
+                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                            ValueAndTimestamp::value;
+                        shouldHandleWindowKeyQueries(valueExtractor);
+                        shouldHandleWindowRangeQueries(valueExtractor);
+                    } else {
+                        final Function<Integer, Integer> valueExtractor = Function.identity();
+                        shouldHandleWindowKeyQueries(valueExtractor);
+                        shouldHandleWindowRangeQueries(valueExtractor);
+                    }
+                }
+
+                if (storeToTest.isSession()) {
+                    // Note there's no "timestamped" differentiation here.
+                    // Idiosyncratically, SessionStores are _never_ timestamped.
+                    shouldHandleSessionKeyQueries();
                 }
             }
-
-            if (storeToTest.isSession()) {
-                // Note there's no "timestamped" differentiation here.
-                // Idiosyncratically, SessionStores are _never_ timestamped.
-                shouldHandleSessionKeyQueries();
-            }
+        } catch (final AssertionError e) {
+            LOG.error("Failed assertion", e);
+            throw e;
         }
     }
 
@@ -1065,9 +1074,9 @@ public class IQv2StoreIntegrationTest {
         final V result1 = queryResult.getResult();
         final Integer integer = valueExtactor.apply(result1);
         assertThat(integer, is(expectedValue));
-
         assertThat(queryResult.getExecutionInfo(), is(empty()));
-    }
+        assertThat(queryResult.getPosition(), is(POSITION_0));
+    }   
 
     public <V> void shouldHandleRangeQuery(
         final Optional<Integer> lower,
@@ -1122,7 +1131,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
@@ -1176,7 +1186,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
@@ -1225,7 +1236,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
@@ -1271,7 +1283,8 @@ public class IQv2StoreIntegrationTest {
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat(actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
@@ -1342,7 +1355,7 @@ public class IQv2StoreIntegrationTest {
                                                    final String supplier, final String kind) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind;
+                + "-" + kind + "-" + RANDOM.nextInt();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

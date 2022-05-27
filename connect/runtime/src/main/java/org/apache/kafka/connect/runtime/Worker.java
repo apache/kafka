@@ -91,6 +91,7 @@ import java.util.stream.Collectors;
 public class Worker {
 
     public static final long CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
+    public static final long EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
 
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
@@ -125,7 +126,6 @@ public class Worker {
         this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy);
     }
 
-    @SuppressWarnings("deprecation")
     Worker(
             String workerId,
             Time time,
@@ -223,6 +223,20 @@ public class Worker {
         connectorStatusMetricsGroup.close();
 
         workerConfigTransformer.close();
+        executor.shutdown();
+        try {
+            // Wait a while for existing tasks to terminate
+            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                executor.shutdownNow(); //cancel current executing threads
+                // Wait a while for tasks to respond to being cancelled
+                if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+                    log.error("Executor did not terminate in time");
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow(); // (Re-)Cancel if current thread also interrupted
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -406,7 +420,7 @@ public class Worker {
             }
 
             if (!connector.awaitShutdown(timeout)) {
-                log.error("Connector ‘{}’ failed to properly shut down, has become unresponsive, and "
+                log.error("Connector '{}' failed to properly shut down, has become unresponsive, and "
                         + "may be consuming external resources. Correct the configuration for "
                         + "this connector or remove the connector. After fixing the connector, it "
                         + "may be necessary to restart this worker to release any consumed "
@@ -649,6 +663,12 @@ public class Worker {
         // These settings will execute infinite retries on retriable exceptions. They *may* be overridden via configs passed to the worker,
         // but this may compromise the delivery guarantees of Kafka Connect.
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
+        // By default, Connect disables idempotent behavior for all producers, even though idempotence became
+        // default for Kafka producers. This is to ensure Connect continues to work with many Kafka broker versions, including older brokers that do not support
+        // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
+        // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
+        // gets approved and scheduled for release.
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));

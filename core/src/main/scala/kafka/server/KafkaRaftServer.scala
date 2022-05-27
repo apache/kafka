@@ -18,19 +18,24 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-import kafka.common.{InconsistentNodeIdException, KafkaException}
-import kafka.log.UnifiedLog
-import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
+import kafka.common.InconsistentNodeIdException
+import kafka.log.{LogConfig, UnifiedLog}
+import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
-import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
+import java.nio.file.Paths
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 /**
  * This class implements the KRaft (Kafka Raft) mode server which relies
@@ -50,7 +55,7 @@ class KafkaRaftServer(
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
-  private val (metaProps, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
+  private val (metaProps, bootstrapMetadata, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
 
   private val metrics = Server.initializeMetrics(
     config,
@@ -82,8 +87,7 @@ class KafkaRaftServer(
       metrics,
       threadNamePrefix,
       offlineDirs,
-      controllerQuorumVotersFuture,
-      Server.SUPPORTED_FEATURES
+      controllerQuorumVotersFuture
     ))
   } else {
     None
@@ -97,7 +101,10 @@ class KafkaRaftServer(
       time,
       metrics,
       threadNamePrefix,
-      controllerQuorumVotersFuture
+      controllerQuorumVotersFuture,
+      KafkaRaftServer.configSchema,
+      raftManager.apiVersions,
+      bootstrapMetadata
     ))
   } else {
     None
@@ -145,7 +152,7 @@ object KafkaRaftServer {
    * @return A tuple containing the loaded meta properties (which are guaranteed to
    *         be consistent across all log dirs) and the offline directories
    */
-  def initializeLogDirs(config: KafkaConfig): (MetaProperties, Seq[String]) = {
+  def initializeLogDirs(config: KafkaConfig): (MetaProperties, BootstrapMetadata, Seq[String]) = {
     val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
@@ -173,7 +180,19 @@ object KafkaRaftServer {
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }
 
-    (metaProperties, offlineDirs.toSeq)
+    // Load the bootstrap metadata file or, in the case of an upgrade from KRaft preview, bootstrap the
+    // metadata.version corresponding to a user-configured IBP.
+    val bootstrapMetadata = if (config.originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
+      BootstrapMetadata.load(Paths.get(config.metadataLogDir), config.interBrokerProtocolVersion)
+    } else {
+      BootstrapMetadata.load(Paths.get(config.metadataLogDir), MetadataVersion.IBP_3_0_IV0)
+    }
+
+    (metaProperties, bootstrapMetadata, offlineDirs.toSeq)
   }
 
+  val configSchema = new KafkaConfigSchema(Map(
+    ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
+    ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
+  ).asJava, LogConfig.AllTopicConfigSynonyms)
 }

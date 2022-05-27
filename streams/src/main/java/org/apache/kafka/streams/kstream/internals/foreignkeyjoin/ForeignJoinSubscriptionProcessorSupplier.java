@@ -108,7 +108,10 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
                         final CombinedKey<KO, K> combinedKey = keySchema.fromBytes(next.key);
                         context().forward(
                             record.withKey(combinedKey.getPrimaryKey())
-                                .withValue(new SubscriptionResponseWrapper<>(next.value.value().getHash(), record.value().newValue))
+                                .withValue(new SubscriptionResponseWrapper<>(
+                                    next.value.value().getHash(),
+                                    record.value().newValue,
+                                    next.value.value().getPrimaryPartition()))
                         );
                     }
                 }

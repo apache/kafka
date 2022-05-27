@@ -28,12 +28,14 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -289,10 +291,11 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback func) {
+                         final StateRestoreCallback func,
+                         final CommitCallback checkpoint) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
-        stateManager().registerStore(store, func);
+        stateManager().registerStore(store, func, checkpoint);
     }
 
     @SuppressWarnings("unchecked")
@@ -497,5 +500,19 @@ public class InternalMockProcessorContext<KOut, VOut>
     @Override
     public String changelogFor(final String storeName) {
         return storeToChangelogTopic.get(storeName);
+    }
+
+    @Override
+    public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record,
+                                                         final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
     }
 }

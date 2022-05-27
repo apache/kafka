@@ -47,6 +47,7 @@ import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
+import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
@@ -234,6 +235,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -304,9 +306,9 @@ public class KafkaAdminClient extends AdminClient {
     private static final long INVALID_SHUTDOWN_TIME = -1;
 
     /**
-     * The base reason for a LeaveGroupRequest
+     * The default reason for a LeaveGroupRequest.
      */
-    static final String LEAVE_GROUP_REASON = "member was removed by an admin";
+    static final String DEFAULT_LEAVE_GROUP_REASON = "member was removed by an admin";
 
     /**
      * Thread name prefix for admin client network thread
@@ -2686,8 +2688,11 @@ public class KafkaAdminClient extends AdminClient {
                     if (descriptions.size() > 0) {
                         future.complete(descriptions);
                     } else {
-                        // descriptions will be empty if and only if the user is not authorized to describe cluster resource.
-                        future.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+                        // Up to v3 DescribeLogDirsResponse did not have an error code field, hence it defaults to None
+                        Errors error = response.data().errorCode() == Errors.NONE.code()
+                                ? Errors.CLUSTER_AUTHORIZATION_FAILED
+                                : Errors.forCode(response.data().errorCode());
+                        future.completeExceptionally(error.exception());
                     }
                 }
                 @Override
@@ -3708,7 +3713,7 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private List<MemberIdentity> getMembersFromGroup(String groupId) {
+    private List<MemberIdentity> getMembersFromGroup(String groupId, String reason) {
         Collection<MemberDescription> members;
         try {
             members = describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).get().members();
@@ -3718,11 +3723,15 @@ public class KafkaAdminClient extends AdminClient {
 
         List<MemberIdentity> membersToRemove = new ArrayList<>();
         for (final MemberDescription member : members) {
+            MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
+
             if (member.groupInstanceId().isPresent()) {
-                membersToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get()));
+                memberIdentity.setGroupInstanceId(member.groupInstanceId().get());
             } else {
-                membersToRemove.add(new MemberIdentity().setMemberId(member.consumerId()));
+                memberIdentity.setMemberId(member.consumerId());
             }
+
+            membersToRemove.add(memberIdentity);
         }
         return membersToRemove;
     }
@@ -3730,15 +3739,17 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
                                                                                RemoveMembersFromConsumerGroupOptions options) {
+        String reason = options.reason() == null || options.reason().isEmpty() ?
+            DEFAULT_LEAVE_GROUP_REASON : options.reason();
+
         List<MemberIdentity> members;
         if (options.removeAll()) {
-            members = getMembersFromGroup(groupId);
+            members = getMembersFromGroup(groupId, reason);
         } else {
-            members = options.members().stream().map(MemberToRemove::toMemberIdentity).collect(Collectors.toList());
+            members = options.members().stream()
+                .map(m -> m.toMemberIdentity().setReason(reason))
+                .collect(Collectors.toList());
         }
-        
-        String reason = options.reason() == null ? LEAVE_GROUP_REASON : LEAVE_GROUP_REASON + ": " + options.reason();
-        members.forEach(member -> member.setReason(reason));
 
         SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
                 RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
@@ -4254,12 +4265,13 @@ public class KafkaAdminClient extends AdminClient {
                         new UpdateFeaturesRequestData.FeatureUpdateKey();
                     requestItem.setFeature(feature);
                     requestItem.setMaxVersionLevel(update.maxVersionLevel());
-                    requestItem.setAllowDowngrade(update.allowDowngrade());
+                    requestItem.setUpgradeType(update.upgradeType().code());
                     featureUpdatesRequestData.add(requestItem);
                 }
                 return new UpdateFeaturesRequest.Builder(
                     new UpdateFeaturesRequestData()
                         .setTimeoutMs(timeoutMs)
+                        .setValidateOnly(options.validateOnly())
                         .setFeatureUpdates(featureUpdatesRequestData));
             }
 
@@ -4385,6 +4397,15 @@ public class KafkaAdminClient extends AdminClient {
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListTransactionsResult(future.all());
+    }
+
+    @Override
+    public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
+        AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> future =
+            FenceProducersHandler.newFuture(transactionalIds);
+        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new FenceProducersResult(future.all());
     }
 
     private <K, V> void invokeDriver(

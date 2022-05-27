@@ -158,7 +158,7 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCreateConnectorFailedValidation() throws Throwable {
+    public void testCreateConnectorFailedValidation() {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
         connector = PowerMock.createMock(BogusSourceConnector.class);
 
@@ -426,7 +426,7 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testRestartConnectorAndTasksUnknownConnector() throws Exception {
+    public void testRestartConnectorAndTasksUnknownConnector() {
         PowerMock.replayAll();
 
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();

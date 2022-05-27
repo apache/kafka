@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.streams.errors.StreamsException;
+import java.util.concurrent.ExecutionException;
 
 public class AddNamedTopologyResult {
 
@@ -33,5 +35,24 @@ public class AddNamedTopologyResult {
      */
     public KafkaFuture<Void> all() {
         return addTopologyFuture;
+    }
+
+    /**
+     * Boiler plate to get the root cause as a StreamsException if completed exceptionally, otherwise returns {@code null}.
+     * Non-blocking.
+     */
+    public StreamsException exceptionNow() {
+        try {
+            addTopologyFuture.getNow(null);
+            return null;
+        } catch (final ExecutionException e) {
+            if (e.getCause() instanceof StreamsException) {
+                return (StreamsException) e.getCause();
+            } else {
+                return new StreamsException(e.getCause());
+            }
+        } catch (final InterruptedException e) {
+            return null;
+        }
     }
 }

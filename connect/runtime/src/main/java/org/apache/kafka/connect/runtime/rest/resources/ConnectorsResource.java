@@ -396,7 +396,7 @@ public class ConnectorsResource {
                             .path(path)
                             .queryParam("forward", recursiveForward);
                     if (queryParameters != null) {
-                        queryParameters.forEach((k, v) ->  uriBuilder.queryParam(k, v));
+                        queryParameters.forEach(uriBuilder::queryParam);
                     }
                     String forwardUrl = uriBuilder.build().toString();
                     log.debug("Forwarding request {} {} {}", forwardUrl, method, body);

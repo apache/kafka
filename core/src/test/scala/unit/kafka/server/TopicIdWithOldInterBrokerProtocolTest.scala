@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.{Arrays, LinkedHashMap, Optional, Properties}
 
-import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
@@ -27,6 +26,7 @@ import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
 class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)
+    properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
     properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
@@ -51,7 +51,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
   def testMetadataTopicIdsWithOldIBP(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
-    createTopic(topic1, replicaAssignment)
+    createTopicWithAssignment(topic1, replicaAssignment)
 
     val resp = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic1).asJava, true, 10, 10).build(), Some(notControllerSocketServer))
     assertEquals(1, resp.topicMetadata.size)
@@ -73,7 +73,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
-    val leadersMap = createTopic(topic1, replicaAssignment)
+    val leadersMap = createTopicWithAssignment(topic1, replicaAssignment)
     val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, ApiKeys.FETCH.latestVersion())
     val resp = sendFetchRequest(leadersMap(0), req)
 
@@ -94,7 +94,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
-    val leadersMap = createTopic(topic1, replicaAssignment)
+    val leadersMap = createTopicWithAssignment(topic1, replicaAssignment)
     val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, 12)
     val resp = sendFetchRequest(leadersMap(0), req)
 

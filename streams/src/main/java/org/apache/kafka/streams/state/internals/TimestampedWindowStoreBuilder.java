@@ -23,8 +23,10 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -83,10 +85,29 @@ public class TimestampedWindowStoreBuilder<K, V>
         if (!enableCaching) {
             return inner;
         }
+
+        final boolean isTimeOrdered = isTimeOrderedStore(inner);
+        if (isTimeOrdered) {
+            return new TimeOrderedCachingWindowStore(
+                inner,
+                storeSupplier.windowSize(),
+                storeSupplier.segmentIntervalMs());
+        }
+
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
             storeSupplier.segmentIntervalMs());
+    }
+
+    private boolean isTimeOrderedStore(final StateStore stateStore) {
+        if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
+            return true;
+        }
+        if (stateStore instanceof WrappedStateStore) {
+            return isTimeOrderedStore(((WrappedStateStore) stateStore).wrapped());
+        }
+        return false;
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapLogging(final WindowStore<Bytes, byte[]> inner) {
@@ -208,15 +229,20 @@ public class TimestampedWindowStoreBuilder<K, V>
         @Override
         public <R> QueryResult<R> query(final Query<R> query,
             final PositionBound positionBound,
-            final boolean collectExecutionInfo) {
+            final QueryConfig config) {
 
-            final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-            final QueryResult<R> result = wrapped.query(query, positionBound, collectExecutionInfo);
-            if (collectExecutionInfo) {
+            final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+            final QueryResult<R> result = wrapped.query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
                 final long end = System.nanoTime();
                 result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");
             }
             return result;
+        }
+
+        @Override
+        public Position getPosition() {
+            return wrapped.getPosition();
         }
 
         @Override

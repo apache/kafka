@@ -39,6 +39,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.util.matching.Regex
 
 case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
 
@@ -59,10 +60,21 @@ class DumpLogSegmentsTest {
   def setUp(): Unit = {
     val props = new Properties
     props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
-    log = UnifiedLog(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+    log = UnifiedLog(
+      dir = logDir,
+      config = LogConfig(props),
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
   }
 
   def addSimpleRecords(): Unit = {
@@ -81,7 +93,7 @@ class DumpLogSegmentsTest {
         leaderEpoch = 0)
     }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
-    log.flush()
+    log.flush(false)
   }
 
   @AfterEach
@@ -242,7 +254,7 @@ class DumpLogSegmentsTest {
       new SimpleRecord(null, buf.array)
     }).toArray
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
-    log.flush()
+    log.flush(false)
 
     var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "false", "--files", logFilePath))
     assert(output.contains("TOPIC_RECORD"))
@@ -287,6 +299,29 @@ class DumpLogSegmentsTest {
     outContent.toString
   }
 
+  @Test
+  def testPrintDataLogPartialBatches(): Unit = {
+    addSimpleRecords()
+    val totalBatches = batches.size
+    val partialBatches = totalBatches / 2
+
+    // Get all the batches
+    val output = runDumpLogSegments(Array("--files", logFilePath))
+    val lines = util.Arrays.asList(output.split("\n"): _*).listIterator()
+
+    // Get total bytes of the partial batches
+    val partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches)
+
+    // Request only the partial batches by bytes
+    val partialOutput = runDumpLogSegments(Array("--max-bytes", partialBatchesBytes.toString, "--files", logFilePath))
+    val partialLines = util.Arrays.asList(partialOutput.split("\n"): _*).listIterator()
+
+    // Count the total of partial batches limited by bytes
+    val partialBatchesCount = countBatches(partialLines)
+
+    assertEquals(partialBatches, partialBatchesCount)
+  }
+
   private def readBatchMetadata(lines: util.ListIterator[String]): Option[String] = {
     while (lines.hasNext) {
       val line = lines.next()
@@ -297,6 +332,38 @@ class DumpLogSegmentsTest {
       }
     }
     None
+  }
+
+  // Returns the total bytes of the batches specified
+  private def readPartialBatchesBytes(lines: util.ListIterator[String], limit: Int): Int = {
+    val sizePattern: Regex = raw".+?size:\s(\d+).+".r
+    var batchesBytes = 0
+    var batchesCounter = 0
+    while (lines.hasNext) {
+      if (batchesCounter >= limit){
+        return batchesBytes
+      }
+      val line = lines.next()
+      if (line.startsWith("baseOffset")) {
+        line match {
+          case sizePattern(size) => batchesBytes += size.toInt
+          case _ => throw new IllegalStateException(s"Failed to parse and find size value for batch line: $line")
+        }
+        batchesCounter += 1
+      }
+    }
+    batchesBytes
+  }
+
+  private def countBatches(lines: util.ListIterator[String]): Int = {
+    var countBatches = 0
+    while (lines.hasNext) {
+      val line = lines.next()
+      if (line.startsWith("baseOffset")) {
+        countBatches += 1
+      }
+    }
+    countBatches
   }
 
   private def readBatchRecords(lines: util.ListIterator[String]): Seq[String] = {

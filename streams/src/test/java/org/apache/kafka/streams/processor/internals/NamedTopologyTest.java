@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.errors.UnknownTopologyException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
@@ -30,7 +33,10 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -38,8 +44,9 @@ import static org.junit.Assert.assertThrows;
 import static java.util.Arrays.asList;
 
 public class NamedTopologyTest {
-    final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
-    final Properties props = configProps();
+    private static final String UNKNOWN_TOPOLOGY = "not-a-real-topology";
+    private static final String UNKNOWN_STORE = "not-a-real-store";
+    private final Properties props = configProps();
 
     private final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(props);
 
@@ -118,6 +125,17 @@ public class NamedTopologyTest {
     }
 
     @Test
+    public void shouldAllowAddingAndRemovingNamedTopologyAndReturnBeforeCallingStart() throws Exception {
+        builder1.stream("stream-1").selectKey((k, v) -> v).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store")));
+        builder2.stream("stream-2").selectKey((k, v) -> v).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store")));
+
+        streams.addNamedTopology(builder1.build()).all().get();
+        streams.addNamedTopology(builder2.build()).all().get();
+
+        streams.removeNamedTopology("topology-2").all().get();
+    }
+
+    @Test
     public void shouldThrowTopologyExceptionWhenMultipleNamedTopologiesCreateStreamFromSameInputTopic() {
         builder1.stream("stream");
         builder2.stream("stream");
@@ -128,6 +146,38 @@ public class NamedTopologyTest {
                 builder1.build(),
                 builder2.build()))
         );
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopicAfterStart() {
+        builder1.stream("stream");
+        builder2.stream("stream");
+
+        streams.start();
+
+        streams.addNamedTopology(builder1.build());
+
+        final ExecutionException exception = assertThrows(
+            ExecutionException.class,
+            () -> streams.addNamedTopology(builder2.build()).all().get()
+        );
+
+        assertThat(exception.getCause().getClass(), equalTo(TopologyException.class));
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopicBeforeStart() {
+        builder1.stream("stream");
+        builder2.stream("stream");
+        
+        streams.addNamedTopology(builder1.build());
+
+        final ExecutionException exception = assertThrows(
+            ExecutionException.class,
+            () -> streams.addNamedTopology(builder2.build()).all().get()
+        );
+
+        assertThat(exception.getCause().getClass(), equalTo(TopologyException.class));
     }
 
     @Test
@@ -179,6 +229,86 @@ public class NamedTopologyTest {
             () -> streams.start(asList(
                 builder1.build(),
                 builder2.build()))
+        );
+    }
+
+    @Test
+    public void shouldThrowUnknownTopologyExceptionForAllLocalStorePartitionLags() {
+        streams.addNamedTopology(builder1.build());
+        streams.start();
+        assertThrows(
+            UnknownTopologyException.class,
+            () -> streams.allLocalStorePartitionLagsForTopology(UNKNOWN_TOPOLOGY)
+        );
+    }
+
+    @Test
+    public void shouldThrowUnknownTopologyExceptionForQueryMetadataForKey() {
+        streams.addNamedTopology(builder1.build());
+        streams.start();
+        assertThrows(
+            UnknownTopologyException.class,
+            () -> streams.queryMetadataForKey("store", "A", new StringSerializer(), UNKNOWN_TOPOLOGY)
+        );
+    }
+
+    @Test
+    public void shouldThrowUnknownStateStoreExceptionForQueryMetadataForKey() {
+        streams.addNamedTopology(builder1.build());
+        streams.start();
+        assertThrows(
+            UnknownStateStoreException.class,
+            () -> streams.queryMetadataForKey(UNKNOWN_STORE, "A", new StringSerializer(), "topology-1")
+        );
+    }
+
+    @Test
+    public void shouldThrowUnknownTopologyExceptionForStreamsMetadataForStore() {
+        streams.addNamedTopology(builder1.build());
+        streams.start();
+        assertThrows(
+            UnknownTopologyException.class,
+            () -> streams.streamsMetadataForStore("store", UNKNOWN_TOPOLOGY)
+        );
+    }
+
+    @Test
+    public void shouldThrowUnknownStateStoreExceptionForStreamsMetadataForStore() {
+        streams.addNamedTopology(builder1.build());
+        streams.start();
+        assertThrows(
+            UnknownStateStoreException.class,
+            () -> streams.streamsMetadataForStore(UNKNOWN_STORE, "topology-1")
+        );
+    }
+
+    @Test
+    public void shouldThrowUnknownTopologyExceptionForStore() {
+        streams.addNamedTopology(builder1.build());
+        streams.start();
+        assertThrows(
+            UnknownTopologyException.class,
+            () -> streams.store(
+                NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
+                    UNKNOWN_TOPOLOGY,
+                    "store",
+                    keyValueStore()
+                ))
+        );
+    }
+
+    @Test
+    public void shouldThrowUnknownStateStoreExceptionForStore() {
+        streams.addNamedTopology(builder1.build());
+        streams.start();
+        assertThrows(
+            UnknownStateStoreException.class,
+            () -> streams.store(
+                NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
+                    "topology-1",
+                    UNKNOWN_STORE,
+                    keyValueStore()
+                ))
         );
     }
 

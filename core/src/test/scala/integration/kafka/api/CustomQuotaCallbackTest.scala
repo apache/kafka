@@ -68,7 +68,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       classOf[GroupedUserPrincipalBuilder].getName)
     this.serverConfig.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
     super.setUp(testInfo)
-    brokerList = TestUtils.bootstrapServers(servers, listenerName)
 
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
       ScramLoginModule(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword).toString)

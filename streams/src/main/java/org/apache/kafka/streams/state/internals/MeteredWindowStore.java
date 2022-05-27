@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -31,15 +30,16 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -79,18 +79,18 @@ public class MeteredWindowStore<K, V>
         mkMap(
             mkEntry(
                 WindowRangeQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(
+                (query, positionBound, config, store) -> runRangeQuery(
                     query,
                     positionBound,
-                    collectExecutionInfo
+                    config
                 )
             ),
             mkEntry(
                 WindowKeyQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> runKeyQuery(
+                (query, positionBound, config, store) -> runKeyQuery(
                     query,
                     positionBound,
-                    collectExecutionInfo
+                    config
                 )
             )
         );
@@ -155,32 +155,18 @@ public class MeteredWindowStore<K, V>
     @Deprecated
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
+            changelogTopic,
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
 
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
+            changelogTopic,
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
@@ -369,14 +355,14 @@ public class MeteredWindowStore<K, V>
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+                                    final QueryConfig config) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
 
         final QueryHandler handler = queryHandlers.get(query.getClass());
         if (handler == null) {
-            result = wrapped().query(query, positionBound, collectExecutionInfo);
-            if (collectExecutionInfo) {
+            result = wrapped().query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
@@ -384,10 +370,10 @@ public class MeteredWindowStore<K, V>
             result = (QueryResult<R>) handler.apply(
                 query,
                 positionBound,
-                collectExecutionInfo,
+                config,
                 this
             );
-            if (collectExecutionInfo) {
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " with serdes "
                         + serdes + " in " + (time.nanoseconds() - start) + "ns");
@@ -399,7 +385,7 @@ public class MeteredWindowStore<K, V>
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(final Query<R> query,
                                              final PositionBound positionBound,
-                                             final boolean collectExecutionInfo) {
+                                             final QueryConfig config) {
         final QueryResult<R> result;
         final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
         // There's no store API for open time ranges
@@ -413,7 +399,7 @@ public class MeteredWindowStore<K, V>
                 wrapped().query(
                     rawKeyQuery,
                     positionBound,
-                    collectExecutionInfo
+                    config
                 );
             if (rawResult.isSuccess()) {
                 final MeteredWindowedKeyValueIterator<K, V> typedResult =
@@ -426,9 +412,7 @@ public class MeteredWindowStore<K, V>
                         time
                     );
                 final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
-                    QueryResult.forResult(
-                        typedResult
-                    );
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.
@@ -452,7 +436,7 @@ public class MeteredWindowStore<K, V>
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runKeyQuery(final Query<R> query,
                                            final PositionBound positionBound,
-                                           final boolean collectExecutionInfo) {
+                                           final QueryConfig config) {
         final QueryResult<R> queryResult;
         final WindowKeyQuery<K, V> typedQuery = (WindowKeyQuery<K, V>) query;
         // There's no store API for open time ranges
@@ -466,7 +450,7 @@ public class MeteredWindowStore<K, V>
             final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(
                 rawKeyQuery,
                 positionBound,
-                collectExecutionInfo
+                config
             );
             if (rawResult.isSuccess()) {
                 final MeteredWindowStoreIterator<V> typedResult = new MeteredWindowStoreIterator<>(
@@ -477,9 +461,7 @@ public class MeteredWindowStore<K, V>
                     time
                 );
                 final QueryResult<MeteredWindowStoreIterator<V>> typedQueryResult =
-                    QueryResult.forResult(
-                        typedResult
-                    );
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 queryResult = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.

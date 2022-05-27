@@ -21,8 +21,10 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 
 /**
@@ -40,7 +42,7 @@ import org.apache.kafka.streams.query.QueryResult;
  * Furthermore, Kafka Streams relies on using the store name as store directory name to perform internal cleanup tasks.
  * <p>
  * This interface does not specify any query capabilities, which, of course,
- * would be query engine specific. Instead it just specifies the minimum
+ * would be query engine specific. Instead, it just specifies the minimum
  * functionality required to reload a storage engine from its changelog as well
  * as basic lifecycle management.
  */
@@ -81,7 +83,7 @@ public interface StateStore {
      * Initializes this state store.
      * <p>
      * The implementation of this function must register the root store in the context via the
-     * {@link StateStoreContext#register(StateStore, StateRestoreCallback)} function, where the
+     * {@link StateStoreContext#register(StateStore, StateRestoreCallback, CommitCallback)} function, where the
      * first {@link StateStore} parameter should always be the passed-in {@code root} object, and
      * the second parameter should be an object of user's implementation
      * of the {@link StateRestoreCallback} interface used for restoring the state store from the changelog.
@@ -141,15 +143,26 @@ public interface StateStore {
      * <p>
      * @param query The query to execute
      * @param positionBound The position the store must be at or past
-     * @param collectExecutionInfo Whether the store should collect detailed execution info for the query
+     * @param config Per query configuration parameters, such as whether the store should collect detailed execution
+     * info for the query
      * @param <R> The result type
      */
     @Evolving
     default <R> QueryResult<R> query(
-        Query<R> query,
-        PositionBound positionBound,
-        boolean collectExecutionInfo) {
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
         // If a store doesn't implement a query handler, then all queries are unknown.
         return QueryResult.forUnknownQueryType(query, this);
+    }
+
+    /**
+     * Returns the position the state store is at with respect to the input topic/partitions
+     */
+    @Evolving
+    default Position getPosition() {
+        throw new UnsupportedOperationException(
+            "getPosition is not implemented by this StateStore (" + getClass() + ")"
+        );
     }
 }

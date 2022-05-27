@@ -17,9 +17,9 @@ package kafka.api
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, Properties}
+
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
-import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
@@ -33,6 +33,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 

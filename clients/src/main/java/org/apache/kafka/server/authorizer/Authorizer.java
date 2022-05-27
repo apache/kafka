@@ -154,6 +154,14 @@ public interface Authorizer extends Configurable, Closeable {
     Iterable<AclBinding> acls(AclBindingFilter filter);
 
     /**
+     * Get the current number of ACLs, for the purpose of metrics. Authorizers that don't implement this function
+     * will simply return -1.
+     */
+    default int aclCount() {
+        return -1;
+    }
+
+    /**
      * Check if the caller is authorized to perform the given ACL operation on at least one
      * resource of the given type.
      *

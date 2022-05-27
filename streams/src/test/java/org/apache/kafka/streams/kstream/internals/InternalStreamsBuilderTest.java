@@ -103,7 +103,7 @@ public class InternalStreamsBuilderTest {
         final KStream<String, String> merged = processedSource1.merge(processedSource2).merge(source3);
         merged.groupByKey().count(Materialized.as("my-table"));
         builder.buildAndOptimizeTopology();
-        final Map<String, List<String>> actual = builder.internalTopologyBuilder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> actual = builder.internalTopologyBuilder.stateStoreNameToFullSourceTopicNames();
         assertEquals(asList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
     }
 
@@ -285,6 +285,7 @@ public class InternalStreamsBuilderTest {
         final String topicName = "topic-1";
 
         builder.table(topicName, consumed, materialized);
+        builder.buildAndOptimizeTopology();
 
         assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(OffsetResetStrategy.NONE));
     }
@@ -295,6 +296,7 @@ public class InternalStreamsBuilderTest {
         final String topic = "topic-5";
 
         builder.stream(topicPattern, consumed);
+        builder.buildAndOptimizeTopology();
 
         assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topic), equalTo(OffsetResetStrategy.NONE));
     }

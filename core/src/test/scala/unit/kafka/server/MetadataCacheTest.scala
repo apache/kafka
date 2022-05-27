@@ -37,6 +37,7 @@ import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage}
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -44,12 +45,12 @@ import scala.jdk.CollectionConverters._
 object MetadataCacheTest {
   def zkCacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1)
+      MetadataCache.zkMetadataCache(1, MetadataVersion.latest())
     )
 
   def cacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1),
+      MetadataCache.zkMetadataCache(1, MetadataVersion.latest()),
       MetadataCache.kRaftMetadataCache(1)
     )
 
@@ -63,8 +64,13 @@ object MetadataCacheTest {
         val image = c.currentImage()
         val partialImage = new MetadataImage(
           new RaftOffsetAndEpoch(100, 10),
-          image.features(), ClusterImage.EMPTY,
-          image.topics(), image.configs(), image.clientQuotas(), image.producerIds())
+          image.features(),
+          ClusterImage.EMPTY,
+          image.topics(),
+          image.configs(),
+          image.clientQuotas(),
+          image.producerIds(),
+          image.acls())
         val delta = new MetadataDelta(partialImage)
 
         def toRecord(broker: UpdateMetadataBroker): RegisterBrokerRecord = {

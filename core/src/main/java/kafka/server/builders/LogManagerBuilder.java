@@ -17,7 +17,6 @@
 
 package kafka.server.builders;
 
-import kafka.api.ApiVersion;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
@@ -26,11 +25,12 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.metadata.ConfigRepository;
 import kafka.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.MetadataVersion;
+import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
-import scala.collection.JavaConverters;
 
 
 public class LogManagerBuilder {
@@ -44,8 +44,9 @@ public class LogManagerBuilder {
     private long flushRecoveryOffsetCheckpointMs = 10000L;
     private long flushStartOffsetCheckpointMs = 10000L;
     private long retentionCheckMs = 1000L;
+    private int maxTransactionTimeoutMs = 15 * 60 * 1000;
     private int maxPidExpirationMs = 60000;
-    private ApiVersion interBrokerProtocolVersion = ApiVersion.latestVersion();
+    private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latest();
     private Scheduler scheduler = null;
     private BrokerTopicStats brokerTopicStats = null;
     private LogDirFailureChannel logDirFailureChannel = null;
@@ -102,12 +103,17 @@ public class LogManagerBuilder {
         return this;
     }
 
+    public LogManagerBuilder setMaxTransactionTimeoutMs(int maxTransactionTimeoutMs) {
+        this.maxTransactionTimeoutMs = maxTransactionTimeoutMs;
+        return this;
+    }
+
     public LogManagerBuilder setMaxPidExpirationMs(int maxPidExpirationMs) {
         this.maxPidExpirationMs = maxPidExpirationMs;
         return this;
     }
 
-    public LogManagerBuilder setInterBrokerProtocolVersion(ApiVersion interBrokerProtocolVersion) {
+    public LogManagerBuilder setInterBrokerProtocolVersion(MetadataVersion interBrokerProtocolVersion) {
         this.interBrokerProtocolVersion = interBrokerProtocolVersion;
         return this;
     }
@@ -156,6 +162,7 @@ public class LogManagerBuilder {
                               flushRecoveryOffsetCheckpointMs,
                               flushStartOffsetCheckpointMs,
                               retentionCheckMs,
+                              maxTransactionTimeoutMs,
                               maxPidExpirationMs,
                               interBrokerProtocolVersion,
                               scheduler,

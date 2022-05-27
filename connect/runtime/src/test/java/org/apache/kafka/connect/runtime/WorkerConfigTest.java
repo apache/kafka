@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -145,6 +146,15 @@ public class WorkerConfigTest {
         for (String config : VALID_HEADER_CONFIGS) {
             assertValidHeaderConfig(config);
         }
+    }
+
+    @Test
+    public void testInvalidSslClientAuthConfig() {
+        Map<String, String> props = baseProps();
+
+        props.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "abc");
+        ConfigException ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        assertTrue(ce.getMessage().contains(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG));
     }
 
     private void assertInvalidHeaderConfig(String config) {

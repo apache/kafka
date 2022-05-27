@@ -99,7 +99,7 @@ public class TopicConfig {
         "limit only applies to a single record in that case.";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
-    public static final String INDEX_INTERVAL_BYTES_DOCS = "This setting controls how frequently " +
+    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +
         "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
         "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
         "position in the log but makes the index larger. You probably don't need to change this.";

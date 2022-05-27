@@ -271,7 +271,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
 
             <p>Store password configs <code>ssl.keystore.password</code> and <code>ssl.truststore.password</code> are not used for PEM.
             If private key is encrypted using a password, the key password must be provided in <code>ssl.key.password</code>. Private keys may be provided
-            in unencrypted form without a password when PEM is specified directly in the config value. In production deployments, configs should be encrypted or
+            in unencrypted form without a password. In production deployments, configs should be encrypted or
             externalized using password protection feature in Kafka in this case. Note that the default SSL engine factory has limited capabilities for decryption
             of encrypted private keys when external tools like OpenSSL are used for encryption. Third party libraries like BouncyCastle may be integrated witn a
             custom <code>SslEngineFactory</code> to support a wider range of encrypted private keys.</p>
@@ -643,7 +643,7 @@ sasl.kerberos.service.name=kafka</code></pre></li>
         <li><h4><a id="security_sasl_plain" href="#security_sasl_plain">Authentication using SASL/PLAIN</a></h4>
             <p>SASL/PLAIN is a simple username/password authentication mechanism that is typically used with TLS for encryption to implement secure authentication.
                 Kafka supports a default implementation for SASL/PLAIN which can be extended for production use as described <a href="#security_sasl_plain_production">here</a>.</p>
-            The username is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
+            Under the default implementation of <code>principal.builder.class</code>, the username is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
             <ol>
                 <li><h5 class="anchor-heading"><a id="security_sasl_plain_brokerconfig" class="anchor-link"></a><a href="#security_sasl_plain_brokerconfig">Configuring Kafka Brokers</a></h5>
                     <ol>
@@ -712,7 +712,7 @@ sasl.mechanism=PLAIN</code></pre></li>
                 addresses the security concerns with traditional mechanisms that perform username/password authentication
                 like PLAIN and DIGEST-MD5. The mechanism is defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
                 Kafka supports <a href="https://tools.ietf.org/html/rfc7677">SCRAM-SHA-256</a> and SCRAM-SHA-512 which
-                can be used with TLS to perform secure authentication. The username is used as the authenticated
+                can be used with TLS to perform secure authentication. Under the default implementation of <code>principal.builder.class</code>, the username is used as the authenticated
                 <code>Principal</code> for configuration of ACLs etc. The default SCRAM implementation in Kafka
                 stores SCRAM credentials in Zookeeper and is suitable for use in Kafka installations where Zookeeper
                 is on a private network. Refer to <a href="#security_sasl_scram_security">Security Considerations</a>
@@ -806,6 +806,7 @@ sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
                 The default OAUTHBEARER implementation in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>
                 and is only suitable for use in non-production Kafka installations. Refer to <a href="#security_sasl_oauthbearer_security">Security Considerations</a>
                 for more details.</p>
+            Under the default implementation of <code>principal.builder.class</code>, the principalName of OAuthBearerToken is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
             <ol>
                 <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_brokerconfig">Configuring Kafka Brokers</a></h5>
                     <ol>
@@ -1047,6 +1048,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                 frameworks to distribute the workload to available workers in a secure environment without the added cost of distributing
                 Kerberos TGT/keytabs or keystores when 2-way SSL is used. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka">KIP-48</a>
                 for more details.</p>
+            Under the default implementation of <code>principal.builder.class</code>, the owner of delegation token is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
 
             <p>Typical steps for delegation token usage are:</p>
             <ol>
@@ -1381,7 +1383,7 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             Above examples add acls to a topic by specifying --topic [topic-name] as the resource pattern option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].
             You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0"
             You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options:
-            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic '*'</code></pre>
             You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name starts with 'Test-' from any host".
             You can do that by executing the CLI with following options:
             <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed</code></pre>
@@ -1398,7 +1400,7 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</code></pre>
             However, this will only return the acls that have been added to this exact resource pattern. Other acls can exist that affect access to the topic,
             e.g. any acls on the topic wildcard '*', or any acls on prefixed resource patterns. Acls on the wildcard resource pattern can be queried explicitly:
-            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic *</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic '*'</code></pre>
             However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known.
             We can list <i>all</i> acls affecting Test-topic by using '--resource-pattern-type match', e.g.
             <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type match</code></pre>

@@ -175,9 +175,9 @@ public class StateDirectory {
             stateDirLock = tryLock(stateDirLockChannel);
         } catch (final IOException e) {
             log.error("Unable to lock the state directory due to unexpected exception", e);
-            throw new ProcessorStateException("Failed to lock the state directory during startup", e);
+            throw new ProcessorStateException(String.format("Failed to lock the state directory [%s] during startup",
+                stateDir.getAbsolutePath()), e);
         }
-
         return stateDirLock != null;
     }
 
@@ -188,8 +188,9 @@ public class StateDirectory {
 
         if (!lockStateDirectory()) {
             log.error("Unable to obtain lock as state directory is already locked by another process");
-            throw new StreamsException("Unable to initialize state, this can happen if multiple instances of " +
-                                           "Kafka Streams are running in the same state directory");
+            throw new StreamsException(String.format("Unable to initialize state, this can happen if multiple instances of " +
+                                           "Kafka Streams are running in the same state directory " +
+                                           "(current state directory is [%s]", stateDir.getAbsolutePath()));
         }
 
         final File processFile = new File(stateDir, PROCESS_FILE_NAME);
@@ -386,7 +387,7 @@ public class StateDirectory {
                 stateDirLockChannel = null;
             } catch (final IOException e) {
                 log.error("Unexpected exception while unlocking the state dir", e);
-                throw new StreamsException("Failed to release the lock on the state directory", e);
+                throw new StreamsException(String.format("Failed to release the lock on the state directory [%s]", stateDir.getAbsolutePath()), e);
             }
 
             // all threads should be stopped and cleaned up by now, so none should remain holding a lock
@@ -534,8 +535,9 @@ public class StateDirectory {
         try {
             Utils.delete(namedTopologyDir);
         } catch (final IOException e) {
-            log.error("Hit an unexpected error while clearing local state for NamedTopology {}", topologyName);
-            throw new StreamsException("Unable to delete state for the named topology " + topologyName);
+            log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);
+            throw new StreamsException("Unable to delete state for the named topology " + topologyName,
+                                       e, new TaskId(-1, -1, topologyName)); // use dummy taskid to report source topology for this error
         }
     }
 

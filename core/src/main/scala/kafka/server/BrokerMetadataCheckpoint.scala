@@ -21,9 +21,10 @@ import java.io._
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
 
-import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
+import kafka.common.InconsistentBrokerMetadataException
 import kafka.server.RawMetaProperties._
 import kafka.utils._
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
@@ -85,6 +86,13 @@ class RawMetaProperties(val props: Properties = new Properties()) {
         s"as an int: ${e.getMessage}")
     }
   }
+
+  override def equals(that: Any): Boolean = that match {
+    case other: RawMetaProperties => props.equals(other.props)
+    case _ => false
+  }
+
+  override def hashCode(): Int = props.hashCode
 
   override def toString: String = {
     "{" + props.keySet().asScala.toList.asInstanceOf[List[String]].sorted.map {

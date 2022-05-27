@@ -26,19 +26,19 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
+
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
-import kafka.log.LogConfig
+import kafka.log.{CleanerConfig, LogConfig}
 import kafka.message.ProducerCompressionCodec
-import kafka.metrics.KafkaYammerMetrics
 import kafka.network.{Processor, RequestChannel}
 import kafka.server.QuorumTestHarness
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.{ConfigEntityChangeNotificationZNode}
+import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
@@ -52,14 +52,14 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
+import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
@@ -485,12 +485,15 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(KafkaConfig.MessageMaxBytesProp, "40000")
     props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "50000000")
     props.put(KafkaConfig.LogCleanerBackoffMsProp, "6000")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerThreadsProp, "2"))
 
     // Verify cleaner config was updated. Wait for one of the configs to be updated and verify
     // that all other others were updated at the same time since they are reconfigured together
-    val newCleanerConfig = servers.head.logManager.cleaner.currentConfig
-    TestUtils.waitUntilTrue(() => newCleanerConfig.numThreads == 2, "Log cleaner not reconfigured")
+    var newCleanerConfig: CleanerConfig = null
+    TestUtils.waitUntilTrue(() => {
+      reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerThreadsProp, "2"))
+      newCleanerConfig = servers.head.logManager.cleaner.currentConfig
+      newCleanerConfig.numThreads == 2
+    }, "Log cleaner not reconfigured", 60000)
     assertEquals(20000000, newCleanerConfig.dedupeBufferSize)
     assertEquals(0.8, newCleanerConfig.dedupeBufferLoadFactor, 0.001)
     assertEquals(300000, newCleanerConfig.ioBufferSize)
@@ -548,6 +551,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
+  @Disabled // TODO: To be re-enabled once we can make it less flaky: KAFKA-6527
   def testDefaultTopicConfig(): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0)
 
@@ -661,6 +665,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
+  @Disabled // TODO: To be re-enabled once we can make it less flaky: KAFKA-8280
   def testUncleanLeaderElectionEnable(): Unit = {
     val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
     val controllerId = controller.config.brokerId
@@ -860,6 +865,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
+  @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-7957)
   def testMetricsReporterUpdate(): Unit = {
     // Add a new metrics reporter
     val newProps = new Properties
@@ -1426,7 +1432,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
         Seq(new ConfigResource(ConfigResource.Type.BROKER, ""))
       brokerResources.foreach { brokerResource =>
         val exception = assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get)
-        assertTrue(exception.getCause.isInstanceOf[InvalidRequestException])
+        assertEquals(classOf[InvalidRequestException], exception.getCause().getClass())
       }
       servers.foreach { server =>
         assertEquals(oldProps, server.config.values.asScala.filter { case (k, _) => newProps.containsKey(k) })
@@ -1674,6 +1680,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       producerProps.put(ProducerConfig.RETRIES_CONFIG, _retries.toString)
       producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, _deliveryTimeoutMs.toString)
       producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, _requestTimeoutMs.toString)
+      // disable the idempotence since some tests want to test the cases when retries=0, and these tests are not testing producers
+      producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
 
       val producer = new KafkaProducer[String, String](producerProps, new StringSerializer, new StringSerializer)
       producers += producer
@@ -1804,6 +1812,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   import TestMetricsReporter._
   val kafkaMetrics = ArrayBuffer[KafkaMetric]()
   @volatile var initializeCount = 0
+  @volatile var contextChangeCount = 0
   @volatile var configureCount = 0
   @volatile var reconfigureCount = 0
   @volatile var closeCount = 0
@@ -1811,7 +1820,12 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   @volatile var pollingInterval: Int = -1
   testReporters.add(this)
 
+  override def contextChange(metricsContext: MetricsContext): Unit = {
+    contextChangeCount += 1
+  }
+
   override def init(metrics: util.List[KafkaMetric]): Unit = {
+    assertTrue(contextChangeCount > 0, "contextChange must be called before init")
     kafkaMetrics ++= metrics.asScala
     initializeCount += 1
   }

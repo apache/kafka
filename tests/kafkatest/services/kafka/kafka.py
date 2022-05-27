@@ -158,7 +158,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     METADATA_SNAPSHOT_SEARCH_STR = "%s/__cluster_metadata-0/*.checkpoint" % METADATA_LOG_DIR
     METADATA_FIRST_LOG = "%s/__cluster_metadata-0/00000000000000000000.log" % METADATA_LOG_DIR
     # Kafka Authorizer
-    ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
+    ZK_ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
+    KRAFT_ACL_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
     INTERBROKER_LISTENER_NAME = 'INTERNAL'
     JAAS_CONF_PROPERTY = "java.security.auth.login.config=/mnt/security/jaas.conf"
@@ -181,6 +182,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             "collect_default": False},
         "kafka_data_2": {
             "path": DATA_LOG_DIR_2,
+            "collect_default": False},
+        "kafka_cluster_metadata": {
+            "path": METADATA_LOG_DIR,
             "collect_default": False},
         "kafka_heap_dump_file": {
             "path": HEAP_DUMP_FILE,

@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -113,6 +114,17 @@ public final class AssignorConfiguration {
                     log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
                         " Please be prepared to remove the 'upgrade.from' config soon.");
                     return RebalanceProtocol.EAGER;
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    // This config is for explicitly sending FK response to a requested partition
+                    // and should not affect the rebalance protocol
+                    break;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
@@ -155,6 +167,17 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
                     // These configs are for cooperative rebalancing and should not affect the metadata version
+                    break;
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    // This config is for explicitly sending FK response to a requested partition
+                    // and should not affect the metadata version
                     break;
                 default:
                     throw new IllegalArgumentException(
@@ -241,22 +264,26 @@ public final class AssignorConfiguration {
         public final int maxWarmupReplicas;
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
+        public final List<String> rackAwareAssignmentTags;
 
         private AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+            rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
-                          final Long probingRebalanceIntervalMs) {
+                          final Long probingRebalanceIntervalMs,
+                          final List<String> rackAwareAssignmentTags) {
             this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
+            this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
         }
 
         private static <T> T validated(final String configKey, final T value) {
@@ -274,6 +301,7 @@ public final class AssignorConfiguration {
                 "\n  maxWarmupReplicas=" + maxWarmupReplicas +
                 "\n  numStandbyReplicas=" + numStandbyReplicas +
                 "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
+                "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
                 "\n}";
         }
     }

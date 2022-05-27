@@ -21,7 +21,6 @@ import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -784,7 +783,7 @@ public class RecordCollectorTest {
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                        return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                             @Override
                             public void abortTransaction() {
                                 functionCalled.set(true);
@@ -816,7 +815,7 @@ public class RecordCollectorTest {
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                        return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                             @Override
                             public List<PartitionInfo> partitionsFor(final String topic) {
                                 return Collections.emptyList();
@@ -889,7 +888,7 @@ public class RecordCollectorTest {
             new MockClientSupplier() {
                 @Override
                 public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                    return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                         @Override
                         public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                             callback.onCompletion(null, exception);
@@ -912,7 +911,7 @@ public class RecordCollectorTest {
             new MockClientSupplier() {
                 @Override
                 public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                    return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                         @Override
                         public synchronized List<PartitionInfo> partitionsFor(final String topic) {
                             throw exception;
