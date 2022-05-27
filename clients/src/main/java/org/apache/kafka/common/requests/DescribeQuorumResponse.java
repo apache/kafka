@@ -119,7 +119,6 @@ public class DescribeQuorumResponse extends AbstractResponse {
      * @return List of {@link ReplicaState}
      */
     private List<ReplicaState> getReplicaInfo(String topicName, Integer partition, boolean getVoterInfo) {
-        //List<QuorumInfo.ReplicaState> replicaInfo = new ArrayList<>();
         TopicData topic = data.topics().stream()
                 .filter(t -> t.topicName().equals(topicName))
                 .findFirst()
@@ -127,13 +126,6 @@ public class DescribeQuorumResponse extends AbstractResponse {
         if (topic != null) {
             List<ReplicaState> replicaStates = getVoterInfo ? topic.partitions().get(partition).currentVoters()
                     : topic.partitions().get(partition).observers();
-            //replicaStates.forEach(
-            //        v -> {
-            //            replicaInfo.add(new QuorumInfo.ReplicaState(v.replicaId(),
-            //                    v.logEndOffset(),
-            //                    OptionalLong.of(v.lastFetchTimestamp()),
-            //                    OptionalLong.of(v.lastCaughtUpTimestamp())));
-            //        });
             return replicaStates;
         }
         return null;
