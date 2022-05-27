@@ -300,6 +300,7 @@ public final class FieldSpec {
         } else if ((type instanceof FieldType.Int8FieldType) ||
             (type instanceof FieldType.Int16FieldType) ||
             (type instanceof FieldType.Uint16FieldType) ||
+            (type instanceof FieldType.Uint32FieldType) ||
             (type instanceof FieldType.Int32FieldType) ||
             (type instanceof FieldType.Int64FieldType)) {
             int base = 10;
@@ -338,13 +339,29 @@ public final class FieldSpec {
                 } else {
                     try {
                         int value = Integer.valueOf(defaultString, base);
-                        if (value < 0 || value > 65535) {
+                        if (value < 0 || value > MessageGenerator.UNSIGNED_SHORT_MAX) {
                             throw new RuntimeException("Invalid default for uint16 field " +
                                     name + ": out of range.");
                         }
                     } catch (NumberFormatException e) {
                         throw new RuntimeException("Invalid default for uint16 field " +
                             name + ": " + defaultString, e);
+                    }
+                    return fieldDefault;
+                }
+            } else if (type instanceof FieldType.Uint32FieldType) {
+                if (defaultString.isEmpty()) {
+                    return "0";
+                } else {
+                    try {
+                        long value = Long.valueOf(defaultString, base);
+                        if (value < 0 || value > MessageGenerator.UNSIGNED_INT_MAX) {
+                            throw new RuntimeException("Invalid default for uint32 field " +
+                                    name + ": out of range.");
+                        }
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("Invalid default for uint32 field " +
+                                name + ": " + defaultString, e);
                     }
                     return fieldDefault;
                 }
@@ -476,6 +493,8 @@ public final class FieldSpec {
             return "short";
         } else if (type instanceof FieldType.Uint16FieldType) {
             return "int";
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            return "long";
         } else if (type instanceof FieldType.Int32FieldType) {
             return "int";
         } else if (type instanceof FieldType.Int64FieldType) {
