@@ -340,7 +340,7 @@ class DumpLogSegmentsTest {
     assertTrue(output.contains("BROKER_RECORD"))
     assertTrue(output.contains("SnapshotHeader"))
     assertTrue(output.contains("SnapshotFooter"))
-    assertTrue(output.contains(s"\"lastContainedLogTimestamp\":$lastContainedLogTimestamp"))
+    assertTrue(output.contains(s""""lastContainedLogTimestamp":$lastContainedLogTimestamp"""))
 
     output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", snapshotPath))
     assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
@@ -348,7 +348,7 @@ class DumpLogSegmentsTest {
     assertTrue(output.contains("BROKER_RECORD"))
     assertFalse(output.contains("SnapshotHeader"))
     assertFalse(output.contains("SnapshotFooter"))
-    assertFalse(output.contains(s"\"lastContainedLogTimestamp\": $lastContainedLogTimestamp"))
+    assertFalse(output.contains(s""""lastContainedLogTimestamp": $lastContainedLogTimestamp"""))
   }
 
   @Test
