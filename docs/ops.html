@@ -1438,30 +1438,30 @@ $ bin/kafka-acls.sh \
         <td></td>
       </tr>
       <tr>
+        <td>Error rate</td>
+        <td>kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=([-.\w]+),error=([-.\w]+)</td>
+        <td>Number of errors in responses counted per-request-type, per-error-code. If a response contains
+          multiple errors, all are counted. error=NONE indicates successful responses.</td>
+      </tr>
+      <tr>
         <td>Produce request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Produce request rate per topic.</td>
       </tr>
       <tr>
         <td>Fetch request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec,topic=([-.\w]+)</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td>Error rate</td>
-        <td>kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=([-.\w]+),error=([-.\w]+)</td>
-        <td>Number of errors in responses counted per-request-type, per-error-code. If a response contains
-            multiple errors, all are counted. error=NONE indicates successful responses.</td>
+        <td>Fetch request (from client or follower) rate per topic.</td>
       </tr>
       <tr>
         <td>Failed produce request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=FailedProduceRequestsPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Failed Produce request rate per topic.</td>
       </tr>
       <tr>
         <td>Failed fetch request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Failed Fetch request (from client or follower) rate per topic.</td>
       </tr>
       <tr>
         <td>Request size in bytes</td>
