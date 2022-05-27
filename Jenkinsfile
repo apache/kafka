@@ -162,10 +162,6 @@ pipeline {
         }
 
         stage('ARM') {
-          // Remove this once infra is fixed. See INFRA-23305 and KAFKA-13941
-          when {
-            expression { false }
-          }
           options {
             timestamps()
           }
