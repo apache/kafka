@@ -1402,17 +1402,17 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Message in rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Incoming message rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Byte in rate from clients</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Byte in (from the clients) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Byte in rate from other brokers</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Byte in (from the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Controller Request rate from Broker</td>
@@ -1446,22 +1446,22 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Produce request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Produce request rate per topic.</td>
+        <td>Produce request rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Fetch request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Fetch request (from client or follower) rate per topic.</td>
+        <td>Fetch request (from client or follower) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Failed produce request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=FailedProduceRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Failed Produce request rate per topic.</td>
+        <td>Failed Produce request rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Failed fetch request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Failed Fetch request (from client or follower) rate per topic.</td>
+        <td>Failed Fetch request (from client or follower) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Request size in bytes</td>
@@ -1481,7 +1481,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Message conversion rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\w]+)</td>
-        <td>Number of records which required message format conversion.</td>
+        <td>Message format conversion rate, by Produce or Fetch request, per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Request Queue Size</td>
@@ -1491,36 +1491,36 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Byte out rate to clients</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Byte out (to the clients) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Byte out rate to other brokers</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec,topic=([-.\w]+)</td>
-        <td></td>
+        <td>Byte out (to the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Rejected byte rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesRejectedPerSec,topic=([-.\w]+)</td>
-        <td>Rejected byte out rate per topic, due to the record batch size is greater than max.message.bytes configuration.</td>
+        <td>Rejected byte rate per topic, due to the record batch size is greater than max.message.bytes configuration. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to no key specified for compacted topic</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec,topic=([-.\w]+)</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec</td>
         <td></td>
       </tr>
       <tr>
         <td>Message validation failure rate due to invalid magic number</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec,topic=([-.\w]+)</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec</td>
         <td></td>
       </tr>
       <tr>
         <td>Message validation failure rate due to incorrect crc checksum</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec,topic=([-.\w]+)</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec</td>
         <td></td>
       </tr>
       <tr>
         <td>Message validation failure rate due to non-continuous offset or sequence number in batch</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec,topic=([-.\w]+)</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec</td>
         <td></td>
       </tr>
       <tr>
@@ -1764,12 +1764,12 @@ $ bin/kafka-acls.sh \
       </tr>
       <tr>
         <td>Outgoing byte rate of reassignment traffic</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec,topic=([-.\w]+)</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
         <td></td>
       </tr>
       <tr>
         <td>Incoming byte rate of reassignment traffic</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec,topic=([-.\w]+)</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
         <td></td>
       </tr>
       <tr>
