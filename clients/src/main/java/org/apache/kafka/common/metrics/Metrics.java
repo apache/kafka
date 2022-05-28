@@ -536,7 +536,7 @@ public class Metrics implements Closeable {
      * @param metricValueProvider The metric value provider associated with this metric
      * @return Existing KafkaMetric if already registered or else a newly created one
      */
-    public KafkaMetric metricOrElseCreate(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
+    public KafkaMetric getMetricOrElseCreate(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric metric = new KafkaMetric(new Object(),
                 Objects.requireNonNull(metricName),
                 Objects.requireNonNull(metricValueProvider),

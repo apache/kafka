@@ -507,7 +507,7 @@ public class StreamsMetricsImplTest {
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         final Metrics metrics = new Metrics(metricConfig);
         assertNull(metrics.metric(metricName));
-        metrics.metricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER);
+        metrics.getMetricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER);
         assertNotNull(metrics.metric(metricName));
     }
 
@@ -542,8 +542,8 @@ public class StreamsMetricsImplTest {
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         final Metrics metrics = new Metrics(metricConfig);
         assertNull(metrics.metric(metricName));
-        final KafkaMetric kafkaMetric = metrics.metricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER);
-        assertEquals(kafkaMetric, metrics.metricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER));
+        final KafkaMetric kafkaMetric = metrics.getMetricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER);
+        assertEquals(kafkaMetric, metrics.getMetricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER));
     }
 
     @Test
@@ -556,8 +556,8 @@ public class StreamsMetricsImplTest {
         final AtomicReference<KafkaMetric> metricCreatedViaThread1 = new AtomicReference<>();
         final AtomicReference<KafkaMetric> metricCreatedViaThread2 = new AtomicReference<>();
 
-        final Thread thread1 = new Thread(() -> metricCreatedViaThread1.set(metrics.metricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER)));
-        final Thread thread2 = new Thread(() -> metricCreatedViaThread2.set(metrics.metricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER)));
+        final Thread thread1 = new Thread(() -> metricCreatedViaThread1.set(metrics.getMetricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER)));
+        final Thread thread2 = new Thread(() -> metricCreatedViaThread2.set(metrics.getMetricOrElseCreate(metricName, metricConfig, VALUE_PROVIDER)));
 
         thread1.start();
         thread2.start();

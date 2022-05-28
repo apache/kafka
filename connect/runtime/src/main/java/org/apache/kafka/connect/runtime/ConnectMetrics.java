@@ -319,7 +319,7 @@ public class ConnectMetrics {
          */
         public <T> void addValueMetric(MetricNameTemplate nameTemplate, final LiteralSupplier<T> supplier) {
             MetricName metricName = metricName(nameTemplate);
-            metrics().metricOrElseCreate(metricName, null, (Gauge<T>) (config, now) -> supplier.metricValue(now));
+            metrics().getMetricOrElseCreate(metricName, null, (Gauge<T>) (config, now) -> supplier.metricValue(now));
         }
 
         /**
@@ -331,7 +331,7 @@ public class ConnectMetrics {
          */
         public <T> void addImmutableValueMetric(MetricNameTemplate nameTemplate, final T value) {
             MetricName metricName = metricName(nameTemplate);
-            metrics().metricOrElseCreate(metricName, null, (Gauge<T>) (config, now) -> value);
+            metrics().getMetricOrElseCreate(metricName, null, (Gauge<T>) (config, now) -> value);
         }
 
         /**
