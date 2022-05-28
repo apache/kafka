@@ -74,7 +74,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     waitUntilControllerEpoch(firstControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    TestUtils.waitUntilTrue(() => !zkClient.getControllerId.isDefined, "failed to kill controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isEmpty, "failed to kill controller")
     waitUntilControllerEpoch(firstControllerEpoch, "controller epoch was not persisted after broker failure")
   }
 
@@ -125,14 +125,14 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     // Need to make sure the broker we shutdown and startup are not the controller. Otherwise we will send out
-    // full UpdateMetadataReuqest to all brokers during controller failover.
+    // full UpdateMetadataRequest to all brokers during controller failover.
     val testBroker = servers.filter(e => e.config.brokerId != controllerId).head
     val remainingBrokers = servers.filter(_.config.brokerId != testBroker.config.brokerId)
     val topic = "topic1"
     // Make sure shutdown the test broker will not require any leadership change to test avoid sending out full
     // UpdateMetadataRequest on broker failure
     val assignment = Map(
-      0 -> Seq(remainingBrokers(0).config.brokerId, testBroker.config.brokerId),
+      0 -> Seq(remainingBrokers.head.config.brokerId, testBroker.config.brokerId),
       1 -> remainingBrokers.map(_.config.brokerId))
 
     // Create topic
@@ -526,7 +526,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // create the topic
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
 
-    val controllerId = zkClient.getControllerId.get
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
     val controlledShutdownCallback = (controlledShutdownResult: Try[collection.Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
@@ -865,7 +865,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       result match {
         case Left(partitionResults: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
           partitionResults.get(tp) match {
-            case Some(Left(error: Errors)) => throw new AssertionError(s"Should not have seen error for $tp")
+            case Some(Left(_: Errors)) => throw new AssertionError(s"Should not have seen error for $tp")
             case Some(Right(leaderAndIsr: LeaderAndIsr)) => assertEquals(leaderAndIsr, newLeaderAndIsr, "ISR should remain unchanged")
             case None => throw new AssertionError(s"Should have seen $tp in result")
           }
@@ -874,7 +874,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       latch.countDown()
     }
 
-    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs.get(otherBroker.config.brokerId).get
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(otherBroker.config.brokerId)
     // When re-sending the current ISR, we should not get and error or any ISR changes
     controller.eventManager.put(AlterPartitionReceived(otherBroker.config.brokerId, brokerEpoch, Map(tp -> newLeaderAndIsr), callback))
     latch.await()
@@ -1253,19 +1253,19 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     adminZkClient.createTopic(tp.topic, 1, 1)
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterCreate, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertTrue(topicIdAfterCreate.isDefined)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "correct topic ID cannot be found in the controller context")
 
     adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
-    val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterAddition, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(topicIdAfterCreate, topicIdAfterAddition)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "topic ID changed after partition additions")
 
     adminZkClient.deleteTopic(tp.topic)
-    TestUtils.waitUntilTrue(() => servers.head.kafkaController.controllerContext.topicIds.get(tp.topic).isEmpty,
+    TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.topicIds.contains(tp.topic),
       "topic ID for topic should have been removed from controller context after deletion")
   }
 
@@ -1279,13 +1279,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     adminZkClient.createTopic(tp.topic, 1, 1)
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterCreate, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(None, topicIdAfterCreate)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "incorrect topic ID can be found in the controller context")
 
     adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
-    val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterAddition, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(topicIdAfterCreate, topicIdAfterAddition)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "topic ID changed after partition additions")
@@ -1311,7 +1311,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers(controllerId).awaitShutdown()
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     val controller2 = getController().kafkaController
-    assertEquals(topicId, controller2.controllerContext.topicIds.get("t").get)
+    assertEquals(topicId, controller2.controllerContext.topicIds("t"))
   }
 
   @Test
@@ -1380,9 +1380,9 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertEquals(topicIdAfterUpgrade, topicId)
     assertEquals(tp.topic, controller2.controllerContext.topicNames(topicId.get))
 
-    TestUtils.waitUntilTrue(() => servers(0).logManager.getLog(tp).isDefined, "log was not created")
+    TestUtils.waitUntilTrue(() => servers.head.logManager.getLog(tp).isDefined, "log was not created")
 
-    val topicIdInLog = servers(0).logManager.getLog(tp).get.topicId
+    val topicIdInLog = servers.head.logManager.getLog(tp).get.topicId
     assertEquals(topicId, topicIdInLog)
 
     adminZkClient.deleteTopic(tp.topic)
@@ -1404,9 +1404,9 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // Only the remaining brokers will have the replicas for the partition
     val assignment = Map(tp.partition -> remainingBrokers.map(_.config.brokerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, remainingBrokers(0).config.brokerId, LeaderAndIsr.InitialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, remainingBrokers.head.config.brokerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterCreate, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(None, topicIdAfterCreate)
     val emptyTopicId = controller.controllerContext.topicIds.get("t")
     assertEquals(None, emptyTopicId)
@@ -1428,7 +1428,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertNotEquals(emptyTopicId, topicIdAfterUpgrade)
     val controller2 = getController().kafkaController
     assertNotEquals(emptyTopicId, controller2.controllerContext.topicIds.get("t"))
-    val topicId = controller2.controllerContext.topicIds.get("t").get
+    val topicId = controller2.controllerContext.topicIds("t")
     assertEquals(topicIdAfterUpgrade.get, topicId)
     assertEquals("t", controller2.controllerContext.topicNames(topicId))
 
@@ -1475,8 +1475,8 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       "correct topic name expected but cannot be found in the controller context")
 
     // Downgrade back to 2.7
-    servers(0).shutdown()
-    servers(0).awaitShutdown()
+    servers.head.shutdown()
+    servers.head.awaitShutdown()
     servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
