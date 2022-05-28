@@ -37,6 +37,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -59,6 +60,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 
 @RunWith(Parameterized.class)
+@Tag("integration")
 public class KTableKTableForeignKeyJoinIntegrationTest {
 
     private static final String LEFT_TABLE = "left_table";
