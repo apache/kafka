@@ -833,10 +833,10 @@ class KafkaServer(
       try {
         checkpoint.write(brokerMetadata.toProperties)
       } catch {
-      case e: IOException =>
-        val dirPath = checkpoint.file.getAbsolutePath
-        logDirFailureChannel.maybeAddOfflineLogDir(dirPath, s"Error while writing meta.properties to $dirPath", e)
-    }
+        case e: IOException =>
+          val dirPath = checkpoint.file.getAbsolutePath
+          logDirFailureChannel.maybeAddOfflineLogDir(dirPath, s"Error while writing meta.properties to $dirPath", e)
+      }
     }
   }
 

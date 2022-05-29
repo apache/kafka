@@ -318,7 +318,7 @@ class LogManager(logDirs: Seq[File],
     val jobs = ArrayBuffer.empty[Seq[Future[_]]]
     var numTotalLogs = 0
 
-    def handleIOException(logDirAbsolutePath: String, e: IOException) = {
+    def handleIOException(logDirAbsolutePath: String, e: IOException): Unit = {
       offlineDirs.add((logDirAbsolutePath, e))
       error(s"Error while loading log dir $logDirAbsolutePath", e)
     }

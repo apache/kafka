@@ -30,7 +30,6 @@ import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -154,18 +153,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
-    createTopic(topic)
-    shutdownBroker()
-    config.logDirs.foreach { dirName =>
-      val partitionDir = new File(dirName, s"$topic-0")
-      partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
-    }
-    verifyCleanShutdownAfterFailedStartup[KafkaStorageException]
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
