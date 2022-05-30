@@ -91,6 +91,7 @@ import java.util.stream.Collectors;
 public class Worker {
 
     public static final long CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
+    public static final long EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
 
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
@@ -222,6 +223,20 @@ public class Worker {
         connectorStatusMetricsGroup.close();
 
         workerConfigTransformer.close();
+        executor.shutdown();
+        try {
+            // Wait a while for existing tasks to terminate
+            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                executor.shutdownNow(); //cancel current executing threads
+                // Wait a while for tasks to respond to being cancelled
+                if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+                    log.error("Executor did not terminate in time");
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow(); // (Re-)Cancel if current thread also interrupted
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -405,7 +420,7 @@ public class Worker {
             }
 
             if (!connector.awaitShutdown(timeout)) {
-                log.error("Connector ‘{}’ failed to properly shut down, has become unresponsive, and "
+                log.error("Connector '{}' failed to properly shut down, has become unresponsive, and "
                         + "may be consuming external resources. Correct the configuration for "
                         + "this connector or remove the connector. After fixing the connector, it "
                         + "may be necessary to restart this worker to release any consumed "

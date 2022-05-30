@@ -91,7 +91,6 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
                 buf.put(serializedData);
             return buf.array();
         }
-
     }
 
     private static final class SubscriptionResponseWrapperDeserializer<V>
@@ -141,9 +140,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
                 value = null;
             }
 
-            return new SubscriptionResponseWrapper<>(hash, value, version);
+            return new SubscriptionResponseWrapper<>(hash, value, version, null);
         }
-
     }
-
 }

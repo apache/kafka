@@ -22,7 +22,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.InvalidRecordException;
@@ -467,22 +466,30 @@ public class SenderTest {
         final byte[] key = "key".getBytes();
         final byte[] value = "value".getBytes();
         final long maxBlockTimeMs = 1000;
-        Callback callback = (metadata, exception) -> {
-            if (exception instanceof TimeoutException) {
-                expiryCallbackCount.incrementAndGet();
-                try {
-                    accumulator.append(tp1, 0L, key, value,
-                        Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-                } catch (InterruptedException e) {
-                    throw new RuntimeException("Unexpected interruption", e);
-                }
-            } else if (exception != null)
-                unexpectedException.compareAndSet(null, exception);
+        Cluster cluster = TestUtils.singletonCluster();
+        RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
+            @Override
+            public void setPartition(int partition) {
+            }
+
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                if (exception instanceof TimeoutException) {
+                    expiryCallbackCount.incrementAndGet();
+                    try {
+                        accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value,
+                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException("Unexpected interruption", e);
+                    }
+                } else if (exception != null)
+                    unexpectedException.compareAndSet(null, exception);
+            }
         };
 
         final long nowMs = time.milliseconds();
         for (int i = 0; i < messagesPerBatch; i++)
-            accumulator.append(tp1, 0L, key, value, null, callback, maxBlockTimeMs, false, nowMs);
+            accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value, null, callbacks, maxBlockTimeMs, false, nowMs, cluster);
 
         // Advance the clock to expire the first batch.
         time.sleep(10000);
@@ -501,9 +508,9 @@ public class SenderTest {
         assertEquals(messagesPerBatch, expiryCallbackCount.get(), "Callbacks not invoked for expiry");
         assertNull(unexpectedException.get(), "Unexpected exception");
         // Make sure that the reconds were appended back to the batch.
-        assertTrue(accumulator.batches().containsKey(tp1));
-        assertEquals(1, accumulator.batches().get(tp1).size());
-        assertEquals(messagesPerBatch, accumulator.batches().get(tp1).peekFirst().recordCount);
+        assertNotNull(accumulator.getDeque(tp1));
+        assertEquals(1, accumulator.getDeque(tp1).size());
+        assertEquals(messagesPerBatch, accumulator.getDeque(tp1).peekFirst().recordCount);
     }
 
     /**
@@ -544,6 +551,76 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size());
         sender.runOnce();
         assertTrue(future.isDone(), "Request should be completed");
+    }
+
+    @Test
+    public void testNodeLatencyStats() throws Exception {
+        try (Metrics m = new Metrics()) {
+            // Create a new record accumulator with non-0 partitionAvailabilityTimeoutMs
+            // otherwise it wouldn't update the stats.
+            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
+            long totalSize = 1024 * 1024;
+            accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
+                DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null,
+                new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
+
+            SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL, 1,
+                senderMetrics, time, REQUEST_TIMEOUT, 1000L, null, new ApiVersions());
+
+            // Produce and send batch.
+            long time1 = time.milliseconds();
+            appendToAccumulator(tp0, 0L, "key", "value");
+            sender.runOnce();
+            assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+
+            // We were able to send the batch out, so both the ready and drain values should be the same.
+            RecordAccumulator.NodeLatencyStats stats = accumulator.getNodeLatencyStats(0);
+            assertEquals(time1, stats.drainTimeMs);
+            assertEquals(time1, stats.readyTimeMs);
+
+            // Make the node 1 not ready.
+            client.throttle(metadata.fetch().nodeById(0), 100);
+
+            // Time passes, but we don't have anything to send.
+            time.sleep(10);
+            sender.runOnce();
+            assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+
+            // Stats shouldn't change as we didn't have anything ready.
+            assertEquals(time1, stats.drainTimeMs);
+            assertEquals(time1, stats.readyTimeMs);
+
+            // Produce a new batch, but we won't be able to send it because node is not ready.
+            long time2 = time.milliseconds();
+            appendToAccumulator(tp0, 0L, "key", "value");
+            sender.runOnce();
+            assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+
+            // The ready time should move forward, but drain time shouldn't change.
+            assertEquals(time1, stats.drainTimeMs);
+            assertEquals(time2, stats.readyTimeMs);
+
+            // Time passes, we keep trying to send, but the node is not ready.
+            time.sleep(10);
+            time2 = time.milliseconds();
+            sender.runOnce();
+            assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+
+            // The ready time should move forward, but drain time shouldn't change.
+            assertEquals(time1, stats.drainTimeMs);
+            assertEquals(time2, stats.readyTimeMs);
+
+            // Finally, time passes beyond the throttle and the node is ready.
+            time.sleep(100);
+            time2 = time.milliseconds();
+            sender.runOnce();
+            assertEquals(2, client.inFlightRequestCount(), "We should have 2 produce requests in flight.");
+
+            // Both times should move forward
+            assertEquals(time2, stats.drainTimeMs);
+            assertEquals(time2, stats.readyTimeMs);
+        }
     }
 
     @Test
@@ -1200,7 +1277,7 @@ public class SenderTest {
         client.respondToRequest(secondClientRequest, produceResponse(tp0, -1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1));
 
         sender.runOnce(); // receive response 1
-        Deque<ProducerBatch> queuedBatches = accumulator.batches().get(tp0);
+        Deque<ProducerBatch> queuedBatches = accumulator.getDeque(tp0);
 
         // Make sure that we are queueing the second batch first.
         assertEquals(1, queuedBatches.size());
@@ -1281,7 +1358,7 @@ public class SenderTest {
         assertTrue(request2.isDone());
         assertEquals(1, request2.get().offset());
         assertFalse(request1.isDone());
-        Deque<ProducerBatch> queuedBatches = accumulator.batches().get(tp0);
+        Deque<ProducerBatch> queuedBatches = accumulator.getDeque(tp0);
 
         assertEquals(0, queuedBatches.size());
         assertEquals(1, client.inFlightRequestCount());
@@ -1389,7 +1466,7 @@ public class SenderTest {
         assertEquals(1, request2.get().offset());
         assertEquals(0, sender.inFlightBatches(tp0).size());
 
-        Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
+        Deque<ProducerBatch> batches = accumulator.getDeque(tp0);
         assertEquals(1, batches.size());
         assertFalse(batches.peekFirst().hasSequence());
         assertFalse(client.hasInFlightRequests());
@@ -1444,7 +1521,7 @@ public class SenderTest {
         sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, 1);
         sender.runOnce(); // receive second response, the third request shouldn't be sent since we are in an unresolved state.
 
-        Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
+        Deque<ProducerBatch> batches = accumulator.getDeque(tp0);
 
         // The epoch should be bumped and the second request should be requeued
         assertEquals(2, batches.size());
@@ -1524,7 +1601,7 @@ public class SenderTest {
         assertFutureFailure(request1, TimeoutException.class);
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         assertFalse(client.hasInFlightRequests());
-        Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
+        Deque<ProducerBatch> batches = accumulator.getDeque(tp0);
         assertEquals(0, batches.size());
         assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
 
@@ -2337,10 +2414,11 @@ public class SenderTest {
             client.prepareMetadataUpdate(metadataUpdate1);
             // Send the first message.
             long nowMs = time.milliseconds();
+            Cluster cluster = TestUtils.singletonCluster();
             Future<RecordMetadata> f1 =
-                    accumulator.append(tp, 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs).future;
+                    accumulator.append(tp.topic(), tp.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs, cluster).future;
             Future<RecordMetadata> f2 =
-                    accumulator.append(tp, 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs).future;
+                    accumulator.append(tp.topic(), tp.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs, cluster).future;
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
@@ -2395,7 +2473,7 @@ public class SenderTest {
             assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence number should be 2");
             assertEquals(OptionalInt.of(1), txnManager.lastAckedSequence(tp), "The last ack'd sequence number should be 1");
             assertEquals(1L, f2.get().offset(), "Offset of the first message should be 1");
-            assertTrue(accumulator.batches().get(tp).isEmpty(), "There should be no batch in the accumulator");
+            assertTrue(accumulator.getDeque(tp).isEmpty(), "There should be no batch in the accumulator");
             assertTrue((Double) (m.metrics().get(senderMetrics.batchSplitRate).metricValue()) > 0, "There should be a split");
         }
     }
@@ -3063,8 +3141,8 @@ public class SenderTest {
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp, long timestamp, String key, String value) throws InterruptedException {
-        return accumulator.append(tp, timestamp, key.getBytes(), value.getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future;
+        return accumulator.append(tp.topic(), tp.partition(), timestamp, key.getBytes(), value.getBytes(), Record.EMPTY_HEADERS,
+                null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(), TestUtils.singletonCluster()).future;
     }
 
     @SuppressWarnings("deprecation")

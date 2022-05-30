@@ -27,12 +27,14 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
 import java.time.Duration;
+import java.util.Optional;
+import java.util.OptionalLong;
 
 /** Used internally by MirrorMaker. Stores offset syncs and performs offset translation. */
 class OffsetSyncStore implements AutoCloseable {
-    private KafkaConsumer<byte[], byte[]> consumer;
-    private Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
-    private TopicPartition offsetSyncTopicPartition;
+    private final KafkaConsumer<byte[], byte[]> consumer;
+    private final Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
+    private final TopicPartition offsetSyncTopicPartition;
 
     OffsetSyncStore(MirrorConnectorConfig config) {
         consumer = new KafkaConsumer<>(config.offsetSyncsTopicConsumerConfig(),
@@ -47,14 +49,18 @@ class OffsetSyncStore implements AutoCloseable {
         this.offsetSyncTopicPartition = offsetSyncTopicPartition;
     }
 
-    long translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
-        OffsetSync offsetSync = latestOffsetSync(sourceTopicPartition);
-        if (offsetSync.upstreamOffset() > upstreamOffset) {
-            // Offset is too far in the past to translate accurately
-            return -1;
+    OptionalLong translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
+        Optional<OffsetSync> offsetSync = latestOffsetSync(sourceTopicPartition);
+        if (offsetSync.isPresent()) {
+            if (offsetSync.get().upstreamOffset() > upstreamOffset) {
+                // Offset is too far in the past to translate accurately
+                return OptionalLong.of(-1L);
+            }
+            long upstreamStep = upstreamOffset - offsetSync.get().upstreamOffset();
+            return OptionalLong.of(offsetSync.get().downstreamOffset() + upstreamStep);
+        } else {
+            return OptionalLong.empty();
         }
-        long upstreamStep = upstreamOffset - offsetSync.upstreamOffset();
-        return offsetSync.downstreamOffset() + upstreamStep;
     }
 
     // poll and handle records
@@ -77,8 +83,7 @@ class OffsetSyncStore implements AutoCloseable {
         offsetSyncs.put(sourceTopicPartition, offsetSync);
     }
 
-    private OffsetSync latestOffsetSync(TopicPartition topicPartition) {
-        return offsetSyncs.computeIfAbsent(topicPartition, x -> new OffsetSync(topicPartition,
-            -1, -1));
+    private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition) {
+        return Optional.ofNullable(offsetSyncs.get(topicPartition));
     }
 }

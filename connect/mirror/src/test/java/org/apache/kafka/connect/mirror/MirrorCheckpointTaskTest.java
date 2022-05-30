@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Collections;
+import java.util.Optional;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -28,6 +30,8 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorCheckpointTaskTest {
 
@@ -53,8 +57,10 @@ public class MirrorCheckpointTaskTest {
             new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
         offsetSyncStore.sync(new TopicPartition("topic1", 2), 3L, 4L);
         offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), 7L, 8L);
-        Checkpoint checkpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
+        Optional<Checkpoint> optionalCheckpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
             new OffsetAndMetadata(10, null));
+        assertTrue(optionalCheckpoint1.isPresent());
+        Checkpoint checkpoint1 = optionalCheckpoint1.get();
         SourceRecord sourceRecord1 = mirrorCheckpointTask.checkpointRecord(checkpoint1, 123L);
         assertEquals(new TopicPartition("source1.topic1", 2), checkpoint1.topicPartition(),
                 "checkpoint group9 source1.topic1 failed");
@@ -68,8 +74,10 @@ public class MirrorCheckpointTaskTest {
                 "checkpoint group9 downstreamOffset failed");
         assertEquals(123L, sourceRecord1.timestamp().longValue(),
                 "checkpoint group9 timestamp failed");
-        Checkpoint checkpoint2 = mirrorCheckpointTask.checkpoint("group11", new TopicPartition("target2.topic5", 6),
+        Optional<Checkpoint> optionalCheckpoint2 = mirrorCheckpointTask.checkpoint("group11", new TopicPartition("target2.topic5", 6),
             new OffsetAndMetadata(12, null));
+        assertTrue(optionalCheckpoint2.isPresent());
+        Checkpoint checkpoint2 = optionalCheckpoint2.get();
         SourceRecord sourceRecord2 = mirrorCheckpointTask.checkpointRecord(checkpoint2, 234L);
         assertEquals(new TopicPartition("topic5", 6), checkpoint2.topicPartition(),
                 "checkpoint group11 topic5 failed");
@@ -137,5 +145,20 @@ public class MirrorCheckpointTaskTest {
                 "Consumer 1 " + topic1 + " failed");
         assertEquals(51, output.get(consumer2).get(t2p0).offset(),
                 "Consumer 2 " + topic2 + " failed");
+    }
+
+    @Test
+    public void testNoCheckpointForTopicWithoutOffsetSyncs() {
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
+        offsetSyncStore.sync(new TopicPartition("topic1", 0), 3L, 4L);
+
+        Optional<Checkpoint> checkpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 1),
+                new OffsetAndMetadata(10, null));
+        Optional<Checkpoint> checkpoint2 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 0),
+                new OffsetAndMetadata(10, null));
+        assertFalse(checkpoint1.isPresent());
+        assertTrue(checkpoint2.isPresent());
     }
 }

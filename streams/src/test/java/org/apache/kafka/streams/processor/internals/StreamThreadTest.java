@@ -516,6 +516,7 @@ public class StreamThreadTest {
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
 
         mockClientSupplier.setCluster(createCluster());
+        mockConsumer.enforceRebalance("Scheduled probing rebalance");
         EasyMock.replay(mockConsumer);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -537,8 +538,6 @@ public class StreamThreadTest {
             null,
             null
         );
-
-        mockConsumer.enforceRebalance();
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
 
@@ -1397,9 +1396,10 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         final AtomicBoolean shouldThrow = new AtomicBoolean(false);
         final AtomicBoolean processed = new AtomicBoolean(false);
+        // TODO check if needs to be extended
         internalTopologyBuilder.addProcessor(
             "proc",
-            () -> record -> {
+            (ProcessorSupplier<Object, Object, Object, Object>) () -> record -> {
                 if (shouldThrow.get()) {
                     throw new TaskCorruptedException(singleton(task1));
                 } else {
@@ -1788,6 +1788,7 @@ public class StreamThreadTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
@@ -1858,6 +1859,7 @@ public class StreamThreadTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPunctuateWithTimestampPreservedInProcessorContext() {
         final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
             () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
@@ -2430,7 +2432,7 @@ public class StreamThreadTest {
         expect(task2.id()).andReturn(taskId2).anyTimes();
         expect(taskManager.handleCorruption(corruptedTasks)).andReturn(true);
 
-        consumer.enforceRebalance();
+        consumer.enforceRebalance("Active tasks corrupted");
         expectLastCall();
 
         EasyMock.replay(task1, task2, taskManager, consumer);

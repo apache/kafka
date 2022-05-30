@@ -16,8 +16,6 @@
  */
 package kafka.controller
 
-import kafka.api.KAFKA_3_1_IV0
-import kafka.api.KAFKA_3_2_IV0
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -26,6 +24,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.MetadataVersion.{IBP_3_1_IV0, IBP_3_2_IV0}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
@@ -171,7 +170,7 @@ class PartitionStateMachineTest {
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
 
     val leaderAndIsrAfterElection = leaderAndIsr.newLeader(brokerId)
-    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
+    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 
@@ -206,7 +205,7 @@ class PartitionStateMachineTest {
       .thenReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
     val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(otherBrokerId, List(otherBrokerId))
-    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
+    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 
@@ -260,7 +259,7 @@ class PartitionStateMachineTest {
     when(mockZkClient.getLogConfigs(Set.empty, config.originals()))
       .thenReturn((Map(partition.topic -> LogConfig()), Map.empty[String, Exception]))
     val leaderAndIsrAfterElection = leaderAndIsr.newLeader(brokerId)
-    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
+    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 
@@ -294,7 +293,7 @@ class PartitionStateMachineTest {
 
 
     val partitionStateMachine = {
-      val apiVersion = if (isLeaderRecoverySupported) KAFKA_3_2_IV0 else KAFKA_3_1_IV0
+      val apiVersion = if (isLeaderRecoverySupported) IBP_3_2_IV0 else IBP_3_1_IV0
       val properties = TestUtils.createBrokerConfig(brokerId, "zkConnect")
 
       properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.toString)
@@ -337,7 +336,7 @@ class PartitionStateMachineTest {
     } else {
       leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
     }
-    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
+    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 

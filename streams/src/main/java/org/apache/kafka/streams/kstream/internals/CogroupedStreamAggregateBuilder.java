@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Merger;
@@ -175,6 +176,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamSlidingWindowAggregate<K, K, VOut>(
                     slidingWindows,
                     storeBuilder.name(),
+                    // TODO: We do not have other emit policies for co-group yet
+                    EmitStrategy.onWindowUpdate(),
                     initializer,
                     kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);

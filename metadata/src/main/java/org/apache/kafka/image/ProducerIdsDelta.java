@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.server.common.MetadataVersion;
 
 
 public final class ProducerIdsDelta {
@@ -37,6 +38,10 @@ public final class ProducerIdsDelta {
 
     public void finishSnapshot() {
         // Nothing to do
+    }
+
+    public void handleMetadataVersionChange(MetadataVersion newVersion) {
+        // no-op
     }
 
     public void replay(ProducerIdsRecord record) {

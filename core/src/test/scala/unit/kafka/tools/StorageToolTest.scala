@@ -26,6 +26,7 @@ import java.util.Properties
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{Test, Timeout}
 
@@ -160,11 +161,11 @@ Found problem:
         clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
       val stream = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false))
       assertEquals("Formatting %s%n".format(tempDir), stream.toString())
 
       try assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, false)) catch {
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false)) catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -172,7 +173,7 @@ Found problem:
 
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, true))
+        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = true))
       assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
   }
@@ -184,5 +185,20 @@ Found problem:
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
           () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
+  }
+
+  @Test
+  def testDefaultMetadataVersion(): Unit = {
+    var namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
+    var mv = StorageTool.getMetadataVersion(namespace)
+    assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
+      "Expected the default metadata.version to be the latest version")
+
+    namespace = StorageTool.parseArguments(Array("format", "-c", "config.props",
+      "--metadata-version", MetadataVersion.latest().featureLevel().toString, "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
+    mv = StorageTool.getMetadataVersion(namespace)
+    assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
+      "Expected the default metadata.version to be the latest version")
+
   }
 }

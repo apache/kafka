@@ -53,7 +53,7 @@ trait KafkaMetricsGroup extends Logging {
 
     nameBuilder.append(typeName)
 
-    if (name.length > 0) {
+    if (name.nonEmpty) {
       nameBuilder.append(",name=")
       nameBuilder.append(name)
     }

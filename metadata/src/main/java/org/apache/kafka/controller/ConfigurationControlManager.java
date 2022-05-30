@@ -148,6 +148,10 @@ public class ConfigurationControlManager {
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
     }
 
+    SnapshotRegistry snapshotRegistry() {
+        return snapshotRegistry;
+    }
+
     /**
      * Determine the result of applying a batch of incremental configuration changes.  Note
      * that this method does not change the contents of memory.  It just generates a
@@ -209,15 +213,19 @@ public class ConfigurationControlManager {
                             "key " + key + " because its type is not LIST."));
                         return;
                     }
-                    List<String> newValueParts = getParts(newValue, key, configResource);
+                    List<String> oldValueList = getParts(newValue, key, configResource);
                     if (opType == APPEND) {
-                        if (!newValueParts.contains(opValue)) {
-                            newValueParts.add(opValue);
+                        for (String value : opValue.split(",")) {
+                            if (!oldValueList.contains(value)) {
+                                oldValueList.add(value);
+                            }
                         }
-                        newValue = String.join(",", newValueParts);
-                    } else if (newValueParts.remove(opValue)) {
-                        newValue = String.join(",", newValueParts);
+                    } else {
+                        for (String value : opValue.split(",")) {
+                            oldValueList.remove(value);
+                        }
                     }
+                    newValue = String.join(",", oldValueList);
                     break;
             }
             if (!Objects.equals(currentValue, newValue)) {
@@ -390,7 +398,7 @@ public class ConfigurationControlManager {
         for (Entry<ConfigResource, Collection<String>> resourceEntry : resources.entrySet()) {
             ConfigResource resource = resourceEntry.getKey();
             try {
-                validator.validate(resource, Collections.emptyMap());
+                validator.validate(resource);
             } catch (Throwable e) {
                 results.put(resource, new ResultOrError<>(ApiError.fromThrowable(e)));
                 continue;

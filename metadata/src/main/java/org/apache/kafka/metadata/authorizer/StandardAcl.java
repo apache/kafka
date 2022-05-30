@@ -25,6 +25,7 @@ import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Objects;
 
@@ -94,6 +95,17 @@ final public class StandardAcl implements Comparable<StandardAcl> {
 
     public String principal() {
         return principal;
+    }
+
+    public KafkaPrincipal kafkaPrincipal() {
+        int colonIndex = principal.indexOf(":");
+        if (colonIndex == -1) {
+            throw new IllegalStateException("Could not parse principal from `" + principal + "` " +
+                "(no colon is present separating the principal type from the principal name)");
+        }
+        String principalType = principal.substring(0, colonIndex);
+        String principalName = principal.substring(colonIndex + 1);
+        return new KafkaPrincipal(principalType, principalName);
     }
 
     public String host() {

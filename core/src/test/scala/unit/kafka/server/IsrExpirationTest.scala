@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.cluster.Partition
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.TestUtils.MockAlterIsrManager
+import kafka.utils.TestUtils.MockAlterPartitionManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -55,7 +55,7 @@ class IsrExpirationTest {
   var quotaManager: QuotaManagers = null
   var replicaManager: ReplicaManager = null
 
-  var alterIsrManager: MockAlterIsrManager = _
+  var alterIsrManager: MockAlterPartitionManager = _
 
   @BeforeEach
   def setUp(): Unit = {
@@ -71,9 +71,9 @@ class IsrExpirationTest {
       scheduler = null,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
   }
 
   @AfterEach
@@ -226,7 +226,8 @@ class IsrExpirationTest {
     partition.setLog(localLog, isFutureLog = false)
 
     partition.updateAssignmentAndIsr(
-      assignment = configs.map(_.brokerId),
+      replicas = configs.map(_.brokerId),
+      isLeader = true,
       isr = configs.map(_.brokerId).toSet,
       addingReplicas = Seq.empty,
       removingReplicas = Seq.empty,

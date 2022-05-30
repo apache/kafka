@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.api.KAFKA_3_0_IV1
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
@@ -25,8 +24,10 @@ import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
 import java.util.{Collections, Properties}
+
+import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
+
 import scala.annotation.nowarn
 
 class LogConfigTest {
@@ -65,7 +66,7 @@ class LogConfigTest {
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
     // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
-    assertEquals(KAFKA_3_0_IV1.version, logProps.get(LogConfig.MessageFormatVersionProp))
+    assertEquals(IBP_3_0_IV1.version, logProps.get(LogConfig.MessageFormatVersionProp))
   }
 
   @Test

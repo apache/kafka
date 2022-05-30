@@ -1901,10 +1901,13 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCallbackHandlesError() throws Exception {
+    public void testCallbackAndInterceptorHandleError() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000");
+        configs.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName());
+        configs.put(MockProducerInterceptor.APPEND_STRING_PROP, "something");
+
 
         Time time = new MockTime();
         ProducerMetadata producerMetadata = newMetadata(0, Long.MAX_VALUE);
@@ -1912,8 +1915,11 @@ public class KafkaProducerTest {
 
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
 
+        ProducerInterceptors<String, String> producerInterceptors =
+                new ProducerInterceptors<>(Arrays.asList(new MockProducerInterceptor()));
+
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
-                producerMetadata, client, null, time)) {
+                producerMetadata, client, producerInterceptors, time)) {
             ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
 
             // Here's the important piece of the test. Let's make sure that the RecordMetadata we get
@@ -1938,6 +1944,7 @@ public class KafkaProducerTest {
             };
 
             producer.send(record, callBack);
+            assertEquals(1, MockProducerInterceptor.ON_ACKNOWLEDGEMENT_COUNT.intValue());
         }
     }
 
@@ -1983,6 +1990,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testPartitionAddedToTransactionAfterFullBatchRetry() throws Exception {
         StringSerializer serializer = new StringSerializer();
@@ -2046,21 +2054,28 @@ public class KafkaProducerTest {
         )).thenReturn(initialSelectedPartition.partition());
 
         when(ctx.accumulator.append(
-            eq(initialSelectedPartition),
-            eq(timestamp),
-            eq(serializedKey),
-            eq(serializedValue),
-            eq(Record.EMPTY_HEADERS),
-            any(Callback.class),
+            eq(initialSelectedPartition.topic()),            // 0
+            eq(initialSelectedPartition.partition()),        // 1
+            eq(timestamp),                                   // 2
+            eq(serializedKey),                               // 3
+            eq(serializedValue),                             // 4
+            eq(Record.EMPTY_HEADERS),                        // 5
+            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(true),
-            anyLong()
-        )).thenReturn(new RecordAccumulator.RecordAppendResult(
-            futureRecordMetadata,
-            false,
-            false,
-            false
-        ));
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(initialSelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(
+                futureRecordMetadata,
+                false,
+                false,
+                false,
+                0);
+        });
 
         return futureRecordMetadata;
     }
@@ -2097,38 +2112,52 @@ public class KafkaProducerTest {
           .thenReturn(retrySelectedPartition.partition());
 
         when(ctx.accumulator.append(
-            eq(initialSelectedPartition),
-            eq(timestamp),
-            eq(serializedKey),
-            eq(serializedValue),
-            eq(Record.EMPTY_HEADERS),
-            any(Callback.class),
+            eq(initialSelectedPartition.topic()),            // 0
+            eq(initialSelectedPartition.partition()),        // 1
+            eq(timestamp),                                   // 2
+            eq(serializedKey),                               // 3
+            eq(serializedValue),                             // 4
+            eq(Record.EMPTY_HEADERS),                        // 5
+            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(true), // abortOnNewBatch
-            anyLong()
-        )).thenReturn(new RecordAccumulator.RecordAppendResult(
-            null,
-            false,
-            false,
-            true
-        ));
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(initialSelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(
+                null,
+                false,
+                false,
+                true,
+                0);
+        });
 
         when(ctx.accumulator.append(
-            eq(retrySelectedPartition),
-            eq(timestamp),
-            eq(serializedKey),
-            eq(serializedValue),
-            eq(Record.EMPTY_HEADERS),
-            any(Callback.class),
+            eq(retrySelectedPartition.topic()),              // 0
+            eq(retrySelectedPartition.partition()),          // 1
+            eq(timestamp),                                   // 2
+            eq(serializedKey),                               // 3
+            eq(serializedValue),                             // 4
+            eq(Record.EMPTY_HEADERS),                        // 5
+            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(false), // abortOnNewBatch
-            anyLong()
-        )).thenReturn(new RecordAccumulator.RecordAppendResult(
-            futureRecordMetadata,
-            false,
-            true,
-            false
-        ));
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(retrySelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(
+                futureRecordMetadata,
+                false,
+                true,
+                false,
+                0);
+        });
 
         return futureRecordMetadata;
     }

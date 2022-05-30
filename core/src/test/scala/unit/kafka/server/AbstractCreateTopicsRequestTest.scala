@@ -91,16 +91,8 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     topic
   }
 
-  def createTopicsSocketServer: SocketServer = {
-    if (isKRaftTest()) {
-      anySocketServer
-    } else {
-      controllerSocketServer
-    }
-  }
-
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
-    val response = sendCreateTopicRequest(request, createTopicsSocketServer)
+    val response = sendCreateTopicRequest(request, adminSocketServer)
 
     assertFalse(response.errorCounts().keySet().asScala.exists(_.code() > 0),
       s"There should be no errors, found ${response.errorCounts().keySet().asScala.mkString(", ")},")
@@ -162,7 +154,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
                                                   expectedResponse: Map[String, ApiError],
                                                   checkErrorMessage: Boolean = true): Unit = {
-    val response = sendCreateTopicRequest(request, createTopicsSocketServer)
+    val response = sendCreateTopicRequest(request, adminSocketServer)
     assertEquals(expectedResponse.size, response.data().topics().size, "The response size should match")
 
     expectedResponse.foreach { case (topicName, expectedError) =>

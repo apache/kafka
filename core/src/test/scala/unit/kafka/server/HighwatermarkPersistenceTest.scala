@@ -70,9 +70,9 @@ class HighwatermarkPersistenceTest {
       scheduler = scheduler,
       logManager = logManagers.head,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
       logDirFailureChannel = logDirFailureChannels.head,
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -85,7 +85,8 @@ class HighwatermarkPersistenceTest {
       partition0.setLog(log0, isFutureLog = false)
 
       partition0.updateAssignmentAndIsr(
-        assignment = Seq(configs.head.brokerId, configs.last.brokerId),
+        replicas = Seq(configs.head.brokerId, configs.last.brokerId),
+        isLeader = true,
         isr = Set(configs.head.brokerId),
         addingReplicas = Seq.empty,
         removingReplicas = Seq.empty,
@@ -127,9 +128,9 @@ class HighwatermarkPersistenceTest {
       scheduler = scheduler,
       logManager = logManagers.head,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
       logDirFailureChannel = logDirFailureChannels.head,
-      alterIsrManager = alterIsrManager)
+      alterPartitionManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

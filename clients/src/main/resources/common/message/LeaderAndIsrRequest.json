@@ -28,7 +28,7 @@
   //
   // Version 5 adds Topic ID and Type to the TopicStates, as described in KIP-516.
   //
-  // Version 6 adds ElectionState as described in KIP-704.
+  // Version 6 adds LeaderRecoveryState as described in KIP-704.
   "validVersions": "0-6",
   "flexibleVersions": "4+",
   "fields": [
@@ -78,8 +78,8 @@
         "about": "The leader epoch." },
       { "name": "Isr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The in-sync replica IDs." },
-      { "name": "ZkVersion", "type": "int32", "versions": "0+",
-        "about": "The ZooKeeper version." },
+      { "name": "PartitionEpoch", "type": "int32", "versions": "0+",
+        "about": "The current epoch for the partition. The epoch is a monotonically increasing value which is incremented after every partition change. (Since the LeaderAndIsr request is only used by the legacy controller, this corresponds to the zkVersion)" },
       { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The replica IDs." },
       { "name": "AddingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true, "entityType": "brokerId",

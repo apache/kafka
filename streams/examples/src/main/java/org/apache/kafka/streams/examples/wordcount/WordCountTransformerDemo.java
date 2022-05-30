@@ -119,6 +119,7 @@ public final class WordCountTransformerDemo {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public static void main(final String[] args) throws IOException {
         final Properties props = new Properties();
         if (args != null && args.length > 0) {

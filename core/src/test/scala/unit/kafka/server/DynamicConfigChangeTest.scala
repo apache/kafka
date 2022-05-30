@@ -16,12 +16,11 @@
   */
 package kafka.server
 
-import kafka.api.KAFKA_3_0_IV1
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Collections.{singletonList, singletonMap}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 
 import kafka.integration.KafkaServerTestHarness
@@ -31,7 +30,7 @@ import kafka.server.Constants._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -42,6 +41,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity.{CLIENT_ID, IP, USER}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -80,7 +80,13 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
         val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, newVal.toString()),
           SET)
-        admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+        val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
+        val op2 = new AlterConfigOp(new ConfigEntry(KafkaConfig.LogFlushIntervalMsProp, newVal.toString()),
+          SET)
+        admin.incrementalAlterConfigs(Map(
+          resource -> List(op).asJavaCollection,
+          resource2 -> List(op2).asJavaCollection,
+        ).asJava).all.get
       } finally {
         admin.close()
       }
@@ -148,7 +154,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       "Topic metadata propagation failed")
     val log = server.logManager.getLog(tp).get
     // message format version should always be 3.0 if inter-broker protocol is 3.0 or higher
-    assertEquals(KAFKA_3_0_IV1, log.config.messageFormatVersion)
+    assertEquals(IBP_3_0_IV1, log.config.messageFormatVersion)
     assertEquals(RecordVersion.V2, log.config.recordVersion)
 
     val compressionType = CompressionType.LZ4.name
@@ -159,7 +165,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() =>
       server.logManager.getLog(tp).get.config.compressionType == compressionType,
       "Topic config change propagation failed")
-    assertEquals(KAFKA_3_0_IV1, log.config.messageFormatVersion)
+    assertEquals(IBP_3_0_IV1, log.config.messageFormatVersion)
     assertEquals(RecordVersion.V2, log.config.recordVersion)
   }
 
@@ -432,16 +438,28 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testConfigureDefaultTopic(quorum: String): Unit = {
+  def testIncrementalAlterDefaultTopicConfig(quorum: String): Unit = {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
       val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, "200000"), SET)
-      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
-      fail("Should fail with InvalidRequestException for topic doesn't exist")
-    } catch {
-      case e: ExecutionException =>
-        assertEquals(classOf[InvalidRequestException], e.getCause().getClass())
+      val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
+      TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
+    } finally {
+      admin.close()
+    }
+  }
+
+  @nowarn("cat=deprecation")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterDefaultTopicConfig(quorum: String): Unit = {
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
+      val config = new Config(Collections.singleton(new ConfigEntry(FlushMessagesProp, "200000")))
+      val future = admin.alterConfigs(Map(resource -> config).asJava).all
+      TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
       admin.close()
     }
