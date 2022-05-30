@@ -36,6 +36,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 
 public class ProcessorNodeMetrics {
     private ProcessorNodeMetrics() {}
@@ -60,6 +61,22 @@ public class ProcessorNodeMetrics {
     private static final String PROCESS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + PROCESS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
+    private static final String BYTES_CONSUMED = "bytes-consumed";
+    private static final String BYTES_CONSUMED_DESCRIPTION = "bytes consumed from this topic";
+    private static final String BYTES_CONSUMED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + BYTES_CONSUMED_DESCRIPTION;
+
+    private static final String RECORDS_CONSUMED = "records-consumed";
+    private static final String RECORDS_CONSUMED_DESCRIPTION = "records consumed from this topic";
+    private static final String RECORDS_CONSUMED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + RECORDS_CONSUMED_DESCRIPTION;
+
+    private static final String BYTES_PRODUCED = "bytes-produced";
+    private static final String BYTES_PRODUCED_DESCRIPTION = "bytes produced to this topic";
+    private static final String BYTES_PRODUCED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + BYTES_PRODUCED_DESCRIPTION;
+
+    private static final String RECORDS_PRODUCED = "records-produced";
+    private static final String RECORDS_PRODUCED_DESCRIPTION = "records produced to this topic";
+    private static final String RECORDS_PRODUCED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + RECORDS_PRODUCED_DESCRIPTION;
 
     private static final String FORWARD = "forward";
     private static final String FORWARD_DESCRIPTION = "calls to forward";
@@ -95,9 +112,9 @@ public class ProcessorNodeMetrics {
     }
 
     public static Sensor skippedIdempotentUpdatesSensor(final String threadId,
-            final String taskId,
-            final String processorNodeId,
-            final StreamsMetricsImpl streamsMetrics) {
+                                                        final String taskId,
+                                                        final String processorNodeId,
+                                                        final StreamsMetricsImpl streamsMetrics) {
         return throughputSensor(
             threadId,
             taskId,
@@ -134,6 +151,82 @@ public class ProcessorNodeMetrics {
             streamsMetrics,
             parentSensor
         );
+    }
+
+    public static Sensor bytesConsumedSensor(final String threadId,
+                                             final String taskId,
+                                             final String processorNodeId,
+                                             final String topic,
+                                             final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor =
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, BYTES_CONSUMED, RecordingLevel.INFO);
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        tagMap.put("topic", topic);
+        addSumMetricToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            BYTES_CONSUMED,
+            BYTES_CONSUMED_TOTAL_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor recordsConsumedSensor(final String threadId,
+                                               final String taskId,
+                                               final String processorNodeId,
+                                               final String topic,
+                                               final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor =
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORDS_CONSUMED, RecordingLevel.INFO);
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        tagMap.put("topic", topic);
+        addSumMetricToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            RECORDS_CONSUMED,
+            RECORDS_CONSUMED_TOTAL_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor bytesProducedSensor(final String threadId,
+                                             final String taskId,
+                                             final String processorNodeId,
+                                             final String topic,
+                                             final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor =
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, BYTES_PRODUCED, RecordingLevel.INFO);
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        tagMap.put("topic", topic);
+        addSumMetricToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            BYTES_PRODUCED,
+            BYTES_PRODUCED_TOTAL_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor recordsProducedSensor(final String threadId,
+                                               final String taskId,
+                                               final String processorNodeId,
+                                               final String topic,
+                                               final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor =
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORDS_PRODUCED, RecordingLevel.INFO);
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        tagMap.put("topic", topic);
+        addSumMetricToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            RECORDS_PRODUCED,
+            RECORDS_PRODUCED_TOTAL_DESCRIPTION
+        );
+        return sensor;
     }
 
     public static Sensor forwardSensor(final String threadId,
