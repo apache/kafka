@@ -27,6 +27,7 @@ import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeader
 import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
+import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
@@ -77,7 +78,7 @@ class KafkaController(val config: KafkaConfig,
                       initialBrokerEpoch: Long,
                       tokenManager: DelegationTokenManager,
                       brokerFeatures: BrokerFeatures,
-                      featureCache: FinalizedFeatureCache,
+                      featureCache: ZkFinalizedFeatureCache,
                       threadNamePrefix: Option[String] = None)
   extends ControllerEventProcessor with Logging with KafkaMetricsGroup {
 
@@ -389,7 +390,7 @@ class KafkaController(val config: KafkaConfig,
           FeatureZNodeStatus.Enabled,
           brokerFeatures.defaultFinalizedFeatures
         ))
-      featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+      featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
       val newFeatures = existingFeatureZNode.status match {
@@ -404,7 +405,7 @@ class KafkaController(val config: KafkaConfig,
       val newFeatureZNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Enabled, newFeatures)
       if (!newFeatureZNode.equals(existingFeatureZNode)) {
         val newVersion = updateFeatureZNode(newFeatureZNode)
-        featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+        featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
       }
     }
   }
@@ -1552,7 +1553,7 @@ class KafkaController(val config: KafkaConfig,
     brokersAndEpochs.partition {
       case (broker, _) =>
         !config.isFeatureVersioningSupported ||
-        !featureCache.get.exists(
+        !featureCache.getFeatureOption.exists(
           latestFinalizedFeatures =>
             BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
     }
@@ -2036,7 +2037,7 @@ class KafkaController(val config: KafkaConfig,
   private def processFeatureUpdatesWithActiveController(request: UpdateFeaturesRequest,
                                                         callback: UpdateFeaturesCallback): Unit = {
     val updates = request.featureUpdates
-    val existingFeatures = featureCache.get
+    val existingFeatures = featureCache.getFeatureOption
       .map(featuresAndEpoch => featuresAndEpoch.features)
       .getOrElse(Map[String, Short]())
     // A map with key being feature name and value being finalized version.
@@ -2077,7 +2078,7 @@ class KafkaController(val config: KafkaConfig,
       if (!existingFeatures.equals(targetFeatures)) {
         val newNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Enabled, targetFeatures)
         val newVersion = updateFeatureZNode(newNode)
-        featureCache.waitUntilEpochOrThrow(newVersion, request.data().timeoutMs())
+        featureCache.waitUntilFeatureEpochOrThrow(newVersion, request.data().timeoutMs())
       }
     } catch {
       // For all features that correspond to valid FeatureUpdate (i.e. error is Errors.NONE),

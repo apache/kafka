@@ -163,7 +163,6 @@ class KafkaServer(
   private var _featureChangeListener: FinalizedFeatureChangeListener = null
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty()
-  val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
   override def brokerState: BrokerState = _brokerState
 
@@ -203,12 +202,6 @@ class KafkaServer(
         /* setup zookeeper */
         initZkClient(time)
         configRepository = new ZkConfigRepository(new AdminZkClient(zkClient))
-
-        /* initialize features */
-        _featureChangeListener = new FinalizedFeatureChangeListener(featureCache, _zkClient)
-        if (config.isFeatureVersioningSupported) {
-          _featureChangeListener.initOrThrow(config.zkConnectionTimeoutMs)
-        }
 
         /* Get or create cluster_id */
         _clusterId = getOrGenerateClusterId(zkClient)
@@ -269,7 +262,14 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
-        metadataCache = MetadataCache.zkMetadataCache(config.brokerId)
+        metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion, brokerFeatures)
+
+        /* initialize feature change listener */
+        _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)
+        if (config.isFeatureVersioningSupported) {
+          _featureChangeListener.initOrThrow(config.zkConnectionTimeoutMs)
+        }
+
         // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
         // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -297,7 +297,7 @@ class KafkaServer(
           config,
           forwardingManager,
           brokerFeatures,
-          featureCache
+          metadataCache
         )
 
         // Create and start the socket server acceptor threads so that the bound port is known.
@@ -339,7 +339,7 @@ class KafkaServer(
         tokenManager.startup()
 
         /* start kafka controller */
-        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
+        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, metadataCache, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
