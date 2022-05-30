@@ -156,10 +156,6 @@ public class MetricsIntegrationTest {
     private static final String PROCESS_LATENCY_MAX = "process-latency-max";
     private static final String PUNCTUATE_LATENCY_AVG = "punctuate-latency-avg";
     private static final String PUNCTUATE_LATENCY_MAX = "punctuate-latency-max";
-    private static final String CREATE_LATENCY_AVG = "create-latency-avg";
-    private static final String CREATE_LATENCY_MAX = "create-latency-max";
-    private static final String DESTROY_LATENCY_AVG = "destroy-latency-avg";
-    private static final String DESTROY_LATENCY_MAX = "destroy-latency-max";
     private static final String PROCESS_RATE = "process-rate";
     private static final String PROCESS_TOTAL = "process-total";
     private static final String PROCESS_RATIO = "process-ratio";
@@ -168,12 +164,6 @@ public class MetricsIntegrationTest {
     private static final String PUNCTUATE_RATE = "punctuate-rate";
     private static final String PUNCTUATE_TOTAL = "punctuate-total";
     private static final String PUNCTUATE_RATIO = "punctuate-ratio";
-    private static final String CREATE_RATE = "create-rate";
-    private static final String CREATE_TOTAL = "create-total";
-    private static final String DESTROY_RATE = "destroy-rate";
-    private static final String DESTROY_TOTAL = "destroy-total";
-    private static final String FORWARD_TOTAL = "forward-total";
-    private static final String FORWARD_RATE = "forward-rate";
     private static final String STREAM_STRING = "stream";
     private static final String COMMIT_LATENCY_AVG = "commit-latency-avg";
     private static final String COMMIT_LATENCY_MAX = "commit-latency-max";
@@ -217,6 +207,10 @@ public class MetricsIntegrationTest {
     private static final String RECORD_E2E_LATENCY_AVG = "record-e2e-latency-avg";
     private static final String RECORD_E2E_LATENCY_MIN = "record-e2e-latency-min";
     private static final String RECORD_E2E_LATENCY_MAX = "record-e2e-latency-max";
+    private static final String BYTES_CONSUMED_TOTAL = "bytes-consumed-total";
+    private static final String RECORDS_CONSUMED_TOTAL = "records-consumed-total";
+    private static final String BYTES_PRODUCED_TOTAL = "bytes-produced-total";
+    private static final String RECORDS_PRODUCED_TOTAL = "records-produced-total";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
@@ -546,6 +540,10 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_AVG, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
+        checkMetricByName(listMetricProcessor, BYTES_CONSUMED_TOTAL, numberOfSourceNodes);
+        checkMetricByName(listMetricProcessor, RECORDS_CONSUMED_TOTAL, numberOfSourceNodes);
+        checkMetricByName(listMetricProcessor, BYTES_PRODUCED_TOTAL, numberOfTerminalNodes);
+        checkMetricByName(listMetricProcessor, RECORDS_PRODUCED_TOTAL, numberOfTerminalNodes);
     }
 
     private void checkKeyValueStoreMetrics(final String tagKey) {

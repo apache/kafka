@@ -26,7 +26,7 @@ import java.util.Map;
 
 public interface RecordCollector {
 
-    <K, V> void send(final String topic,
+    <K, V> int send(final String topic,
                      final K key,
                      final V value,
                      final Headers headers,
@@ -35,14 +35,14 @@ public interface RecordCollector {
                      final Serializer<K> keySerializer,
                      final Serializer<V> valueSerializer);
 
-    <K, V> void send(final String topic,
-                     final K key,
-                     final V value,
-                     final Headers headers,
-                     final Long timestamp,
-                     final Serializer<K> keySerializer,
-                     final Serializer<V> valueSerializer,
-                     final StreamPartitioner<? super K, ? super V> partitioner);
+    <K, V> int send(final String topic,
+                    final K key,
+                    final V value,
+                    final Headers headers,
+                    final Long timestamp,
+                    final Serializer<K> keySerializer,
+                    final Serializer<V> valueSerializer,
+                    final StreamPartitioner<? super K, ? super V> partitioner);
 
     /**
      * Initialize the internal {@link Producer}; note this function should be made idempotent

@@ -39,37 +39,39 @@ public class MockRecordCollector implements RecordCollector {
     private boolean flushed = false;
 
     @Override
-    public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Integer partition,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer) {
+    public <K, V> int send(final String topic,
+                           final K key,
+                           final V value,
+                           final Headers headers,
+                           final Integer partition,
+                           final Long timestamp,
+                           final Serializer<K> keySerializer,
+                           final Serializer<V> valueSerializer) {
         collected.add(new ProducerRecord<>(topic,
-            partition,
-            timestamp,
-            key,
-            value,
-            headers));
+                                           partition,
+                                           timestamp,
+                                           key,
+                                           value,
+                                           headers));
+        return 0;
     }
 
     @Override
-    public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer,
-                            final StreamPartitioner<? super K, ? super V> partitioner) {
+    public <K, V> int send(final String topic,
+                           final K key,
+                           final V value,
+                           final Headers headers,
+                           final Long timestamp,
+                           final Serializer<K> keySerializer,
+                           final Serializer<V> valueSerializer,
+                           final StreamPartitioner<? super K, ? super V> partitioner) {
         collected.add(new ProducerRecord<>(topic,
             0, // partition id
             timestamp,
             key,
             value,
             headers));
+        return 0;
     }
 
     @Override

@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerializer;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerializer;
@@ -30,6 +32,9 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     private Serializer<VIn> valSerializer;
     private final TopicNameExtractor<KIn, VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
+
+    private Sensor bytesProducedSensor;
+    private Sensor recordsProducedSensor;
 
     private InternalProcessorContext<Void, Void> context;
 
@@ -56,6 +61,26 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
     @Override
     public void init(final InternalProcessorContext<Void, Void> context) {
+        // It is important to first create the sensor before calling init on the
+        // parent object. Otherwise due to backwards compatibility an empty sensor
+        // without parent is created with the same name.
+        // Once the backwards compatibility is not needed anymore it might be possible to
+        // change this.
+        bytesProducedSensor = ProcessorNodeMetrics.bytesProducedSensor(
+            threadId,
+            internalProcessorContext.taskId().toString(),
+            name(),
+            context.topic(),
+            context.metrics()
+        );
+        recordsProducedSensor = ProcessorNodeMetrics.recordsProducedSensor(
+            threadId,
+            internalProcessorContext.taskId().toString(),
+            name(),
+            context.topic(),
+            context.metrics()
+        );
+
         super.init(context);
         this.context = context;
         keySerializer = prepareKeySerializer(keySerializer, context, this.name());
@@ -82,7 +107,12 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
         final String topic = topicExtractor.extract(key, value, contextForExtraction);
 
-        collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
+        final int bytesProduced =
+            collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
+
+        // Just use the cached system time to avoid the clock lookup
+        bytesProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
+        recordsProducedSensor.record(1, context.currentSystemTimeMs());
     }
 
     /**

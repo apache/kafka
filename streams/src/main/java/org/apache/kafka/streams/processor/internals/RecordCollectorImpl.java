@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.slf4j.Logger;
@@ -99,14 +100,14 @@ public class RecordCollectorImpl implements RecordCollector {
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
-    public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer,
-                            final StreamPartitioner<? super K, ? super V> partitioner) {
+    public <K, V> int send(final String topic,
+                           final K key,
+                           final V value,
+                           final Headers headers,
+                           final Long timestamp,
+                           final Serializer<K> keySerializer,
+                           final Serializer<V> valueSerializer,
+                           final StreamPartitioner<? super K, ? super V> partitioner) {
         final Integer partition;
 
         if (partitioner != null) {
@@ -136,11 +137,11 @@ public class RecordCollectorImpl implements RecordCollector {
             partition = null;
         }
 
-        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
+        return send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
     }
 
     @Override
-    public <K, V> void send(final String topic,
+    public <K, V> int send(final String topic,
                             final K key,
                             final V value,
                             final Headers headers,
@@ -199,6 +200,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
             }
         });
+        return keyBytes.length + valBytes.length;
     }
 
     private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord) {

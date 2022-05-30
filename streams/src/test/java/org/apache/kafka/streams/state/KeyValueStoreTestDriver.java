@@ -215,31 +215,35 @@ public class KeyValueStoreTestDriver<K, V> {
             new MockStreamsMetrics(new Metrics())
         ) {
             @Override
-            public <K1, V1> void send(final String topic,
-                                      final K1 key,
-                                      final V1 value,
-                                      final Headers headers,
-                                      final Integer partition,
-                                      final Long timestamp,
-                                      final Serializer<K1> keySerializer,
-                                      final Serializer<V1> valueSerializer) {
+            public <K1, V1> int send(final String topic,
+                                     final K1 key,
+                                     final V1 value,
+                                     final Headers headers,
+                                     final Integer partition,
+                                     final Long timestamp,
+                                     final Serializer<K1> keySerializer,
+                                     final Serializer<V1> valueSerializer) {
                 // for byte arrays we need to wrap it for comparison
 
-                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, headers, key));
-                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, headers, value));
+                final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
+                final byte[] valueBytes = valueSerializer.serialize(topic, headers, value);
+
+                final K keyTest = serdes.keyFrom(keyBytes);
+                final V valueTest = serdes.valueFrom(valueBytes);
 
                 recordFlushed(keyTest, valueTest);
+                return keyBytes.length + valueBytes.length;
             }
 
             @Override
-            public <K1, V1> void send(final String topic,
-                                      final K1 key,
-                                      final V1 value,
-                                      final Headers headers,
-                                      final Long timestamp,
-                                      final Serializer<K1> keySerializer,
-                                      final Serializer<V1> valueSerializer,
-                                      final StreamPartitioner<? super K1, ? super V1> partitioner) {
+            public <K1, V1> int send(final String topic,
+                                     final K1 key,
+                                     final V1 value,
+                                     final Headers headers,
+                                     final Long timestamp,
+                                     final Serializer<K1> keySerializer,
+                                     final Serializer<V1> valueSerializer,
+                                     final StreamPartitioner<? super K1, ? super V1> partitioner) {
                 throw new UnsupportedOperationException();
             }
         };

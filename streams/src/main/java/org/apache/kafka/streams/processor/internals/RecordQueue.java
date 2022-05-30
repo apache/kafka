@@ -18,18 +18,19 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.sizeInBytes;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -52,6 +53,8 @@ public class RecordQueue {
     private long partitionTime = UNKNOWN;
 
     private final Sensor droppedRecordsSensor;
+    private final Sensor bytesConsumedSensor;
+    private final Sensor recordsConsumedSensor;
     private long totalBytesBuffered;
     private long headRecordSizeInBytes;
 
@@ -69,6 +72,20 @@ public class RecordQueue {
         droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
             Thread.currentThread().getName(),
             processorContext.taskId().toString(),
+            processorContext.metrics()
+        );
+        bytesConsumedSensor = ProcessorNodeMetrics.bytesConsumedSensor(
+            Thread.currentThread().getName(),
+            processorContext.taskId().toString(),
+            source.name(),
+            partition.topic(),
+            processorContext.metrics()
+        );
+        recordsConsumedSensor = ProcessorNodeMetrics.recordsConsumedSensor(
+            Thread.currentThread().getName(),
+            processorContext.taskId().toString(),
+            source.name(),
+            partition.topic(),
             processorContext.metrics()
         );
         recordDeserializer = new RecordDeserializer(
@@ -104,25 +121,6 @@ public class RecordQueue {
         return partition;
     }
 
-    private long sizeInBytes(final ConsumerRecord<byte[], byte[]> record) {
-        long headerSizeInBytes = 0L;
-
-        for (final Header header: record.headers().toArray()) {
-            headerSizeInBytes += Utils.utf8(header.key()).length;
-            if (header.value() != null) {
-                headerSizeInBytes += header.value().length;
-            }
-        }
-
-        return record.serializedKeySize() +
-                record.serializedValueSize() +
-                8L + // timestamp
-                8L + // offset
-                Utils.utf8(record.topic()).length +
-                4L + // partition
-                headerSizeInBytes;
-    }
-
     /**
      * Add a batch of {@link ConsumerRecord} into the queue
      *
@@ -145,8 +143,12 @@ public class RecordQueue {
      *
      * @return StampedRecord
      */
-    public StampedRecord poll() {
+    public StampedRecord poll(final long wallClockTime) {
         final StampedRecord recordToReturn = headRecord;
+
+        bytesConsumedSensor.record(headRecordSizeInBytes, wallClockTime);
+        recordsConsumedSensor.record(1, wallClockTime);
+
         totalBytesBuffered -= headRecordSizeInBytes;
         headRecord = null;
         headRecordSizeInBytes = 0L;

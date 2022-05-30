@@ -78,7 +78,6 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         valDeserializer = prepareValueDeserializer(valDeserializer, context, name());
     }
 
-
     @Override
     public void process(final Record<KIn, VIn> record) {
         context.forward(record);

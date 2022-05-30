@@ -111,7 +111,7 @@ public class ProcessorNodeMetricsTest {
                 expectedParentSensor
         );
 
-        verifySensor(() -> ProcessorNodeMetrics.processAtSourceSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
+        verifySensor(() -> ProcessorNodeMetrics.recordsProcessedAtSourceSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
     }
 
     @Test
