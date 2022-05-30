@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.{BeforeEach, Disabled, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -152,6 +153,33 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
       propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
+    createTopic(topic)
+    shutdownBroker()
+    config.logDirs.foreach { dirName =>
+      val partitionDir = new File(dirName, s"$topic-0")
+      partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
+    }
+
+    val expectedStatusCode = Some(1)
+    var receivedStatusCode = Option.empty[Int]
+    Exit.setHaltProcedure((statusCode, _) => {
+      receivedStatusCode = Some(statusCode)
+    }.asInstanceOf[Nothing])
+
+    try {
+      val recreateBrokerExec: Executable = () => recreateBroker(true)
+      // this startup should fail with no online log dir (due to corrupted log), and exit directly without throwing exception
+      assertDoesNotThrow(recreateBrokerExec)
+      // JVM should exit with status code 1
+      assertEquals(expectedStatusCode, receivedStatusCode)
+    } finally {
+      Exit.resetExitProcedure()
     }
   }
 
