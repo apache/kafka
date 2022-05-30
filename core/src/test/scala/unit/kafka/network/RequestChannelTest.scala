@@ -18,10 +18,6 @@
 package kafka.network
 
 
-import java.io.IOException
-import java.net.InetAddress
-import java.nio.ByteBuffer
-import java.util.Collections
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
 import kafka.server.EnvelopeUtils
@@ -30,11 +26,11 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, SslConfigs, TopicConfig}
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.{CreateTopicsRequestData, CreateTopicsResponseData, IncrementalAlterConfigsRequestData}
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
+import org.apache.kafka.common.message.{CreateTopicsRequestData, CreateTopicsResponseData, IncrementalAlterConfigsRequestData}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest}
 import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
@@ -42,11 +38,14 @@ import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
-import org.mockito.Mockito.mock
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+import org.mockito.Mockito.mock
 
+import java.io.IOException
+import java.net.InetAddress
+import java.nio.ByteBuffer
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -210,7 +209,7 @@ class RequestChannelTest {
         assertNull(envelopeResponse.responseData)
       case _ =>
         assertEquals(Errors.NONE, envelopeResponse.error)
-        val unwrappedResponse = AbstractResponse.parseResponse(envelopeResponse.responseData(), unwrapped.header)
+        val unwrappedResponse = AbstractResponse.parseResponse(envelopeResponse.responseData, unwrapped.header)
         assertEquals(createTopicResponse.data, unwrappedResponse.data)
     }
   }
