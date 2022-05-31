@@ -76,7 +76,7 @@ public class ClusterTestExtensionsTest {
         Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.ZK,
             "generate1 provided a Zk cluster, so we should see that here");
         Assertions.assertEquals(clusterInstance.config().name().orElse(""), "Generated Test",
-            "generate 1 named this cluster config, so we should see that here");
+            "generate1 named this cluster config, so we should see that here");
         Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("before"), "each");
     }
 

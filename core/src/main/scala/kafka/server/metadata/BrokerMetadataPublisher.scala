@@ -19,12 +19,11 @@ package kafka.server.metadata
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicLong
-
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.ConfigAdminManager.toLoggableProps
-import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
@@ -103,7 +102,6 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               groupCoordinator: GroupCoordinator,
                               txnCoordinator: TransactionCoordinator,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
-                              featureCache: FinalizedFeatureCache,
                               dynamicConfigHandlers: Map[String, ConfigHandler],
                               private val _authorizer: Option[Authorizer]) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
@@ -149,9 +147,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         debug(s"Publishing metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
       }
 
-      // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
         featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
           info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
         }

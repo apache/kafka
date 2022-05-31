@@ -195,7 +195,6 @@ class BrokerMetadataPublisherTest {
         groupCoordinator = broker.groupCoordinator,
         txnCoordinator = broker.transactionCoordinator,
         clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
-        featureCache = broker.featureCache,
         dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
         _authorizer = Option.empty
       ))
