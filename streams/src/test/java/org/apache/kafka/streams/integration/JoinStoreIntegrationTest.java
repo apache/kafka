@@ -45,6 +45,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -60,6 +61,8 @@ import static org.junit.Assert.assertThrows;
 @SuppressWarnings("deprecation")
 @Category({IntegrationTest.class})
 public class JoinStoreIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
