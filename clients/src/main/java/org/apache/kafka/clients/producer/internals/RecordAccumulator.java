@@ -36,7 +36,6 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -193,17 +192,20 @@ public class RecordAccumulator {
     }
 
     private void registerMetrics(Metrics metrics, String metricGrpName) {
-        MetricName metricName = metrics.metricName("waiting-threads", metricGrpName,
-            "The number of user threads blocked waiting for buffer memory to enqueue their records");
-        metrics.addMetric(metricName, (config, now) -> free.queued());
+        metrics.addMetric(
+            metrics.metricName("waiting-threads", metricGrpName,
+                "The number of user threads blocked waiting for buffer memory to enqueue their records"),
+            (config, now) -> free.queued());
 
-        metricName = metrics.metricName("buffer-total-bytes", metricGrpName,
-            "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
-        metrics.addMetric(metricName, (config, now) -> free.totalMemory());
+        metrics.addMetric(
+            metrics.metricName("buffer-total-bytes", metricGrpName,
+                "The maximum amount of buffer memory the client can use (whether or not it is currently used)."),
+            (config, now) -> free.totalMemory());
 
-        metricName = metrics.metricName("buffer-available-bytes", metricGrpName,
-            "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
-        metrics.addMetric(metricName, (config, now) -> free.availableMemory());
+        metrics.addMetric(
+            metrics.metricName("buffer-available-bytes", metricGrpName,
+                "The total amount of buffer memory that is not being used (either unallocated or in the free list)."),
+            (config, now) -> free.availableMemory());
     }
 
     private void setPartition(AppendCallbacks callbacks, int partition) {
