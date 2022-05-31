@@ -29,11 +29,13 @@ import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
@@ -174,7 +176,13 @@ public class TestUtils {
      */
     public static File tempFile(final String contents) throws IOException {
         final File file = tempFile();
-        Files.writeString(file.toPath(), contents);
+        if (Java.IS_JAVA11_COMPATIBLE) {
+            Files.writeString(file.toPath(), contents);
+        } else {
+            try(final FileWriter writer = new FileWriter(file)) {
+                writer.write(contents);
+            }
+        }
         return file;
     }
 
