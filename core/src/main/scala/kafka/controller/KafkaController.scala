@@ -166,6 +166,10 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var offlinePartitionCount = 0
   @volatile private var preferredReplicaImbalanceCount = 0
   @volatile private var globalTopicCount = 0
+  // https://docs.google.com/document/d/1s9_klx0OFZBf8-Hw87ZaXWPPqs1kf0EEgAckz4n0mzc/edit#heading=h.j3hmr1fm6kkj
+  // shows that each topic has a 4 bytes overhead when they are counted toward the 1M zk jute.maxbuffer limit.
+  val topicNameBytesOverheadOnZk = 4
+  @volatile private var sumOfTopicNameLength = 0
   @volatile private var globalPartitionCount = 0
   @volatile private var topicsToDeleteCount = 0
   @volatile private var replicasToDeleteCount = 0
@@ -185,6 +189,7 @@ class KafkaController(val config: KafkaConfig,
   newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
   newGauge("ControllerState", () => state.value)
   newGauge("GlobalTopicCount", () => globalTopicCount)
+  newGauge("SumOfTopicNameLength", () => sumOfTopicNameLength)
   newGauge("GlobalPartitionCount", () => globalPartitionCount)
   newGauge("TopicsToDeleteCount", () => topicsToDeleteCount)
   newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
@@ -1054,7 +1059,6 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def fetchTopicDeletionsInProgress(): (Set[String], Set[String]) = {
-    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val topicsToBeDeleted = zkClient.getTopicDeletions.toSet
     val topicsForWhichPartitionReassignmentIsInProgress = controllerContext.partitionsBeingReassigned.map(_.topic)
     val topicsIneligibleForDeletion = topicsForWhichPartitionReassignmentIsInProgress
@@ -1655,6 +1659,8 @@ class KafkaController(val config: KafkaConfig,
       }
 
     globalTopicCount = if (!isActive) 0 else controllerContext.allTopics.size
+
+    sumOfTopicNameLength = if (!isActive) 0 else controllerContext.allTopics.map(_.size + topicNameBytesOverheadOnZk).sum
 
     globalPartitionCount = if (!isActive) 0 else controllerContext.partitionWithLeadersCount
 

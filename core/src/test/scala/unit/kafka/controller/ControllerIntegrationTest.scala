@@ -558,7 +558,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val broker1 = servers.find(_.config.brokerId == 1).get
     broker1.shutdown()
 
-    var activeServers = servers.filter(s => s != broker1)
+    val activeServers = servers.filter(s => s != broker1)
     // wait for the update metadata request to trickle to the brokers
     TestUtils.waitUntilTrue(() =>
       activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.isr.size == 1),
