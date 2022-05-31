@@ -259,6 +259,7 @@ subprojects {
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
   def shouldPublish = !project.name.equals('jmh-benchmarks')
+  def shouldPublishWithShadow = (['clients'].contains(project.name))
 
   if (shouldPublish) {
     apply plugin: 'maven-publish'
@@ -318,7 +319,29 @@ subprojects {
       }
       publications {
         mavenJava(MavenPublication) {
-          from components.java
+          if (shouldPublishWithShadow) {
+            apply plugin: 'com.github.johnrengelman.shadow'
+            project.shadow.component(mavenJava)
+
+            // work around issue with 'shadow' using the project name instead of the resolved artifactId
+            // this requires any project relying on 'shadow' dependencies to define those as part of the
+            // shadowProjects extension as well. This must be executed within 'afterEvaluate' to allow
+            // subprojects to set the extension.
+            afterEvaluate {
+              pom.withXml {
+                asNode().dependencies.dependency.findAll() {
+                  // replace artifactId with archivesBaseName for 'project' dependencies
+                  def projectName = it.artifactId.text()
+                  if (shadowProjects.containsKey(projectName)) {
+                    logger.debug("Overriding shadow project artifactId in final pom: " + projectName + " -> " + shadowProjects[projectName].archivesBaseName)
+                    it.artifactId*.value = shadowProjects[projectName].archivesBaseName
+                  }
+                }
+              }
+            }
+          } else {
+            from components.java
+          }
 
           afterEvaluate {
             ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
@@ -1259,6 +1282,7 @@ project(':generator') {
 }
 
 project(':clients') {
+  apply plugin: 'com.github.johnrengelman.shadow'
   archivesBaseName = "kafka-clients"
 
   configurations {
@@ -1267,10 +1291,13 @@ project(':clients') {
 
   dependencies {
     implementation libs.zstd
-    implementation libs.lz4
     implementation libs.opentelemetryProto
+    implementation libs.lz4
     implementation libs.snappy
     implementation libs.slf4jApi
+
+    // shadow implementation for KIP-714
+    shadow libs.opentelemetryProto
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
@@ -1287,6 +1314,24 @@ project(':clients') {
     testImplementation libs.jacksonJaxrsJsonProvider
 
     generator project(':generator')
+  }
+
+  shadowJar {
+    archiveClassifier = null
+
+    // KIP-714: moving shaded dependencies to a shaded location
+    relocate('opentelemetry', 'org.apache.kafka.shaded.opentelemetry')
+    relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
+    relocate('google.protobuf', 'org.apache.kafka.shaded.google.protobuf')
+
+    // dependencies exclusion from the final jar
+    dependencies {
+      exclude(dependency(libs.opentelemetryProto))
+      exclude(dependency(libs.snappy))
+      exclude(dependency(libs.zstd))
+      exclude(dependency('org.lz4:lz4-java'))
+      exclude(dependency('org.slf4j:slf4j-api'))
+    }
   }
 
   task createVersionFile() {
@@ -1308,7 +1353,9 @@ project(':clients') {
   }
 
   jar {
+    enabled false
     dependsOn createVersionFile
+    dependsOn 'shadowJar'
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
     }
