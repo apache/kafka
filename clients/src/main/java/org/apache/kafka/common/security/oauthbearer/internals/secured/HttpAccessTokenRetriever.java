@@ -362,7 +362,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             return requestParameters.toString();
         } catch (UnsupportedEncodingException e) {
             // The world has gone crazy!
-            throw new IOException(String.format("Encoding %s not supported", StandardCharsets.UTF_8.name()));
+            throw new IOException(String.format("Encoding %s not supported", StandardCharsets.UTF_8.name()), e);
         }
     }
 

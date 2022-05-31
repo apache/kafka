@@ -172,7 +172,7 @@ final class StateManagerUtil {
 
             return new TaskId(topicGroupId, partition, namedTopology);
         } catch (final Exception e) {
-            throw new TaskIdFormatException(taskIdStr);
+            throw new TaskIdFormatException(taskIdStr, e);
         }
     }
 

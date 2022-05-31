@@ -308,7 +308,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 try {
                     return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 } catch (BufferUnderflowException e) {
-                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
+                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached", e);
                 }
             }
             @Override
