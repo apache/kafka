@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidReq
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -37,7 +37,6 @@ import scala.jdk.CollectionConverters._
   * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.
   */
 @Timeout(120)
-@Tag("integration")
 class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with Logging {
 
   import AdminClientWithPoliciesIntegrationTest._
