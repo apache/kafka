@@ -216,7 +216,7 @@ public class TestSslUtils {
         }
         if (trustCerts != null) {
             if (tsPath == null) {
-                tsPath = File.createTempFile("truststore", ".pem").getPath();
+                tsPath = TestUtils.tempFile("truststore", ".pem").getPath();
                 sslProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, tsPath);
             }
             sslProps.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, PEM_TYPE);
@@ -504,13 +504,13 @@ public class TestSslUtils {
             File keyStoreFile = null;
 
             if (mode == Mode.CLIENT && useClientCert) {
-                keyStoreFile = File.createTempFile("clientKS", ".jks");
+                keyStoreFile = TestUtils.tempFile("clientKS", ".jks");
                 KeyPair cKP = generateKeyPair(algorithm);
                 X509Certificate cCert = certBuilder.generate("CN=" + cn + ", O=A client", cKP);
                 createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "client", cKP.getPrivate(), cCert);
                 certs.put(certAlias, cCert);
             } else if (mode == Mode.SERVER) {
-                keyStoreFile = File.createTempFile("serverKS", ".jks");
+                keyStoreFile = TestUtils.tempFile("serverKS", ".jks");
                 KeyPair sKP = generateKeyPair(algorithm);
                 X509Certificate sCert = certBuilder.generate("CN=" + cn + ", O=A server", sKP);
                 createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "server", sKP.getPrivate(), sCert);
