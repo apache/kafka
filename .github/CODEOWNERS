@@ -1,3 +1,1 @@
-# See go/codeowners - automatically generated for confluentinc/kafka:
 *	@confluentinc/kafka-eng
-*	@confluentinc/security
