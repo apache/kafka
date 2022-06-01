@@ -44,14 +44,14 @@ import scala.compat.java8.OptionConverters.RichOptionForJava8
  * @param blockingSender The raw leader endpoint used to communicate with the leader
  * @param fetchSessionHandler A FetchSessionHandler to track the partitions in the session
  * @param brokerConfig Broker configuration
- * @param replicaMgr A ReplicaManager
+ * @param replicaManager A ReplicaManager
  * @param quota The quota, used when building a fetch request
  */
 class RemoteLeaderEndPoint(logPrefix: String,
                            blockingSender: BlockingSend,
                            private[server] val fetchSessionHandler: FetchSessionHandler, // visible for testing
                            brokerConfig: KafkaConfig,
-                           replicaMgr: ReplicaManager,
+                           replicaManager: ReplicaManager,
                            quota: ReplicaQuota) extends LeaderEndPoint with Logging {
 
   this.logIdent = logPrefix
@@ -168,15 +168,15 @@ class RemoteLeaderEndPoint(logPrefix: String,
     }
   }
 
-  override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
+  override def buildFetch(partitions: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
 
-    val builder = fetchSessionHandler.newBuilder(partitionMap.size, false)
-    partitionMap.forKeyValue { (topicPartition, fetchState) =>
+    val builder = fetchSessionHandler.newBuilder(partitions.size, false)
+    partitions.forKeyValue { (topicPartition, fetchState) =>
       // We will not include a replica in the fetch request if it should be throttled.
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
         try {
-          val logStartOffset = replicaMgr.localLogOrException(topicPartition).logStartOffset
+          val logStartOffset = replicaManager.localLogOrException(topicPartition).logStartOffset
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)
             fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
           else
@@ -222,5 +222,5 @@ class RemoteLeaderEndPoint(logPrefix: String,
     !fetchState.isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
-  override def toString: String = s"RemoteLeaderEndPoint with $blockingSender"
+  override def toString: String = s"RemoteLeaderEndPoint(blockingSender=$blockingSender)"
 }

@@ -97,10 +97,10 @@ trait LeaderEndPoint {
   /**
    * Builds a fetch request, given a partition map.
    *
-   * @param partitionMap A map of topic partitions to their respective partition fetch state
+   * @param partitions A map of topic partitions to their respective partition fetch state
    *
    * @return A ResultWithPartitions, used to create the fetchRequest for fetch.
    */
-  def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]]
+  def buildFetch(partitions: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]]
 
 }

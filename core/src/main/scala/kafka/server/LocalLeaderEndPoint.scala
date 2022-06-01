@@ -41,12 +41,12 @@ import scala.jdk.CollectionConverters._
  *
  * @param sourceBroker The broker (host:port) that we want to connect to
  * @param brokerConfig A config file with broker related configurations
- * @param replicaMgr A ReplicaManager
+ * @param replicaManager A ReplicaManager
  * @param quota The quota, used when building a fetch request
  */
 class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
                           brokerConfig: KafkaConfig,
-                          replicaMgr: ReplicaManager,
+                          replicaManager: ReplicaManager,
                           quota: ReplicaQuota) extends LeaderEndPoint with Logging {
 
   private val replicaId = brokerConfig.brokerId
@@ -100,7 +100,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
       clientMetadata = None
     )
 
-    replicaMgr.fetchMessages(
+    replicaManager.fetchMessages(
       params = fetchParams,
       fetchInfos = fetchData.asScala.toSeq,
       quota = UnboundedQuota,
@@ -114,12 +114,12 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
   }
 
   override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
-    val partition = replicaMgr.getPartitionOrException(topicPartition)
+    val partition = replicaManager.getPartitionOrException(topicPartition)
     partition.localLogOrException.logStartOffset
   }
 
   override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
-    val partition = replicaMgr.getPartitionOrException(topicPartition)
+    val partition = replicaManager.getPartitionOrException(topicPartition)
     partition.localLogOrException.logEndOffset
   }
 
@@ -131,7 +131,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
             .setPartition(tp.partition)
             .setErrorCode(Errors.NONE.code)
         } else {
-          val partition = replicaMgr.getPartitionOrException(tp)
+          val partition = replicaManager.getPartitionOrException(tp)
           partition.lastOffsetForLeaderEpoch(
             currentLeaderEpoch = RequestUtils.getLeaderEpoch(epochData.currentLeaderEpoch),
             leaderEpoch = epochData.leaderEpoch,
@@ -148,12 +148,12 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     }
   }
 
-  override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
+  override def buildFetch(partitions: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
     // Only include replica in the fetch request if it is not throttled.
     if (quota.isQuotaExceeded) {
       ResultWithPartitions(None, Set.empty)
     } else {
-      selectPartitionToFetch(partitionMap) match {
+      selectPartitionToFetch(partitions) match {
         case Some((tp, fetchState)) =>
           buildFetchForPartition(tp, fetchState)
         case None =>
@@ -162,14 +162,14 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     }
   }
 
-  private def selectPartitionToFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
+  private def selectPartitionToFetch(partitions: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
     // Only move one partition at a time to increase its catch-up rate and thus reduce the time spent on
     // moving any given replica. Replicas are selected in ascending order (lexicographically by topic) from the
     // partitions that are ready to fetch. Once selected, we will continue fetching the same partition until it
     // becomes unavailable or is removed.
 
     inProgressPartition.foreach { tp =>
-      val fetchStateOpt = partitionMap.get(tp)
+      val fetchStateOpt = partitions.get(tp)
       fetchStateOpt.filter(_.isReadyForFetch).foreach { fetchState =>
         return Some((tp, fetchState))
       }
@@ -177,32 +177,32 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     inProgressPartition = None
 
-    val nextPartitionOpt = nextReadyPartition(partitionMap)
+    val nextPartitionOpt = nextReadyPartition(partitions)
     nextPartitionOpt.foreach { case (tp, fetchState) =>
       inProgressPartition = Some(tp)
       info(s"Beginning/resuming copy of partition $tp from offset ${fetchState.fetchOffset}. " +
-        s"Including this partition, there are ${partitionMap.size} remaining partitions to copy by this thread.")
+        s"Including this partition, there are ${partitions.size} remaining partitions to copy by this thread.")
     }
     nextPartitionOpt
   }
 
-  private def buildFetchForPartition(tp: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[ReplicaFetch]] = {
+  private def buildFetchForPartition(topicPartition: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[ReplicaFetch]] = {
     val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
     try {
-      val logStartOffset = replicaMgr.futureLocalLogOrException(tp).logStartOffset
+      val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
       val lastFetchedEpoch = if (isTruncationOnFetchSupported)
         fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
       else
         Optional.empty[Integer]
       val topicId = fetchState.topicId.getOrElse(Uuid.ZERO_UUID)
-      requestMap.put(tp, new FetchRequest.PartitionData(topicId, fetchState.fetchOffset, logStartOffset,
+      requestMap.put(topicPartition, new FetchRequest.PartitionData(topicId, fetchState.fetchOffset, logStartOffset,
         fetchSize, Optional.of(fetchState.currentLeaderEpoch), lastFetchedEpoch))
     } catch {
       case e: KafkaStorageException =>
-        debug(s"Failed to build fetch for $tp", e)
-        partitionsWithError += tp
+        debug(s"Failed to build fetch for $topicPartition", e)
+        partitionsWithError += topicPartition
     }
 
     val fetchRequestOpt = if (requestMap.isEmpty) {
@@ -221,8 +221,8 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     ResultWithPartitions(fetchRequestOpt, partitionsWithError)
   }
 
-  private def nextReadyPartition(partitionMap: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
-    partitionMap.filter { case (_, partitionFetchState) =>
+  private def nextReadyPartition(partitions: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
+    partitions.filter { case (_, partitionFetchState) =>
       partitionFetchState.isReadyForFetch
     }.reduceLeftOption { (left, right) =>
       if ((left._1.topic < right._1.topic) || (left._1.topic == right._1.topic && left._1.partition < right._1.partition))
