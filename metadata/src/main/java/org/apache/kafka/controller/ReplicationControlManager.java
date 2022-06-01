@@ -1104,7 +1104,7 @@ public class ReplicationControlManager {
         if (featureControl.metadataVersion().isBrokerRegistrationChangeRecordSupported()) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                     setBrokerId(brokerId).setBrokerEpoch(brokerRegistration.epoch()).
-                    setFenced(BrokerRegistrationFencingChange.ADDED.value()),
+                    setFenced(BrokerRegistrationFencingChange.UNFENCE.value()),
                     (short) 0));
         } else {
             records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
@@ -1147,7 +1147,7 @@ public class ReplicationControlManager {
         if (featureControl.metadataVersion().isBrokerRegistrationChangeRecordSupported()) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                 setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
-                setFenced(BrokerRegistrationFencingChange.REMOVED.value()),
+                setFenced(BrokerRegistrationFencingChange.FENCE.value()),
                 (short) 0));
         } else {
             records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().setId(brokerId).

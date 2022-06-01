@@ -155,9 +155,11 @@ public enum MetadataVersion {
     // Support for metadata.version feature flag and Removes min_version_level from the finalized version range that is written to ZooKeeper (KIP-778)
     IBP_3_3_IV0(5, "3.3", "IV0", false),
 
+    // Use NoopRecord as specified in KIP-835.
+    IBP_3_3_IV1(6, "3.3", "IV1", true),
+
     // In KRaft mode, use BrokerRegistrationChangeRecord instead of UnfenceBrokerRecord and FenceBrokerRecord.
-    // Also, use NoopRecord as specified in KIP-835.
-    IBP_3_3_IV1(6, "3.3", "IV1", true);
+    IBP_3_3_IV2(7, "3.3", "IV2", true);
 
     public static final String FEATURE_NAME = "metadata.version";
 
@@ -238,7 +240,7 @@ public enum MetadataVersion {
     }
 
     public boolean isBrokerRegistrationChangeRecordSupported() {
-        return this.isAtLeast(IBP_3_3_IV1);
+        return this.isAtLeast(IBP_3_3_IV2);
     }
 
     private static final Map<String, MetadataVersion> IBP_VERSIONS;

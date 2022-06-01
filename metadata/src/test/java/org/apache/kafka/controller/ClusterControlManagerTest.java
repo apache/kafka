@@ -54,7 +54,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class ClusterControlManagerTest {
     @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_0_IV0", "IBP_3_3_IV1"})
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_0_IV0", "IBP_3_3_IV2"})
     public void testReplay(MetadataVersion metadataVersion) {
         MockTime time = new MockTime(0, 0, 0);
 
@@ -93,7 +93,7 @@ public class ClusterControlManagerTest {
         assertFalse(clusterControl.unfenced(0));
         assertFalse(clusterControl.unfenced(1));
 
-        if (metadataVersion.isLessThan(IBP_3_3_IV1)) {
+        if (metadataVersion.isLessThan(IBP_3_3_IV2)) {
             UnfenceBrokerRecord unfenceBrokerRecord =
                     new UnfenceBrokerRecord().setId(1).setEpoch(100);
             clusterControl.replay(unfenceBrokerRecord);
@@ -105,7 +105,7 @@ public class ClusterControlManagerTest {
         assertFalse(clusterControl.unfenced(0));
         assertTrue(clusterControl.unfenced(1));
 
-        if (metadataVersion.isLessThan(IBP_3_3_IV1)) {
+        if (metadataVersion.isLessThan(IBP_3_3_IV2)) {
             FenceBrokerRecord fenceBrokerRecord =
                     new FenceBrokerRecord().setId(1).setEpoch(100);
             clusterControl.replay(fenceBrokerRecord);

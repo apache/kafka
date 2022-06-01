@@ -25,9 +25,9 @@ import java.util.stream.Collectors;
 
 
 public enum BrokerRegistrationFencingChange {
-    REMOVED(-1, Optional.of(false)),
-    UNCHANGED(0, Optional.empty()),
-    ADDED(1, Optional.of(true));
+    FENCE(-1, Optional.of(false)),
+    NONE(0, Optional.empty()),
+    UNFENCE(1, Optional.of(true));
 
     private final byte value;
 

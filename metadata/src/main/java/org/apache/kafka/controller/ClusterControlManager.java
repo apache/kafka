@@ -395,12 +395,12 @@ public class ClusterControlManager {
 
     public void replay(FenceBrokerRecord record) {
         replayRegistrationChange(record, record.id(), record.epoch(),
-            BrokerRegistrationFencingChange.ADDED);
+            BrokerRegistrationFencingChange.UNFENCE);
     }
 
     public void replay(UnfenceBrokerRecord record) {
         replayRegistrationChange(record, record.id(), record.epoch(),
-            BrokerRegistrationFencingChange.REMOVED);
+            BrokerRegistrationFencingChange.FENCE);
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
@@ -429,7 +429,7 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             BrokerRegistration nextRegistration = curRegistration;
-            if (fencingChange != BrokerRegistrationFencingChange.UNCHANGED) {
+            if (fencingChange != BrokerRegistrationFencingChange.NONE) {
                 nextRegistration = nextRegistration.cloneWithFencing(fencingChange.asBoolean().get());
             }
             if (!curRegistration.equals(nextRegistration)) {
