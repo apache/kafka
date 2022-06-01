@@ -61,21 +61,17 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
     @Override
     public void init(final InternalProcessorContext<Void, Void> context) {
-        // It is important to first create the sensor before calling init on the
-        // parent object. Otherwise due to backwards compatibility an empty sensor
-        // without parent is created with the same name.
-        // Once the backwards compatibility is not needed anymore it might be possible to
-        // change this.
+        final String threadName = Thread.currentThread().getName();
         bytesProducedSensor = ProcessorNodeMetrics.bytesProducedSensor(
-            threadId,
-            internalProcessorContext.taskId().toString(),
+            threadName,
+            context.taskId().toString(),
             name(),
             context.topic(),
             context.metrics()
         );
         recordsProducedSensor = ProcessorNodeMetrics.recordsProducedSensor(
-            threadId,
-            internalProcessorContext.taskId().toString(),
+            threadName,
+            context.taskId().toString(),
             name(),
             context.topic(),
             context.metrics()
@@ -110,7 +106,6 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         final int bytesProduced =
             collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
 
-        // Just use the cached system time to avoid the clock lookup
         bytesProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
         recordsProducedSensor.record(1, context.currentSystemTimeMs());
     }

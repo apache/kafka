@@ -118,13 +118,13 @@ public class RecordQueueTest {
         assertEquals(2L, queue.headRecordOffset().longValue());
 
         // poll the first record, now with 1, 3
-        assertEquals(2L, queue.poll().timestamp);
+        assertEquals(2L, queue.poll(0).timestamp);
         assertEquals(2, queue.size());
         assertEquals(1L, queue.headRecordTimestamp());
         assertEquals(1L, queue.headRecordOffset().longValue());
 
         // poll the second record, now with 3
-        assertEquals(1L, queue.poll().timestamp);
+        assertEquals(1L, queue.poll(0).timestamp);
         assertEquals(1, queue.size());
         assertEquals(3L, queue.headRecordTimestamp());
         assertEquals(3L, queue.headRecordOffset().longValue());
@@ -143,21 +143,21 @@ public class RecordQueueTest {
         assertEquals(3L, queue.headRecordOffset().longValue());
 
         // poll the third record, now with 4, 1, 2
-        assertEquals(3L, queue.poll().timestamp);
+        assertEquals(3L, queue.poll(0).timestamp);
         assertEquals(3, queue.size());
         assertEquals(4L, queue.headRecordTimestamp());
         assertEquals(4L, queue.headRecordOffset().longValue());
 
         // poll the rest records
-        assertEquals(4L, queue.poll().timestamp);
+        assertEquals(4L, queue.poll(0).timestamp);
         assertEquals(1L, queue.headRecordTimestamp());
         assertEquals(1L, queue.headRecordOffset().longValue());
 
-        assertEquals(1L, queue.poll().timestamp);
+        assertEquals(1L, queue.poll(0).timestamp);
         assertEquals(2L, queue.headRecordTimestamp());
         assertEquals(2L, queue.headRecordOffset().longValue());
 
-        assertEquals(2L, queue.poll().timestamp);
+        assertEquals(2L, queue.poll(0).timestamp);
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
         assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
@@ -176,7 +176,7 @@ public class RecordQueueTest {
         assertEquals(4L, queue.headRecordOffset().longValue());
 
         // poll one record again, the timestamp should advance now
-        assertEquals(4L, queue.poll().timestamp);
+        assertEquals(4L, queue.poll(0).timestamp);
         assertEquals(2, queue.size());
         assertEquals(5L, queue.headRecordTimestamp());
         assertEquals(5L, queue.headRecordOffset().longValue());
@@ -218,13 +218,13 @@ public class RecordQueueTest {
         queue.addRawRecords(list1);
         assertThat(queue.partitionTime(), is(RecordQueue.UNKNOWN));
 
-        queue.poll();
+        queue.poll(0);
         assertThat(queue.partitionTime(), is(2L));
 
-        queue.poll();
+        queue.poll(0);
         assertThat(queue.partitionTime(), is(2L));
 
-        queue.poll();
+        queue.poll(0);
         assertThat(queue.partitionTime(), is(3L));
     }
 
@@ -251,13 +251,13 @@ public class RecordQueueTest {
         queue.addRawRecords(list1);
         assertThat(queue.partitionTime(), is(150L));
 
-        queue.poll();
+        queue.poll(0);
         assertThat(queue.partitionTime(), is(200L));
 
         queue.setPartitionTime(500L);
         assertThat(queue.partitionTime(), is(500L));
 
-        queue.poll();
+        queue.poll(0);
         assertThat(queue.partitionTime(), is(500L));
     }
 
@@ -299,7 +299,7 @@ public class RecordQueueTest {
 
         queueThatSkipsDeserializeErrors.addRawRecords(records);
         assertEquals(1, queueThatSkipsDeserializeErrors.size());
-        assertEquals(new CorruptedRecord(record), queueThatSkipsDeserializeErrors.poll());
+        assertEquals(new CorruptedRecord(record), queueThatSkipsDeserializeErrors.poll(0));
     }
 
     @Test
@@ -313,7 +313,7 @@ public class RecordQueueTest {
 
         queueThatSkipsDeserializeErrors.addRawRecords(records);
         assertEquals(1, queueThatSkipsDeserializeErrors.size());
-        assertEquals(new CorruptedRecord(record), queueThatSkipsDeserializeErrors.poll());
+        assertEquals(new CorruptedRecord(record), queueThatSkipsDeserializeErrors.poll(0));
     }
 
     @Test
@@ -394,13 +394,13 @@ public class RecordQueueTest {
         // no (known) timestamp has yet been passed to the timestamp extractor
         assertEquals(RecordQueue.UNKNOWN, timestampExtractor.partitionTime);
 
-        queue.poll();
+        queue.poll(0);
         assertEquals(2L, timestampExtractor.partitionTime);
 
-        queue.poll();
+        queue.poll(0);
         assertEquals(2L, timestampExtractor.partitionTime);
 
-        queue.poll();
+        queue.poll(0);
         assertEquals(3L, timestampExtractor.partitionTime);
 
     }
