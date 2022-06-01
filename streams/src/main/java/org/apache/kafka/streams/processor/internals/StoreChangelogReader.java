@@ -490,19 +490,35 @@ public class StoreChangelogReader implements ChangelogReader {
         // For standby tasks in the `tasks` map, we make sure that the `restoreConsumer`'s state
         // is correct.
         if (state == ChangelogReaderState.STANDBY_UPDATING) {
-            for (final TopicPartition partition : restoringChangelogs) {
-                final ProcessorStateManager manager = changelogs.get(partition).stateManager;
-                final TaskId taskId = manager.taskId();
-                final Task task = tasks.get(taskId);
-                if (manager.taskType() == TaskType.STANDBY) {
-                    if (task != null) {
-                        restoreConsumer.resume(Collections.singleton(partition));
-                    } else {
-                        restoreConsumer.pause(Collections.singleton(partition));
-                    }
-                }
-            }
+            final Collection<TopicPartition> toResume =
+                restoringChangelogs.stream().filter(t -> shouldResume(tasks,
+                t)).collect(Collectors.toList());
+            final Collection<TopicPartition> toPause =
+                restoringChangelogs.stream().filter(t -> shouldPause(tasks,
+                    t)).collect(Collectors.toList());
+            restoreConsumer.resume(toResume);
+            restoreConsumer.pause(toPause);
         }
+    }
+
+    private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition) {
+        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final TaskId taskId = manager.taskId();
+        final Task task = tasks.get(taskId);
+        if (manager.taskType() == TaskType.STANDBY) {
+            return task != null;
+        }
+        return false;
+    }
+
+    private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition) {
+        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final TaskId taskId = manager.taskId();
+        final Task task = tasks.get(taskId);
+        if (manager.taskType() == TaskType.STANDBY) {
+            return task == null;
+        }
+        return false;
     }
 
     private void maybeLogRestorationProgress() {
