@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -52,6 +53,8 @@ public class RecordQueue {
     private long partitionTime = UNKNOWN;
 
     private final Sensor droppedRecordsSensor;
+    private final Sensor bytesConsumedSensor;
+    private final Sensor recordsConsumedSensor;
     private long totalBytesBuffered;
     private long headRecordSizeInBytes;
 
@@ -69,6 +72,20 @@ public class RecordQueue {
         droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
             Thread.currentThread().getName(),
             processorContext.taskId().toString(),
+            processorContext.metrics()
+        );
+        bytesConsumedSensor = ProcessorNodeMetrics.bytesConsumedSensor(
+            Thread.currentThread().getName(),
+            processorContext.taskId().toString(),
+            source.name(),
+            partition.topic(),
+            processorContext.metrics()
+        );
+        recordsConsumedSensor = ProcessorNodeMetrics.recordsConsumedSensor(
+            Thread.currentThread().getName(),
+            processorContext.taskId().toString(),
+            source.name(),
+            partition.topic(),
             processorContext.metrics()
         );
         recordDeserializer = new RecordDeserializer(
@@ -145,8 +162,12 @@ public class RecordQueue {
      *
      * @return StampedRecord
      */
-    public StampedRecord poll() {
+    public StampedRecord poll(final long wallClockTime) {
         final StampedRecord recordToReturn = headRecord;
+
+        bytesConsumedSensor.record(headRecordSizeInBytes, wallClockTime);
+        recordsConsumedSensor.record(1, wallClockTime);
+
         totalBytesBuffered -= headRecordSizeInBytes;
         headRecord = null;
         headRecordSizeInBytes = 0L;
