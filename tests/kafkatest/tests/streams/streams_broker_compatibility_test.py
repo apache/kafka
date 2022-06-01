@@ -64,6 +64,13 @@ class StreamsBrokerCompatibility(Test):
 
 
     @cluster(num_nodes=4)
+    @parametrize(broker_version=str(LATEST_3_2))
+    @parametrize(broker_version=str(LATEST_3_1))
+    @parametrize(broker_version=str(LATEST_3_0))
+    @parametrize(broker_version=str(LATEST_2_8))
+    @parametrize(broker_version=str(LATEST_2_7))
+    @parametrize(broker_version=str(LATEST_2_6))
+    @parametrize(broker_version=str(LATEST_2_5))
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
@@ -89,6 +96,11 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
+    @parametrize(broker_version=str(LATEST_3_2))
+    @parametrize(broker_version=str(LATEST_3_1))
+    @parametrize(broker_version=str(LATEST_3_0))
+    @parametrize(broker_version=str(LATEST_2_8))
+    @parametrize(broker_version=str(LATEST_2_7))
     @parametrize(broker_version=str(LATEST_2_6))
     @parametrize(broker_version=str(LATEST_2_5))
     @parametrize(broker_version=str(LATEST_2_4))
@@ -116,6 +128,9 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
+    @parametrize(broker_version=str(LATEST_3_2))
+    @parametrize(broker_version=str(LATEST_3_1))
+    @parametrize(broker_version=str(LATEST_3_0))
     @parametrize(broker_version=str(LATEST_2_8))
     @parametrize(broker_version=str(LATEST_2_7))
     @parametrize(broker_version=str(LATEST_2_6))
