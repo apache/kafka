@@ -163,7 +163,7 @@ public class FeatureControlManager {
 
         if (newVersion < 0) {
             return invalidUpdateVersion(featureName, newVersion,
-                "A feature version cannot be less than 1.");
+                "A feature version cannot be less than 0.");
         }
 
         Optional<String> reasonNotSupported = quorumFeatures.reasonNotSupported(featureName, newVersion);
