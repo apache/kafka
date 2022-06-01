@@ -76,6 +76,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -164,6 +165,7 @@ public class ReplicationControlManagerTest {
 
         ReplicationControlTestContext(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.replicationControl = new ReplicationControlManager.Builder().
+                setMetadataVersion(() -> MetadataVersion.IBP_3_3_IV1).
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).

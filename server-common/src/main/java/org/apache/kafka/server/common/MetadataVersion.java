@@ -150,10 +150,13 @@ public enum MetadataVersion {
     IBP_3_1_IV0(3, "3.1", "IV0", false),
 
     // Support for leader recovery for unclean leader election (KIP-704)
-    IBP_3_2_IV0(4, "3.2", "IV0", false),
+    IBP_3_2_IV0(4, "3.2", "IV0", true),
 
     // Support for metadata.version feature flag and Removes min_version_level from the finalized version range that is written to ZooKeeper (KIP-778)
-    IBP_3_3_IV0(5, "3.3", "IV0", false);
+    IBP_3_3_IV0(5, "3.3", "IV0", false),
+
+    // Support NoopRecord for the cluster metadata log (KIP-835)
+    IBP_3_3_IV1(6, "3.3", "IV1", true);
 
     public static final String FEATURE_NAME = "metadata.version";
 
@@ -209,6 +212,14 @@ public enum MetadataVersion {
 
     public boolean isAllocateProducerIdsSupported() {
         return this.isAtLeast(IBP_3_0_IV0);
+    }
+
+    public boolean isLeaderRecoverySupported() {
+        return this.isAtLeast(IBP_3_2_IV0);
+    }
+
+    public boolean isNoOpRecordSupported() {
+        return this.isAtLeast(IBP_3_3_IV1);
     }
 
     public boolean isKRaftSupported() {

@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 
+import java.util.Arrays;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
@@ -34,11 +35,11 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     private final Metrics metrics;
 
-    private OffsetAndEpoch logEndOffset;
-    private int numUnknownVoterConnections;
-    private OptionalLong electionStartMs;
-    private OptionalLong pollStartMs;
-    private OptionalLong pollEndMs;
+    private volatile OffsetAndEpoch logEndOffset;
+    private volatile int numUnknownVoterConnections;
+    private volatile OptionalLong electionStartMs;
+    private volatile OptionalLong pollStartMs;
+    private volatile OptionalLong pollEndMs;
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
@@ -186,19 +187,23 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        metrics.removeMetric(currentLeaderIdMetricName);
-        metrics.removeMetric(currentVotedIdMetricName);
-        metrics.removeMetric(currentEpochMetricName);
-        metrics.removeMetric(currentStateMetricName);
-        metrics.removeMetric(highWatermarkMetricName);
-        metrics.removeMetric(logEndOffsetMetricName);
-        metrics.removeMetric(logEndEpochMetricName);
-        metrics.removeMetric(numUnknownVoterConnectionsMetricName);
+        Arrays.asList(
+            currentLeaderIdMetricName,
+            currentVotedIdMetricName,
+            currentEpochMetricName,
+            currentStateMetricName,
+            highWatermarkMetricName,
+            logEndOffsetMetricName,
+            logEndEpochMetricName,
+            numUnknownVoterConnectionsMetricName
+        ).forEach(metrics::removeMetric);
 
-        metrics.removeSensor(commitTimeSensor.name());
-        metrics.removeSensor(electionTimeSensor.name());
-        metrics.removeSensor(fetchRecordsSensor.name());
-        metrics.removeSensor(appendRecordsSensor.name());
-        metrics.removeSensor(pollIdleSensor.name());
+        Arrays.asList(
+            commitTimeSensor.name(),
+            electionTimeSensor.name(),
+            fetchRecordsSensor.name(),
+            appendRecordsSensor.name(),
+            pollIdleSensor.name()
+        ).forEach(metrics::removeSensor);
     }
 }
