@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.server.metadata
+package kafka.server.metadata
 
 import java.util.Collections.{singleton, singletonMap}
 import java.util.Properties
@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
-import kafka.server.metadata.BrokerMetadataPublisher
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET

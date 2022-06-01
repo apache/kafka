@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package integration.kafka.server
+package kafka.server
 
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, ClusterTests, Type}

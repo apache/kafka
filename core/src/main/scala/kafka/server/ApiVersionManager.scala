@@ -18,6 +18,7 @@ package kafka.server
 
 import kafka.network
 import kafka.network.RequestChannel
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
@@ -51,17 +52,18 @@ object ApiVersionManager {
 
 class SimpleApiVersionManager(
   val listenerType: ListenerType,
-  val enabledApis: collection.Set[ApiKeys]
+  val enabledApis: collection.Set[ApiKeys],
+  brokerFeatures: Features[SupportedVersionRange]
 ) extends ApiVersionManager {
 
   def this(listenerType: ListenerType) = {
-    this(listenerType, ApiKeys.apisForListener(listenerType).asScala)
+    this(listenerType, ApiKeys.apisForListener(listenerType).asScala, BrokerFeatures.defaultSupportedFeatures())
   }
 
   private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava)
 
   override def apiVersionResponse(requestThrottleMs: Int): ApiVersionsResponse = {
-    ApiVersionsResponse.createApiVersionsResponse(0, apiVersions)
+    ApiVersionsResponse.createApiVersionsResponse(requestThrottleMs, apiVersions, brokerFeatures)
   }
 }
 
