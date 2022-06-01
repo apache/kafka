@@ -33,8 +33,7 @@ public class TaskExecutionMetadataTest {
     final static String TOPOLOGY1 = "topology1";
     final static String TOPOLOGY2 = "topology2";
     final static Set<String> NAMED_TOPOLOGIES = new HashSet<>(Arrays.asList(TOPOLOGY1, TOPOLOGY2));
-    final static int TIME_ZERO = 0;
-    final static int ONE_SECOND = 1000;
+    final static int TIME_ZERO = 0; 
     final static int CONSTANT_BACKOFF_MS = 5000;
 
     @Test
@@ -108,8 +107,8 @@ public class TaskExecutionMetadataTest {
         Assert.assertTrue(metadata.canProcessTask(mockTask2, TIME_ZERO));
 
         metadata.registerTaskError(mockTask1, new Throwable("Error"), TIME_ZERO);
-        Assert.assertFalse(metadata.canProcessTask(mockTask1, ONE_SECOND));
-        Assert.assertTrue(metadata.canProcessTask(mockTask2, ONE_SECOND));
+        Assert.assertFalse(metadata.canProcessTask(mockTask1, CONSTANT_BACKOFF_MS - 1));
+        Assert.assertTrue(metadata.canProcessTask(mockTask2, CONSTANT_BACKOFF_MS - 1));
 
         Assert.assertFalse(metadata.canProcessTask(mockTask1, CONSTANT_BACKOFF_MS));
         Assert.assertTrue(metadata.canProcessTask(mockTask2, CONSTANT_BACKOFF_MS));
