@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
@@ -393,35 +394,31 @@ public class ClusterControlManager {
     }
 
     public void replay(FenceBrokerRecord record) {
-        replayRegistrationChange(record, record.id(), record.epoch(), Optional.of(true));
+        replayRegistrationChange(record, record.id(), record.epoch(),
+            BrokerRegistrationFencingChange.ADDED);
     }
 
     public void replay(UnfenceBrokerRecord record) {
-        replayRegistrationChange(record, record.id(), record.epoch(), Optional.of(false));
+        replayRegistrationChange(record, record.id(), record.epoch(),
+            BrokerRegistrationFencingChange.REMOVED);
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
-        replayRegistrationChange(record, record.brokerId(), record.brokerEpoch(), getFencingChange(record.fenced()));
-    }
-
-    private Optional<Boolean> getFencingChange(byte value) {
-        switch (value) {
-            case -1:
-                return Optional.of(false);
-            case 0:
-                return Optional.empty();
-            case 1:
-                return Optional.of(true);
-            default:
-                throw new RuntimeException(String.format("Invalid value for fenced: %d", value));
+        Optional<BrokerRegistrationFencingChange> fencingChange =
+            BrokerRegistrationFencingChange.fromValue(record.fenced());
+        if (!fencingChange.isPresent()) {
+            throw new RuntimeException(String.format("Unable to replay %s: unknown " +
+                "value for fenced field: %d", record.toString(), record.fenced()));
         }
+        replayRegistrationChange(record, record.brokerId(), record.brokerEpoch(),
+            fencingChange.get());
     }
 
     private void replayRegistrationChange(
         ApiMessage record,
         int brokerId,
         long brokerEpoch,
-        Optional<Boolean> fenced
+        BrokerRegistrationFencingChange fencingChange
     ) {
         BrokerRegistration curRegistration = brokerRegistrations.get(brokerId);
         if (curRegistration == null) {
@@ -432,8 +429,8 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             BrokerRegistration nextRegistration = curRegistration;
-            if (fenced.isPresent()) {
-                nextRegistration = nextRegistration.cloneWithFencing(fenced.get());
+            if (fencingChange != BrokerRegistrationFencingChange.UNCHANGED) {
+                nextRegistration = nextRegistration.cloneWithFencing(fencingChange.asBoolean().get());
             }
             if (!curRegistration.equals(nextRegistration)) {
                 brokerRegistrations.put(brokerId, nextRegistration);

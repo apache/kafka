@@ -71,21 +71,21 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
-import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -117,7 +117,6 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
-import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
@@ -1118,9 +1117,10 @@ public class ReplicationControlManager {
         }
         generateLeaderAndIsrUpdates("handleBrokerFenced", brokerId, NO_LEADER, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
-        if (featureControl.metadataVersion().brokerRegistrationChangeRecordSupported()) {
+        if (featureControl.metadataVersion().isBrokerRegistrationChangeRecordSupported()) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
-                    setBrokerId(brokerId).setBrokerEpoch(brokerRegistration.epoch()).setFenced((byte) 1),
+                    setBrokerId(brokerId).setBrokerEpoch(brokerRegistration.epoch()).
+                    setFenced(BrokerRegistrationFencingChange.ADDED.value()),
                     (short) 0));
         } else {
             records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
@@ -1143,15 +1143,9 @@ public class ReplicationControlManager {
                                   List<ApiMessageAndVersion> records) {
         generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, NO_LEADER, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
-        if (featureControl.metadataVersion().brokerRegistrationChangeRecordSupported()) {
-            records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
-                    setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).setFenced((byte) -1),
-                    (short) 0));
-        } else {
-            records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(brokerId).setEpoch(brokerEpoch),
-                    (short) 0));
-        }
+        records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
+            setBrokerId(brokerId).setBrokerEpoch(brokerEpoch),
+            (short) 0));
     }
 
     /**
@@ -1166,8 +1160,15 @@ public class ReplicationControlManager {
      * @param records       The record list to append to.
      */
     void handleBrokerUnfenced(int brokerId, long brokerEpoch, List<ApiMessageAndVersion> records) {
-        records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().setId(brokerId).
-            setEpoch(brokerEpoch), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
+        if (featureControl.metadataVersion().isBrokerRegistrationChangeRecordSupported()) {
+            records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
+                setFenced(BrokerRegistrationFencingChange.REMOVED.value()),
+                (short) 0));
+        } else {
+            records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().setId(brokerId).
+                setEpoch(brokerEpoch), (short) 0));
+        }
         generateLeaderAndIsrUpdates("handleBrokerUnfenced", NO_LEADER, brokerId, records,
             brokersToIsrs.partitionsWithNoLeader());
     }
