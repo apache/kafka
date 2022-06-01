@@ -69,20 +69,22 @@ public class RecordQueue {
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
         this.processorContext = processorContext;
+
+        final String threadName = Thread.currentThread().getName();
         droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
-            Thread.currentThread().getName(),
+            threadName,
             processorContext.taskId().toString(),
             processorContext.metrics()
         );
         bytesConsumedSensor = ProcessorNodeMetrics.bytesConsumedSensor(
-            Thread.currentThread().getName(),
+            threadName,
             processorContext.taskId().toString(),
             source.name(),
             partition.topic(),
             processorContext.metrics()
         );
         recordsConsumedSensor = ProcessorNodeMetrics.recordsConsumedSensor(
-            Thread.currentThread().getName(),
+            threadName,
             processorContext.taskId().toString(),
             source.name(),
             partition.topic(),

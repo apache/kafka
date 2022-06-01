@@ -40,12 +40,12 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private final Processor<KIn, VIn, KOut, VOut> processor;
     private final FixedKeyProcessor<KIn, VIn, VOut> fixedKeyProcessor;
     private final String name;
-    protected final Time time;
+    private final Time time;
 
     public final Set<String> stateStores;
 
-    protected InternalProcessorContext<KOut, VOut> internalProcessorContext;
-    protected String threadId;
+    private InternalProcessorContext<KOut, VOut> internalProcessorContext;
+    private String threadId;
 
     private boolean closed = true;
 
