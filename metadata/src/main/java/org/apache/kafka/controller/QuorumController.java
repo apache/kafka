@@ -1563,7 +1563,11 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setControllerMetrics(controllerMetrics).
             build();
-        this.featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
+        this.featureControl = new FeatureControlManager.Builder().
+                setLogContext(logContext).
+                setQuorumFeatures(quorumFeatures).
+                setSnapshotRegistry(snapshotRegistry).
+                build();
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;

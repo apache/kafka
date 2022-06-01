@@ -19,86 +19,74 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.metadata.VersionRange;
 import org.junit.jupiter.api.Test;
 
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 
+import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
+    private final static Map<String, VersionRange> LOCAL;
+
+    static {
+        Map<String, VersionRange> local = new HashMap<>();
+        local.put("foo", VersionRange.of(0, 3));
+        local.put("bar", VersionRange.of(0, 4));
+        local.put("baz", VersionRange.of(2, 2));
+        LOCAL = Collections.unmodifiableMap(local);
+    }
+
     @Test
-    public void testQuorumFeatures() {
+    public void testDefaultSupportedLevels() {
+        QuorumFeatures quorumFeatures = new QuorumFeatures(0, new ApiVersions(), emptyMap(), Arrays.asList(0, 1, 2));
+        assertEquals(Optional.empty(), quorumFeatures.reasonNotSupported("foo", (short) 0));
+        assertEquals(Optional.of("Local controller 0 does not support this feature."),
+            quorumFeatures.reasonNotSupported("foo", (short) 1));
+    }
+
+    @Test
+    public void testLocalSupportedFeature() {
+        QuorumFeatures quorumFeatures = new QuorumFeatures(0, new ApiVersions(), LOCAL, Arrays.asList(0, 1, 2));
+        assertEquals(VersionRange.of(0, 3), quorumFeatures.localSupportedFeature("foo"));
+        assertEquals(VersionRange.of(0, 4), quorumFeatures.localSupportedFeature("bar"));
+        assertEquals(VersionRange.of(2, 2), quorumFeatures.localSupportedFeature("baz"));
+        assertEquals(VersionRange.of(0, 0), quorumFeatures.localSupportedFeature("quux"));
+    }
+
+    @Test
+    public void testReasonNotSupported() {
         ApiVersions apiVersions = new ApiVersions();
-        Map<String, VersionRange> featureMap = new HashMap<>(2);
-        featureMap.put("foo", VersionRange.of(1, 2));
-        featureMap.put("bar", VersionRange.of(3, 5));
-
-        List<Integer> nodeIds = new ArrayList<>();
-        nodeIds.add(0);
-
-        QuorumFeatures quorumFeatures = new QuorumFeatures(0, apiVersions, featureMap, nodeIds);
-        assertLocalFeature(quorumFeatures, "foo", 1, 2);
-        assertLocalFeature(quorumFeatures, "bar", 3, 5);
-        assertQuorumFeature(quorumFeatures, "foo", 1, 2);
-        assertQuorumFeature(quorumFeatures, "bar", 3, 5);
-
-        // Add a second node with identical features
-        nodeIds.add(1);
-        apiVersions.update("1", nodeApiVersions(featureMap));
-        assertLocalFeature(quorumFeatures, "foo", 1, 2);
-        assertLocalFeature(quorumFeatures, "bar", 3, 5);
-        assertQuorumFeature(quorumFeatures, "foo", 1, 2);
-        assertQuorumFeature(quorumFeatures, "bar", 3, 5);
-
-        // Change the supported features of one node
-        Map<String, VersionRange> node1Features = new HashMap<>(featureMap);
-        node1Features.put("bar", VersionRange.of(3, 4));
-        apiVersions.update("1", nodeApiVersions(node1Features));
-        assertLocalFeature(quorumFeatures, "foo", 1, 2);
-        assertLocalFeature(quorumFeatures, "bar", 3, 5);
-        assertQuorumFeature(quorumFeatures, "foo", 1, 2);
-        assertQuorumFeature(quorumFeatures, "bar", 3, 4);
-
-        // Add a third node with no features
-        nodeIds.add(2);
-        apiVersions.update("1", NodeApiVersions.create());
-        assertFalse(quorumFeatures.quorumSupportedFeature("foo").isPresent());
-        assertFalse(quorumFeatures.quorumSupportedFeature("bar").isPresent());
+        QuorumFeatures quorumFeatures = new QuorumFeatures(0, apiVersions, LOCAL, Arrays.asList(0, 1, 2));
+        assertEquals(Optional.of("Local controller 0 only supports versions 0-3"),
+                quorumFeatures.reasonNotSupported("foo", (short) 10));
+        apiVersions.update("1", nodeApiVersions(Arrays.asList(
+                new SimpleImmutableEntry<>("foo", VersionRange.of(1, 3)),
+                new SimpleImmutableEntry<>("bar", VersionRange.of(1, 3)),
+                new SimpleImmutableEntry<>("baz", VersionRange.of(1, 2)))));
+        assertEquals(Optional.empty(), quorumFeatures.reasonNotSupported("bar", (short) 3));
+        assertEquals(Optional.of("Controller 1 only supports versions 1-3"),
+                quorumFeatures.reasonNotSupported("bar", (short) 4));
     }
 
-
-    public static NodeApiVersions nodeApiVersions(Map<String, VersionRange> featureMap) {
-        List<ApiVersionsResponseData.SupportedFeatureKey> supportedFeatures = new ArrayList<>(featureMap.size());
-        featureMap.forEach((featureName, versionRange) -> {
-            supportedFeatures.add(new ApiVersionsResponseData.SupportedFeatureKey()
-                .setName(featureName)
-                .setMinVersion(versionRange.min())
-                .setMaxVersion(versionRange.max()));
+    private static NodeApiVersions nodeApiVersions(List<Entry<String, VersionRange>> entries) {
+        List<SupportedFeatureKey> features = new ArrayList<>();
+        entries.forEach(entry -> {
+            features.add(new SupportedFeatureKey().
+                    setName(entry.getKey()).
+                    setMinVersion(entry.getValue().min()).
+                    setMaxVersion(entry.getValue().max()));
         });
-        return new NodeApiVersions(Collections.emptyList(), supportedFeatures);
+        return new NodeApiVersions(Collections.emptyList(), features);
     }
-
-    private void assertLocalFeature(QuorumFeatures features, String name, int expectedMin, int expectedMax) {
-        Optional<VersionRange> featureRange = features.localSupportedFeature(name);
-        assertTrue(featureRange.isPresent());
-        assertEquals(expectedMin, featureRange.get().min());
-        assertEquals(expectedMax, featureRange.get().max());
-    }
-
-    private void assertQuorumFeature(QuorumFeatures features, String name, int expectedMin, int expectedMax) {
-        Optional<VersionRange> featureRange = features.quorumSupportedFeature(name);
-        assertTrue(featureRange.isPresent());
-        assertEquals(expectedMin, featureRange.get().min());
-        assertEquals(expectedMax, featureRange.get().max());
-    }
-
 }
