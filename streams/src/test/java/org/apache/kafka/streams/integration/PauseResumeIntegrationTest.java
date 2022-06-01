@@ -152,8 +152,7 @@ public class PauseResumeIntegrationTest {
         CLUSTER.deleteTopicsAndWait(OUTPUT_STREAM_2);
     }
 
-    private static void produceToInputTopics(final String topic,
-        final Collection<KeyValue<String, Long>> records) {
+    private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             topic,
             records,
