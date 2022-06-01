@@ -86,6 +86,7 @@ import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -210,12 +211,14 @@ public class ReplicationControlManager {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
             if (featureControl == null) {
-                featureControl = new FeatureControlManager(logContext,
-                new QuorumFeatures(0, new ApiVersions(),
-                    QuorumFeatures.defaultFeatureMap(),
-                    Collections.singletonList(0)),
-                snapshotRegistry);
-
+                featureControl = new FeatureControlManager.Builder().
+                    setLogContext(logContext).
+                    setSnapshotRegistry(snapshotRegistry).
+                    setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                        QuorumFeatures.defaultFeatureMap(),
+                        Collections.singletonList(0))).
+                    setMetadataVersion(MetadataVersion.latest()).
+                    build();
             }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,

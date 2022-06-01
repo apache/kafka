@@ -33,40 +33,41 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.stream.Collectors;
 
 /**
  * A holder class of the local node's supported feature flags as well as the ApiVersions of other nodes.
  */
 public class QuorumFeatures {
+    private static final VersionRange DISABLED = VersionRange.of(0, 0);
+
     private static final Logger log = LoggerFactory.getLogger(QuorumFeatures.class);
 
     private final int nodeId;
     private final ApiVersions apiVersions;
-    private final Map<String, VersionRange> supportedFeatures;
+    private final Map<String, VersionRange> localSupportedFeatures;
     private final List<Integer> quorumNodeIds;
 
     QuorumFeatures(
         int nodeId,
         ApiVersions apiVersions,
-        Map<String, VersionRange> supportedFeatures,
+        Map<String, VersionRange> localSupportedFeatures,
         List<Integer> quorumNodeIds
     ) {
         this.nodeId = nodeId;
         this.apiVersions = apiVersions;
-        this.supportedFeatures = Collections.unmodifiableMap(supportedFeatures);
+        this.localSupportedFeatures = Collections.unmodifiableMap(localSupportedFeatures);
         this.quorumNodeIds = Collections.unmodifiableList(quorumNodeIds);
     }
 
     public static QuorumFeatures create(
         int nodeId,
         ApiVersions apiVersions,
-        Map<String, VersionRange> supportedFeatures,
+        Map<String, VersionRange> localSupportedFeatures,
         Collection<Node> quorumNodes
     ) {
         List<Integer> nodeIds = quorumNodes.stream().map(Node::id).collect(Collectors.toList());
-        return new QuorumFeatures(nodeId, apiVersions, supportedFeatures, nodeIds);
+        return new QuorumFeatures(nodeId, apiVersions, localSupportedFeatures, nodeIds);
     }
 
     public static Map<String, VersionRange> defaultFeatureMap() {
@@ -75,47 +76,50 @@ public class QuorumFeatures {
         return features;
     }
 
-    Optional<VersionRange> quorumSupportedFeature(String featureName) {
-        List<VersionRange> supportedVersions = new ArrayList<>(quorumNodeIds.size());
-        for (int nodeId : quorumNodeIds) {
-            if (nodeId == this.nodeId) {
-                // We get this node's features from "supportedFeatures"
-                continue;
+    /**
+     * Return the reason a specific feature level is not supported, or Optional.empty if it is supported.
+     *
+     * @param featureName   The feature name.
+     * @param level         The feature level.
+     * @return              The reason why the feature level is not supported, or Optional.empty if it is supported.
+     */
+    public Optional<String> reasonNotSupported(String featureName, short level) {
+        VersionRange localRange = localSupportedFeatures.getOrDefault(featureName, DISABLED);
+        if (!localRange.contains(level)) {
+            if (localRange.equals(DISABLED)) {
+                return Optional.of("Local controller " + nodeId + " does not support this feature.");
+            } else {
+                return Optional.of("Local controller " + nodeId + " only supports versions " + localRange);
             }
-            NodeApiVersions nodeVersions = apiVersions.get(Integer.toString(nodeId));
+        }
+        List<String> missing = new ArrayList<>();
+        for (int id : quorumNodeIds) {
+            if (nodeId == id) {
+                continue; // We get the local node's features from localSupportedFeatures.
+            }
+            NodeApiVersions nodeVersions = apiVersions.get(Integer.toString(id));
             if (nodeVersions == null) {
+                missing.add(Integer.toString(id));
                 continue;
             }
             SupportedVersionRange supportedRange = nodeVersions.supportedFeatures().get(featureName);
-            if (supportedRange == null) {
-                supportedVersions.add(VersionRange.of(0, 0));
-            } else {
-                supportedVersions.add(VersionRange.of(supportedRange.min(), supportedRange.max()));
-            }
-        }
-        localSupportedFeature(featureName).ifPresent(supportedVersions::add);
-
-        if (supportedVersions.isEmpty()) {
-            return Optional.empty();
-        } else {
-            OptionalInt highestMinVersion = supportedVersions.stream().mapToInt(VersionRange::min).max();
-            OptionalInt lowestMaxVersion = supportedVersions.stream().mapToInt(VersionRange::max).min();
-            if (highestMinVersion.isPresent() && lowestMaxVersion.isPresent()) {
-                if (highestMinVersion.getAsInt() <= lowestMaxVersion.getAsInt()) {
-                    if (supportedVersions.size() < quorumNodeIds.size()) {
-                        log.info("Using incomplete set of quorum supported features.");
-                    }
-                    return Optional.of(VersionRange.of((short) highestMinVersion.getAsInt(), (short) lowestMaxVersion.getAsInt()));
+            VersionRange range = supportedRange == null ? DISABLED :
+                    VersionRange.of(supportedRange.min(), supportedRange.max());
+            if (!range.contains(level)) {
+                if (range.equals(DISABLED)) {
+                    return Optional.of("Controller " + id + " does not support this feature.");
                 } else {
-                    return Optional.empty();
+                    return Optional.of("Controller " + id + " only supports versions " + range);
                 }
-            } else {
-                return Optional.empty();
             }
         }
+        if (!missing.isEmpty()) {
+            log.info("Unable to get feature level information for controller(s): " + String.join(", ", missing));
+        }
+        return Optional.empty();
     }
 
-    Optional<VersionRange> localSupportedFeature(String featureName) {
-        return Optional.ofNullable(supportedFeatures.get(featureName));
+    VersionRange localSupportedFeature(String featureName) {
+        return localSupportedFeatures.getOrDefault(featureName, DISABLED);
     }
 }

@@ -22,17 +22,21 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import kafka.log.{AppendOrigin, UnifiedLog, LogConfig, LogManager, LogTestUtils}
-import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
+import kafka.log.{AppendOrigin, Defaults, LogConfig, LogManager, LogTestUtils, UnifiedLog}
+import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
+import kafka.server.{BrokerTopicStats, FetchLogEnd, KafkaRaftServer, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -49,6 +53,7 @@ class DumpLogSegmentsTest {
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val segmentName = "00000000000000000000"
   val logFilePath = s"$logDir/$segmentName.log"
+  val snapshotPath = s"$logDir/00000000000000000000-0000000000.checkpoint"
   val indexFilePath = s"$logDir/$segmentName.index"
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
   val time = new MockTime(0, 0)
@@ -256,13 +261,14 @@ class DumpLogSegmentsTest {
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
     log.flush(false)
 
-    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "false", "--files", logFilePath))
-    assert(output.contains("TOPIC_RECORD"))
-    assert(output.contains("BROKER_RECORD"))
+    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
 
-    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "false", "--files", logFilePath))
-    assert(output.contains("TOPIC_RECORD"))
-    assert(output.contains("BROKER_RECORD"))
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
 
     // Bogus metadata record
     val buf = ByteBuffer.allocate(4)
@@ -272,10 +278,77 @@ class DumpLogSegmentsTest {
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 2)
 
-    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "false", "--files", logFilePath))
-    assert(output.contains("TOPIC_RECORD"))
-    assert(output.contains("BROKER_RECORD"))
-    assert(output.contains("skipping"))
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
+    assertTrue(output.contains("skipping"))
+  }
+
+  @Test
+  def testDumpMetadataSnapshot(): Unit = {
+    val metadataRecords = Seq(
+      new ApiMessageAndVersion(
+        new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10), 0.toShort),
+      new ApiMessageAndVersion(
+        new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(20), 0.toShort),
+      new ApiMessageAndVersion(
+        new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()), 0.toShort),
+      new ApiMessageAndVersion(
+        new PartitionChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).
+          setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
+    )
+
+    val metadataLog = KafkaMetadataLog(
+      KafkaRaftServer.MetadataPartition,
+      KafkaRaftServer.MetadataTopicId,
+      logDir,
+      time,
+      time.scheduler,
+      MetadataLogConfig(
+        logSegmentBytes = 100 * 1024,
+        logSegmentMinBytes = 100 * 1024,
+        logSegmentMillis = 10 * 1000,
+        retentionMaxBytes = 100 * 1024,
+        retentionMillis = 60 * 1000,
+        maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+        maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
+        nodeId = 1
+      )
+    )
+
+    val lastContainedLogTimestamp = 10000
+
+    TestUtils.resource(
+      RecordsSnapshotWriter.createWithHeader(
+        () => metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)),
+        1024,
+        MemoryPool.NONE,
+        new MockTime,
+        lastContainedLogTimestamp,
+        CompressionType.NONE,
+        new MetadataRecordSerde
+      ).get()
+    ) { snapshotWriter =>
+      snapshotWriter.append(metadataRecords.asJava)
+      snapshotWriter.freeze()
+    }
+
+    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", snapshotPath))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
+    assertTrue(output.contains("SnapshotHeader"))
+    assertTrue(output.contains("SnapshotFooter"))
+    assertTrue(output.contains(s""""lastContainedLogTimestamp":$lastContainedLogTimestamp"""))
+
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", snapshotPath))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
+    assertFalse(output.contains("SnapshotHeader"))
+    assertFalse(output.contains("SnapshotFooter"))
+    assertFalse(output.contains(s""""lastContainedLogTimestamp": $lastContainedLogTimestamp"""))
   }
 
   @Test
