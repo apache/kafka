@@ -161,7 +161,7 @@ public class FeatureControlManager {
             currentVersion = finalizedVersions.get(featureName);
         }
 
-        if (newVersion <= 0) {
+        if (newVersion < 0) {
             return invalidUpdateVersion(featureName, newVersion,
                 "A feature version cannot be less than 1.");
         }
@@ -276,8 +276,13 @@ public class FeatureControlManager {
             log.info("Setting metadata.version to {}", record.featureLevel());
             metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
         } else {
-            log.info("Setting feature {} to {}", record.name(), record.featureLevel());
-            finalizedVersions.put(record.name(), record.featureLevel());
+            if (record.featureLevel() == 0) {
+                log.info("Removing feature {}", record.name());
+                finalizedVersions.remove(record.name());
+            } else {
+                log.info("Setting feature {} to {}", record.name(), record.featureLevel());
+                finalizedVersions.put(record.name(), record.featureLevel());
+            }
         }
     }
 
