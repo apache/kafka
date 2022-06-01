@@ -167,8 +167,10 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
 
     val expectedStatusCode = Some(1)
-    var receivedStatusCode = Option.empty[Int]
+    @volatile var receivedStatusCode = Option.empty[Int]
+    @volatile var hasHaltProcedureCalled = false
     Exit.setHaltProcedure((statusCode, _) => {
+      hasHaltProcedureCalled = true
       receivedStatusCode = Some(statusCode)
     }.asInstanceOf[Nothing])
 
@@ -177,9 +179,11 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       // this startup should fail with no online log dir (due to corrupted log), and exit directly without throwing exception
       assertDoesNotThrow(recreateBrokerExec)
       // JVM should exit with status code 1
-      assertEquals(expectedStatusCode, receivedStatusCode)
+      TestUtils.waitUntilTrue(() => hasHaltProcedureCalled == true && expectedStatusCode == receivedStatusCode,
+        s"Expected to halt directly with the expected status code:${expectedStatusCode.get}, " +
+          s"but got hasHaltProcedureCalled: $hasHaltProcedureCalled and received status code: ${receivedStatusCode.orNull}")
     } finally {
-      Exit.resetExitProcedure()
+      Exit.resetHaltProcedure()
     }
   }
 
