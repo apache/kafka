@@ -86,6 +86,7 @@ import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -143,7 +144,6 @@ public class ReplicationControlManager {
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
-        private boolean isLeaderRecoverySupported = true;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private ControllerMetrics controllerMetrics = null;
@@ -175,11 +175,6 @@ public class ReplicationControlManager {
             return this;
         }
 
-        Builder setIsLeaderRecoverySupported(boolean isLeaderRecoverySupported) {
-            this.isLeaderRecoverySupported = isLeaderRecoverySupported;
-            return this;
-        }
-
         Builder setConfigurationControl(ConfigurationControlManager configurationControl) {
             this.configurationControl = configurationControl;
             return this;
@@ -207,13 +202,11 @@ public class ReplicationControlManager {
 
         ReplicationControlManager build() {
             if (configurationControl == null) {
-                throw new RuntimeException("You must specify configurationControl.");
-            }
-            if (clusterControl == null) {
-                throw new RuntimeException("You must specify clusterControl.");
-            }
-            if (controllerMetrics == null) {
-                throw new RuntimeException("You must specify controllerMetrics.");
+                throw new IllegalStateException("Configuration control must be set before building");
+            } else if (clusterControl == null) {
+                throw new IllegalStateException("Cluster controller must be set before building");
+            } else if (controllerMetrics == null) {
+                throw new IllegalStateException("Metrics must be set before building");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
@@ -230,7 +223,6 @@ public class ReplicationControlManager {
                 defaultReplicationFactor,
                 defaultNumPartitions,
                 maxElectionsPerImbalance,
-                isLeaderRecoverySupported,
                 configurationControl,
                 clusterControl,
                 controllerMetrics,
@@ -289,11 +281,6 @@ public class ReplicationControlManager {
      * not specify a number of partitions.
      */
     private final int defaultNumPartitions;
-
-    /**
-     * If the cluster supports leader recovery state from KIP-704.
-     */
-    private final boolean isLeaderRecoverySupported;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -383,7 +370,6 @@ public class ReplicationControlManager {
         short defaultReplicationFactor,
         int defaultNumPartitions,
         int maxElectionsPerImbalance,
-        boolean isLeaderRecoverySupported,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         ControllerMetrics controllerMetrics,
@@ -395,7 +381,6 @@ public class ReplicationControlManager {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
-        this.isLeaderRecoverySupported = isLeaderRecoverySupported;
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.createTopicPolicy = createTopicPolicy;
@@ -951,7 +936,7 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     r -> clusterControl.unfenced(r),
-                    isLeaderRecoverySupported);
+                    featureControl.metadataVersion().isLeaderRecoverySupported());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1259,7 +1244,7 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             r -> clusterControl.unfenced(r),
-            isLeaderRecoverySupported);
+            featureControl.metadataVersion().isLeaderRecoverySupported());
         builder.setElection(election);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
@@ -1375,7 +1360,7 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 r -> clusterControl.unfenced(r),
-                isLeaderRecoverySupported
+                featureControl.metadataVersion().isLeaderRecoverySupported()
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
             builder.build().ifPresent(records::add);
@@ -1578,7 +1563,7 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
-                isLeaderRecoverySupported);
+                featureControl.metadataVersion().isLeaderRecoverySupported());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -1688,7 +1673,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             r -> clusterControl.unfenced(r),
-            isLeaderRecoverySupported);
+            featureControl.metadataVersion().isLeaderRecoverySupported());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -1740,7 +1725,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             r -> clusterControl.unfenced(r),
-            isLeaderRecoverySupported);
+            featureControl.metadataVersion().isLeaderRecoverySupported());
         if (!reassignment.merged().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.merged());
         }

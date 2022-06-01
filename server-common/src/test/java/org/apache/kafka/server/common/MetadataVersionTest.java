@@ -189,9 +189,9 @@ class MetadataVersionTest {
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2"));
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2-IV0"));
 
+        assertEquals(IBP_3_3_IV1, MetadataVersion.fromVersionString("3.3"));
         assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
         assertEquals(IBP_3_3_IV1, MetadataVersion.fromVersionString("3.3-IV1"));
-        assertEquals(IBP_3_3_IV1, MetadataVersion.fromVersionString("3.3"));
     }
 
     @Test
@@ -234,7 +234,9 @@ class MetadataVersionTest {
         assertEquals("3.0", IBP_3_0_IV0.shortVersion());
         assertEquals("3.0", IBP_3_0_IV1.shortVersion());
         assertEquals("3.1", IBP_3_1_IV0.shortVersion());
+        assertEquals("3.2", IBP_3_2_IV0.shortVersion());
         assertEquals("3.3", IBP_3_3_IV0.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV1.shortVersion());
     }
 
     @Test
@@ -283,13 +285,14 @@ class MetadataVersionTest {
     @Test
     public void testMetadataChanged() {
         assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_2_IV0));
-        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_1_IV0));
-        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV1));
-        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_1_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV1));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV0));
         assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_2_8_IV1));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_3_IV1, IBP_3_3_IV0));
 
         // Check that argument order doesn't matter
-        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_0_IV0, IBP_3_2_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_0_IV0, IBP_3_2_IV0));
         assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_2_8_IV1, IBP_3_2_IV0));
     }
 
