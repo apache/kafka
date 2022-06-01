@@ -112,6 +112,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -644,10 +645,10 @@ public final class QuorumController implements Controller {
 
         /**
          * Once we've passed the records to the Raft layer, we will invoke this function
-         * with the end offset at which those records were placed.  If there were no
-         * records to write, we'll just pass the last write offset.
+         * with the previous batch end offset and the end offset at which those records were placed.
+         * If there were no records to write, both of these values will be the last write offset.
          */
-        default void processBatchEndOffset(long offset) {
+        default void processBatchEndOffset(long previousBatchEndOffset, long offset) {
         }
     }
 
@@ -684,7 +685,7 @@ public final class QuorumController implements Controller {
             startProcessingTimeNs = OptionalLong.of(now);
             ControllerResult<T> result = op.generateRecordsAndResult();
             if (result.records().isEmpty()) {
-                op.processBatchEndOffset(writeOffset);
+                op.processBatchEndOffset(writeOffset, writeOffset);
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
@@ -714,7 +715,7 @@ public final class QuorumController implements Controller {
                 } else {
                     offset = raftClient.scheduleAppend(controllerEpoch, result.records());
                 }
-                op.processBatchEndOffset(offset);
+                op.processBatchEndOffset(writeOffset, offset);
                 writeOffset = offset;
                 resultAndOffset = ControllerResultAndOffset.of(offset, result);
                 for (ApiMessageAndVersion message : result.records()) {
@@ -758,9 +759,10 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private <T> CompletableFuture<T> appendWriteEvent(String name,
-                                                      OptionalLong deadlineNs,
-                                                      ControllerWriteOperation<T> op) {
+    // Visible for testing
+    <T> CompletableFuture<T> appendWriteEvent(String name,
+                                              OptionalLong deadlineNs,
+                                              ControllerWriteOperation<T> op) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
         if (deadlineNs.isPresent()) {
             queue.appendWithDeadline(deadlineNs.getAsLong(), event);
@@ -1008,6 +1010,11 @@ public final class QuorumController implements Controller {
         } else {
             log.trace("maybeCompleteAuthorizerInitialLoad: highWatermark not set.");
         }
+    }
+
+    // Visible for testing
+    MetadataVersion currentMetadataVersion() {
+        return featureControl.metadataVersion();
     }
 
     private void renounce() {
@@ -1675,7 +1682,7 @@ public final class QuorumController implements Controller {
                 }
 
                 @Override
-                public void processBatchEndOffset(long offset) {
+                public void processBatchEndOffset(long previousBatchEndOffset, long offset) {
                     if (inControlledShutdown) {
                         clusterControl.heartbeatManager().
                             updateControlledShutdownOffset(brokerId, offset);
@@ -1735,17 +1742,38 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         UpdateFeaturesRequestData request
     ) {
-        return appendWriteEvent("updateFeatures", context.deadlineNs(), () -> {
-            Map<String, Short> updates = new HashMap<>();
-            Map<String, FeatureUpdate.UpgradeType> upgradeTypes = new HashMap<>();
-            request.featureUpdates().forEach(featureUpdate -> {
-                String featureName = featureUpdate.feature();
-                upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
-                updates.put(featureName, featureUpdate.maxVersionLevel());
-            });
-            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
-                request.validateOnly());
+        final AtomicLong offsetToSnapshot = new AtomicLong(0L);
+        return appendWriteEvent("updateFeatures", context.deadlineNs(), new ControllerWriteOperation<Map<String, ApiError>>() {
+            @Override
+            public ControllerResult<Map<String, ApiError>> generateRecordsAndResult() throws Exception {
+                Map<String, Short> updates = new HashMap<>();
+                Map<String, FeatureUpdate.UpgradeType> upgradeTypes = new HashMap<>();
+                request.featureUpdates().forEach(featureUpdate -> {
+                    String featureName = featureUpdate.feature();
+                    upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
+                    updates.put(featureName, featureUpdate.maxVersionLevel());
+                });
+                return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
+                        request.validateOnly());
+            }
+
+            @Override
+            public void processBatchEndOffset(long previousBatchEndOffset, long offset) {
+                log.debug("Offset before metadata.version update {}. Offset after update {}", previousBatchEndOffset, offset);
+                offsetToSnapshot.set(previousBatchEndOffset);
+            }
+
         }).thenApply(result -> {
+            // The future that this chained callback is attached to is completed synchronously from the Raft thread via
+            // the controller purgatory. See QuorumMetaLogListener#handleCommit. Since this callback is synchronous,
+            // we can safely create a snapshot of the prior offset before it gets cleaned up by the Raft thread.
+            long offset = offsetToSnapshot.get();
+            if (offset > 0 && snapshotGeneratorManager.generator == null) {
+                log.info("Generating a snapshot prior to a metadata.version update that includes (epoch={}, offset={}) after {}.",
+                    lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot);
+                snapshotGeneratorManager.createSnapshotGenerator(offset, lastCommittedEpoch, lastCommittedTimestamp);
+            }
+
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
             result.forEach((featureName, error) -> responseData.results().add(

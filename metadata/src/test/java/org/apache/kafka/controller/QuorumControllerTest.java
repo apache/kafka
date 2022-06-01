@@ -39,9 +39,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
@@ -1127,6 +1129,54 @@ public class QuorumControllerTest {
         for (int i = 0; i < authorizers.size(); i++) {
             assertFalse(authorizers.get(i).initialLoadFuture().isDone(),
                 "authorizer " + i + " should not have completed loading.");
+        }
+    }
+
+    @Test
+    public void testMetadataVersionUpgradeSnapshot() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigSchema(SCHEMA),
+                    OptionalLong.empty(), OptionalLong.empty(), MetadataVersion.IBP_3_0_IV0)) {
+                QuorumController controller = controlEnv.activeController();
+
+                // Capture the offset just prior to running an upgrade
+                final AtomicLong previousEndOffset = new AtomicLong();
+                controller.appendWriteEvent("getOffset", OptionalLong.empty(), new QuorumController.ControllerWriteOperation<Void>() {
+                    @Override
+                    public ControllerResult<Void> generateRecordsAndResult() {
+                        return ControllerResult.of(Collections.emptyList(), null);
+                    }
+
+                    @Override
+                    public void processBatchEndOffset(long previousBatchEndOffset, long offset) {
+                        previousEndOffset.set(previousBatchEndOffset);
+                    }
+                }).get();
+
+                // Do the upgrade
+                UpdateFeaturesRequestData data = new UpdateFeaturesRequestData().setFeatureUpdates(
+                    new UpdateFeaturesRequestData.FeatureUpdateKeyCollection());
+                data.featureUpdates().add(
+                    new UpdateFeaturesRequestData.FeatureUpdateKey()
+                        .setFeature(MetadataVersion.FEATURE_NAME)
+                        .setMaxVersionLevel(MetadataVersion.IBP_3_1_IV0.featureLevel())
+                        .setUpgradeType(FeatureUpdate.UpgradeType.UPGRADE.code()));
+
+                controller.updateFeatures(ANONYMOUS_CONTEXT, data).get();
+
+                SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
+                    logEnv.waitForLatestSnapshot()
+                );
+
+                // The previous version should appear in a snapshot
+                List<ApiMessageAndVersion> expectedSnapshot = Collections.singletonList(
+                    new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(MetadataVersion.IBP_3_0_IV0.featureLevel()), (short) 0));
+                checkSnapshotContent(expectedSnapshot, snapshot);
+
+                assertEquals(MetadataVersion.IBP_3_1_IV0, controller.currentMetadataVersion());
+            }
         }
     }
 }
