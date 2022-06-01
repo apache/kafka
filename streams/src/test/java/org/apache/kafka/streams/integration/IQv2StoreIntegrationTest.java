@@ -71,8 +71,10 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -117,6 +119,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class IQv2StoreIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final Logger LOG = LoggerFactory.getLogger(IQv2StoreIntegrationTest.class);
 

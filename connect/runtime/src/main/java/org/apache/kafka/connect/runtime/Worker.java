@@ -420,7 +420,7 @@ public class Worker {
             }
 
             if (!connector.awaitShutdown(timeout)) {
-                log.error("Connector ‘{}’ failed to properly shut down, has become unresponsive, and "
+                log.error("Connector '{}' failed to properly shut down, has become unresponsive, and "
                         + "may be consuming external resources. Correct the configuration for "
                         + "this connector or remove the connector. After fixing the connector, it "
                         + "may be necessary to restart this worker to release any consumed "
