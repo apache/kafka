@@ -33,7 +33,7 @@ public class TaskExecutionMetadataTest {
     final static String TOPOLOGY1 = "topology1";
     final static String TOPOLOGY2 = "topology2";
     final static Set<String> NAMED_TOPOLOGIES = new HashSet<>(Arrays.asList(TOPOLOGY1, TOPOLOGY2));
-    final static int TIME_ZERO = 0; 
+    final static int TIME_ZERO = 0;
     final static int CONSTANT_BACKOFF_MS = 5000;
 
     @Test
