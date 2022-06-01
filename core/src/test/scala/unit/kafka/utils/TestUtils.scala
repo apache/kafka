@@ -76,7 +76,6 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
-import org.mockito.Mockito
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -2172,14 +2171,13 @@ object TestUtils extends Logging {
     }
   }
 
-  def buildRequestWithEnvelope(request: AbstractRequest,
-                               principalSerde: KafkaPrincipalSerde,
-                               requestChannelMetrics: RequestChannel.Metrics,
-                               startTimeNanos: Long,
-                               fromPrivilegedListener: Boolean = true,
-                               shouldSpyRequestContext: Boolean = false,
-                               envelope: Option[RequestChannel.Request] = None
-                              ): RequestChannel.Request = {
+  def buildEnvelopeRequest(
+    request: AbstractRequest,
+    principalSerde: KafkaPrincipalSerde,
+    requestChannelMetrics: RequestChannel.Metrics,
+    startTimeNanos: Long,
+    fromPrivilegedListener: Boolean = true
+  ): RequestChannel.Request = {
     val clientId = "id"
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
@@ -2195,22 +2193,18 @@ object TestUtils extends Logging {
 
     RequestHeader.parse(envelopeBuffer)
 
-    var requestContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
+    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, Optional.of(principalSerde))
 
-    if (shouldSpyRequestContext) {
-      requestContext = Mockito.spy(requestContext)
-    }
-
     new RequestChannel.Request(
       processor = 1,
-      context = requestContext,
+      context = envelopeContext,
       startTimeNanos = startTimeNanos,
       memoryPool = MemoryPool.NONE,
       buffer = envelopeBuffer,
       metrics = requestChannelMetrics,
-      envelope = envelope
+      envelope = None
     )
   }
 

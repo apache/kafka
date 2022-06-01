@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.concurrent.TimeUnit
 import java.util.{Collections, Locale, Properties}
 
 import kafka.cluster.EndPoint
@@ -81,6 +82,7 @@ object Defaults {
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
   val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
+  val MetadataMaxIdleIntervalMs = 500
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -402,6 +404,7 @@ object KafkaConfig {
   val MetadataMaxRetentionBytesProp = "metadata.max.retention.bytes"
   val MetadataMaxRetentionMillisProp = "metadata.max.retention.ms"
   val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
+  val MetadataMaxIdleIntervalMsProp = "metadata.max.idle.interval.ms"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -712,6 +715,9 @@ object KafkaConfig {
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest snapshot and the high-watermark needed before generating a new snapshot."
+  val MetadataMaxIdleIntervalMsDoc = "This configuration controls how often the active " +
+    "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
+    s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
     "if running in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.\n " +
     "Note: The ZK-based controller should not set this configuration."
@@ -1148,6 +1154,7 @@ object KafkaConfig {
       .define(MetadataLogSegmentMillisProp, LONG, Defaults.LogRollHours * 60 * 60 * 1000L, null, HIGH, MetadataLogSegmentMillisDoc)
       .define(MetadataMaxRetentionBytesProp, LONG, Defaults.LogRetentionBytes, null, HIGH, MetadataMaxRetentionBytesDoc)
       .define(MetadataMaxRetentionMillisProp, LONG, Defaults.LogRetentionHours * 60 * 60 * 1000L, null, HIGH, MetadataMaxRetentionMillisDoc)
+      .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.MetadataMaxIdleIntervalMs, atLeast(0), LOW, MetadataMaxIdleIntervalMsDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, new ConfigDef.NonNullValidator(), LOW, AuthorizerClassNameDoc)
@@ -1643,7 +1650,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def metadataRetentionBytes = getLong(KafkaConfig.MetadataMaxRetentionBytesProp)
   def metadataRetentionMillis = getLong(KafkaConfig.MetadataMaxRetentionMillisProp)
 
-
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
   def backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)
   val queuedMaxRequests = getInt(KafkaConfig.QueuedMaxRequestsProp)
@@ -1661,6 +1667,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /************* Metadata Configuration ***********/
   val metadataSnapshotMaxNewRecordBytes = getLong(KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp)
+  val metadataMaxIdleIntervalNs: Option[Long] = {
+    val value = TimeUnit.NANOSECONDS.convert(getInt(KafkaConfig.MetadataMaxIdleIntervalMsProp).toLong, TimeUnit.MILLISECONDS)
+    if (value > 0) Some(value) else None
+  }
 
   /************* Authorizer Configuration ***********/
   def createNewAuthorizer(): Option[Authorizer] = {

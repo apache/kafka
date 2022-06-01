@@ -71,6 +71,8 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
+
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Iterator;
@@ -102,6 +104,8 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
 public class NamedTopologyIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
     
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);

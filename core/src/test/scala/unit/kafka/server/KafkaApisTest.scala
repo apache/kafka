@@ -307,7 +307,7 @@ class KafkaApisTest {
         Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
 
-    val request = TestUtils.buildRequestWithEnvelope(
+    val request = TestUtils.buildEnvelopeRequest(
       alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
 
     val capturedResponse: ArgumentCaptor[AlterConfigsResponse] = ArgumentCaptor.forClass(classOf[AlterConfigsResponse])
@@ -341,7 +341,7 @@ class KafkaApisTest {
 
     when(controller.isActive).thenReturn(true)
 
-    val request = TestUtils.buildRequestWithEnvelope(
+    val request = TestUtils.buildEnvelopeRequest(
       leaveGroupRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
@@ -396,7 +396,7 @@ class KafkaApisTest {
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false)
       .build(requestHeader.apiVersion)
 
-    val request = TestUtils.buildRequestWithEnvelope(
+    val request = TestUtils.buildEnvelopeRequest(
       alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds(), fromPrivilegedListener)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])

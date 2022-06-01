@@ -63,11 +63,14 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Category(IntegrationTest.class)
 public class OptimizedKTableIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger LOG = LoggerFactory.getLogger(OptimizedKTableIntegrationTest.class);
     private static final int NUM_BROKERS = 1;
     private static int port = 0;
