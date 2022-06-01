@@ -94,21 +94,7 @@ public class FeatureControlManager {
         }
     }
 
-    ControllerResult<Map<String, ApiError>> initializeMetadataVersion(short initVersion) {
-        if (!metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
-            return ControllerResult.atomicOf(
-                Collections.emptyList(),
-                Collections.singletonMap(
-                    MetadataVersion.FEATURE_NAME,
-                    new ApiError(Errors.INVALID_UPDATE_VERSION,
-                        "Cannot initialize metadata.version to " + initVersion + " since it has already been " +
-                            "initialized to " + metadataVersion().featureLevel() + ".")
-            ));
-        }
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        ApiError result = updateMetadataVersion(initVersion, false, records::add);
-        return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersion.FEATURE_NAME, result));
-    }
+
 
     /**
      * Test if the quorum can support this feature and version

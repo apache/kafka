@@ -56,6 +56,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -168,7 +169,6 @@ public class ReplicationControlManagerTest {
 
         ReplicationControlTestContext(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.replicationControl = new ReplicationControlManager.Builder().
-                setMetadataVersion(() -> MetadataVersion.IBP_3_3_IV1).
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
@@ -178,6 +178,9 @@ public class ReplicationControlManagerTest {
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControlManager(featureControl).
                 build();
+            featureControl.replay(new FeatureLevelRecord()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.IBP_3_3_IV1.featureLevel()));
             clusterControl.activate();
         }
 

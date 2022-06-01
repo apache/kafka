@@ -361,7 +361,6 @@ public class ReplicationControlManager {
     final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
     private ReplicationControlManager(
-        Supplier<MetadataVersion> metadataVersion,
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         short defaultReplicationFactor,
