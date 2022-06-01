@@ -25,7 +25,7 @@ import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
-import org.apache.kafka.common.message.{SnapshotFooterRecord, SnapshotFooterRecordJsonConverter, SnapshotHeaderRecord, SnapshotHeaderRecordJsonConverter}
+import org.apache.kafka.common.message.{SnapshotFooterRecordJsonConverter, SnapshotHeaderRecordJsonConverter}
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
@@ -296,10 +296,10 @@ object DumpLogSegments {
                     print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
                   case ControlRecordType.SNAPSHOT_HEADER =>
                     val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(record)
-                    print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, SnapshotHeaderRecord.HIGHEST_SUPPORTED_VERSION)}")
+                    print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, header.version())}")
                   case ControlRecordType.SNAPSHOT_FOOTER =>
                     val footer = ControlRecordUtils.deserializedSnapshotFooterRecord(record)
-                    print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, SnapshotFooterRecord.HIGHEST_SUPPORTED_VERSION)}")
+                    print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")
                 }
