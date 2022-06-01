@@ -43,14 +43,15 @@ object AbstractPartitionTest {
 class AbstractPartitionTest {
 
   val brokerId = AbstractPartitionTest.brokerId
+  val remoteReplicaId = brokerId + 1
   val topicPartition = new TopicPartition("test-topic", 0)
   val time = new MockTime()
   var tmpDir: File = _
   var logDir1: File = _
   var logDir2: File = _
   var logManager: LogManager = _
-  var alterIsrManager: MockAlterPartitionManager = _
-  var isrChangeListener: MockAlterPartitionListener = _
+  var alterPartitionManager: MockAlterPartitionManager = _
+  var alterPartitionListener: MockAlterPartitionListener = _
   var logConfig: LogConfig = _
   var configRepository: MockConfigRepository = _
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
@@ -73,18 +74,18 @@ class AbstractPartitionTest {
       CleanerConfig(enableCleaner = false), time, interBrokerProtocolVersion)
     logManager.startup(Set.empty)
 
-    alterIsrManager = TestUtils.createAlterIsrManager()
-    isrChangeListener = TestUtils.createIsrChangeListener()
+    alterPartitionManager = TestUtils.createAlterIsrManager()
+    alterPartitionListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       time,
-      isrChangeListener,
+      alterPartitionListener,
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager)
+      alterPartitionManager)
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
@@ -115,7 +116,7 @@ class AbstractPartitionTest {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
-    val replicas = List[Integer](brokerId, brokerId + 1).asJava
+    val replicas = List[Integer](brokerId, remoteReplicaId).asJava
     val isr = replicas
 
     if (isLeader) {
@@ -131,7 +132,7 @@ class AbstractPartitionTest {
     } else {
       assertTrue(partition.makeFollower(new LeaderAndIsrPartitionState()
         .setControllerEpoch(controllerEpoch)
-        .setLeader(brokerId + 1)
+        .setLeader(remoteReplicaId)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)
         .setPartitionEpoch(1)

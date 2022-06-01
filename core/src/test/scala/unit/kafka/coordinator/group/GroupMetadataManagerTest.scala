@@ -1055,7 +1055,7 @@ class GroupMetadataManagerTest {
     val protocol = "range"
     val memberId = "memberId"
 
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, metadataVersion = metadataVersion)
 
       val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
@@ -2276,7 +2276,7 @@ class GroupMetadataManagerTest {
       assertEquals(expectedLeaderEpoch, deserializedOffsetAndMetadata.leaderEpoch)
     }
 
-    for (version <- MetadataVersion.VALUES) {
+    for (version <- MetadataVersion.VERSIONS) {
       val expectedSchemaVersion = version match {
         case v if v.isLessThan(IBP_2_1_IV0) => 1
         case v if v.isLessThan(IBP_2_1_IV1) => 2
@@ -2307,7 +2307,7 @@ class GroupMetadataManagerTest {
       assertEquals(offsetAndMetadata, deserializedOffsetAndMetadata)
     }
 
-    for (version <- MetadataVersion.VALUES)
+    for (version <- MetadataVersion.VERSIONS)
       verifySerde(version)
   }
 
@@ -2335,7 +2335,7 @@ class GroupMetadataManagerTest {
       assertEquals(offsetAndMetadata, deserializedOffsetAndMetadata)
     }
 
-    for (version <- MetadataVersion.VALUES)
+    for (version <- MetadataVersion.VERSIONS)
       verifySerde(version)
   }
 

@@ -18,11 +18,13 @@
 package kafka.test;
 
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.test.annotation.ClusterTest;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -94,6 +96,11 @@ public interface ClusterInstance {
      * Return any one of the controller servers. Throw an error if none are found
      */
     SocketServer anyControllerSocketServer();
+
+    /**
+     * Return a mapping of the underlying broker IDs to their supported features
+     */
+    Map<Integer, BrokerFeatures> brokerFeatures();
 
     /**
      * The underlying object which is responsible for setting up and tearing down the cluster.

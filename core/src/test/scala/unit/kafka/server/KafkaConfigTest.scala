@@ -698,8 +698,8 @@ class KafkaConfigTest {
       KafkaConfig.fromProps(props)
     }
 
-    MetadataVersion.VALUES.foreach { interBrokerVersion =>
-      MetadataVersion.VALUES.foreach { messageFormatVersion =>
+    MetadataVersion.VERSIONS.foreach { interBrokerVersion =>
+      MetadataVersion.VERSIONS.foreach { messageFormatVersion =>
         if (interBrokerVersion.highestSupportedRecordVersion.value >= messageFormatVersion.highestSupportedRecordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)

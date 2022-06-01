@@ -59,27 +59,27 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_1_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetadataVersionTest {
 
     @Test
     public void testFeatureLevel() {
-        int firstFeatureLevelIndex = Arrays.asList(MetadataVersion.VALUES).indexOf(IBP_3_0_IV0);
+        MetadataVersion[] metadataVersions = MetadataVersion.VERSIONS;
+        int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(IBP_3_0_IV0);
         for (int i = 0; i < firstFeatureLevelIndex; i++) {
-            assertFalse(MetadataVersion.VALUES[i].featureLevel().isPresent());
+            assertTrue(metadataVersions[i].featureLevel() < 0);
         }
         short expectedFeatureLevel = 1;
-        for (int i = firstFeatureLevelIndex; i < MetadataVersion.VALUES.length; i++) {
-            MetadataVersion metadataVersion = MetadataVersion.VALUES[i];
-            short featureLevel = metadataVersion.featureLevel().orElseThrow(() ->
-                new IllegalArgumentException(
-                    String.format("Metadata version %s must have a non-null feature level", metadataVersion.version())));
-            assertEquals(expectedFeatureLevel, featureLevel,
-                String.format("Metadata version %s should have feature level %s", metadataVersion.version(), expectedFeatureLevel));
+        for (int i = firstFeatureLevelIndex; i < metadataVersions.length; i++) {
+            MetadataVersion metadataVersion = metadataVersions[i];
+            assertEquals(expectedFeatureLevel, metadataVersion.featureLevel(),
+                    String.format("Metadata version %s should have feature level %s", metadataVersion.featureLevel(), expectedFeatureLevel));
             expectedFeatureLevel += 1;
         }
     }
@@ -187,6 +187,9 @@ class MetadataVersionTest {
 
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2"));
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2-IV0"));
+
+        assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3"));
+        assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
     }
 
     @Test
@@ -229,7 +232,7 @@ class MetadataVersionTest {
         assertEquals("3.0", IBP_3_0_IV0.shortVersion());
         assertEquals("3.0", IBP_3_0_IV1.shortVersion());
         assertEquals("3.1", IBP_3_1_IV0.shortVersion());
-        assertEquals("3.2", IBP_3_2_IV0.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV0.shortVersion());
     }
 
     @Test
@@ -262,6 +265,47 @@ class MetadataVersionTest {
         assertEquals("3.0-IV1", IBP_3_0_IV1.version());
         assertEquals("3.1-IV0", IBP_3_1_IV0.version());
         assertEquals("3.2-IV0", IBP_3_2_IV0.version());
+        assertEquals("3.3-IV0", IBP_3_3_IV0.version());
     }
 
+    @Test
+    public void testPrevious() {
+        for (int i = 1; i < MetadataVersion.VERSIONS.length - 2; i++) {
+            MetadataVersion version = MetadataVersion.VERSIONS[i];
+            assertTrue(version.previous().isPresent());
+            assertEquals(MetadataVersion.VERSIONS[i - 1], version.previous().get());
+        }
+    }
+
+    @Test
+    public void testMetadataChanged() {
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_2_IV0));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_1_IV0));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV1));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_2_8_IV1));
+
+        // Check that argument order doesn't matter
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_0_IV0, IBP_3_2_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_2_8_IV1, IBP_3_2_IV0));
+    }
+
+    @Test
+    public void testKRaftVersions() {
+        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
+            if (metadataVersion.isKRaftSupported()) {
+                assertTrue(metadataVersion.featureLevel() > 0);
+            } else {
+                assertEquals(-1, metadataVersion.featureLevel());
+            }
+        }
+
+        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
+            if (metadataVersion.isAtLeast(IBP_3_0_IV0)) {
+                assertTrue(metadataVersion.isKRaftSupported());
+            } else {
+                assertFalse(metadataVersion.isKRaftSupported());
+            }
+        }
+    }
 }

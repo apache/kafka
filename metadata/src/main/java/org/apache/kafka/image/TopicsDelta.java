@@ -24,6 +24,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -115,6 +116,10 @@ public final class TopicsDelta {
                 deletedTopicIds.add(topicId);
             }
         }
+    }
+
+    public void handleMetadataVersionChange(MetadataVersion newVersion) {
+        // no-op
     }
 
     public TopicsImage apply() {

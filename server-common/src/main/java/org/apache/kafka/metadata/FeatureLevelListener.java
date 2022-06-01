@@ -14,10 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.mirror.integration;
 
-import org.junit.jupiter.api.Tag;
+package org.apache.kafka.metadata;
 
-@Tag("integration")
-public class MirrorConnectorsIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
+/**
+ * A callback for changes to feature levels. Currently, this is only used by the controller to receive a callback
+ * when committed FeatureLevelRecords are being replayed.
+ */
+public interface FeatureLevelListener {
+    void handle(String featureName, short finalizedVersion);
 }

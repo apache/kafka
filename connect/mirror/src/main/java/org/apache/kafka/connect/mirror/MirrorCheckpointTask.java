@@ -37,11 +37,14 @@ import java.util.Map.Entry;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
+import java.util.stream.Stream;
 
 /** Emits checkpoints for upstream consumer groups. */
 public class MirrorCheckpointTask extends SourceTask {
@@ -169,6 +172,7 @@ public class MirrorCheckpointTask extends SourceTask {
         return listConsumerGroupOffsets(group).entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
+            .flatMap(o -> o.map(Stream::of).orElseGet(Stream::empty)) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
             .collect(Collectors.toList());
     }
@@ -182,12 +186,16 @@ public class MirrorCheckpointTask extends SourceTask {
         return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
     }
 
-    Checkpoint checkpoint(String group, TopicPartition topicPartition,
-            OffsetAndMetadata offsetAndMetadata) {
+    Optional<Checkpoint> checkpoint(String group, TopicPartition topicPartition,
+                                    OffsetAndMetadata offsetAndMetadata) {
         long upstreamOffset = offsetAndMetadata.offset();
-        long downstreamOffset = offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
-        return new Checkpoint(group, renameTopicPartition(topicPartition),
-            upstreamOffset, downstreamOffset, offsetAndMetadata.metadata());
+        OptionalLong downstreamOffset = offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
+        if (downstreamOffset.isPresent()) {
+            return Optional.of(new Checkpoint(group, renameTopicPartition(topicPartition),
+                    upstreamOffset, downstreamOffset.getAsLong(), offsetAndMetadata.metadata()));
+        } else {
+            return Optional.empty();
+        }
     }
 
     SourceRecord checkpointRecord(Checkpoint checkpoint, long timestamp) {
@@ -232,11 +240,10 @@ public class MirrorCheckpointTask extends SourceTask {
                 ConsumerGroupState consumerGroupState = consumerGroupDesc.state();
                 // sync offset to the target cluster only if the state of current consumer group is:
                 // (1) idle: because the consumer at target is not actively consuming the mirrored topic
-                // (2) dead: the new consumer that is recently created at source and never exist at target
-                if (consumerGroupState.equals(ConsumerGroupState.EMPTY)) {
+                // (2) dead: the new consumer that is recently created at source and never existed at target
+                if (consumerGroupState == ConsumerGroupState.EMPTY) {
                     idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
-                        .partitionsToOffsetAndMetadata().get().entrySet().stream().collect(
-                            Collectors.toMap(Entry::getKey, Entry::getValue)));
+                        .partitionsToOffsetAndMetadata().get());
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {
