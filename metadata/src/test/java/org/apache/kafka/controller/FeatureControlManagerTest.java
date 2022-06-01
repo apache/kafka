@@ -257,7 +257,7 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager(logContext, features, snapshotRegistry);
         ControllerResult<Map<String, ApiError>> result = manager.initializeMetadataVersion(MetadataVersion.IBP_3_3_IV0.featureLevel());
         RecordTestUtils.replayAll(manager, result.records());
-        assertEquals(manager.metadataVersion(), MetadataVersion.latest());
+        assertEquals(manager.metadataVersion(), MetadataVersion.IBP_3_3_IV0);
 
         result = manager.updateFeatures(
             Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel()),

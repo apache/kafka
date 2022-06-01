@@ -73,16 +73,16 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.metadata.BrokerHeartbeatReply;
-import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -202,20 +202,19 @@ public class ReplicationControlManager {
 
         ReplicationControlManager build() {
             if (configurationControl == null) {
-                throw new RuntimeException("You must specify configurationControl.");
-            }
-            if (clusterControl == null) {
-                throw new RuntimeException("You must specify clusterControl.");
-            }
-            if (controllerMetrics == null) {
-                throw new RuntimeException("You must specify controllerMetrics.");
+                throw new IllegalStateException("Configuration control must be set before building");
+            } else if (clusterControl == null) {
+                throw new IllegalStateException("Cluster controller must be set before building");
+            } else if (controllerMetrics == null) {
+                throw new IllegalStateException("Metrics must be set before building");
             }
             if (featureControlManager == null) {
                 throw new RuntimeException("You must specify featureControlManager.");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
-            return new ReplicationControlManager(snapshotRegistry,
+            return new ReplicationControlManager(
+                snapshotRegistry,
                 logContext,
                 defaultReplicationFactor,
                 defaultNumPartitions,
@@ -362,6 +361,7 @@ public class ReplicationControlManager {
     final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
     private ReplicationControlManager(
+        Supplier<MetadataVersion> metadataVersion,
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         short defaultReplicationFactor,

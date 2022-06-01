@@ -174,6 +174,8 @@ class ControllerServer(
           OptionalLong.empty()
         }
 
+        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
+
         new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
           setTime(time).
           setThreadNamePrefix(threadNamePrefixAsString).
@@ -186,7 +188,8 @@ class ControllerServer(
             TimeUnit.MILLISECONDS)).
           setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
-          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+          setMaxIdleIntervalNs(maxIdleIntervalNs).
+          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).

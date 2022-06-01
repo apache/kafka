@@ -63,6 +63,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -89,7 +90,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Category({IntegrationTest.class})
 public class IQv2IntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
     public static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
     private static int port = 0;
