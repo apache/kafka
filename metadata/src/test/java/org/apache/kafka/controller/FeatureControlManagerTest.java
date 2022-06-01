@@ -251,11 +251,11 @@ public class FeatureControlManagerTest {
 
 
         result = manager.updateFeatures(
-            Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel()),
+            Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_1_IV0.featureLevel()),
             Collections.singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
             Collections.emptyMap(),
             true);
-        assertEquals(Errors.NONE, result.response().get(MetadataVersion.FEATURE_NAME).error());
+        assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
 
         result = manager.updateFeatures(
                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_0_IV0.featureLevel()),

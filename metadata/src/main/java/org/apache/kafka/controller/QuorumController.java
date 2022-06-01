@@ -48,6 +48,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -1262,7 +1263,6 @@ public final class QuorumController implements Controller {
                     break;
                 case FEATURE_LEVEL_RECORD:
                     featureControl.replay((FeatureLevelRecord) message);
-
                     handleFeatureControlChange();
                     break;
                 case CLIENT_QUOTA_RECORD:
@@ -1270,6 +1270,9 @@ public final class QuorumController implements Controller {
                     break;
                 case PRODUCER_IDS_RECORD:
                     producerIdControlManager.replay((ProducerIdsRecord) message);
+                    break;
+                case BROKER_REGISTRATION_CHANGE_RECORD:
+                    clusterControl.replay((BrokerRegistrationChangeRecord) message);
                     break;
                 case ACCESS_CONTROL_ENTRY_RECORD:
                     aclControlManager.replay((AccessControlEntryRecord) message, snapshotId);
@@ -1573,7 +1576,6 @@ public final class QuorumController implements Controller {
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
         this.maxIdleIntervalNs = maxIdleIntervalNs;
         this.replicationControl = new ReplicationControlManager.Builder().
-            setMetadataVersion(() -> featureControl.metadataVersion()).
             setSnapshotRegistry(snapshotRegistry).
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
@@ -1583,6 +1585,7 @@ public final class QuorumController implements Controller {
             setClusterControl(clusterControl).
             setControllerMetrics(controllerMetrics).
             setCreateTopicPolicy(createTopicPolicy).
+            setFeatureControl(featureControl).
             build();
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));
