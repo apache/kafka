@@ -73,6 +73,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
@@ -843,12 +844,8 @@ public class KafkaStreamsTest {
                 streams::isPaused,
                 "Streams did not pause.");
 
-            try {
-                streams.cleanUp();
-                fail("Should have thrown IllegalStateException");
-            } catch (final IllegalStateException expected) {
-                assertEquals("Cannot clean up while running.", expected.getMessage());
-            }
+            assertThrows("Cannot clean up while running.", IllegalStateException.class,
+                streams::cleanUp);
         }
     }
 
