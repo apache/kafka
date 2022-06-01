@@ -169,23 +169,4 @@ public class ClientUtils {
         final int index = fullThreadName.indexOf("StreamThread-");
         return fullThreadName.substring(index);
     }
-
-    public static long sizeInBytes(final ConsumerRecord<byte[], byte[]> record) {
-        long headerSizeInBytes = 0L;
-
-        for (final Header header: record.headers().toArray()) {
-            headerSizeInBytes += Utils.utf8(header.key()).length;
-            if (header.value() != null) {
-                headerSizeInBytes += header.value().length;
-            }
-        }
-
-        return record.serializedKeySize() +
-            record.serializedValueSize() +
-            8L + // timestamp
-            8L + // offset
-            Utils.utf8(record.topic()).length +
-            4L + // partition
-            headerSizeInBytes;
-    }
 }
