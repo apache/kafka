@@ -830,7 +830,13 @@ class KafkaServer(
   private def checkpointBrokerMetadata(brokerMetadata: ZkMetaProperties) = {
     for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
-      checkpoint.write(brokerMetadata.toProperties)
+      try {
+        checkpoint.write(brokerMetadata.toProperties)
+      } catch {
+        case e: IOException =>
+          val dirPath = checkpoint.file.getAbsolutePath
+          logDirFailureChannel.maybeAddOfflineLogDir(dirPath, s"Error while writing meta.properties to $dirPath", e)
+      }
     }
   }
 
