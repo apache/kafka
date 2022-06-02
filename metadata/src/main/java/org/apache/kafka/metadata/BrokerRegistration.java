@@ -230,4 +230,9 @@ public class BrokerRegistration {
         return new BrokerRegistration(id, epoch, incarnationId, listeners,
             supportedFeatures, rack, fencing, inControlledShutdown);
     }
+
+    public BrokerRegistration cloneWithInControlledShutdown(boolean inControlledShutdown) {
+        return new BrokerRegistration(id, epoch, incarnationId, listeners,
+            supportedFeatures, rack, fenced, inControlledShutdown);
+    }
 }

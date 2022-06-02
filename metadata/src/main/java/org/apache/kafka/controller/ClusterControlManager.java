@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
@@ -432,12 +433,14 @@ public class ClusterControlManager {
 
     public void replay(FenceBrokerRecord record) {
         replayRegistrationChange(record, record.id(), record.epoch(),
-            BrokerRegistrationFencingChange.UNFENCE);
+            BrokerRegistrationFencingChange.UNFENCE,
+            BrokerRegistrationInControlledShutdownChange.NONE);
     }
 
     public void replay(UnfenceBrokerRecord record) {
         replayRegistrationChange(record, record.id(), record.epoch(),
-            BrokerRegistrationFencingChange.FENCE);
+            BrokerRegistrationFencingChange.FENCE,
+            BrokerRegistrationInControlledShutdownChange.NONE);
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
@@ -447,15 +450,22 @@ public class ClusterControlManager {
             throw new RuntimeException(String.format("Unable to replay %s: unknown " +
                 "value for fenced field: %d", record.toString(), record.fenced()));
         }
+        Optional<BrokerRegistrationInControlledShutdownChange> inControlledShutdownChange =
+            BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown());
+        if (!inControlledShutdownChange.isPresent()) {
+            throw new RuntimeException(String.format("Unable to replay %s: unknown " +
+                "value for inControlledShutdown field: %d", record.toString(), record.inControlledShutdown()));
+        }
         replayRegistrationChange(record, record.brokerId(), record.brokerEpoch(),
-            fencingChange.get());
+            fencingChange.get(), inControlledShutdownChange.get());
     }
 
     private void replayRegistrationChange(
         ApiMessage record,
         int brokerId,
         long brokerEpoch,
-        BrokerRegistrationFencingChange fencingChange
+        BrokerRegistrationFencingChange fencingChange,
+        BrokerRegistrationInControlledShutdownChange inControlledShutdownChange
     ) {
         BrokerRegistration curRegistration = brokerRegistrations.get(brokerId);
         if (curRegistration == null) {
@@ -468,6 +478,9 @@ public class ClusterControlManager {
             BrokerRegistration nextRegistration = curRegistration;
             if (fencingChange != BrokerRegistrationFencingChange.NONE) {
                 nextRegistration = nextRegistration.cloneWithFencing(fencingChange.asBoolean().get());
+            }
+            if (inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
+                nextRegistration = nextRegistration.cloneWithInControlledShutdown(inControlledShutdownChange.asBoolean().get());
             }
             if (!curRegistration.equals(nextRegistration)) {
                 brokerRegistrations.put(brokerId, nextRegistration);

@@ -41,6 +41,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
@@ -121,6 +123,7 @@ public class ClusterControlManagerTest {
         assertFalse(clusterControl.unfenced(1));
     }
 
+    @Test
     public void testReplayRegisterBrokerRecord() {
         MockTime time = new MockTime(0, 0, 0);
 
@@ -163,6 +166,56 @@ public class ClusterControlManagerTest {
 
         assertTrue(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
+    }
+
+    @Test
+    public void testReplayBrokerRegistrationChangeRecord() {
+        MockTime time = new MockTime(0, 0, 0);
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setControllerMetrics(new MockControllerMetrics()).
+            build();
+
+        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.inControlledShutdown(0));
+
+        RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
+            setBrokerEpoch(100).
+            setBrokerId(0).
+            setRack(null).
+            setFenced(false);
+        brokerRecord.endPoints().add(new BrokerEndpoint().
+            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+            setPort((short) 9092).
+            setName("PLAINTEXT").
+            setHost("example.com"));
+        clusterControl.replay(brokerRecord);
+
+        assertTrue(clusterControl.unfenced(0));
+        assertFalse(clusterControl.inControlledShutdown(0));
+
+        BrokerRegistrationChangeRecord registrationChangeRecord = new BrokerRegistrationChangeRecord()
+            .setBrokerId(0)
+            .setBrokerEpoch(100)
+            .setInControlledShutdown(BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value());
+        clusterControl.replay(registrationChangeRecord);
+
+        assertTrue(clusterControl.unfenced(0));
+        assertTrue(clusterControl.inControlledShutdown(0));
+
+        registrationChangeRecord = new BrokerRegistrationChangeRecord()
+            .setBrokerId(0)
+            .setBrokerEpoch(100)
+            .setFenced(BrokerRegistrationFencingChange.FENCE.value());
+        clusterControl.replay(registrationChangeRecord);
+
+        assertTrue(clusterControl.unfenced(0));
+        assertTrue(clusterControl.inControlledShutdown(0));
     }
 
     @Test
