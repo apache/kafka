@@ -56,8 +56,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -90,6 +92,8 @@ import static org.junit.Assert.assertFalse;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class EosV2UpgradeIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Boolean[]> data() {

@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Spliterator;
@@ -84,6 +85,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -424,6 +426,54 @@ public class QuorumControllerTest {
     }
 
     @Test
+    public void testNoOpRecordWriteAfterTimeout() throws Throwable {
+        long maxIdleIntervalNs = 1_000;
+        long maxReplicationDelayMs = 60_000;
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
+                logEnv,
+                builder -> {
+                    builder.setConfigSchema(SCHEMA)
+                        .setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs));
+                }
+            );
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+
+            LocalLogManager localLogManager = logEnv
+                .logManagers()
+                .stream()
+                .filter(logManager -> logManager.nodeId().equals(OptionalInt.of(active.nodeId())))
+                .findAny()
+                .get();
+            TestUtils.waitForCondition(
+                () -> localLogManager.highWatermark().isPresent(),
+                maxReplicationDelayMs,
+                "High watermark was not established"
+            );
+
+
+            final long firstHighWatermark = localLogManager.highWatermark().getAsLong();
+            TestUtils.waitForCondition(
+                () -> localLogManager.highWatermark().getAsLong() > firstHighWatermark,
+                maxReplicationDelayMs,
+                "Active controller didn't write NoOpRecord the first time"
+            );
+
+            // Do it again to make sure that we are not counting the leader change record
+            final long secondHighWatermark = localLogManager.highWatermark().getAsLong();
+            TestUtils.waitForCondition(
+                () -> localLogManager.highWatermark().getAsLong() > secondHighWatermark,
+                maxReplicationDelayMs,
+                "Active controller didn't write NoOpRecord the second time"
+            );
+        }
+    }
+
+    @Test
     public void testUnregisterBroker() throws Throwable {
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
@@ -668,7 +718,7 @@ public class QuorumControllerTest {
                                             setPartitionIndex(1).
                                             setBrokerIds(Arrays.asList(1, 2, 0))).
                                                 iterator()))).iterator())),
-                        Collections.singleton(topicName)).get();
+                        Collections.singleton(topicName)).get(60, TimeUnit.SECONDS);
                 }
                 logEnv.waitForLatestSnapshot();
             }

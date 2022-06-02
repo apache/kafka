@@ -75,7 +75,7 @@
         <li>Kafka has replaced log4j with reload4j due to security concerns.
             This only affects modules that specify a logging backend (<code>connect-runtime</code> and <code>kafka-tools</code> are two such examples).
             A number of modules, including <code>kafka-clients</code>, leave it to the application to specify the logging backend.
-            More information can be found at <a href"https://reload4j.qos.ch">reload4j</a>.
+            More information can be found at <a href="https://reload4j.qos.ch">reload4j</a>.
             Projects that depend on the affected modules from the Kafka project should use
             <a href="https://www.slf4j.org/manual.html#swapping">slf4j-log4j12 version 1.7.35 or above</a> or
             slf4j-reload4j to avoid
@@ -229,7 +229,7 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
     <li>The broker configuration <code>log.message.format.version</code> and topic configuration <code>message.format.version</code> have been deprecated.
         The value of both configurations is always assumed to be <code>3.0</code> if <code>inter.broker.protocol.version</code> is <code>3.0</code> or higher.
-        If <code>log.message.format.version</code> or <<code>message.format.version</code> are set, we recommend clearing them at the same time as the
+        If <code>log.message.format.version</code> or <code>message.format.version</code> are set, we recommend clearing them at the same time as the
         <code>inter.broker.protocol.version</code> upgrade to 3.0. This will avoid potential compatibility issues if the <code>inter.broker.protocol.version</code>
         is downgraded. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-724%3A+Drop+support+for+message+formats+v0+and+v1">KIP-724</a> for more details.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
@@ -744,7 +744,7 @@
         can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-520%3A+Add+overloaded+Consumer%23committed+for+batching+partitions">KIP-520</a>).
     </li>
     <li>We've introduced a new <code>INVALID_RECORD</code> error in the produce response to distinguish from the <code>CORRUPT_MESSAGE</code> error.
-        To be more concrete, previously when a batch of records were sent as part of a single request to the broker and one or more of the records failed
+        To be more concrete, previously when a batch of records was sent as part of a single request to the broker and one or more of the records failed
         the validation due to various causes (mismatch magic bytes, crc checksum errors, null key for log compacted topics, etc), the whole batch would be rejected
         with the same and misleading <code>CORRUPT_MESSAGE</code>, and the caller of the producer client would see the corresponding exception from either
         the future object of <code>RecordMetadata</code> returned from the <code>send</code> call as well as in the <code>Callback#onCompletion(RecordMetadata metadata, Exception exception)</code>
@@ -1893,7 +1893,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
          To maintain compatibility with old clients, this change only applies to Message format 0.10.0 and later.
          Clients that Produce/Fetch LZ4-compressed messages using v0/v1 (Message format 0.9.0) should continue
          to use the 0.9.0 framing implementation. Clients that use Produce/Fetch protocols v2 or later
-         should use interoperable LZ4f framing. A list of interoperable LZ4 libraries is available at http://www.lz4.org/
+         should use interoperable LZ4f framing. A list of interoperable LZ4 libraries is available at <a href="https://www.lz4.org/">https://www.lz4.org/</a>
 </ul>
 
 <h5><a id="upgrade_10_notable" href="#upgrade_10_notable">Notable changes in 0.10.0.0</a></h5>

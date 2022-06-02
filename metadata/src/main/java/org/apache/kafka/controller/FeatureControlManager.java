@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -47,6 +48,46 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 
 
 public class FeatureControlManager {
+    public static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+        private QuorumFeatures quorumFeatures = null;
+        private MetadataVersion metadataVersion = MetadataVersion.UNINITIALIZED;
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder setQuorumFeatures(QuorumFeatures quorumFeatures) {
+            this.quorumFeatures = quorumFeatures;
+            return this;
+        }
+
+        Builder setMetadataVersion(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
+            return this;
+        }
+
+        public FeatureControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            if (quorumFeatures == null) {
+                quorumFeatures = new QuorumFeatures(0, new ApiVersions(), QuorumFeatures.defaultFeatureMap(),
+                        Collections.emptyList());
+            }
+            return new FeatureControlManager(logContext,
+                quorumFeatures,
+                snapshotRegistry,
+                metadataVersion);
+        }
+    }
+
     private final Logger log;
 
     /**
@@ -65,13 +106,16 @@ public class FeatureControlManager {
     private final TimelineObject<MetadataVersion> metadataVersion;
 
 
-    FeatureControlManager(LogContext logContext,
-                          QuorumFeatures quorumFeatures,
-                          SnapshotRegistry snapshotRegistry) {
+    private FeatureControlManager(
+        LogContext logContext,
+        QuorumFeatures quorumFeatures,
+        SnapshotRegistry snapshotRegistry,
+        MetadataVersion metadataVersion
+    ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metadataVersion = new TimelineObject<>(snapshotRegistry, MetadataVersion.UNINITIALIZED);
+        this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -94,35 +138,6 @@ public class FeatureControlManager {
         }
     }
 
-    ControllerResult<Map<String, ApiError>> initializeMetadataVersion(short initVersion) {
-        if (!metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
-            return ControllerResult.atomicOf(
-                Collections.emptyList(),
-                Collections.singletonMap(
-                    MetadataVersion.FEATURE_NAME,
-                    new ApiError(Errors.INVALID_UPDATE_VERSION,
-                        "Cannot initialize metadata.version to " + initVersion + " since it has already been " +
-                            "initialized to " + metadataVersion().featureLevel() + ".")
-            ));
-        }
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        ApiError result = updateMetadataVersion(initVersion, false, records::add);
-        return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersion.FEATURE_NAME, result));
-    }
-
-    /**
-     * Test if the quorum can support this feature and version
-     */
-    boolean canSupportVersion(String featureName, short version) {
-        return quorumFeatures.quorumSupportedFeature(featureName)
-            .filter(versionRange -> versionRange.contains(version))
-            .isPresent();
-    }
-
-    boolean featureExists(String featureName) {
-        return quorumFeatures.localSupportedFeature(featureName).isPresent();
-    }
-
     MetadataVersion metadataVersion() {
         return metadataVersion.get();
     }
@@ -134,11 +149,6 @@ public class FeatureControlManager {
         Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
         List<ApiMessageAndVersion> records
     ) {
-        if (!featureExists(featureName)) {
-            return invalidUpdateVersion(featureName, newVersion,
-                "The controller does not support the given feature.");
-        }
-
         if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
             return invalidUpdateVersion(featureName, newVersion,
                 "The controller does not support the given upgrade type.");
@@ -151,14 +161,14 @@ public class FeatureControlManager {
             currentVersion = finalizedVersions.get(featureName);
         }
 
-        if (newVersion <= 0) {
+        if (newVersion < 0) {
             return invalidUpdateVersion(featureName, newVersion,
-                "A feature version cannot be less than 1.");
+                "A feature version cannot be less than 0.");
         }
 
-        if (!canSupportVersion(featureName, newVersion)) {
-            return invalidUpdateVersion(featureName, newVersion,
-                "The quorum does not support the given feature version.");
+        Optional<String> reasonNotSupported = quorumFeatures.reasonNotSupported(featureName, newVersion);
+        if (reasonNotSupported.isPresent()) {
+            return invalidUpdateVersion(featureName, newVersion, reasonNotSupported.get());
         }
 
         for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokersAndFeatures.entrySet()) {
@@ -208,19 +218,6 @@ public class FeatureControlManager {
         boolean allowUnsafeDowngrade,
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
-        Optional<VersionRange> quorumSupported = quorumFeatures.quorumSupportedFeature(MetadataVersion.FEATURE_NAME);
-        if (!quorumSupported.isPresent()) {
-            return invalidMetadataVersion(newVersionLevel, "The quorum does not support metadata.version.");
-        }
-
-        if (newVersionLevel <= 0) {
-            return invalidMetadataVersion(newVersionLevel, "KRaft mode/the quorum does not support metadata.version values less than 1.");
-        }
-
-        if (!quorumSupported.get().contains(newVersionLevel)) {
-            return invalidMetadataVersion(newVersionLevel, "The controller quorum does support this version.");
-        }
-
         MetadataVersion currentVersion = metadataVersion();
         final MetadataVersion newVersion;
         try {
@@ -234,9 +231,15 @@ public class FeatureControlManager {
             boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);
             if (!metadataChanged) {
                 log.info("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
+            } else if (allowUnsafeDowngrade) {
+                log.info("Downgrading metadata.version unsafely from {} to {}.", currentVersion, newVersion);
             } else {
-                return invalidMetadataVersion(newVersionLevel, "Unsafe metadata.version downgrades are not supported.");
+                return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
+                        "downgrade because it might delete metadata information. Retry using " +
+                        "UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.");
             }
+        } else {
+            log.info("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
         }
 
         recordConsumer.accept(new ApiMessageAndVersion(
@@ -264,17 +267,22 @@ public class FeatureControlManager {
     }
 
     public void replay(FeatureLevelRecord record) {
-        if (!canSupportVersion(record.name(), record.featureLevel())) {
-            throw new RuntimeException("Controller cannot support feature " + record.name() +
-                                       " at version " + record.featureLevel());
+        VersionRange range = quorumFeatures.localSupportedFeature(record.name());
+        if (!range.contains(record.featureLevel())) {
+            throw new RuntimeException("Tried to apply FeatureLevelRecord " + record + ", but this controller only " +
+                "supports versions " + range);
         }
-
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             log.info("Setting metadata.version to {}", record.featureLevel());
             metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
         } else {
-            log.info("Setting feature {} to {}", record.name(), record.featureLevel());
-            finalizedVersions.put(record.name(), record.featureLevel());
+            if (record.featureLevel() == 0) {
+                log.info("Removing feature {}", record.name());
+                finalizedVersions.remove(record.name());
+            } else {
+                log.info("Setting feature {} to {}", record.name(), record.featureLevel());
+                finalizedVersions.put(record.name(), record.featureLevel());
+            }
         }
     }
 

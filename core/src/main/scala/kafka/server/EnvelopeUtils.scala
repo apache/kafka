@@ -32,7 +32,8 @@ object EnvelopeUtils {
   def handleEnvelopeRequest(
     request: RequestChannel.Request,
     requestChannelMetrics: RequestChannel.Metrics,
-    handler: RequestChannel.Request => Unit): Unit = {
+    handler: RequestChannel.Request => Unit
+  ): Unit = {
     val envelope = request.body[EnvelopeRequest]
     val forwardedPrincipal = parseForwardedPrincipal(request.context, envelope.requestPrincipal)
     val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)

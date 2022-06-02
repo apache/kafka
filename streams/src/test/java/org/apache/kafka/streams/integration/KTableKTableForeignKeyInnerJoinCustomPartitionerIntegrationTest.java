@@ -57,13 +57,17 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import kafka.utils.MockTime;
+import org.junit.rules.Timeout;
 
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private final static int NUM_BROKERS = 1;
 
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
