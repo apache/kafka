@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -54,6 +55,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.Lis
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -68,6 +70,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.ReplicationControlManager.KRaftClusterDescriber;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MockRandom;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -76,11 +79,13 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,6 +123,7 @@ import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAIL
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -162,7 +168,23 @@ public class ReplicationControlManagerTest {
             this(Optional.empty());
         }
 
+        ReplicationControlTestContext(MetadataVersion metadataVersion) {
+            this(metadataVersion, Optional.empty());
+        }
+
         ReplicationControlTestContext(Optional<CreateTopicPolicy> createTopicPolicy) {
+            this(MetadataVersion.latest(), createTopicPolicy);
+        }
+
+        ReplicationControlTestContext(MetadataVersion metadataVersion, Optional<CreateTopicPolicy> createTopicPolicy) {
+            FeatureControlManager featureControl = new FeatureControlManager.Builder().
+                setSnapshotRegistry(snapshotRegistry).
+                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                    QuorumFeatures.defaultFeatureMap(),
+                    Collections.singletonList(0))).
+                setMetadataVersion(metadataVersion).
+                build();
+
             this.replicationControl = new ReplicationControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
@@ -171,6 +193,7 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setControllerMetrics(metrics).
                 setCreateTopicPolicy(createTopicPolicy).
+                setFeatureControl(featureControl).
                 build();
             clusterControl.activate();
         }
@@ -1796,5 +1819,46 @@ public class ReplicationControlManagerTest {
             new UsableBroker(2, Optional.empty(), false),
             new UsableBroker(3, Optional.empty(), false),
             new UsableBroker(4, Optional.empty(), false))), brokers);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_3_IV2", "IBP_3_3_IV3"})
+    public void testProcessBrokerHeartbeatInControlledShutdown(MetadataVersion metadataVersion) throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext(metadataVersion);
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+
+        Uuid topicId = ctx.createTestTopic("foo", new int[][]{new int[]{0, 1, 2}}).topicId();
+
+        BrokerHeartbeatRequestData heartbeatRequest = new BrokerHeartbeatRequestData()
+            .setBrokerId(0)
+            .setBrokerEpoch(100)
+            .setCurrentMetadataOffset(0)
+            .setWantShutDown(true);
+
+        ControllerResult<BrokerHeartbeatReply> result = ctx.replicationControl
+            .processBrokerHeartbeat(heartbeatRequest, 0);
+
+        List<ApiMessageAndVersion> expectedRecords = new ArrayList<>();
+
+        if (metadataVersion.isAtLeast(IBP_3_3_IV3)) {
+            expectedRecords.add(new ApiMessageAndVersion(
+                new BrokerRegistrationChangeRecord()
+                    .setBrokerEpoch(100)
+                    .setBrokerId(0)
+                    .setInControlledShutdown(BrokerRegistrationInControlledShutdownChange
+                        .IN_CONTROLLED_SHUTDOWN.value()),
+                (short) 1));
+        }
+
+        expectedRecords.add(new ApiMessageAndVersion(
+            new PartitionChangeRecord()
+                .setPartitionId(0)
+                .setTopicId(topicId)
+                .setIsr(asList(1, 2))
+                .setLeader(1),
+            (short) 0));
+
+        assertEquals(expectedRecords, result.records());
     }
 }
