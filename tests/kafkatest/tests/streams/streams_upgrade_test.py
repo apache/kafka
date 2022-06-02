@@ -39,7 +39,7 @@ broker_upgrade_versions = [str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 fk_join_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(LATEST_2_8), 
-                    str(LATEST_3_0), str(LATEST_3_1)]
+                    str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2)]
 
 """
 After each release one should first check that the released version has been uploaded to 
