@@ -422,7 +422,7 @@ public class ClusterControlManager {
             record,
             record.id(),
             record.epoch(),
-            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            BrokerRegistrationFencingChange.FENCE.asBoolean(),
             BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
         );
     }
@@ -432,7 +432,7 @@ public class ClusterControlManager {
             record,
             record.id(),
             record.epoch(),
-            BrokerRegistrationFencingChange.FENCE.asBoolean(),
+            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
             BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
         );
     }
