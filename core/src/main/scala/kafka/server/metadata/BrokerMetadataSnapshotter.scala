@@ -17,14 +17,12 @@
 package kafka.server.metadata
 
 import java.util.concurrent.RejectedExecutionException
-
 import kafka.utils.Logging
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
-
 
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
@@ -75,7 +73,8 @@ class BrokerMetadataSnapshotter(
         extends EventQueue.Event {
     override def run(): Unit = {
       try {
-        image.write(writer.append(_))
+        val metadataVersion = image.features().metadataVersion();
+        image.write(writer.append(_), metadataVersion)
         writer.freeze()
       } finally {
         try {

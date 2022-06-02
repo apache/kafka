@@ -23,6 +23,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -86,11 +87,11 @@ public class BrokerRegistrationTest {
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
-        ApiMessageAndVersion messageAndVersion = registration.toRecord();
+        ApiMessageAndVersion messageAndVersion = registration.toRecord(MetadataVersion.latest());
         BrokerRegistration registration2 = BrokerRegistration.fromRecord(
             (RegisterBrokerRecord) messageAndVersion.message());
         assertEquals(registration, registration2);
-        ApiMessageAndVersion messageAndVersion2 = registration2.toRecord();
+        ApiMessageAndVersion messageAndVersion2 = registration2.toRecord(MetadataVersion.latest());
         assertEquals(messageAndVersion, messageAndVersion2);
     }
 

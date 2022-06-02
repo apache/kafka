@@ -29,6 +29,7 @@ import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -142,7 +143,7 @@ public class ClusterImageTest {
 
     private void testToImageAndBack(ClusterImage image) throws Throwable {
         MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer);
+        image.write(writer, MetadataVersion.latest());
         ClusterDelta delta = new ClusterDelta(ClusterImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
         ClusterImage nextImage = delta.apply();

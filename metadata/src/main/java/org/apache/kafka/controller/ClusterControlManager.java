@@ -54,7 +54,6 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -68,6 +67,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
@@ -151,7 +151,7 @@ public class ClusterControlManager {
                     setSnapshotRegistry(snapshotRegistry).
                     setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
                         QuorumFeatures.defaultFeatureMap(),
-                        Collections.singletonList(0))).
+                        singletonList(0))).
                     setMetadataVersion(MetadataVersion.latest()).
                     build();
             }
@@ -610,16 +610,18 @@ public class ClusterControlManager {
                     setMaxSupportedVersion(featureEntry.getValue().max()).
                     setMinSupportedVersion(featureEntry.getValue().min()));
             }
-            List<ApiMessageAndVersion> batch = new ArrayList<>();
-            batch.add(new ApiMessageAndVersion(new RegisterBrokerRecord().
+            RegisterBrokerRecord record = new RegisterBrokerRecord().
                 setBrokerId(brokerId).
                 setIncarnationId(registration.incarnationId()).
                 setBrokerEpoch(registration.epoch()).
                 setEndPoints(endpoints).
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced()), registerBrokerRecordVersion()));
-            return batch;
+                setFenced(registration.fenced());
+            if (featureControl.metadataVersion().isInControlledShutdownStateSupported()) {
+                record.setInControlledShutdown(registration.inControlledShutdown());
+            }
+            return singletonList(new ApiMessageAndVersion(record, registerBrokerRecordVersion()));
         }
     }
 

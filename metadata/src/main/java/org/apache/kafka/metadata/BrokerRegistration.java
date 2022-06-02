@@ -20,6 +20,7 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
@@ -159,14 +160,18 @@ public class BrokerRegistration {
         return inControlledShutdown;
     }
 
-    public ApiMessageAndVersion toRecord() {
+    public ApiMessageAndVersion toRecord(MetadataVersion metadataVersion) {
         RegisterBrokerRecord registrationRecord = new RegisterBrokerRecord().
             setBrokerId(id).
             setRack(rack.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
-            setFenced(fenced).
-            setInControlledShutdown(inControlledShutdown);
+            setFenced(fenced);
+
+        if (metadataVersion.isInControlledShutdownStateSupported()) {
+            registrationRecord.setInControlledShutdown(inControlledShutdown);
+        }
+
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
             Endpoint endpoint = entry.getValue();
             registrationRecord.endPoints().add(new BrokerEndpoint().
@@ -175,19 +180,23 @@ public class BrokerRegistration {
                 setPort(endpoint.port()).
                 setSecurityProtocol(endpoint.securityProtocol().id));
         }
+
         for (Entry<String, VersionRange> entry : supportedFeatures.entrySet()) {
             registrationRecord.features().add(new BrokerFeature().
                 setName(entry.getKey()).
                 setMinSupportedVersion(entry.getValue().min()).
                 setMaxSupportedVersion(entry.getValue().max()));
         }
-        return new ApiMessageAndVersion(registrationRecord, (short) 0);
+
+        short version = metadataVersion.isInControlledShutdownStateSupported() ?
+            (short) 1 : (short) 0;
+        return new ApiMessageAndVersion(registrationRecord, version);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures,
-            rack, fenced);
+            rack, fenced, inControlledShutdown);
     }
 
     @Override
