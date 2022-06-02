@@ -69,7 +69,7 @@ public class SslConfigs {
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "
-            + "This is optional for client. The currently supported values for kafka are [JKS , PKCS12, PEM].";
+            + "This is optional for client. The default values currently supported by kafka are [JKS, PKCS12, PEM].";
     public static final String DEFAULT_SSL_KEYSTORE_TYPE = "JKS";
 
     public static final String SSL_KEYSTORE_KEY_CONFIG = "ssl.keystore.key";
@@ -99,7 +99,7 @@ public class SslConfigs {
         + "the PEM key specified in `ssl.keystore.key'.";
 
     public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
-    public static final String SSL_TRUSTSTORE_TYPE_DOC = "The file format of the trust store file. The currently supported values for kafka are [JKS , PKCS12, PEM].";
+    public static final String SSL_TRUSTSTORE_TYPE_DOC = "The file format of the trust store file. The default values currently supported by kafka are [JKS, PKCS12, PEM].";
     public static final String DEFAULT_SSL_TRUSTSTORE_TYPE = "JKS";
 
     public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
