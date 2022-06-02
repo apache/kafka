@@ -176,10 +176,12 @@ public class ClientUtils {
                                          final Headers headers) {
         long headerSizeInBytes = 0L;
 
-        for (final Header header: headers.toArray()) {
-            headerSizeInBytes += Utils.utf8(header.key()).length;
-            if (header.value() != null) {
-                headerSizeInBytes += header.value().length;
+        if (headers != null) {
+            for (final Header header : headers.toArray()) {
+                headerSizeInBytes += Utils.utf8(header.key()).length;
+                if (header.value() != null) {
+                    headerSizeInBytes += header.value().length;
+                }
             }
         }
 
