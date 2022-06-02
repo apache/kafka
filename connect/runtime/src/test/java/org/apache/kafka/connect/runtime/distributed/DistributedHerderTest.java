@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
@@ -33,6 +32,7 @@ import org.apache.kafka.connect.runtime.RestartPlan;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.TopicStatus;
@@ -52,6 +52,8 @@ import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -90,16 +92,18 @@ import java.util.concurrent.TimeoutException;
 
 import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
+import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CONNECTOR;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -790,22 +794,261 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testConnectorNameConflictsWithWorkerGroupId() {
         Map<String, String> config = new HashMap<>(CONN2_CONFIG);
         config.put(ConnectorConfig.NAME_CONFIG, "test-group");
 
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
+        SinkConnector connectorMock = PowerMock.createMock(SinkConnector.class);
+
+        PowerMock.replayAll(connectorMock);
 
         // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
         // the consumer group id we would use for this sink
-        Map<String, ConfigValue> validatedConfigs =
-            herder.validateBasicConnectorConfig(connectorMock, ConnectorConfig.configDef(), config);
+        Map<String, ConfigValue> validatedConfigs = herder.validateSinkConnectorConfig(
+                connectorMock, SinkConnectorConfig.configDef(), config);
 
         ConfigValue nameConfig = validatedConfigs.get(ConnectorConfig.NAME_CONFIG);
-        assertNotNull(nameConfig.errorMessages());
-        assertFalse(nameConfig.errorMessages().isEmpty());
+        assertEquals(
+                Collections.singletonList("Consumer group for sink connector named test-group conflicts with Connect worker group connect-test-group"),
+                nameConfig.errorMessages());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testExactlyOnceSourceSupportValidation() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(connectorMock.exactlyOnceSupport(EasyMock.eq(config)))
+                .andReturn(ExactlyOnceSupport.SUPPORTED);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
+        assertEquals(Collections.emptyList(), errors);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testExactlyOnceSourceSupportValidationOnUnsupportedConnector() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(connectorMock.exactlyOnceSupport(EasyMock.eq(config)))
+                .andReturn(ExactlyOnceSupport.UNSUPPORTED);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
+        assertEquals(
+                Collections.singletonList("The connector does not support exactly-once delivery guarantees with the provided configuration."),
+                errors);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testExactlyOnceSourceSupportValidationOnUnknownConnector() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(connectorMock.exactlyOnceSupport(EasyMock.eq(config)))
+                .andReturn(null);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
+        assertFalse(errors.isEmpty());
+        assertTrue(
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("The connector does not implement the API required for preflight validation of exactly-once source support."));
+        assertEquals(1, errors.size());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testExactlyOnceSourceSupportValidationHandlesConnectorErrorsGracefully() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        String errorMessage = "time to add a new unit test :)";
+        EasyMock.expect(connectorMock.exactlyOnceSupport(EasyMock.eq(config)))
+                .andThrow(new NullPointerException(errorMessage));
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
+        assertFalse(errors.isEmpty());
+        assertTrue(
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains(errorMessage));
+        assertEquals(1, errors.size());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testExactlyOnceSourceSupportValidationWhenExactlyOnceNotEnabledOnWorker() {
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(connectorMock.exactlyOnceSupport(EasyMock.eq(config)))
+                .andReturn(ExactlyOnceSupport.SUPPORTED);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
+        assertEquals(
+                Collections.singletonList("This worker does not have exactly-once source support enabled."),
+                errors);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testExactlyOnceSourceSupportValidationHandlesInvalidValuesGracefully() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, "invalid");
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
+        assertFalse(errors.isEmpty());
+        assertTrue(
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("String must be one of (case insensitive): "));
+        assertEquals(1, errors.size());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorTransactionBoundaryValidation() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(connectorMock.canDefineTransactionBoundaries(EasyMock.eq(config)))
+                .andReturn(ConnectorTransactionBoundaries.SUPPORTED);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
+        assertEquals(Collections.emptyList(), errors);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorTransactionBoundaryValidationOnUnsupportedConnector() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(connectorMock.canDefineTransactionBoundaries(EasyMock.eq(config)))
+                .andReturn(ConnectorTransactionBoundaries.UNSUPPORTED);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
+        assertFalse(errors.isEmpty());
+        assertTrue(
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("The connector does not support connector-defined transaction boundaries with the given configuration."));
+        assertEquals(1, errors.size());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorTransactionBoundaryValidationHandlesConnectorErrorsGracefully() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+        String errorMessage = "Wait I thought we tested for this?";
+        EasyMock.expect(connectorMock.canDefineTransactionBoundaries(EasyMock.eq(config)))
+                .andThrow(new ConnectException(errorMessage));
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
+        assertFalse(errors.isEmpty());
+        assertTrue(
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains(errorMessage));
+        assertEquals(1, errors.size());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorTransactionBoundaryValidationHandlesInvalidValuesGracefully() {
+        herder = exactlyOnceHerder();
+        Map<String, String> config = new HashMap<>();
+        config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, "CONNECTOR.toString()");
+
+        SourceConnector connectorMock = PowerMock.createMock(SourceConnector.class);
+
+        PowerMock.replayAll(connectorMock);
+
+        Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
+                connectorMock, SourceConnectorConfig.configDef(), config);
+
+        List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
+        assertFalse(errors.isEmpty());
+        assertTrue(
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("String must be one of (case insensitive): "));
+        assertEquals(1, errors.size());
+
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -2849,6 +3092,16 @@ public class DistributedHerderTest {
     }
 
     private abstract class BogusSourceTask extends SourceTask {
+    }
+
+    private DistributedHerder exactlyOnceHerder() {
+        Map<String, String> config = new HashMap<>(HERDER_CONFIG);
+        config.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        return PowerMock.createPartialMock(DistributedHerder.class,
+                new String[]{"connectorTypeForClass", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig"},
+                new DistributedConfig(config), worker, WORKER_ID, KAFKA_CLUSTER_ID,
+                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time, noneConnectorClientConfigOverridePolicy,
+                new AutoCloseable[0]);
     }
 
 }
