@@ -505,6 +505,7 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(GroupAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
     }
 
+    /*
     @Test
     public void testCoordinatorNotAvailableWithUserAssignedType() {
         subscriptions.assignFromUser(Collections.singleton(t1p));
@@ -519,6 +520,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.coordinatorUnknown());
     }
+    */
 
     @Test
     public void testCoordinatorNotAvailable() {
