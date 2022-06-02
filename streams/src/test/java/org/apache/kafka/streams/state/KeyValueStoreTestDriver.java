@@ -54,6 +54,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.ClientUtils.recordSizeInBytes;
+
 /**
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
  * all entries written to the Kafka topic by the store during {@link KeyValueStore#flush()} are captured for testing purposes.
@@ -232,7 +234,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 final V valueTest = serdes.valueFrom(valueBytes);
 
                 recordFlushed(keyTest, valueTest);
-                return keyBytes.length + valueBytes.length;
+                return recordSizeInBytes(keyBytes, valueBytes, topic, headers);
             }
 
             @Override
