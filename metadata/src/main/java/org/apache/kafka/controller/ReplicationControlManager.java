@@ -653,11 +653,11 @@ public class ReplicationControlManager {
                 validateManualPartitionAssignment(assignment.brokerIds(), replicationFactor);
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
                 List<Integer> isr = assignment.brokerIds().stream().
-                    filter(clusterControl::unfenced).collect(Collectors.toList());
+                    filter(clusterControl::active).collect(Collectors.toList());
                 if (isr.isEmpty()) {
                     return new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
                         "All brokers specified in the manual partition assignment for " +
-                        "partition " + assignment.partitionIndex() + " are fenced.");
+                        "partition " + assignment.partitionIndex() + " are fenced or in controlled shutdown.");
                 }
                 newParts.put(assignment.partitionIndex(), new PartitionRegistration(
                     Replicas.toArray(assignment.brokerIds()), Replicas.toArray(isr),
@@ -683,25 +683,35 @@ public class ReplicationControlManager {
             short replicationFactor = topic.replicationFactor() == -1 ?
                 defaultReplicationFactor : topic.replicationFactor();
             try {
-                List<List<Integer>> replicas = clusterControl.replicaPlacer().place(new PlacementSpec(
+                List<List<Integer>> partitions = clusterControl.replicaPlacer().place(new PlacementSpec(
                     0,
                     numPartitions,
                     replicationFactor
                 ), clusterDescriber);
-                for (int partitionId = 0; partitionId < replicas.size(); partitionId++) {
-                    int[] r = Replicas.toArray(replicas.get(partitionId));
+                for (int partitionId = 0; partitionId < partitions.size(); partitionId++) {
+                    List<Integer> replicas = partitions.get(partitionId);
+                    List<Integer> isr = replicas.stream().
+                        filter(clusterControl::active).collect(Collectors.toList());
+                    // We need to have at least one replica in the ISR.
+                    if (isr.isEmpty()) isr.add(replicas.get(0));
                     newParts.put(partitionId,
-                        new PartitionRegistration(r, r, Replicas.NONE, Replicas.NONE, r[0], LeaderRecoveryState.RECOVERED, 0, 0));
+                        new PartitionRegistration(
+                            Replicas.toArray(replicas),
+                            Replicas.toArray(isr),
+                            Replicas.NONE,
+                            Replicas.NONE,
+                            isr.get(0),
+                            LeaderRecoveryState.RECOVERED,
+                            0,
+                            0));
                 }
             } catch (InvalidReplicationFactorException e) {
                 return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
                     "Unable to replicate the partition " + replicationFactor +
                         " time(s): " + e.getMessage());
             }
-            ApiError error = maybeCheckCreateTopicPolicy(() -> {
-                return new CreateTopicPolicy.RequestMetadata(
-                    topic.name(), numPartitions, replicationFactor, null, creationConfigs);
-            });
+            ApiError error = maybeCheckCreateTopicPolicy(() -> new CreateTopicPolicy.RequestMetadata(
+                topic.name(), numPartitions, replicationFactor, null, creationConfigs));
             if (error.isFailure()) return error;
         }
         Uuid topicId = Uuid.randomUuid();
@@ -938,7 +948,7 @@ public class ReplicationControlManager {
                     partition,
                     topic.id,
                     partitionId,
-                    r -> clusterControl.unfenced(r),
+                    clusterControl::active,
                     featureControl.metadataVersion().isLeaderRecoverySupported());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1268,7 +1278,7 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
             topicId,
             partitionId,
-            r -> clusterControl.unfenced(r),
+            clusterControl::active,
             featureControl.metadataVersion().isLeaderRecoverySupported());
         builder.setElection(election);
         Optional<ApiMessageAndVersion> record = builder.build();
@@ -1383,7 +1393,7 @@ public class ReplicationControlManager {
                 partition,
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
-                r -> clusterControl.unfenced(r),
+                clusterControl::active,
                 featureControl.metadataVersion().isLeaderRecoverySupported()
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
@@ -1471,11 +1481,11 @@ public class ReplicationControlManager {
                     OptionalInt.of(replicationFactor));
                 placements.add(assignment.brokerIds());
                 List<Integer> isr = assignment.brokerIds().stream().
-                    filter(clusterControl::unfenced).collect(Collectors.toList());
+                    filter(clusterControl::active).collect(Collectors.toList());
                 if (isr.isEmpty()) {
                     throw new InvalidReplicaAssignmentException(
                         "All brokers specified in the manual partition assignment for " +
-                            "partition " + (startPartitionId + i) + " are fenced.");
+                            "partition " + (startPartitionId + i) + " are fenced or in controlled shutdown.");
                 }
                 isrs.add(isr);
             }
@@ -1489,12 +1499,15 @@ public class ReplicationControlManager {
         }
         int partitionId = startPartitionId;
         for (int i = 0; i < placements.size(); i++) {
-            List<Integer> placement = placements.get(i);
-            List<Integer> isr = isrs.get(i);
+            List<Integer> replicas = placements.get(i);
+            List<Integer> isr = isrs.get(i).stream().
+                filter(clusterControl::active).collect(Collectors.toList());
+            // We need to have at least one replica in the ISR.
+            if (isr.isEmpty()) isr.add(replicas.get(0));
             records.add(new ApiMessageAndVersion(new PartitionRecord().
                 setPartitionId(partitionId).
                 setTopicId(topicId).
-                setReplicas(placement).
+                setReplicas(replicas).
                 setIsr(isr).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
                 setRemovingReplicas(Collections.emptyList()).
@@ -1569,7 +1582,7 @@ public class ReplicationControlManager {
         // where there is an unclean leader election which chooses a leader from outside
         // the ISR.
         Function<Integer, Boolean> isAcceptableLeader =
-            r -> (r != brokerToRemove) && (r == brokerToAdd || clusterControl.unfenced(r));
+            r -> (r != brokerToRemove) && (r == brokerToAdd || clusterControl.active(r));
 
         while (iterator.hasNext()) {
             TopicIdPartition topicIdPart = iterator.next();
@@ -1696,7 +1709,7 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
             tp.topicId(),
             tp.partitionId(),
-            r -> clusterControl.unfenced(r),
+            clusterControl::active,
             featureControl.metadataVersion().isLeaderRecoverySupported());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1748,7 +1761,7 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
             tp.topicId(),
             tp.partitionId(),
-            r -> clusterControl.unfenced(r),
+            clusterControl::active,
             featureControl.metadataVersion().isLeaderRecoverySupported());
         if (!reassignment.merged().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.merged());
