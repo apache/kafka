@@ -54,6 +54,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.streams.processor.internals.ClientUtils.recordSizeInBytes;
+
 public class RecordCollectorImpl implements RecordCollector {
     private final static String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
 
@@ -99,7 +101,7 @@ public class RecordCollectorImpl implements RecordCollector {
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
-    public <K, V> int send(final String topic,
+    public <K, V> long send(final String topic,
                            final K key,
                            final V value,
                            final Headers headers,
@@ -140,7 +142,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     @Override
-    public <K, V> int send(final String topic,
+    public <K, V> long send(final String topic,
                             final K key,
                             final V value,
                             final Headers headers,
@@ -199,7 +201,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
             }
         });
-        return keyBytes.length + valBytes.length;
+        return recordSizeInBytes(keyBytes.length, valBytes.length, topic, headers);
     }
 
     private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord) {

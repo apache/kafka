@@ -27,6 +27,9 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -165,5 +168,27 @@ public class ClientUtils {
     public static String extractThreadId(final String fullThreadName) {
         final int index = fullThreadName.indexOf("StreamThread-");
         return fullThreadName.substring(index);
+    }
+
+    public static long recordSizeInBytes(final long keyBytes,
+                                         final long valueBytes,
+                                         final String topic,
+                                         final Headers headers) {
+        long headerSizeInBytes = 0L;
+
+        for (final Header header: headers.toArray()) {
+            headerSizeInBytes += Utils.utf8(header.key()).length;
+            if (header.value() != null) {
+                headerSizeInBytes += header.value().length;
+            }
+        }
+
+        return keyBytes +
+            valueBytes +
+            8L + // timestamp
+            8L + // offset
+            Utils.utf8(topic).length +
+            4L + // partition
+            headerSizeInBytes;
     }
 }
