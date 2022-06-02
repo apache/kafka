@@ -170,8 +170,8 @@ public class ClientUtils {
         return fullThreadName.substring(index);
     }
 
-    public static long recordSizeInBytes(final long keyBytes,
-                                         final long valueBytes,
+    public static long recordSizeInBytes(final byte[] keyBytes,
+                                         final byte[] valueBytes,
                                          final String topic,
                                          final Headers headers) {
         long headerSizeInBytes = 0L;
@@ -185,8 +185,11 @@ public class ClientUtils {
             }
         }
 
-        return keyBytes +
-            valueBytes +
+        final long keyLength = keyBytes.length;;
+        final long valueLength = valueBytes == null ? 0 : valueBytes.length;
+
+        return keyLength +
+            valueLength +
             8L + // timestamp
             8L + // offset
             Utils.utf8(topic).length +
