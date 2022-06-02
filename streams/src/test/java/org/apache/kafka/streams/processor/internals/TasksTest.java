@@ -20,50 +20,32 @@ package org.apache.kafka.streams.processor.internals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Assert;
 import org.junit.Test;
 
 public class TasksTest {
-    final static String CLIENT_ID = "client-id";
-    final static String VERSION = "latest";
-    final MockTime time = new MockTime(0);
-
     @Test
     public void testNotPausedTasks() {
-        final LogContext logContext = new LogContext();
-        final Metrics metrics = new Metrics();
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
-
-        final ActiveTaskCreator mockActiveTaskCreater = mock(ActiveTaskCreator.class);
-        final StandbyTaskCreator mockStandbyTaskCreator = mock(StandbyTaskCreator.class);
-
         final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
-        when(topologyMetadata.isPaused(null))
+        final String unnamedTopologyName = null;
+        when(topologyMetadata.isPaused(unnamedTopologyName))
             .thenReturn(false)
             .thenReturn(false).thenReturn(false)
             .thenReturn(true)
             .thenReturn(true).thenReturn(true);
 
-        final Tasks tasks =
-            new Tasks(logContext, topologyMetadata, streamsMetrics, mockActiveTaskCreater, mockStandbyTaskCreator);
+        final Tasks tasks = new Tasks(
+            new LogContext(),
+            topologyMetadata,
+            mock(ActiveTaskCreator.class),
+            mock(StandbyTaskCreator.class)
+        );
 
         final TaskId taskId1 = new TaskId(0, 1);
-        final TopicPartition topicPartition1 = new TopicPartition("topic", 1);
         final TaskId taskId2 = new TaskId(0, 2);
-        final TopicPartition topicPartition2 = new TopicPartition("topic", 2);
-        final Map<TaskId, Set<TopicPartition>> activeTasks = Collections.singletonMap(taskId1,
-            Collections.singleton(topicPartition1));
-        final Map<TaskId, Set<TopicPartition>> standbyTasks = Collections.singletonMap(taskId2,
-            Collections.singleton(topicPartition2));
 
         final StreamTask streamTask = mock(StreamTask.class);
         when(streamTask.isActive()).thenReturn(true);
@@ -80,10 +62,5 @@ public class TasksTest {
 
         Assert.assertEquals(tasks.notPausedActiveTasks().size(), 0);
         Assert.assertEquals(tasks.notPausedTasks().size(), 0);
-    }
-
-    @Test
-    public void testNotPausedTasksWithNamedTopologies() {
-
     }
 }

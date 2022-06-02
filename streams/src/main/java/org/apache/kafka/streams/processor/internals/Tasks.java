@@ -39,7 +39,6 @@ import java.util.stream.Collectors;
 class Tasks {
     private final Logger log;
     private final TopologyMetadata topologyMetadata;
-    private final StreamsMetricsImpl streamsMetrics;
 
     private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
     private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
@@ -69,14 +68,12 @@ class Tasks {
 
     Tasks(final LogContext logContext,
           final TopologyMetadata topologyMetadata,
-          final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
 
         log = logContext.logger(getClass());
 
         this.topologyMetadata = topologyMetadata;
-        this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
     }
