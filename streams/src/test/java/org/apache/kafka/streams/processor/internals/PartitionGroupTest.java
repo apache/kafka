@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -849,8 +848,8 @@ public class PartitionGroupTest {
         long rawRecordsSizeInBytes = 0L;
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             rawRecordsSizeInBytes += recordSizeInBytes(
-                rawRecord.key().length,
-                rawRecord.value().length,
+                rawRecord.key(),
+                rawRecord.value(),
                 rawRecord.topic(),
                 rawRecord.headers()
             );
