@@ -159,9 +159,8 @@ public class ProcessorNodeMetrics {
                                              final String processorNodeId,
                                              final String topic,
                                              final StreamsMetricsImpl streamsMetrics) {
-        final String sensorName = processorNodeId + "-" + BYTES_CONSUMED;
         final Sensor sensor =
-            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorName, RecordingLevel.INFO);
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, BYTES_CONSUMED, RecordingLevel.INFO);
         final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
@@ -179,9 +178,8 @@ public class ProcessorNodeMetrics {
                                                final String processorNodeId,
                                                final String topic,
                                                final StreamsMetricsImpl streamsMetrics) {
-        final String sensorName = processorNodeId + "-" + RECORDS_CONSUMED;
         final Sensor sensor =
-            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorName, RecordingLevel.INFO);
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORDS_CONSUMED, RecordingLevel.INFO);
         final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
@@ -199,9 +197,8 @@ public class ProcessorNodeMetrics {
                                              final String processorNodeId,
                                              final String topic,
                                              final StreamsMetricsImpl streamsMetrics) {
-        final String sensorName = processorNodeId + "-" + BYTES_PRODUCED;
         final Sensor sensor =
-            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorName, RecordingLevel.INFO);
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, BYTES_PRODUCED, RecordingLevel.INFO);
         final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
@@ -219,9 +216,8 @@ public class ProcessorNodeMetrics {
                                                final String processorNodeId,
                                                final String topic,
                                                final StreamsMetricsImpl streamsMetrics) {
-        final String sensorName = processorNodeId + "-" + RECORDS_PRODUCED;
         final Sensor sensor =
-            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorName, RecordingLevel.INFO);
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORDS_PRODUCED, RecordingLevel.INFO);
         final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
