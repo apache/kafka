@@ -795,6 +795,23 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
+    public static void addTotalCountAndSumMetricsToSensor(final Sensor sensor,
+                                                          final String group,
+                                                          final Map<String, String> tags,
+                                                          final String countMetricNamePrefix,
+                                                          final String sumMetricNamePrefix,
+                                                          final String descriptionOfCount,
+                                                          final String descriptionOfTotal) {
+        sensor.add(
+            new MetricName(countMetricNamePrefix + TOTAL_SUFFIX, group, descriptionOfCount, tags),
+            new CumulativeCount()
+        );
+        sensor.add(
+            new MetricName(sumMetricNamePrefix + TOTAL_SUFFIX, group, descriptionOfTotal, tags),
+            new CumulativeSum()
+        );
+    }
+
     public static void maybeMeasureLatency(final Runnable actionToMeasure,
                                            final Time time,
                                            final Sensor sensor) {

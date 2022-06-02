@@ -33,8 +33,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     private final TopicNameExtractor<KIn, VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
 
-    private Sensor bytesProducedSensor;
-    private Sensor recordsProducedSensor;
+    private Sensor producedSensor;
 
     private InternalProcessorContext<Void, Void> context;
 
@@ -62,14 +61,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     @Override
     public void init(final InternalProcessorContext<Void, Void> context) {
         final String threadName = Thread.currentThread().getName();
-        bytesProducedSensor = ProcessorNodeMetrics.bytesProducedSensor(
-            threadName,
-            context.taskId().toString(),
-            name(),
-            context.topic(),
-            context.metrics()
-        );
-        recordsProducedSensor = ProcessorNodeMetrics.recordsProducedSensor(
+        producedSensor = ProcessorNodeMetrics.producedSensor(
             threadName,
             context.taskId().toString(),
             name(),
@@ -106,8 +98,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         final long bytesProduced =
             collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
 
-        bytesProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
-        recordsProducedSensor.record(1, context.currentSystemTimeMs());
+        producedSensor.record(bytesProduced, context.currentSystemTimeMs());
     }
 
     /**

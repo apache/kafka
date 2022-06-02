@@ -53,6 +53,8 @@ import java.util.Optional;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.recordSizeInBytes;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -846,19 +848,12 @@ public class PartitionGroupTest {
     private long getBytesBufferedForRawRecords(final List<ConsumerRecord<byte[], byte[]>> rawRecords) {
         long rawRecordsSizeInBytes = 0L;
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
-            long headerSizeInBytes = 0L;
-
-            for (final Header header: rawRecord.headers().toArray()) {
-                headerSizeInBytes += header.key().getBytes().length + header.value().length;
-            }
-
-            rawRecordsSizeInBytes += rawRecord.serializedKeySize() +
-                    rawRecord.serializedValueSize() +
-                    8L + // timestamp
-                    8L + // offset
-                    rawRecord.topic().getBytes().length +
-                    4L + // partition
-                    headerSizeInBytes;
+            rawRecordsSizeInBytes += recordSizeInBytes(
+                rawRecord.key().length,
+                rawRecord.value().length,
+                rawRecord.topic(),
+                rawRecord.headers()
+            );
         }
         return rawRecordsSizeInBytes;
     }
