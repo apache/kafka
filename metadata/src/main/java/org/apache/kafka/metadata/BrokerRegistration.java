@@ -36,9 +36,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKER_RECORD;
-
-
 /**
  * An immutable class which represents broker registrations.
  */
@@ -173,8 +170,7 @@ public class BrokerRegistration {
                 setMinSupportedVersion(entry.getValue().min()).
                 setMaxSupportedVersion(entry.getValue().max()));
         }
-        return new ApiMessageAndVersion(registrationRecord,
-                REGISTER_BROKER_RECORD.highestSupportedVersion());
+        return new ApiMessageAndVersion(registrationRecord, (short) 0);
     }
 
     @Override
