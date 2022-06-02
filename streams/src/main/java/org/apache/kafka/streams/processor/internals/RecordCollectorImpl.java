@@ -102,13 +102,13 @@ public class RecordCollectorImpl implements RecordCollector {
      */
     @Override
     public <K, V> long send(final String topic,
-                           final K key,
-                           final V value,
-                           final Headers headers,
-                           final Long timestamp,
-                           final Serializer<K> keySerializer,
-                           final Serializer<V> valueSerializer,
-                           final StreamPartitioner<? super K, ? super V> partitioner) {
+                            final K key,
+                            final V value,
+                            final Headers headers,
+                            final Long timestamp,
+                            final Serializer<K> keySerializer,
+                            final Serializer<V> valueSerializer,
+                            final StreamPartitioner<? super K, ? super V> partitioner) {
         final Integer partition;
 
         if (partitioner != null) {
