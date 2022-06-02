@@ -23,6 +23,9 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerializer;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerializer;
 
@@ -33,7 +36,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     private final TopicNameExtractor<KIn, VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
 
-    private Sensor producedSensor;
+    private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
     private InternalProcessorContext<Void, Void> context;
 
@@ -60,15 +63,6 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
     @Override
     public void init(final InternalProcessorContext<Void, Void> context) {
-        final String threadName = Thread.currentThread().getName();
-        producedSensor = ProcessorNodeMetrics.producedSensor(
-            threadName,
-            context.taskId().toString(),
-            name(),
-            topicExtractor.extract(null, null, null),
-            context.metrics()
-        );
-
         super.init(context);
         this.context = context;
         keySerializer = prepareKeySerializer(keySerializer, context, this.name());
@@ -98,7 +92,16 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         final long bytesProduced =
             collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
 
-        producedSensor.record(bytesProduced, context.currentSystemTimeMs());
+        producedSensorByTopic.putIfAbsent(
+            topic,
+            ProcessorNodeMetrics.producedSensor(
+                Thread.currentThread().getName(),
+                context.taskId().toString(),
+                name(),
+                topicExtractor.extract(null, null, null),
+                context.metrics()
+        ));
+        producedSensorByTopic.get(topic).record(bytesProduced, context.currentSystemTimeMs());
     }
 
     /**
