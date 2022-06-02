@@ -185,7 +185,7 @@ public class ClientUtils {
             }
         }
 
-        final long keyLength = keyBytes.length;;
+        final long keyLength = keyBytes.length;
         final long valueLength = valueBytes == null ? 0 : valueBytes.length;
 
         return keyLength +
