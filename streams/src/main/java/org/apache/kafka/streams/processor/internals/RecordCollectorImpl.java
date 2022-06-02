@@ -201,7 +201,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
             }
         });
-        return recordSizeInBytes(keyBytes.length, valBytes == null ? 0 : valBytes.length, topic, headers);
+        return recordSizeInBytes(keyBytes == null ? 0 : keyBytes.length, valBytes == null ? 0 : valBytes.length, topic, headers);
     }
 
     private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord) {
