@@ -382,12 +382,11 @@
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
   <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</code></pre>
   When you execute this script you will see the throttle engage:
-  <pre class="line-numbers"><code class="language-bash">  The throttle limit was set to 50000000 B/s
+  <pre class="line-numbers"><code class="language-bash">  The inter-broker throttle limit was set to 50000000 B/s
   Successfully started reassignment of partitions.</code></pre>
-  <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command passing the same reassignment-json-file:</p>
-  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
-  There is an existing assignment running.
-  The throttle limit was set to 700000000 B/s</code></pre>
+  <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command with the --additional option passing the same reassignment-json-file:</p>
+  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --additional --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
+  The inter-broker throttle limit was set to 700000000 B/s</code></pre>
 
   <p>Once the rebalance completes the administrator can check the status of the rebalance using the --verify option.
       If the rebalance has completed, the throttle will be removed via the --verify command. It is important that
