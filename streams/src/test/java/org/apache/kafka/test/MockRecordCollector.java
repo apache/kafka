@@ -39,14 +39,14 @@ public class MockRecordCollector implements RecordCollector {
     private boolean flushed = false;
 
     @Override
-    public <K, V> int send(final String topic,
-                           final K key,
-                           final V value,
-                           final Headers headers,
-                           final Integer partition,
-                           final Long timestamp,
-                           final Serializer<K> keySerializer,
-                           final Serializer<V> valueSerializer) {
+    public <K, V> long send(final String topic,
+                            final K key,
+                            final V value,
+                            final Headers headers,
+                            final Integer partition,
+                            final Long timestamp,
+                            final Serializer<K> keySerializer,
+                            final Serializer<V> valueSerializer) {
         collected.add(new ProducerRecord<>(topic,
                                            partition,
                                            timestamp,
@@ -57,14 +57,14 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public <K, V> int send(final String topic,
-                           final K key,
-                           final V value,
-                           final Headers headers,
-                           final Long timestamp,
-                           final Serializer<K> keySerializer,
-                           final Serializer<V> valueSerializer,
-                           final StreamPartitioner<? super K, ? super V> partitioner) {
+    public <K, V> long send(final String topic,
+                            final K key,
+                            final V value,
+                            final Headers headers,
+                            final Long timestamp,
+                            final Serializer<K> keySerializer,
+                            final Serializer<V> valueSerializer,
+                            final StreamPartitioner<? super K, ? super V> partitioner) {
         collected.add(new ProducerRecord<>(topic,
             0, // partition id
             timestamp,

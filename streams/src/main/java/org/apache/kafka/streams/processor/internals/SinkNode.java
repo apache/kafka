@@ -103,7 +103,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
         final String topic = topicExtractor.extract(key, value, contextForExtraction);
 
-        final int bytesProduced =
+        final long bytesProduced =
             collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
 
         bytesProducedSensor.record(bytesProduced, context.currentSystemTimeMs());

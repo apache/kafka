@@ -18,10 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
@@ -31,6 +29,8 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.recordSizeInBytes;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -124,22 +124,7 @@ public class RecordQueue {
     }
 
     private long sizeInBytes(final ConsumerRecord<byte[], byte[]> record) {
-        long headerSizeInBytes = 0L;
-
-        for (final Header header: record.headers().toArray()) {
-            headerSizeInBytes += Utils.utf8(header.key()).length;
-            if (header.value() != null) {
-                headerSizeInBytes += header.value().length;
-            }
-        }
-
-        return record.serializedKeySize() +
-                record.serializedValueSize() +
-                8L + // timestamp
-                8L + // offset
-                Utils.utf8(record.topic()).length +
-                4L + // partition
-                headerSizeInBytes;
+        return recordSizeInBytes(record.key().length, record.value().length, record.topic(), record.headers());
     }
 
     /**

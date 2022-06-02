@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_LATENCY_DESCRIPTION;
@@ -160,7 +161,7 @@ public class ProcessorNodeMetrics {
                                              final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, BYTES_CONSUMED, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
             sensor,
@@ -179,7 +180,7 @@ public class ProcessorNodeMetrics {
                                                final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORDS_CONSUMED, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
             sensor,
@@ -198,7 +199,7 @@ public class ProcessorNodeMetrics {
                                              final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, BYTES_PRODUCED, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
             sensor,
@@ -217,7 +218,7 @@ public class ProcessorNodeMetrics {
                                                final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORDS_PRODUCED, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final Map<String, String> tagMap = new HashMap<>(streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId));
         tagMap.put("topic", topic);
         addSumMetricToSensor(
             sensor,
