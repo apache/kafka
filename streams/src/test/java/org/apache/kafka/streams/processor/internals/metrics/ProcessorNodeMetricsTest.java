@@ -117,90 +117,59 @@ public class ProcessorNodeMetricsTest {
     }
 
     @Test
-    public void shouldGetBytesConsumedSensor() {
-        final String metricNamePrefix = "bytes-consumed";
-        final String descriptionOfTotal = "The total number of bytes consumed from this topic";
-        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.INFO))
+    public void shouldGetRecordsAndBytesConsumedSensor() {
+        final String recordsMetricNamePrefix = "records-consumed";
+        final String bytesMetricNamePrefix = "bytes-consumed";
+        final String descriptionOfRecordsTotal = "The total number of records consumed from this topic";
+        final String descriptionOfBytesTotal = "The total number of bytes consumed from this topic";
+        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, recordsMetricNamePrefix, RecordingLevel.INFO))
+            .thenReturn(expectedSensor);
+        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, bytesMetricNamePrefix, RecordingLevel.INFO))
             .thenReturn(expectedSensor);
         when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
 
-        final Map<String, String> bytesConsumedTagMap = new HashMap<>(tagMap);
-        bytesConsumedTagMap.put("topic", TOPIC_NAME);
-        StreamsMetricsImpl.addSumMetricToSensor(
+        final Map<String, String> consumedTagMap = new HashMap<>(tagMap);
+        consumedTagMap.put("topic", TOPIC_NAME);
+        StreamsMetricsImpl.addTotalCountAndSumMetricsToSensor(
             expectedSensor,
             PROCESSOR_NODE_LEVEL_GROUP,
-            bytesConsumedTagMap,
-            metricNamePrefix,
-            descriptionOfTotal
+            consumedTagMap,
+            recordsMetricNamePrefix,
+            bytesMetricNamePrefix,
+            descriptionOfRecordsTotal,
+            descriptionOfBytesTotal
         );
         verifySensor(
-            () -> ProcessorNodeMetrics.bytesConsumedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics)
+            () -> ProcessorNodeMetrics.consumedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics)
         );
     }
 
     @Test
-    public void shouldGetRecordsConsumedSensor() {
-        final String metricNamePrefix = "records-consumed";
-        final String descriptionOfTotal = "The total number of records consumed from this topic";
-        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.INFO))
+    public void shouldGetRecordsAndBytesProducedSensor() {
+        final String recordsMetricNamePrefix = "records-produced";
+        final String bytesMetricNamePrefix = "bytes-produced";
+        final String descriptionOfRecordsTotal = "The total number of records produced to this topic";
+        final String descriptionOfBytesTotal = "The total number of bytes produced to this topic";
+
+        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, recordsMetricNamePrefix, RecordingLevel.INFO))
+            .thenReturn(expectedSensor);
+        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, bytesMetricNamePrefix, RecordingLevel.INFO))
             .thenReturn(expectedSensor);
         when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
 
-        final Map<String, String> recordsConsumedTagMap = new HashMap<>(tagMap);
-        recordsConsumedTagMap.put("topic", TOPIC_NAME);
-        StreamsMetricsImpl.addSumMetricToSensor(
+        final Map<String, String> producedTagMap = new HashMap<>(tagMap);
+        producedTagMap.put("topic", TOPIC_NAME);
+        StreamsMetricsImpl.addTotalCountAndSumMetricsToSensor(
             expectedSensor,
             PROCESSOR_NODE_LEVEL_GROUP,
-            recordsConsumedTagMap,
-            metricNamePrefix,
-            descriptionOfTotal
+            producedTagMap,
+            recordsMetricNamePrefix,
+            bytesMetricNamePrefix,
+            descriptionOfRecordsTotal,
+            descriptionOfBytesTotal
         );
         verifySensor(
-            () -> ProcessorNodeMetrics.recordsConsumedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics)
-        );
-    }
-
-    @Test
-    public void shouldGetBytesProducedSensor() {
-        final String metricNamePrefix = "bytes-produced";
-        final String descriptionOfTotal = "The total number of bytes produced to this topic";
-        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.INFO))
-            .thenReturn(expectedSensor);
-        when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
-
-        final Map<String, String> bytesProducedTagMap = new HashMap<>(tagMap);
-        bytesProducedTagMap.put("topic", TOPIC_NAME);
-        StreamsMetricsImpl.addSumMetricToSensor(
-            expectedSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            bytesProducedTagMap,
-            metricNamePrefix,
-            descriptionOfTotal
-        );
-        verifySensor(
-            () -> ProcessorNodeMetrics.bytesProducedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics)
-        );
-    }
-
-    @Test
-    public void shouldGetRecordsProducedSensor() {
-        final String metricNamePrefix = "records-produced";
-        final String descriptionOfTotal = "The total number of records produced to this topic";
-        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.INFO))
-            .thenReturn(expectedSensor);
-        when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
-
-        final Map<String, String> recordsProducedTagMap = new HashMap<>(tagMap);
-        recordsProducedTagMap.put("topic", TOPIC_NAME);
-        StreamsMetricsImpl.addSumMetricToSensor(
-            expectedSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            recordsProducedTagMap,
-            metricNamePrefix,
-            descriptionOfTotal
-        );
-        verifySensor(
-            () -> ProcessorNodeMetrics.recordsProducedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics)
+            () -> ProcessorNodeMetrics.producedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics)
         );
     }
 

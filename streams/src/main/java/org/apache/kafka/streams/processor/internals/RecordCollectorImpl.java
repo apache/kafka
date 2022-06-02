@@ -124,7 +124,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + fatal.toString(),
+                    "' for task " + taskId + " due to " + fatal,
                     fatal
                 );
             }
@@ -175,7 +175,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     valueClass),
                 exception);
         } catch (final RuntimeException exception) {
-            final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
+            final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
             throw new StreamsException(errorMessage, exception);
         }
 

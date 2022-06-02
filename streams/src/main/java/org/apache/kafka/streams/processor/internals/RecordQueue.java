@@ -53,8 +53,7 @@ public class RecordQueue {
     private long partitionTime = UNKNOWN;
 
     private final Sensor droppedRecordsSensor;
-    private final Sensor bytesConsumedSensor;
-    private final Sensor recordsConsumedSensor;
+    private final Sensor consumedSensor;
     private long totalBytesBuffered;
     private long headRecordSizeInBytes;
 
@@ -76,14 +75,7 @@ public class RecordQueue {
             processorContext.taskId().toString(),
             processorContext.metrics()
         );
-        bytesConsumedSensor = ProcessorNodeMetrics.bytesConsumedSensor(
-            threadName,
-            processorContext.taskId().toString(),
-            source.name(),
-            partition.topic(),
-            processorContext.metrics()
-        );
-        recordsConsumedSensor = ProcessorNodeMetrics.recordsConsumedSensor(
+        consumedSensor = ProcessorNodeMetrics.consumedSensor(
             threadName,
             processorContext.taskId().toString(),
             source.name(),
@@ -152,8 +144,7 @@ public class RecordQueue {
     public StampedRecord poll(final long wallClockTime) {
         final StampedRecord recordToReturn = headRecord;
 
-        bytesConsumedSensor.record(headRecordSizeInBytes, wallClockTime);
-        recordsConsumedSensor.record(1, wallClockTime);
+        consumedSensor.record(headRecordSizeInBytes, wallClockTime);
 
         totalBytesBuffered -= headRecordSizeInBytes;
         headRecord = null;
