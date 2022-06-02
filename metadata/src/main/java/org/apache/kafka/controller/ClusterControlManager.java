@@ -476,11 +476,10 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             BrokerRegistration nextRegistration = curRegistration;
-            if (fencingChange != BrokerRegistrationFencingChange.NONE) {
-                nextRegistration = nextRegistration.cloneWithFencing(fencingChange.asBoolean().get());
-            }
-            if (inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
-                nextRegistration = nextRegistration.cloneWithInControlledShutdown(inControlledShutdownChange.asBoolean().get());
+            if (fencingChange != BrokerRegistrationFencingChange.NONE
+                || inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
+                nextRegistration = nextRegistration.cloneWith(
+                    fencingChange.asBoolean(), inControlledShutdownChange.asBoolean());
             }
             if (!curRegistration.equals(nextRegistration)) {
                 brokerRegistrations.put(brokerId, nextRegistration);

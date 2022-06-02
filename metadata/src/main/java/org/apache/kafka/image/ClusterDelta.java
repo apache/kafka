@@ -23,6 +23,8 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
@@ -102,10 +104,34 @@ public final class ClusterDelta {
     public void replay(BrokerRegistrationChangeRecord record) {
         BrokerRegistration broker =
             getBrokerOrThrow(record.brokerId(), record.brokerEpoch(), "change");
-        if (record.fenced() < 0) {
-            changedBrokers.put(record.brokerId(), Optional.of(broker.cloneWithFencing(false)));
-        } else if (record.fenced() > 0) {
-            changedBrokers.put(record.brokerId(), Optional.of(broker.cloneWithFencing(true)));
+        Optional<BrokerRegistrationFencingChange> fencingChange =
+            BrokerRegistrationFencingChange.fromValue(record.fenced());
+        if (!fencingChange.isPresent()) {
+            throw new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                "value for fenced field: %d", record.toString(), record.fenced()));
+        }
+        Optional<BrokerRegistrationInControlledShutdownChange> inControlledShutdownChange =
+            BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown());
+        if (!inControlledShutdownChange.isPresent()) {
+            throw new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                "value for inControlledShutdown field: %d", record.toString(), record.inControlledShutdown()));
+        }
+
+        replayRegistration(record.brokerId(), broker, fencingChange.get(), inControlledShutdownChange.get());
+    }
+
+    private void replayRegistration(
+        int brokerId,
+        BrokerRegistration broker,
+        BrokerRegistrationFencingChange fencingChange,
+        BrokerRegistrationInControlledShutdownChange inControlledShutdownChange
+    ) {
+        if (fencingChange != BrokerRegistrationFencingChange.NONE
+            || inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
+            changedBrokers.put(brokerId, Optional.of(broker.cloneWith(
+                fencingChange.asBoolean(),
+                inControlledShutdownChange.asBoolean()
+            )));
         }
     }
 

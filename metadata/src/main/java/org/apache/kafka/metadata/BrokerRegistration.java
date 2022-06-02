@@ -231,8 +231,19 @@ public class BrokerRegistration {
             supportedFeatures, rack, fencing, inControlledShutdown);
     }
 
-    public BrokerRegistration cloneWithInControlledShutdown(boolean inControlledShutdown) {
-        return new BrokerRegistration(id, epoch, incarnationId, listeners,
-            supportedFeatures, rack, fenced, inControlledShutdown);
+    public BrokerRegistration cloneWith(
+        Optional<Boolean> fencingChange,
+        Optional<Boolean> inControlledShutdownChange
+    ) {
+        return new BrokerRegistration(
+            id,
+            epoch,
+            incarnationId,
+            listeners,
+            supportedFeatures,
+            rack,
+            fencingChange.orElse(fenced),
+            inControlledShutdownChange.orElse(inControlledShutdown)
+        );
     }
 }

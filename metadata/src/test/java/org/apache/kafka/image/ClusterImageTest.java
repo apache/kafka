@@ -19,11 +19,13 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -87,6 +89,10 @@ public class ClusterImageTest {
             setId(0).setEpoch(1000), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FenceBrokerRecord().
             setId(1).setEpoch(1001), FENCE_BROKER_RECORD.highestSupportedVersion()));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+            setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
+                BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()),
+            FENCE_BROKER_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(2).setBrokerEpoch(123),
             UNREGISTER_BROKER_RECORD.highestSupportedVersion()));
@@ -102,7 +108,7 @@ public class ClusterImageTest {
             Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
             false,
-            false));
+            true));
         map2.put(1, new BrokerRegistration(1,
             1001,
             Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
