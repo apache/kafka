@@ -27,7 +27,6 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiV
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
-import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -37,7 +36,6 @@ import scala.reflect.ClassTag
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")
 class DescribeQuorumRequestTest(cluster: ClusterInstance) {
-  val log = LoggerFactory.getLogger(classOf[DescribeQuorumRequestTest])
 
   @ClusterTest(clusterType = Type.ZK)
   def testDescribeQuorumNotSupportedByZkBrokers(): Unit = {
@@ -56,7 +54,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testDescribeQuorum(): Unit = {
-    for (version <- ApiKeys.DESCRIBE_QUORUM.oldestVersion to ApiKeys.DESCRIBE_QUORUM.latestVersion) {
+    for (version <- ApiKeys.DESCRIBE_QUORUM.allVersions.asScala) {
       val request = new DescribeQuorumRequest.Builder(
         singletonRequest(KafkaRaftServer.MetadataPartition)
       ).build(version.asInstanceOf[Short])
@@ -79,19 +77,19 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
       val leaderState = partitionData.currentVoters.asScala.find(_.replicaId == leaderId)
         .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
-        assertTrue(leaderState.logEndOffset > 0)
+      assertTrue(leaderState.logEndOffset > 0)
 
         val voterData = partitionData.currentVoters().asScala
         val observerData = partitionData.observers().asScala
         if (version == 0) {
-          voterData.foreach( state => {
-            assertTrue(state.lastFetchTimestamp() == -1)
-            assertTrue(state.lastCaughtUpTimestamp() == -1)
-          })
-          observerData.foreach( state => {
-            assertTrue(state.lastFetchTimestamp() == -1)
-            assertTrue(state.lastCaughtUpTimestamp() == -1)
-          })
+          voterData.foreach { state =>
+            assertEquals(-1, state.lastFetchTimestamp())
+            assertEquals(-1, state.lastCaughtUpTimestamp())
+          }
+          observerData.foreach { state =>
+            assertEquals(-1, state.lastFetchTimestamp())
+            assertEquals(-1, state.lastCaughtUpTimestamp())
+          }
         }
     }
   }

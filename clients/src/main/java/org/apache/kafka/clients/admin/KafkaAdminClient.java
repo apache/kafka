@@ -135,7 +135,6 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
-import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
@@ -274,7 +273,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_NAME;
 import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
@@ -4363,27 +4361,45 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             DescribeQuorumRequest.Builder createRequest(int timeoutMs) {
-                DescribeQuorumRequestData data = new DescribeQuorumRequestData()
-                        .setTopics(singletonList(new DescribeQuorumRequestData.TopicData()
-                                .setPartitions(singletonList(new DescribeQuorumRequestData.PartitionData()
-                                        .setPartitionIndex(0)))
-                                .setTopicName(METADATA_TOPIC_NAME)));
-                return new Builder(data);
+                return new Builder(DescribeQuorumRequest.singletonRequest(
+                        new TopicPartition(METADATA_TOPIC_NAME, METADATA_TOPIC_PARTITION.partition())));
             }
 
             @Override
             void handleResponse(AbstractResponse response) {
                 final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
-                if (quorumResponse.data().errorCode() == Errors.NONE.code()) {
-                    DescribeQuorumResponseData.PartitionData partition = quorumResponse.data().topics().
-                            get(0).partitions().get(METADATA_TOPIC_PARTITION.partition());
-                    if (partition.errorCode() == Errors.NONE.code()) {
-                        future.complete(createQuorumResult(quorumResponse));
-                    } else {
-                        future.completeExceptionally(Errors.forCode(partition.errorCode()).exception());
+                try {
+                    if (quorumResponse.data().errorCode() != Errors.NONE.code()) {
+                        throw Errors.forCode(quorumResponse.data().errorCode()).exception();
                     }
-                } else {
-                    future.completeExceptionally(Errors.forCode(quorumResponse.data().errorCode()).exception());
+                    if (quorumResponse.data().topics().size() > 1) {
+                        log.error("DescribeMetadataQuorum received {} topics when 1 was expected",
+                                quorumResponse.data().topics().size());
+                        throw new UnknownServerException();
+                    }
+                    DescribeQuorumResponseData.TopicData topic = quorumResponse.data().topics().get(0);
+                    if (!topic.topicName().equals(METADATA_TOPIC_NAME)) {
+                        log.error("DescribeMetadataQuorum received a topic with name {} when {} was expected",
+                                topic.topicName(), METADATA_TOPIC_NAME);
+                        throw new UnknownServerException();
+                    }
+                    if (topic.partitions().size() > 1) {
+                        log.error("DescribeMetadataQuorum received a topic {} with {} partitions when 1 was expected",
+                                topic.topicName(), topic.partitions().size());
+                        throw new UnknownServerException();
+                    }
+                    DescribeQuorumResponseData.PartitionData partition = topic.partitions().get(0);
+                    if (partition.partitionIndex() != METADATA_TOPIC_PARTITION.partition()) {
+                        log.error("DescribeMetadataQuorum received a single partition with index {} when {} was expected",
+                                partition.partitionIndex(), METADATA_TOPIC_PARTITION.partition());
+                        throw new UnknownServerException();
+                    }
+                    if (partition.errorCode() != Errors.NONE.code()) {
+                        throw Errors.forCode(partition.errorCode()).exception();
+                    }
+                    future.complete(createQuorumResult(quorumResponse));
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
                 }
             }
 
