@@ -184,18 +184,18 @@ public class ProcessorNodeMetricsTest {
 
     @Test
     public void shouldGetRecordsProducedSensor() {
-        final String metricNamePrefix = "bytes-produced";
+        final String metricNamePrefix = "records-produced";
         final String descriptionOfTotal = "The total number of records produced to this topic";
         when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.INFO))
             .thenReturn(expectedSensor);
         when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
 
-        final Map<String, String> bytesRecordsTagMap = new HashMap<>(tagMap);
-        bytesRecordsTagMap.put("topic", TOPIC_NAME);
+        final Map<String, String> recordsProducedTagMap = new HashMap<>(tagMap);
+        recordsProducedTagMap.put("topic", TOPIC_NAME);
         StreamsMetricsImpl.addSumMetricToSensor(
             expectedSensor,
             PROCESSOR_NODE_LEVEL_GROUP,
-            bytesRecordsTagMap,
+            recordsProducedTagMap,
             metricNamePrefix,
             descriptionOfTotal
         );
