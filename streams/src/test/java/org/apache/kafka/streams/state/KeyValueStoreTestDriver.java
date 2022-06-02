@@ -234,7 +234,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 final V valueTest = serdes.valueFrom(valueBytes);
 
                 recordFlushed(keyTest, valueTest);
-                return recordSizeInBytes(keyBytes.length, valueBytes.length, topic, headers);
+                return recordSizeInBytes(keyBytes.length, valueBytes == null ? 0 : valueBytes.length, topic, headers);
             }
 
             @Override
