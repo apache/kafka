@@ -116,7 +116,7 @@ public class RecordQueue {
     }
 
     private long sizeInBytes(final ConsumerRecord<byte[], byte[]> record) {
-        return recordSizeInBytes(record.key(), record.value(), record.topic(), record.headers());
+        return recordSizeInBytes(record.serializedKeySize(), record.serializedValueSize(), record.topic(), record.headers());
     }
 
     /**

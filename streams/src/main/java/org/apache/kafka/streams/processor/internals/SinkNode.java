@@ -65,7 +65,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
             threadName,
             context.taskId().toString(),
             name(),
-            context.topic(),
+            topicExtractor.extract(null, null, null),
             context.metrics()
         );
 
