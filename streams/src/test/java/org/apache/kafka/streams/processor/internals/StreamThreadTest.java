@@ -16,7 +16,60 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.easymock.EasyMock.anyInt;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.niceMock;
+import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.startsWith;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.isA;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
+import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -84,66 +137,11 @@ import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
-import java.util.function.BiConsumer;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
-
-import java.io.File;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Stream;
-
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonMap;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
-import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyInt;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.verify;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.startsWith;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.isA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class StreamThreadTest {
 
@@ -1726,6 +1724,12 @@ public class StreamThreadTest {
                 ("K" + i).getBytes(),
                 ("V" + i).getBytes()));
             restoreConsumer.addRecord(new ConsumerRecord<>(
+                changelogName1,
+                2,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+            restoreConsumer.addRecord(new ConsumerRecord<>(
                 changelogName2,
                 1,
                 i,
@@ -1737,6 +1741,7 @@ public class StreamThreadTest {
     private void setupThread(final String storeName1, final String storeName2,
         final String changelogName1, final String changelogName2, final StreamThread thread,
         final MockConsumer<byte[], byte[]> restoreConsumer) throws IOException {
+        final TopicPartition activePartition = new TopicPartition(changelogName1, 2);
         final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
 
@@ -1753,6 +1758,11 @@ public class StreamThreadTest {
             Collections.singletonList(new PartitionInfo(changelogName1, 1, null, new Node[0], new Node[0]))
         );
 
+        restoreConsumer.updateEndOffsets(Collections.singletonMap(activePartition, 10L));
+        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
+        ((MockAdminClient) (thread.adminClient())).updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
+        ((MockAdminClient) (thread.adminClient())).updateEndOffsets(Collections.singletonMap(activePartition, 10L));
+
         restoreConsumer.updateEndOffsets(Collections.singletonMap(partition1, 10L));
         restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition1, 0L));
         restoreConsumer.updateEndOffsets(Collections.singletonMap(partition2, 10L));
@@ -1764,13 +1774,16 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+
+        activeTasks.put(task2, Collections.singleton(t1p2));
 
         // assign single partition
         standbyTasks.put(task1, Collections.singleton(t1p1));
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
-        thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
+        thread.taskManager().handleAssignment(activeTasks, standbyTasks);
         thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds(), null);
 
         thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
@@ -1790,13 +1803,18 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
+        final StreamTask activeTask1 = activeTask(thread.taskManager(), t1p2);
         final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
         final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
+        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.getStore(storeName1);
+
         final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
         final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+
+        assertEquals(0L, activeStore.approximateNumEntries());
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
 
@@ -1806,6 +1824,8 @@ public class StreamThreadTest {
         // Simulate pause
         thread.taskManager().topologyMetadata().pauseTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
         thread.runOnce();
+
+        assertEquals(0L, activeStore.approximateNumEntries());
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
 
@@ -1813,6 +1833,7 @@ public class StreamThreadTest {
         thread.taskManager().topologyMetadata().resumeTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
         thread.runOnce();
 
+        assertEquals(10L, activeStore.approximateNumEntries());
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(4L, store2.approximateNumEntries());
 
@@ -3166,6 +3187,15 @@ public class StreamThreadTest {
             Optional.empty()));
     }
 
+    StreamTask activeTask(final TaskManager taskManager, final TopicPartition partition) {
+        final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> t.isActive());
+        for (final Task task : (Iterable<Task>) standbys::iterator) {
+            if (task.inputPartitions().contains(partition)) {
+                return (StreamTask) task;
+            }
+        }
+        return null;
+    }
     StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {
         final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> !t.isActive());
         for (final Task task : (Iterable<Task>) standbys::iterator) {
