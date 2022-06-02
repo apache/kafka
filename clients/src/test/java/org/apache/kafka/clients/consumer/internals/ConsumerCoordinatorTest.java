@@ -505,7 +505,6 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(GroupAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
     }
 
-    /*
     @Test
     public void testCoordinatorNotAvailableWithUserAssignedType() {
         subscriptions.assignFromUser(Collections.singleton(t1p));
@@ -515,12 +514,52 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(0));
         assertTrue(coordinator.coordinatorUnknown());
 
-        // should find an available node in next find coordinator request
+        // should not try to find coordinator since we are in manual assignment
+        // hence the prepared response should not be returned
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+        assertTrue(coordinator.coordinatorUnknown());
+    }
+
+    @Test
+    public void testAutoCommitAsyncWithUserAssignedType() {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)
+        ) {
+            subscriptions.assignFromUser(Collections.singleton(t1p));
+            // should mark coordinator unknown after COORDINATOR_NOT_AVAILABLE error
+            client.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+            // set timeout to 0 because we don't want to retry after the error
+            coordinator.poll(time.timer(0));
+            assertTrue(coordinator.coordinatorUnknown());
+
+            // elapse auto commit interval and set committable position
+            time.sleep(autoCommitIntervalMs);
+            subscriptions.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
+
+            // should try to find coordinator since we are auto committing
+            client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+            coordinator.poll(time.timer(Long.MAX_VALUE));
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testCommitAsyncWithUserAssignedType() {
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        // should mark coordinator unknown after COORDINATOR_NOT_AVAILABLE error
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+        // set timeout to 0 because we don't want to retry after the error
+        coordinator.poll(time.timer(0));
+        assertTrue(coordinator.coordinatorUnknown());
+
+        // should try to find coordinator since we are commit async
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), (offsets, exception) -> {
+            throw new AssertionError("Commit should not succeed");
+        });
         coordinator.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.coordinatorUnknown());
     }
-    */
 
     @Test
     public void testCoordinatorNotAvailable() {
