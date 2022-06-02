@@ -274,6 +274,13 @@ class Tasks {
         return readOnlyTasks;
     }
 
+    Collection<Task> notPausedActiveTasks() {
+        return new ArrayList<>(readOnlyActiveTasks)
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
+            .collect(Collectors.toList());
+    }
+
     Collection<Task> notPausedTasks() {
         return new ArrayList<>(readOnlyTasks)
             .stream()
