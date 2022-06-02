@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
@@ -46,11 +47,13 @@ import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -83,6 +86,7 @@ public class ClusterControlManager {
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;
         private ControllerMetrics controllerMetrics = null;
+        private FeatureControlManager featureControl = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -119,8 +123,15 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setFeatureControlManager(FeatureControlManager featureControl) {
+            this.featureControl = featureControl;
+            return this;
+        }
+
         ClusterControlManager build() {
-            if (logContext == null) logContext = new LogContext();
+            if (logContext == null) {
+                logContext = new LogContext();
+            }
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid().toString();
             }
@@ -131,7 +142,17 @@ public class ClusterControlManager {
                 replicaPlacer = new StripedReplicaPlacer(new Random());
             }
             if (controllerMetrics == null) {
-                throw new RuntimeException("You must specify controllerMetrics");
+                throw new RuntimeException("You must specify ControllerMetrics");
+            }
+            if (featureControl == null) {
+                featureControl = new FeatureControlManager.Builder().
+                    setLogContext(logContext).
+                    setSnapshotRegistry(snapshotRegistry).
+                    setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                        QuorumFeatures.defaultFeatureMap(),
+                        Collections.singletonList(0))).
+                    setMetadataVersion(MetadataVersion.latest()).
+                    build();
             }
             return new ClusterControlManager(logContext,
                 clusterId,
@@ -139,7 +160,9 @@ public class ClusterControlManager {
                 snapshotRegistry,
                 sessionTimeoutNs,
                 replicaPlacer,
-                controllerMetrics);
+                controllerMetrics,
+                featureControl
+            );
         }
     }
 
@@ -217,6 +240,11 @@ public class ClusterControlManager {
      */
     private Optional<ReadyBrokersFuture> readyBrokersFuture;
 
+    /**
+     * The feature control manager.
+     */
+    private final FeatureControlManager featureControl;
+
     private ClusterControlManager(
         LogContext logContext,
         String clusterId,
@@ -224,7 +252,8 @@ public class ClusterControlManager {
         SnapshotRegistry snapshotRegistry,
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
-        ControllerMetrics metrics
+        ControllerMetrics metrics,
+        FeatureControlManager featureControl
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -236,6 +265,7 @@ public class ClusterControlManager {
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
         this.controllerMetrics = metrics;
+        this.featureControl = featureControl;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -276,6 +306,13 @@ public class ClusterControlManager {
             .filter(BrokerRegistration::fenced)
             .map(BrokerRegistration::id)
             .collect(Collectors.toSet());
+    }
+
+    private short registerBrokerRecordVersion() {
+        if (featureControl.metadataVersion().isInControlledShutdownStateSupported())
+            return (short) 1;
+        else
+            return (short) 0;
     }
 
     /**
@@ -338,7 +375,7 @@ public class ClusterControlManager {
         heartbeatManager.register(brokerId, record.fenced());
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record, (short) 0));
+        records.add(new ApiMessageAndVersion(record, registerBrokerRecordVersion()));
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -360,7 +397,8 @@ public class ClusterControlManager {
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
                 new BrokerRegistration(brokerId, record.brokerEpoch(),
                     record.incarnationId(), listeners, features,
-                    Optional.ofNullable(record.rack()), record.fenced()));
+                    Optional.ofNullable(record.rack()), record.fenced(),
+                    record.inControlledShutdown()));
         updateMetrics(prevRegistration, brokerRegistrations.get(brokerId));
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);
@@ -490,6 +528,12 @@ public class ClusterControlManager {
         return !registration.fenced();
     }
 
+    public boolean inControlledShutdown(int brokerId) {
+        BrokerRegistration registration = brokerRegistrations.get(brokerId);
+        if (registration == null) return false;
+        return registration.inControlledShutdown();
+    }
+
     BrokerHeartbeatManager heartbeatManager() {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
@@ -556,7 +600,7 @@ public class ClusterControlManager {
                 setEndPoints(endpoints).
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced()), (short) 0));
+                setFenced(registration.fenced()), registerBrokerRecordVersion()));
             return batch;
         }
     }

@@ -55,6 +55,7 @@ public class BrokerRegistration {
     private final Map<String, VersionRange> supportedFeatures;
     private final Optional<String> rack;
     private final boolean fenced;
+    private final boolean inControlledShutdown;
 
     public BrokerRegistration(int id,
                               long epoch,
@@ -62,8 +63,10 @@ public class BrokerRegistration {
                               List<Endpoint> listeners,
                               Map<String, VersionRange> supportedFeatures,
                               Optional<String> rack,
-                              boolean fenced) {
-        this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack, fenced);
+                              boolean fenced,
+                              boolean inControlledShutdown) {
+        this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
+            fenced, inControlledShutdown);
     }
 
     public BrokerRegistration(int id,
@@ -72,7 +75,8 @@ public class BrokerRegistration {
                               Map<String, Endpoint> listeners,
                               Map<String, VersionRange> supportedFeatures,
                               Optional<String> rack,
-                              boolean fenced) {
+                              boolean fenced,
+                              boolean inControlledShutdown) {
         this.id = id;
         this.epoch = epoch;
         this.incarnationId = incarnationId;
@@ -89,6 +93,7 @@ public class BrokerRegistration {
         Objects.requireNonNull(rack);
         this.rack = rack;
         this.fenced = fenced;
+        this.inControlledShutdown = inControlledShutdown;
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -110,7 +115,8 @@ public class BrokerRegistration {
             listeners,
             supportedFeatures,
             Optional.ofNullable(record.rack()),
-            record.fenced());
+            record.fenced(),
+            record.inControlledShutdown());
     }
 
     public int id() {
@@ -149,13 +155,18 @@ public class BrokerRegistration {
         return fenced;
     }
 
+    public boolean inControlledShutdown() {
+        return inControlledShutdown;
+    }
+
     public ApiMessageAndVersion toRecord() {
         RegisterBrokerRecord registrationRecord = new RegisterBrokerRecord().
             setBrokerId(id).
             setRack(rack.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
-            setFenced(fenced);
+            setFenced(fenced).
+            setInControlledShutdown(inControlledShutdown);
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
             Endpoint endpoint = entry.getValue();
             registrationRecord.endPoints().add(new BrokerEndpoint().
@@ -189,7 +200,8 @@ public class BrokerRegistration {
             other.listeners.equals(listeners) &&
             other.supportedFeatures.equals(supportedFeatures) &&
             other.rack.equals(rack) &&
-            other.fenced == fenced;
+            other.fenced == fenced &&
+            other.inControlledShutdown == inControlledShutdown;
     }
 
     @Override
@@ -209,12 +221,13 @@ public class BrokerRegistration {
         bld.append("}");
         bld.append(", rack=").append(rack);
         bld.append(", fenced=").append(fenced);
+        bld.append(", inControlledShutdown=").append(inControlledShutdown);
         bld.append(")");
         return bld.toString();
     }
 
     public BrokerRegistration cloneWithFencing(boolean fencing) {
         return new BrokerRegistration(id, epoch, incarnationId, listeners,
-            supportedFeatures, rack, fencing);
+            supportedFeatures, rack, fencing, inControlledShutdown);
     }
 }
