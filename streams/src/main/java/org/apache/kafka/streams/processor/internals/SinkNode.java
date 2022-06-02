@@ -98,7 +98,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
                 name(),
-                topicExtractor.extract(null, null, null),
+                topic,
                 context.metrics()
         ));
         producedSensorByTopic.get(topic).record(bytesProduced, context.currentSystemTimeMs());
