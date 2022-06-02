@@ -848,8 +848,8 @@ public class PartitionGroupTest {
         long rawRecordsSizeInBytes = 0L;
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             rawRecordsSizeInBytes += recordSizeInBytes(
-                rawRecord.key(),
-                rawRecord.value(),
+                rawRecord.serializedKeySize(),
+                rawRecord.serializedValueSize(),
                 rawRecord.topic(),
                 rawRecord.headers()
             );
