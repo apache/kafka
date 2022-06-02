@@ -111,7 +111,7 @@ public class PauseResumeIntegrationTest {
     @Rule
     public final TestName testName = new TestName();
     private String appId;
-    private KafkaStreams kafkaStreams;
+    private KafkaStreams kafkaStreams, kafkaStreams2;
     private KafkaStreamsNamedTopologyWrapper streamsNamedTopologyWrapper;
 
     @Before
@@ -142,6 +142,9 @@ public class PauseResumeIntegrationTest {
     public void shutdown() throws InterruptedException {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
+        }
+        if (kafkaStreams2 != null) {
+            kafkaStreams2.close(Duration.ofSeconds(30));
         }
         if (streamsNamedTopologyWrapper != null) {
             streamsNamedTopologyWrapper.close(Duration.ofSeconds(30));
@@ -337,7 +340,6 @@ public class PauseResumeIntegrationTest {
         assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
         assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
 
-
         // Write more data for topology 1 and topology 2
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
@@ -431,6 +433,55 @@ public class PauseResumeIntegrationTest {
         // Verify that the input written during the pause is processed.
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3),
             CoreMatchers.equalTo(COUNT_OUTPUT_DATA2));
+    }
+
+    @Test
+    public void shouldWorkAcrossInstances() throws Exception {
+        // Create data on input topics (would need at least two partitions)
+        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
+
+        // Start two instances paused
+        // Create KafkaStreams instance
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
+
+        kafkaStreams = new KafkaStreams(builder.build(props()), props());
+
+        // Start KafkaStream with paused processing.
+        kafkaStreams.pause();
+        kafkaStreams.start();
+        // Check for rebalancing instead?
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, STARTUP_TIMEOUT);
+        assertTrue(kafkaStreams.isPaused());
+
+        // Create KafkaStreams instance
+        final StreamsBuilder builder2 = new StreamsBuilder();
+        builder2.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(OUTPUT_STREAM_2);
+
+        kafkaStreams2 = new KafkaStreams(builder2.build(props()), props());
+
+        // Start KafkaStream with paused processing.
+        kafkaStreams2.pause();
+        kafkaStreams2.start();
+        // Check for rebalancing instead?
+        waitForApplicationState(singletonList(kafkaStreams2), State.RUNNING, STARTUP_TIMEOUT);
+        assertTrue(kafkaStreams2.isPaused());
+
+        // Verify no data?
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 0),
+            CoreMatchers.equalTo(Collections.emptyList()));
+
+        // -- Verify that each instance is in rebalancing (after change to pause active task restoration)
+
+        // Close the other -- this causes a rebalance
+        kafkaStreams2.close();
+
+        // Resume paused instance
+        kafkaStreams.resume();
+
+        // Observe all data processed
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3),
+            CoreMatchers.equalTo(COUNT_OUTPUT_DATA));
     }
 
     private static void assertNoLag(final Map<String, Map<Integer, LagInfo>> lagMap) {
