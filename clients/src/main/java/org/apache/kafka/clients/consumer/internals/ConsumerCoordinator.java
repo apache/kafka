@@ -1009,7 +1009,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty()) {
             // No need to check coordinator if offsets is empty since commit of empty offsets is completed locally.
             future = doCommitOffsetsAsync(offsets, callback);
-        } else if (coordinatorUnknownAndUnready(time.timer(Duration.ZERO))) {
+        } else if (!coordinatorUnknownAndUnready(time.timer(Duration.ZERO))) {
             future = doCommitOffsetsAsync(offsets, callback);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit
