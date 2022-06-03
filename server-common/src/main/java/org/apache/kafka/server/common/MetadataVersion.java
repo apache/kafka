@@ -43,7 +43,6 @@ import org.apache.kafka.common.record.RecordVersion;
  * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
  */
 public enum MetadataVersion {
-    UNINITIALIZED(-1, "0.0", ""),
 
     IBP_0_8_0(-1, "0.8.0", ""),
     IBP_0_8_1(-1, "0.8.1", ""),
@@ -140,26 +139,26 @@ public enum MetadataVersion {
     IBP_2_8_IV1(-1, "2.8", "IV1"),
 
     // Introduce AllocateProducerIds (KIP-730)
-    IBP_3_0_IV0(1, "3.0", "IV0", true),
+    IBP_3_0_IV0(-1, "3.0", "IV0"),
 
     // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
     // Assume message format version is 3.0 (KIP-724)
-    IBP_3_0_IV1(2, "3.0", "IV1", false),
+    IBP_3_0_IV1(1, "3.0", "IV1", true),
 
     // Adds topic IDs to Fetch requests/responses (KIP-516)
-    IBP_3_1_IV0(3, "3.1", "IV0", false),
+    IBP_3_1_IV0(2, "3.1", "IV0", false),
 
     // Support for leader recovery for unclean leader election (KIP-704)
-    IBP_3_2_IV0(4, "3.2", "IV0", true),
+    IBP_3_2_IV0(3, "3.2", "IV0", true),
 
     // Support for metadata.version feature flag and Removes min_version_level from the finalized version range that is written to ZooKeeper (KIP-778)
-    IBP_3_3_IV0(5, "3.3", "IV0", false),
+    IBP_3_3_IV0(4, "3.3", "IV0", false),
 
     // Support NoopRecord for the cluster metadata log (KIP-835)
-    IBP_3_3_IV1(6, "3.3", "IV1", true),
+    IBP_3_3_IV1(5, "3.3", "IV1", true),
 
     // In KRaft mode, use BrokerRegistrationChangeRecord instead of UnfenceBrokerRecord and FenceBrokerRecord.
-    IBP_3_3_IV2(7, "3.3", "IV2", true);
+    IBP_3_3_IV2(6, "3.3", "IV2", true);
 
     public static final String FEATURE_NAME = "metadata.version";
 
@@ -250,7 +249,7 @@ public enum MetadataVersion {
         {
             // Make a copy of values() and omit UNINITIALIZED
             MetadataVersion[] enumValues = MetadataVersion.values();
-            VERSIONS = Arrays.copyOfRange(enumValues, 1, enumValues.length);
+            VERSIONS = Arrays.copyOf(enumValues, enumValues.length);
 
             IBP_VERSIONS = new HashMap<>();
             Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
@@ -276,8 +275,8 @@ public enum MetadataVersion {
 
     Optional<MetadataVersion> previous() {
         int idx = this.ordinal();
-        if (idx > 1) {
-            return Optional.of(VERSIONS[idx - 2]);
+        if (idx > 0) {
+            return Optional.of(VERSIONS[idx - 1]);
         } else {
             return Optional.empty();
         }

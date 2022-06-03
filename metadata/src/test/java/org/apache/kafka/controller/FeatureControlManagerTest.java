@@ -263,7 +263,7 @@ public class FeatureControlManagerTest {
                 Collections.emptyMap(),
                 true);
         assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
-        assertEquals("Invalid update version 2 for feature metadata.version. Local controller 0 only supports versions 4-5",
+        assertEquals("Invalid update version 1 for feature metadata.version. Local controller 0 only supports versions 3-4",
             result.response().get(MetadataVersion.FEATURE_NAME).message());
     }
 

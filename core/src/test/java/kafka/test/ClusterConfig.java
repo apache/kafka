@@ -122,8 +122,8 @@ public class ClusterConfig {
         return Optional.ofNullable(trustStoreFile);
     }
 
-    public Optional<MetadataVersion> metadataVersion() {
-        return Optional.ofNullable(metadataVersion);
+    public MetadataVersion metadataVersion() {
+        return metadataVersion;
     }
 
     public Properties brokerServerProperties(int brokerId) {
@@ -133,7 +133,7 @@ public class ClusterConfig {
     public Map<String, String> nameTags() {
         Map<String, String> tags = new LinkedHashMap<>(4);
         name().ifPresent(name -> tags.put("Name", name));
-        metadataVersion().ifPresent(mv -> tags.put("MetadataVersion", mv.toString()));
+        tags.put("MetadataVersion", metadataVersion.toString());
         tags.put("Security", securityProtocol.name());
         listenerName().ifPresent(listener -> tags.put("Listener", listener));
         return tags;

@@ -128,7 +128,9 @@ public class BootstrapMetadata {
 
     public static BootstrapMetadata create(MetadataVersion metadataVersion, List<ApiMessageAndVersion> records) {
         if (!metadataVersion.isKRaftSupported()) {
-            throw new IllegalArgumentException("Cannot create BootstrapMetadata with a non-KRaft metadata version.");
+            throw new IllegalArgumentException(String.format(
+                "Cannot create BootstrapMetadata with a non-KRaft metadata version %s. Minimum version is %s",
+                metadataVersion, MetadataVersion.MINIMUM_KRAFT_VERSION));
         }
         records.add(new ApiMessageAndVersion(
             new FeatureLevelRecord()
