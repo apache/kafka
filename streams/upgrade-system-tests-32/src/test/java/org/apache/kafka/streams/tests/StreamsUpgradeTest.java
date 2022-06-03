@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.tests;
 
-import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
-import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
-
-import java.util.Random;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -34,6 +30,10 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Properties;
+import java.util.Random;
+
+import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
 
 
 public class StreamsUpgradeTest {
@@ -47,7 +47,7 @@ public class StreamsUpgradeTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
-        System.out.println("StreamsTest instance started (StreamsUpgradeTest v3.1)");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest v3.2)");
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();

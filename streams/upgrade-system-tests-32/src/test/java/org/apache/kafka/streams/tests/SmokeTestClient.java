@@ -56,6 +56,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private KafkaStreams streams;
     private boolean uncaughtException = false;
+    private boolean started;
     private volatile boolean closed;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
@@ -92,6 +93,10 @@ public class SmokeTestClient extends SmokeTestUtil {
         this.name = name;
     }
 
+    public boolean started() {
+        return started;
+    }
+
     public boolean closed() {
         return closed;
     }
@@ -104,6 +109,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams.setStateListener((newState, oldState) -> {
             System.out.printf("%s %s: %s -> %s%n", name, Instant.now(), oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
+                started = true;
                 countDownLatch.countDown();
             }
 
@@ -114,7 +120,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         streams.setUncaughtExceptionHandler(e -> {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
-            System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + Thread.currentThread() + ": " + e);
+            System.out.println(name + ": FATAL: An unexpected exception is encountered: " + e);
             e.printStackTrace(System.out);
             uncaughtException = true;
             return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -126,14 +132,13 @@ public class SmokeTestClient extends SmokeTestUtil {
         try {
             if (!countDownLatch.await(1, TimeUnit.MINUTES)) {
                 System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't start in one minute");
-            } else {
-                System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
-                System.out.println(name + " started at " + Instant.now());
             }
         } catch (final InterruptedException e) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: " + e);
             e.printStackTrace(System.out);
         }
+        System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
+        System.out.println(name + " started at " + Instant.now());
     }
 
     public void closeAsync() {
@@ -141,14 +146,14 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        final boolean wasClosed = streams.close(Duration.ofMinutes(1));
+        final boolean closed = streams.close(Duration.ofMinutes(1));
 
-        if (wasClosed && !uncaughtException) {
+        if (closed && !uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");
-        } else if (wasClosed) {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Got an uncaught exception");
+        } else if (closed) {
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
         } else {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close in time.");
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close");
         }
     }
 
@@ -157,7 +162,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, tempDirectory().getAbsolutePath());
-        fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         fullProps.putAll(props);
         return fullProps;
     }
@@ -196,7 +200,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         final KTable<Windowed<String>, Integer> smallWindowSum = groupedData
             .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(2), Duration.ofSeconds(30)).advanceBy(Duration.ofSeconds(1)))
-            .reduce((l, r) -> l + r);
+            .reduce(Integer::sum);
 
         streamify(smallWindowSum, "sws-raw");
         streamify(smallWindowSum.suppress(untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");

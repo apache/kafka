@@ -140,8 +140,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         stringSerde.serializer().serialize("", key),
                         intSerde.serializer().serialize("", value)
                     );
-
                 producer.send(record);
+
+                final ProducerRecord<byte[], byte[]> fkRecord =
+                    new ProducerRecord<>(
+                        "fk",
+                        intSerde.serializer().serialize("", value),
+                        stringSerde.serializer().serialize("", key)
+                    );
+                producer.send(fkRecord);
 
                 numRecordsProduced++;
                 if (numRecordsProduced % 100 == 0) {
@@ -157,7 +164,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                                      final int maxRecordsPerKey,
                                                      final Duration timeToSpend) {
         final Properties producerProps = generatorProperties(kafka);
-
 
         int numRecordsProduced = 0;
 
@@ -186,7 +192,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     remaining--;
                     data[index] = data[remaining];
                 } else {
-
                     final ProducerRecord<byte[], byte[]> record =
                         new ProducerRecord<>(
                             "data",
@@ -228,24 +233,23 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 intSerde.serializer().serialize("", 0),
                 stringSerde.serializer().serialize("", "flush")
             );
-
         }
         return Collections.unmodifiableMap(allData);
     }
 
     private static void retry(final KafkaProducer<byte[], byte[]> producer,
-                              List<ProducerRecord<byte[], byte[]>> needRetry,
-                              final Serde<?> keySerde) {
+        List<ProducerRecord<byte[], byte[]>> needRetry,
+        final Serde<?> keySerde) {
         int remainingRetries = 5;
         while (!needRetry.isEmpty()) {
             final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
             for (final ProducerRecord<byte[], byte[]> record : needRetry) {
-                System.out.println("retry producing " + keySerde.deserializer().deserialize("", record.key()));
+                System.out.println(
+                    "retry producing " + keySerde.deserializer().deserialize("", record.key()));
                 producer.send(record, new TestCallback(record, needRetry2));
             }
             producer.flush();
             needRetry = needRetry2;
-
             if (--remainingRetries == 0 && !needRetry.isEmpty()) {
                 System.err.println("Failed to produce all records after multiple retries");
                 Exit.exit(1);
@@ -254,9 +258,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static void flush(final KafkaProducer<byte[], byte[]> producer,
-                              final String topic,
-                              final byte[] keyBytes,
-                              final byte[] valBytes) {
+        final String topic,
+        final byte[] keyBytes,
+        final byte[] valBytes) {
         // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
         // all suppressed records.
         final List<PartitionInfo> partitions = producer.partitionsFor(topic);
