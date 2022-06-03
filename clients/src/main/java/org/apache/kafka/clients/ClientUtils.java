@@ -52,7 +52,7 @@ public final class ClientUtils {
      * some third-party applications still rely on this API to parse and validate addresses.
      */
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
-        return parseAndValidateAddresses(urls, ClientDnsLookup.DEFAULT);
+        return parseAndValidateAddresses(urls, ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {

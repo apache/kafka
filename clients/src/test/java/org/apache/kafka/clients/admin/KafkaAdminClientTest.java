@@ -248,7 +248,7 @@ public class KafkaAdminClientTest {
 
     private static Cluster mockBootstrapCluster() {
         return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
-                singletonList("localhost:8121"), ClientDnsLookup.DEFAULT));
+                singletonList("localhost:8121"), ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {
@@ -2281,7 +2281,7 @@ public class KafkaAdminClientTest {
         assertEquals(FencedInstanceIdException.class, KafkaAdminClient.getSubLevelError(
             errorsMap, memberIdentities.get(1), "For unit test").getClass());
     }
-    
+
     private ClientQuotaEntity newClientQuotaEntity(String... args) {
         assertTrue(args.length % 2 == 0);
 
