@@ -43,7 +43,7 @@ public class TopicMetricsTest {
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
     private final Sensor expectedSensor = mock(Sensor.class);
-    private static final MockedStatic<StreamsMetricsImpl> streamsMetricsMockedStatic = mockStatic(StreamsMetricsImpl.class);
+    private static final MockedStatic<StreamsMetricsImpl> STREAMS_METRICS_STATIC_MOCK = mockStatic(StreamsMetricsImpl.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
 
     @Test
@@ -63,7 +63,7 @@ public class TopicMetricsTest {
             () -> TopicMetrics.consumedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics)
         );
 
-        streamsMetricsMockedStatic.verify(
+        STREAMS_METRICS_STATIC_MOCK.verify(
             () -> StreamsMetricsImpl.addTotalCountAndSumMetricsToSensor(
                 expectedSensor,
                 TOPIC_LEVEL_GROUP,
@@ -91,7 +91,7 @@ public class TopicMetricsTest {
 
         verifySensor(() -> TopicMetrics.producedSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, TOPIC_NAME, streamsMetrics));
 
-        streamsMetricsMockedStatic.verify(
+        STREAMS_METRICS_STATIC_MOCK.verify(
             () -> StreamsMetricsImpl.addTotalCountAndSumMetricsToSensor(
                 expectedSensor,
                 TOPIC_LEVEL_GROUP,
