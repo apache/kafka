@@ -549,7 +549,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
         } else {
-            // For manually assigned partitions, if coordinator is unknown, make sure we lookup one and await metadata.
+            // For manually assigned partitions, we do not try to pro-actively lookup coordinator;
+            // instead we only try to refresh metadata when necessary.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
             // requests result in polls returning immediately, causing a tight loop of polls. Without
             // the wakeup, poll() with no channels would block for the timeout, delaying re-connection.
@@ -557,6 +558,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (metadata.updateRequested() && !client.hasReadyNodes(timer.currentTimeMs())) {
                 client.awaitMetadataUpdate(timer);
             }
+
+            // if there is pending coordinator requests, ensure they have a chance to be transmitted.
+            client.pollNoWakeup();
         }
 
         maybeAutoCommitOffsetsAsync(timer.currentTimeMs());

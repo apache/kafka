@@ -523,42 +523,53 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testAutoCommitAsyncWithUserAssignedType() {
-        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)
-        ) {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.assignFromUser(Collections.singleton(t1p));
-            // should mark coordinator unknown after COORDINATOR_NOT_AVAILABLE error
-            client.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
-            // set timeout to 0 because we don't want to retry after the error
+            // set timeout to 0 because we expect no requests sent
             coordinator.poll(time.timer(0));
             assertTrue(coordinator.coordinatorUnknown());
+            assertFalse(client.hasInFlightRequests());
 
             // elapse auto commit interval and set committable position
             time.sleep(autoCommitIntervalMs);
             subscriptions.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
 
             // should try to find coordinator since we are auto committing
-            client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-            coordinator.poll(time.timer(Long.MAX_VALUE));
+            coordinator.poll(time.timer(0));
+            assertTrue(coordinator.coordinatorUnknown());
+            assertTrue(client.hasInFlightRequests());
+
+            client.respond(groupCoordinatorResponse(node, Errors.NONE));
+            coordinator.poll(time.timer(0));
             assertFalse(coordinator.coordinatorUnknown());
+            // after we've discovered the coordinator we should send
+            // out the commit request immediately
+            assertTrue(client.hasInFlightRequests());
         }
     }
 
     @Test
     public void testCommitAsyncWithUserAssignedType() {
         subscriptions.assignFromUser(Collections.singleton(t1p));
-        // should mark coordinator unknown after COORDINATOR_NOT_AVAILABLE error
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
-        // set timeout to 0 because we don't want to retry after the error
+        // set timeout to 0 because we expect no requests sent
         coordinator.poll(time.timer(0));
         assertTrue(coordinator.coordinatorUnknown());
+        assertFalse(client.hasInFlightRequests());
 
         // should try to find coordinator since we are commit async
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), (offsets, exception) -> {
-            throw new AssertionError("Commit should not succeed");
+            throw new AssertionError("Commit should not get responses");
         });
-        coordinator.poll(time.timer(Long.MAX_VALUE));
+        coordinator.poll(time.timer(0));
+        assertTrue(coordinator.coordinatorUnknown());
+        assertTrue(client.hasInFlightRequests());
+
+        client.respond(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.poll(time.timer(0));
         assertFalse(coordinator.coordinatorUnknown());
+        // after we've discovered the coordinator we should send
+        // out the commit request immediately
+        assertTrue(client.hasInFlightRequests());
     }
 
     @Test
@@ -2157,8 +2168,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testAutoCommitDynamicAssignment() {
-        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)
-        ) {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.subscribe(singleton(topic1), rebalanceListener);
             joinAsFollowerAndReceiveAssignment(coordinator, singletonList(t1p));
             subscriptions.seek(t1p, 100);
