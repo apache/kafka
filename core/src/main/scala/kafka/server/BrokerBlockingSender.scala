@@ -33,6 +33,8 @@ import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
 
+  def brokerEndPoint(): BrokerEndPoint
+
   def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse
 
   def initiateClose(): Unit
@@ -40,13 +42,13 @@ trait BlockingSend {
   def close(): Unit
 }
 
-class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
-                                 brokerConfig: KafkaConfig,
-                                 metrics: Metrics,
-                                 time: Time,
-                                 fetcherId: Int,
-                                 clientId: String,
-                                 logContext: LogContext) extends BlockingSend {
+class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
+                           brokerConfig: KafkaConfig,
+                           metrics: Metrics,
+                           time: Time,
+                           fetcherId: Int,
+                           clientId: String,
+                           logContext: LogContext) extends BlockingSend {
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
@@ -99,6 +101,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
     (networkClient, reconfigurableChannelBuilder)
   }
 
+  override def brokerEndPoint(): BrokerEndPoint = sourceBroker
+
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
     try {
       if (!NetworkClientUtils.awaitReady(networkClient, sourceNode, time, socketTimeout))
@@ -123,5 +127,9 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
 
   def close(): Unit = {
     networkClient.close()
+  }
+
+  override def toString: String = {
+    s"BrokerBlockingSender(sourceBroker=$sourceBroker, fetcherId=$fetcherId)"
   }
 }
