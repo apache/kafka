@@ -46,6 +46,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -54,7 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.streams.processor.internals.ClientUtils.recordSizeInBytes;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final static String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
@@ -63,9 +65,12 @@ public class RecordCollectorImpl implements RecordCollector {
     private final TaskId taskId;
     private final StreamsProducer streamsProducer;
     private final ProductionExceptionHandler productionExceptionHandler;
-    private final Sensor droppedRecordsSensor;
     private final boolean eosEnabled;
     private final Map<TopicPartition, Long> offsets;
+
+    private final StreamsMetricsImpl streamsMetrics;
+    private final Sensor droppedRecordsSensor;
+    private final Map<String, Map<String, Sensor>> sinkNodeToProducedSensorByTopic = new HashMap<>();
 
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
@@ -76,15 +81,29 @@ public class RecordCollectorImpl implements RecordCollector {
                                final TaskId taskId,
                                final StreamsProducer streamsProducer,
                                final ProductionExceptionHandler productionExceptionHandler,
-                               final StreamsMetricsImpl streamsMetrics) {
+                               final StreamsMetricsImpl streamsMetrics,
+                               final ProcessorTopology topology) {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.streamsProducer = streamsProducer;
         this.productionExceptionHandler = productionExceptionHandler;
         this.eosEnabled = streamsProducer.eosEnabled();
+        this.streamsMetrics = streamsMetrics;
 
         final String threadId = Thread.currentThread().getName();
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
+        for (final String topic : topology.sinkTopics()) {
+            final String processorNodeId = topology.sink(topic).name();
+            sinkNodeToProducedSensorByTopic.computeIfAbsent(processorNodeId, t -> new HashMap<>()).put(
+                topic,
+                TopicMetrics.producedSensor(
+                    threadId,
+                    taskId.toString(),
+                    processorNodeId,
+                    topic,
+                    streamsMetrics
+                ));
+        }
 
         this.offsets = new HashMap<>();
     }
@@ -101,13 +120,15 @@ public class RecordCollectorImpl implements RecordCollector {
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
-    public <K, V> long send(final String topic,
+    public <K, V> void send(final String topic,
                             final K key,
                             final V value,
                             final Headers headers,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
         final Integer partition;
 
@@ -138,18 +159,20 @@ public class RecordCollectorImpl implements RecordCollector {
             partition = null;
         }
 
-        return send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
+        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
     }
 
     @Override
-    public <K, V> long send(final String topic,
+    public <K, V> void send(final String topic,
                             final K key,
                             final V value,
                             final Headers headers,
                             final Integer partition,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer) {
+                            final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
         final byte[] keyBytes;
@@ -194,6 +217,28 @@ public class RecordCollectorImpl implements RecordCollector {
                 } else {
                     log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
                 }
+
+                if (!topic.endsWith("-changelog")) {
+                    // we may not have created a sensor yet if the node uses dynamic topic routing
+                    final Map<String, Sensor> producedSensorByTopic = sinkNodeToProducedSensorByTopic.get(processorNodeId);
+                    if (producedSensorByTopic == null) {
+                        log.error("Unable to records bytes produced to topic {} by sink node {} as the node is not recognized.\n"
+                                      + "Known sink nodes are {}.", topic, processorNodeId, sinkNodeToProducedSensorByTopic.keySet());
+                    } else {
+                        final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
+                            topic,
+                            t -> TopicMetrics.producedSensor(
+                                Thread.currentThread().getName(),
+                                taskId.toString(),
+                                processorNodeId,
+                                topic,
+                                context.metrics()
+                            )
+                        );
+                        final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
+                        topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
+                    }
+                }
             } else {
                 recordSendError(topic, exception, serializedRecord);
 
@@ -201,7 +246,6 @@ public class RecordCollectorImpl implements RecordCollector {
                 log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
             }
         });
-        return recordSizeInBytes(keyBytes == null ? 0 : keyBytes.length, valBytes == null ? 0 : valBytes.length, topic, headers);
     }
 
     private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord) {
@@ -270,6 +314,8 @@ public class RecordCollectorImpl implements RecordCollector {
     public void closeClean() {
         log.info("Closing record collector clean");
 
+        removeAllProducedSensors();
+
         // No need to abort transaction during a clean close: either we have successfully committed the ongoing
         // transaction during handleRevocation and thus there is no transaction in flight, or else none of the revoked
         // tasks had any data in the current transaction and therefore there is no need to commit or abort it.
@@ -291,6 +337,14 @@ public class RecordCollectorImpl implements RecordCollector {
         }
 
         checkForException();
+    }
+
+    private void removeAllProducedSensors() {
+        for (final Map<String, Sensor> nodeMap : sinkNodeToProducedSensorByTopic.values()) {
+            for (final Sensor sensor : nodeMap.values()) {
+                streamsMetrics.removeSensor(sensor);
+            }
+        }
     }
 
     @Override

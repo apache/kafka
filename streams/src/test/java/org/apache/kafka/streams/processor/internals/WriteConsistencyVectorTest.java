@@ -114,17 +114,17 @@ public class WriteConsistencyVectorTest {
         headers.add(new RecordHeader(
                 ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
                 PositionSerde.serialize(position).array()));
-        EasyMock.expect(
-                recordCollector.send(
-                    CHANGELOG_PARTITION.topic(),
-                    KEY_BYTES,
-                    VALUE_BYTES,
-                    headers,
-                    CHANGELOG_PARTITION.partition(),
-                    TIMESTAMP,
-                    BYTES_KEY_SERIALIZER,
-                    BYTEARRAY_VALUE_SERIALIZER))
-            .andStubReturn(0L);
+        recordCollector.send(
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            headers,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
 
         final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
 

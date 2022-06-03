@@ -17,9 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -28,12 +31,15 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -47,6 +53,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -62,10 +71,15 @@ public class RecordQueueTest {
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
 
+    private final Metrics metrics = new Metrics();
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime());
+
     @SuppressWarnings("rawtypes")
     final InternalMockProcessorContext context = new InternalMockProcessorContext<>(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
-        new MockRecordCollector()
+        new MockRecordCollector(),
+        metrics
     );
     private final MockSourceNode<Integer, Integer> mockSourceNodeWithMetrics
         = new MockSourceNode<>(intDeserializer, intDeserializer);
@@ -96,6 +110,57 @@ public class RecordQueueTest {
     @After
     public void after() {
         mockSourceNodeWithMetrics.close();
+    }
+
+    @Test
+    public void testConsumedSensor() {
+        final List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()));
+
+        queue.addRawRecords(records);
+
+        final String threadId = Thread.currentThread().getName();
+        final String taskId = context.taskId().toString();
+        final String processorNodeId = mockSourceNodeWithMetrics.name();
+        final String topic = "topic";
+        final Metric recordsConsumed = context.metrics().metrics().get(
+            new MetricName("records-consumed-total",
+                           TOPIC_LEVEL_GROUP,
+                           "The total number of records consumed from this topic",
+                           streamsMetrics.topicLevelTagMap(threadId, taskId, processorNodeId, topic))
+        );
+        final Metric bytesConsumed = context.metrics().metrics().get(
+            new MetricName("bytes-consumed-total",
+                           TOPIC_LEVEL_GROUP,
+                           "The total number of bytes consumed from this topic",
+                           streamsMetrics.topicLevelTagMap(threadId, taskId, processorNodeId, topic))
+        );
+
+        double totalBytes = 0D;
+        double totalRecords = 0D;
+
+        queue.poll(5L);
+        ++totalRecords;
+        totalBytes += consumerRecordSizeInBytes(records.get(0));
+
+        assertThat(bytesConsumed.metricValue(), equalTo(totalBytes));
+        assertThat(recordsConsumed.metricValue(), equalTo(totalRecords));
+
+        queue.poll(6L);
+        ++totalRecords;
+        totalBytes += consumerRecordSizeInBytes(records.get(1));
+
+        assertThat(bytesConsumed.metricValue(), equalTo(totalBytes));
+        assertThat(recordsConsumed.metricValue(), equalTo(totalRecords));
+
+        queue.poll(7L);
+        ++totalRecords;
+        totalBytes += consumerRecordSizeInBytes(records.get(2));
+
+        assertThat(bytesConsumed.metricValue(), equalTo(totalBytes));
+        assertThat(recordsConsumed.metricValue(), equalTo(totalRecords));
     }
 
     @Test

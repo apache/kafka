@@ -21,6 +21,8 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -168,6 +170,24 @@ public class ClientUtils {
     public static String extractThreadId(final String fullThreadName) {
         final int index = fullThreadName.indexOf("StreamThread-");
         return fullThreadName.substring(index);
+    }
+
+    public static long producerRecordSizeInBytes(final ProducerRecord<byte[], byte[]> record) {
+        return recordSizeInBytes(
+            record.key().length,
+            record.value() == null ? 0 : record.value().length,
+            record.topic(),
+            record.headers()
+        );
+    }
+
+    public static long consumerRecordSizeInBytes(final ConsumerRecord<byte[], byte[]> record) {
+        return recordSizeInBytes(
+            record.serializedKeySize(),
+            record.serializedValueSize(),
+            record.topic(),
+            record.headers()
+        );
     }
 
     public static long recordSizeInBytes(final long keyBytes,
