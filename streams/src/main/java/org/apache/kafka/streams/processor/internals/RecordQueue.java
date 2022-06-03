@@ -22,15 +22,16 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
 
-import static org.apache.kafka.streams.processor.internals.ClientUtils.recordSizeInBytes;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -75,7 +76,7 @@ public class RecordQueue {
             processorContext.taskId().toString(),
             processorContext.metrics()
         );
-        consumedSensor = ProcessorNodeMetrics.consumedSensor(
+        consumedSensor = TopicMetrics.consumedSensor(
             threadName,
             processorContext.taskId().toString(),
             source.name(),
@@ -115,10 +116,6 @@ public class RecordQueue {
         return partition;
     }
 
-    private long sizeInBytes(final ConsumerRecord<byte[], byte[]> record) {
-        return recordSizeInBytes(record.serializedKeySize(), record.serializedValueSize(), record.topic(), record.headers());
-    }
-
     /**
      * Add a batch of {@link ConsumerRecord} into the queue
      *
@@ -128,7 +125,7 @@ public class RecordQueue {
     int addRawRecords(final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             fifoQueue.addLast(rawRecord);
-            this.totalBytesBuffered += sizeInBytes(rawRecord);
+            this.totalBytesBuffered += consumerRecordSizeInBytes(rawRecord);
         }
 
         updateHead();
@@ -198,6 +195,10 @@ public class RecordQueue {
         partitionTime = UNKNOWN;
     }
 
+    public void close() {
+        processorContext.metrics().removeSensor(consumedSensor);
+    }
+
     private void updateHead() {
         ConsumerRecord<byte[], byte[]> lastCorruptedRecord = null;
 
@@ -234,7 +235,7 @@ public class RecordQueue {
                 continue;
             }
             headRecord = new StampedRecord(deserialized, timestamp);
-            headRecordSizeInBytes = sizeInBytes(raw);
+            headRecordSizeInBytes = consumerRecordSizeInBytes(raw);
         }
 
         // if all records in the FIFO queue are corrupted, make the last one the headRecord

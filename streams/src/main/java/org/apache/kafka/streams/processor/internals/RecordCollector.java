@@ -26,22 +26,26 @@ import java.util.Map;
 
 public interface RecordCollector {
 
-    <K, V> long send(final String topic,
+    <K, V> void send(final String topic,
                      final K key,
                      final V value,
                      final Headers headers,
                      final Integer partition,
                      final Long timestamp,
                      final Serializer<K> keySerializer,
-                     final Serializer<V> valueSerializer);
+                     final Serializer<V> valueSerializer,
+                     final String processorNodeId,
+                     final InternalProcessorContext<Void, Void> context);
 
-    <K, V> long send(final String topic,
+    <K, V> void send(final String topic,
                      final K key,
                      final V value,
                      final Headers headers,
                      final Long timestamp,
                      final Serializer<K> keySerializer,
                      final Serializer<V> valueSerializer,
+                     final String processorNodeId,
+                     final InternalProcessorContext<Void, Void> context,
                      final StreamPartitioner<? super K, ? super V> partitioner);
 
     /**

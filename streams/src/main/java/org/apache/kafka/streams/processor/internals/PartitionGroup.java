@@ -392,6 +392,12 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
+    void close() {
+        for (final RecordQueue queue : partitionQueues.values()) {
+            queue.close();
+        }
+    }
+
     // Below methods are for only testing.
 
     boolean allPartitionsBufferedLocally() {

@@ -637,6 +637,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     log
                 );
 
+                TaskManager.executeAndMaybeSwallow(
+                    clean,
+                    partitionGroup::close,
+                    "partition group close",
+                    log
+                );
+
                 break;
 
             case CLOSED:

@@ -16,15 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
-
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerializer;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerializer;
@@ -35,8 +30,6 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     private Serializer<VIn> valSerializer;
     private final TopicNameExtractor<KIn, VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
-
-    private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
     private InternalProcessorContext<Void, Void> context;
 
@@ -89,19 +82,17 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
         final String topic = topicExtractor.extract(key, value, contextForExtraction);
 
-        final long bytesProduced =
-            collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
-
-        producedSensorByTopic.putIfAbsent(
+        collector.send(
             topic,
-            ProcessorNodeMetrics.producedSensor(
-                Thread.currentThread().getName(),
-                context.taskId().toString(),
-                name(),
-                topic,
-                context.metrics()
-        ));
-        producedSensorByTopic.get(topic).record(bytesProduced, context.currentSystemTimeMs());
+            key,
+            value,
+            record.headers(),
+            timestamp,
+            keySerializer,
+            valSerializer,
+            name(),
+            context,
+            partitioner);
     }
 
     /**

@@ -52,7 +52,7 @@ import java.util.Optional;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.recordSizeInBytes;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -847,12 +847,7 @@ public class PartitionGroupTest {
     private long getBytesBufferedForRawRecords(final List<ConsumerRecord<byte[], byte[]>> rawRecords) {
         long rawRecordsSizeInBytes = 0L;
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
-            rawRecordsSizeInBytes += recordSizeInBytes(
-                rawRecord.serializedKeySize(),
-                rawRecord.serializedValueSize(),
-                rawRecord.topic(),
-                rawRecord.headers()
-            );
+            rawRecordsSizeInBytes += consumerRecordSizeInBytes(rawRecord);
         }
         return rawRecordsSizeInBytes;
     }
