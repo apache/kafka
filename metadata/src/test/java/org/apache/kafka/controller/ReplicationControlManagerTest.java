@@ -78,6 +78,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -153,7 +154,12 @@ public class ReplicationControlManagerTest {
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             build();
-        final FeatureControlManager featureControl = new FeatureControlManager(logContext, quorumFeatures, snapshotRegistry);
+        final FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(quorumFeatures).
+            setMetadataVersion(MetadataVersion.latest()).
+            build();
         final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
@@ -175,7 +181,7 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setControllerMetrics(metrics).
                 setCreateTopicPolicy(createTopicPolicy).
-                setFeatureControlManager(featureControl).
+                setFeatureControl(featureControl).
                 build();
             featureControl.replay(new FeatureLevelRecord()
                 .setName(MetadataVersion.FEATURE_NAME)

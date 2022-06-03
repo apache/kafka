@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.ElectionType;
@@ -144,7 +143,6 @@ public class ReplicationControlManager {
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
-        private FeatureControlManager featureControlManager;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private ControllerMetrics controllerMetrics = null;
@@ -173,11 +171,6 @@ public class ReplicationControlManager {
 
         Builder setMaxElectionsPerImbalance(int maxElectionsPerImbalance) {
             this.maxElectionsPerImbalance = maxElectionsPerImbalance;
-            return this;
-        }
-
-        Builder setFeatureControlManager(FeatureControlManager featureControlManager) {
-            this.featureControlManager = featureControlManager;
             return this;
         }
 
@@ -210,31 +203,19 @@ public class ReplicationControlManager {
             if (configurationControl == null) {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
-                throw new IllegalStateException("Cluster controller must be set before building");
+                throw new IllegalStateException("Cluster control must be set before building");
             } else if (controllerMetrics == null) {
                 throw new IllegalStateException("Metrics must be set before building");
-            }
-            if (featureControlManager == null) {
-                throw new RuntimeException("You must specify featureControlManager.");
+            } else if (featureControl == null) {
+                throw new RuntimeException("Feature control must be set before building.");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
-            if (featureControl == null) {
-                featureControl = new FeatureControlManager.Builder().
-                    setLogContext(logContext).
-                    setSnapshotRegistry(snapshotRegistry).
-                    setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
-                        QuorumFeatures.defaultFeatureMap(),
-                        Collections.singletonList(0))).
-                    setMetadataVersion(MetadataVersion.latest()).
-                    build();
-            }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,
                 defaultReplicationFactor,
                 defaultNumPartitions,
                 maxElectionsPerImbalance,
-                featureControlManager,
                 configurationControl,
                 clusterControl,
                 controllerMetrics,
@@ -382,7 +363,6 @@ public class ReplicationControlManager {
         short defaultReplicationFactor,
         int defaultNumPartitions,
         int maxElectionsPerImbalance,
-        FeatureControlManager featureControlManager,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         ControllerMetrics controllerMetrics,
@@ -394,7 +374,6 @@ public class ReplicationControlManager {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
-        this.featureControlManager = featureControlManager;
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.createTopicPolicy = createTopicPolicy;
@@ -745,7 +724,7 @@ public class ReplicationControlManager {
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
             setTopicId(topicId), TOPIC_RECORD.highestSupportedVersion()));
-        MetadataVersion metadataVersion = featureControlManager.metadataVersion();
+        MetadataVersion metadataVersion = featureControl.metadataVersion();
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
@@ -1814,7 +1793,7 @@ public class ReplicationControlManager {
         ReplicationControlIterator(long epoch) {
             this.epoch = epoch;
             this.iterator = topics.values(epoch).iterator();
-            this.metadataVersion = featureControlManager.metadataVersion(epoch);
+            this.metadataVersion = featureControl.metadataVersion(epoch);
         }
 
         @Override
