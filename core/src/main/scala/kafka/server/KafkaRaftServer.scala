@@ -185,7 +185,7 @@ object KafkaRaftServer {
     val bootstrapMetadata = if (config.originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
       BootstrapMetadata.load(Paths.get(config.metadataLogDir), config.interBrokerProtocolVersion)
     } else {
-      BootstrapMetadata.load(Paths.get(config.metadataLogDir), MetadataVersion.IBP_3_0_IV0)
+      BootstrapMetadata.load(Paths.get(config.metadataLogDir), MetadataVersion.MINIMUM_KRAFT_VERSION)
     }
 
     (metaProperties, bootstrapMetadata, offlineDirs.toSeq)

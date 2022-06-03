@@ -222,13 +222,13 @@ public class FeatureControlManagerTest {
     @Test
     public void testApplyMetadataVersionChangeRecord() {
         QuorumFeatures features = features(MetadataVersion.FEATURE_NAME,
-                MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV0.featureLevel());
+                MetadataVersion.IBP_3_0_IV1.featureLevel(), MetadataVersion.IBP_3_3_IV0.featureLevel());
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features).build();
         manager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_3_0_IV0.featureLevel()));
-        assertEquals(MetadataVersion.IBP_3_0_IV0, manager.metadataVersion());
+            setFeatureLevel(MetadataVersion.IBP_3_0_IV1.featureLevel()));
+        assertEquals(MetadataVersion.IBP_3_0_IV1, manager.metadataVersion());
     }
 
     @Test
@@ -258,12 +258,12 @@ public class FeatureControlManagerTest {
         assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
 
         result = manager.updateFeatures(
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_0_IV0.featureLevel()),
+                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()),
                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
                 Collections.emptyMap(),
                 true);
         assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
-        assertEquals("Invalid update version 1 for feature metadata.version. Local controller 0 only supports versions 4-5",
+        assertEquals("Invalid update version 2 for feature metadata.version. Local controller 0 only supports versions 4-5",
             result.response().get(MetadataVersion.FEATURE_NAME).message());
     }
 
@@ -271,7 +271,7 @@ public class FeatureControlManagerTest {
     public void testCreateFeatureLevelRecords() {
         Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
         localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-                MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.latest().featureLevel()));
+                MetadataVersion.IBP_3_0_IV1.featureLevel(), MetadataVersion.latest().featureLevel()));
         localSupportedFeatures.put("foo", VersionRange.of(0, 2));
         FeatureControlManager manager = new FeatureControlManager.Builder().
                 setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(), localSupportedFeatures, emptyList())).

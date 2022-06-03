@@ -163,6 +163,8 @@ public enum MetadataVersion {
 
     public static final String FEATURE_NAME = "metadata.version";
 
+    public static final MetadataVersion MINIMUM_KRAFT_VERSION = IBP_3_0_IV1;
+
     public static final MetadataVersion[] VERSIONS;
 
     private final short featureLevel;
