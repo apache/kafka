@@ -157,6 +157,10 @@ public class MetricsIntegrationTest {
     private static final String PROCESS_LATENCY_MAX = "process-latency-max";
     private static final String PUNCTUATE_LATENCY_AVG = "punctuate-latency-avg";
     private static final String PUNCTUATE_LATENCY_MAX = "punctuate-latency-max";
+    private static final String CREATE_LATENCY_AVG = "create-latency-avg";
+    private static final String CREATE_LATENCY_MAX = "create-latency-max";
+    private static final String DESTROY_LATENCY_AVG = "destroy-latency-avg";
+    private static final String DESTROY_LATENCY_MAX = "destroy-latency-max";
     private static final String PROCESS_RATE = "process-rate";
     private static final String PROCESS_TOTAL = "process-total";
     private static final String PROCESS_RATIO = "process-ratio";
@@ -165,6 +169,12 @@ public class MetricsIntegrationTest {
     private static final String PUNCTUATE_RATE = "punctuate-rate";
     private static final String PUNCTUATE_TOTAL = "punctuate-total";
     private static final String PUNCTUATE_RATIO = "punctuate-ratio";
+    private static final String CREATE_RATE = "create-rate";
+    private static final String CREATE_TOTAL = "create-total";
+    private static final String DESTROY_RATE = "destroy-rate";
+    private static final String DESTROY_TOTAL = "destroy-total";
+    private static final String FORWARD_TOTAL = "forward-total";
+    private static final String FORWARD_RATE = "forward-rate";
     private static final String STREAM_STRING = "stream";
     private static final String COMMIT_LATENCY_AVG = "commit-latency-avg";
     private static final String COMMIT_LATENCY_MAX = "commit-latency-max";
