@@ -125,6 +125,7 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
@@ -953,13 +954,10 @@ public class ReplicationControlManager {
                     partitionId,
                     partition,
                     clusterControl::active,
+                    context.requestHeader().requestApiVersion(),
                     partitionData);
 
                 if (validationError != Errors.NONE) {
-                    if (validationError == Errors.INELIGIBLE_REPLICA &&
-                            context.requestHeader().requestApiVersion() <= 1) {
-                        validationError = Errors.OPERATION_NOT_ATTEMPTED;
-                    }
                     responseTopicData.partitions().add(
                         new AlterPartitionResponseData.PartitionData()
                             .setPartitionIndex(partitionId)
@@ -1056,6 +1054,7 @@ public class ReplicationControlManager {
         int partitionId,
         PartitionRegistration partition,
         Function<Integer, Boolean> isAcceptableReplica,
+        short requestApiVersion,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
         if (partition == null) {
@@ -1129,7 +1128,11 @@ public class ReplicationControlManager {
                     "it specified ineligible replicas {} in the new ISR {}.",
                 brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsr());
 
-            return INELIGIBLE_REPLICA;
+            if (requestApiVersion > 1) {
+                return INELIGIBLE_REPLICA;
+            } else {
+                return OPERATION_NOT_ATTEMPTED;
+            }
         }
 
         return Errors.NONE;

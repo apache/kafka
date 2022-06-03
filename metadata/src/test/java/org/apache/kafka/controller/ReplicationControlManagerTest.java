@@ -1518,8 +1518,6 @@ public class ReplicationControlManagerTest {
             new int[][] {new int[] {1, 2, 3, 4}}
         ).topicId();
 
-        ctx.clusterControl.heartbeatManager().updateControlledShutdownOffset(3, 0);
-
         assertEquals(
             new PartitionRegistration(
                 new int[] {1, 2, 3, 4},
@@ -1531,6 +1529,8 @@ public class ReplicationControlManagerTest {
                 0,
                 0),
             replication.getPartition(fooId, 0));
+
+        ctx.inControlledShutdownBrokers(3);
 
         AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData()
             .setBrokerId(1)
