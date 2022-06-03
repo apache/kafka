@@ -123,6 +123,7 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_PARTITIONS;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICATION_FACTOR;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT;
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
+import static org.apache.kafka.common.protocol.Errors.NEW_LEADER_ELECTED;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
 import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
@@ -1324,8 +1325,9 @@ public class ReplicationControlManagerTest {
     private final static ListPartitionReassignmentsResponseData NONE_REASSIGNING =
         new ListPartitionReassignmentsResponseData().setErrorMessage(null);
 
-    @Test
-    public void testReassignPartitions() throws Exception {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testReassignPartitions(short version) throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3);
@@ -1410,17 +1412,25 @@ public class ReplicationControlManagerTest {
                         setErrorMessage(null)))))),
             cancelResult);
         log.info("running final alterPartition...");
+        ControllerRequestContext requestContext = new ControllerRequestContext(
+            new RequestHeaderData()
+                .setRequestApiVersion(ApiKeys.ALTER_PARTITION.id)
+                .setRequestApiVersion(version),
+            KafkaPrincipal.ANONYMOUS,
+            OptionalLong.empty()
+        );
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
-            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
+            requestContext,
             new AlterPartitionRequestData().setBrokerId(3).setBrokerEpoch(103).
                 setTopics(asList(new TopicData().setTopicName("foo").setPartitions(asList(
                     new PartitionData().setPartitionIndex(1).setPartitionEpoch(1).
                         setLeaderEpoch(0).setNewIsr(asList(3, 0, 2, 1)))))));
+        Errors expectedError = version > 1 ? NEW_LEADER_ELECTED : FENCED_LEADER_EPOCH;
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
             new AlterPartitionResponseData.TopicData().setTopicName("foo").setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(1).
-                    setErrorCode(FENCED_LEADER_EPOCH.code()))))),
+                    setErrorCode(expectedError.code()))))),
             alterPartitionResult.response());
         ctx.replay(alterPartitionResult.records());
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));

@@ -1815,6 +1815,16 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testAlterIsrNewLeaderElected(): Unit = {
+    handleAlterIsrFailure(Errors.NEW_LEADER_ELECTED,
+      (brokerId: Int, remoteBrokerId: Int, partition: Partition) => {
+        assertEquals(partition.partitionState.isr, Set(brokerId))
+        assertEquals(partition.partitionState.maximalIsr, Set(brokerId, remoteBrokerId))
+        assertEquals(alterPartitionManager.isrUpdates.size, 0)
+      })
+  }
+
+  @Test
   def testAlterIsrUnknownTopic(): Unit = {
     handleAlterIsrFailure(Errors.UNKNOWN_TOPIC_OR_PARTITION,
       (brokerId: Int, remoteBrokerId: Int, partition: Partition) => {

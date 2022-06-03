@@ -123,6 +123,7 @@ import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
+import static org.apache.kafka.common.protocol.Errors.NEW_LEADER_ELECTED;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
 import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
@@ -1005,9 +1006,11 @@ public class ReplicationControlManager {
                             "the ongoing partition reassignment and triggered a " +
                             "leadership change. Returning FENCED_LEADER_EPOCH.",
                             request.brokerId(), topic.name, partitionId);
+                        Errors error = context.requestHeader().requestApiVersion() > 1 ?
+                            NEW_LEADER_ELECTED : FENCED_LEADER_EPOCH;
                         responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                             setPartitionIndex(partitionId).
-                            setErrorCode(FENCED_LEADER_EPOCH.code()));
+                            setErrorCode(error.code()));
                         continue;
                     } else if (change.removingReplicas() != null ||
                             change.addingReplicas() != null) {

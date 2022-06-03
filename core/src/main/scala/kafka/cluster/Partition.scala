@@ -1617,6 +1617,7 @@ class Partition(val topicPartition: TopicPartition,
       case Errors.INELIGIBLE_REPLICA =>
         // Since the operation was rejected, it is safe to reset back to the committed state. This
         // assumes that the current state was still the correct expected state.
+        // This is only raised in KRaft mode.
         partitionState = proposedIsrState.partitionStateToRollBackTo
         debug(s"Failed to alter partition to $proposedIsrState since the controller rejected at least one replica " +
           s"because it is ineligible to join the ISR. partition state has been reset to the latest committed state $partitionState.")
@@ -1633,6 +1634,10 @@ class Partition(val topicPartition: TopicPartition,
         false
       case Errors.INVALID_REQUEST =>
         debug(s"Failed to alter partition to $proposedIsrState because the request is invalid. Giving up.")
+        false
+      case Errors.NEW_LEADER_ELECTED =>
+        // This is only raised in KRaft mode.
+        debug(s"ISR updated to ${partitionState.isr.mkString(",")} but this broker is not longer the leader.")
         false
       case _ =>
         warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
