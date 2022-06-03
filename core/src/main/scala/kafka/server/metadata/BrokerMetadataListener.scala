@@ -322,7 +322,7 @@ class BrokerMetadataListener(
     }
 
     override def run(): Unit = {
-      _image.write(this, _image.features().metadataVersion())
+      _image.write(this)
       future.complete(records)
     }
   }

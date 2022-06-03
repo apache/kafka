@@ -19,7 +19,6 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -87,7 +86,7 @@ public class MetadataImageTest {
 
     private void testToImageAndBack(MetadataImage image) throws Throwable {
         MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer, MetadataVersion.latest());
+        image.write(writer);
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
         RecordTestUtils.replayAllBatches(
             delta, image.highestOffsetAndEpoch().offset, image.highestOffsetAndEpoch().epoch, writer.batches());

@@ -73,8 +73,7 @@ class BrokerMetadataSnapshotter(
         extends EventQueue.Event {
     override def run(): Unit = {
       try {
-        val metadataVersion = image.features().metadataVersion();
-        image.write(writer.append(_), metadataVersion)
+        image.write(writer.append(_))
         writer.freeze()
       } finally {
         try {
