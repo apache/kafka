@@ -87,8 +87,6 @@ class AbstractPartitionTest {
       logManager,
       alterPartitionManager)
 
-    when(metadataCache.hasAliveBroker(ArgumentMatchers.anyInt)).thenReturn(true)
-
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
   }

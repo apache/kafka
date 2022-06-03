@@ -243,6 +243,10 @@ class ZkMetadataCache(brokerId: Int, metadataVersion: MetadataVersion, brokerFea
 
   override def hasAliveBroker(brokerId: Int): Boolean = metadataSnapshot.aliveBrokers.contains(brokerId)
 
+  override def isBrokerFenced(brokerId: Int): Boolean = false
+
+  override def isBrokerInControlledShutdown(brokerId: Int): Boolean = false
+
   override def getAliveBrokers(): Iterable[BrokerMetadata] = {
     metadataSnapshot.aliveBrokers.values.map(b => new BrokerMetadata(b.id, b.rack))
   }

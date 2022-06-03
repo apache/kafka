@@ -870,12 +870,9 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def isBrokerIsrEligible(brokerId: Int): Boolean = {
-    // With KRaft, a broker is considered alive if it is unfenced. If it
-    // is fenced or not present, the leader prevent it to be added back
-    // to the ISR.
-    // With ZK, the leader only prevent unexisting brokers to be added back
-    // to the ISR.
-    metadataCache.hasAliveBroker(brokerId)
+    // In KRaft mode, only replicas which are not fenced nor in controlled shutdown are
+    // allowed to join the ISR. This does not apply to ZK mode.
+    !metadataCache.isBrokerFenced(brokerId) && !metadataCache.isBrokerInControlledShutdown(brokerId)
   }
 
   /*

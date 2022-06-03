@@ -58,6 +58,10 @@ trait MetadataCache {
 
   def hasAliveBroker(brokerId: Int): Boolean
 
+  def isBrokerFenced(brokerId: Int): Boolean
+
+  def isBrokerInControlledShutdown(brokerId: Int): Boolean
+
   def getAliveBrokers(): Iterable[BrokerMetadata]
 
   def getTopicId(topicName: String): Uuid
