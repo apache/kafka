@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -115,7 +116,7 @@ public class TestTopicsTest {
         inputTopic.pipeKeyValueList(inputList);
         final List<String> output = outputTopic.readValuesToList();
         assertThat(output, hasItems("This", "is", "an", "example"));
-        assertThat(output, is(equalTo(inputList.stream().map(kv -> kv.value))));
+        assertThat(output, is(equalTo(inputList.stream().map(kv -> kv.value).collect(Collectors.toList()))));
     }
 
     @Test
