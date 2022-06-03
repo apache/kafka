@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -1385,6 +1386,23 @@ public class IntegrationTestUtils {
             }
             Thread.sleep(Math.min(100L, waitTime));
         }
+    }
+
+    public static long getTopicSize(final Properties consumerConfig, final String topicName) {
+        long sum = 0;
+        try (final Consumer<Object, Object> consumer = createConsumer(consumerConfig)) {
+            final Collection<TopicPartition> partitions = consumer.partitionsFor(topicName)
+                .stream()
+                .map(info -> new TopicPartition(topicName, info.partition()))
+                .collect(Collectors.toList());
+            final Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(partitions);
+            final Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+
+            for (final TopicPartition partition : beginningOffsets.keySet()) {
+                sum += endOffsets.get(partition) - beginningOffsets.get(partition);
+            }
+        }
+        return sum;
     }
 
     public static class StableAssignmentListener implements AssignmentListener {

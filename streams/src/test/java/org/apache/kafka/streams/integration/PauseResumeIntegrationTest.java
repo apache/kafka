@@ -19,6 +19,7 @@ package org.apache.kafka.streams.integration;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.KeyValue.pair;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getTopicSize;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
@@ -183,6 +184,7 @@ public class PauseResumeIntegrationTest {
         assertNoLag(lagMap);
 
         // Verify no output somehow?
+        assertEquals(getTopicSize(consumerConfig, OUTPUT_STREAM_1), 3);
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 0),
             CoreMatchers.equalTo(Collections.emptyList()));
 
@@ -191,6 +193,7 @@ public class PauseResumeIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3),
             CoreMatchers.equalTo(COUNT_OUTPUT_DATA2));
+        assertEquals(getTopicSize(consumerConfig, OUTPUT_STREAM_1), 6);
     }
 
     @Test
