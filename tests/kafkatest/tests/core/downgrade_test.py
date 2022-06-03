@@ -19,7 +19,8 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import config_property
 from kafkatest.tests.end_to_end import EndToEndTest
-from kafkatest.version import LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
+    LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, DEV_BRANCH, KafkaVersion
 
 class TestDowngrade(EndToEndTest):
     PARTITIONS = 3
@@ -79,6 +80,9 @@ class TestDowngrade(EndToEndTest):
                     timeout_sec=60, backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
     @cluster(num_nodes=7)
+    @parametrize(version=str(LATEST_3_2), compression_types=["snappy"])
+    @parametrize(version=str(LATEST_3_2), compression_types=["zstd"], security_protocol="SASL_SSL")
+    @matrix(version=[str(LATEST_3_2)], compression_types=[["none"]], static_membership=[False, True])
     @parametrize(version=str(LATEST_3_1), compression_types=["snappy"])
     @parametrize(version=str(LATEST_3_1), compression_types=["zstd"], security_protocol="SASL_SSL")
     @matrix(version=[str(LATEST_3_1)], compression_types=[["none"]], static_membership=[False, True])
