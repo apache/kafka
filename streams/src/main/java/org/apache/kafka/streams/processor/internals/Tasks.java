@@ -37,7 +37,7 @@ class Tasks {
     private final Logger log;
     private final TopologyMetadata topologyMetadata;
 
-    private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
+    private final Map<TaskId, Task> allTasksPerId = Collections.synchronizedSortedMap(new TreeMap<>());
     private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
     private final Collection<Task> readOnlyTasks = Collections.unmodifiableCollection(allTasksPerId.values());
 

@@ -487,35 +487,40 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private void updateStandbyPartitions(final Map<TaskId, Task> tasks,
         final Set<TopicPartition> restoringChangelogs) {
-        // For standby tasks in the `tasks` map, we make sure that the `restoreConsumer`'s state
-        // is correct.
+        if (state == ChangelogReaderState.ACTIVE_RESTORING) {
+            updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
+        }
         if (state == ChangelogReaderState.STANDBY_UPDATING) {
-            final Collection<TopicPartition> toResume =
-                restoringChangelogs.stream().filter(t -> shouldResume(tasks,
-                t)).collect(Collectors.toList());
-            final Collection<TopicPartition> toPause =
-                restoringChangelogs.stream().filter(t -> shouldPause(tasks,
-                    t)).collect(Collectors.toList());
-            restoreConsumer.resume(toResume);
-            restoreConsumer.pause(toPause);
+            updatePartitionsByType(tasks, restoringChangelogs, TaskType.STANDBY);
         }
     }
 
-    private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition) {
+    private void updatePartitionsByType(final Map<TaskId, Task> tasks,
+                                        final Set<TopicPartition> restoringChangelogs,
+                                        final TaskType taskType) {
+        final Collection<TopicPartition> toResume =
+            restoringChangelogs.stream().filter(t -> shouldResume(tasks, t, taskType)).collect(Collectors.toList());
+        final Collection<TopicPartition> toPause =
+            restoringChangelogs.stream().filter(t -> shouldPause(tasks, t, taskType)).collect(Collectors.toList());
+        restoreConsumer.resume(toResume);
+        restoreConsumer.pause(toPause);
+    }
+
+    private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
         final ProcessorStateManager manager = changelogs.get(partition).stateManager;
         final TaskId taskId = manager.taskId();
         final Task task = tasks.get(taskId);
-        if (manager.taskType() == TaskType.STANDBY) {
+        if (manager.taskType() == taskType) {
             return task != null;
         }
         return false;
     }
 
-    private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition) {
+    private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
         final ProcessorStateManager manager = changelogs.get(partition).stateManager;
         final TaskId taskId = manager.taskId();
         final Task task = tasks.get(taskId);
-        if (manager.taskType() == TaskType.STANDBY) {
+        if (manager.taskType() == taskType) {
             return task == null;
         }
         return false;

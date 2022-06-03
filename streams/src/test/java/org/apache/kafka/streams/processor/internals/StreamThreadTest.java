@@ -1688,7 +1688,7 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
 
-        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer);
+        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer, false);
 
         thread.runOnce();
 
@@ -1703,7 +1703,7 @@ public class StreamThreadTest {
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
 
-        addRecordsToRestoreConsumer(restoreConsumer, changelogName1, changelogName2);
+        addStandbyRecordsToRestoreConsumer(restoreConsumer);
 
         thread.runOnce();
 
@@ -1713,24 +1713,28 @@ public class StreamThreadTest {
         thread.taskManager().shutdown(true);
     }
 
-    private void addRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer,
-        final String changelogName1, final String changelogName2) {
+    private void addActiveRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
+        for (long i = 0L; i < 10L; i++) {
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                "stream-thread-test-count-one-changelog",
+                2,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+        }
+    }
+
+    private void addStandbyRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
         for (long i = 0L; i < 10L; i++) {
             restoreConsumer.addRecord(new ConsumerRecord<>(
-                changelogName1,
+                "stream-thread-test-count-one-changelog",
                 1,
                 i,
                 ("K" + i).getBytes(),
                 ("V" + i).getBytes()));
             restoreConsumer.addRecord(new ConsumerRecord<>(
-                changelogName1,
-                2,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                changelogName2,
+                "stream-thread-test-table-two-changelog",
                 1,
                 i,
                 ("K" + i).getBytes(),
@@ -1738,9 +1742,13 @@ public class StreamThreadTest {
         }
     }
 
-    private void setupThread(final String storeName1, final String storeName2,
-        final String changelogName1, final String changelogName2, final StreamThread thread,
-        final MockConsumer<byte[], byte[]> restoreConsumer) throws IOException {
+    private void setupThread(final String storeName1,
+        final String storeName2,
+        final String changelogName1,
+        final String changelogName2,
+        final StreamThread thread,
+        final MockConsumer<byte[], byte[]> restoreConsumer,
+        final boolean addActiveTask) throws IOException {
         final TopicPartition activePartition = new TopicPartition(changelogName1, 2);
         final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
@@ -1777,7 +1785,9 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
-        activeTasks.put(task2, Collections.singleton(t1p2));
+        if (addActiveTask) {
+            activeTasks.put(task2, Collections.singleton(t1p2));
+        }
 
         // assign single partition
         standbyTasks.put(task1, Collections.singleton(t1p1));
@@ -1799,7 +1809,7 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
 
-        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer);
+        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer, true);
 
         thread.runOnce();
 
@@ -1818,8 +1828,10 @@ public class StreamThreadTest {
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
 
+        // Add some records that the active task would handle
+        addActiveRecordsToRestoreConsumer(restoreConsumer);
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
-        addRecordsToRestoreConsumer(restoreConsumer, changelogName1, changelogName2);
+        addStandbyRecordsToRestoreConsumer(restoreConsumer);
 
         // Simulate pause
         thread.taskManager().topologyMetadata().pauseTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
@@ -1833,6 +1845,11 @@ public class StreamThreadTest {
         thread.taskManager().topologyMetadata().resumeTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
         thread.runOnce();
 
+        assertEquals(10L, activeStore.approximateNumEntries());
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        thread.runOnce();
         assertEquals(10L, activeStore.approximateNumEntries());
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(4L, store2.approximateNumEntries());
