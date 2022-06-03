@@ -1791,7 +1791,13 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
-  val interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
+  // If running in ZK mode, this is the IBP given in the config file. If running in KRaft, this is pinned to the lowest
+  // supported IBP that supports KRaft (3.0).
+  val interBrokerProtocolVersion = if (processRoles.isEmpty) {
+    MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
+  } else {
+    MetadataVersion.IBP_3_0_IV1
+  }
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)

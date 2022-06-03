@@ -1903,7 +1903,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {
-    new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
+    new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager, () => metadataCache.metadataVersion())
   }
 
   protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {

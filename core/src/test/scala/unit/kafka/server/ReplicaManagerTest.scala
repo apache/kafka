@@ -2002,11 +2002,12 @@ class ReplicaManagerTest {
                                                          time: Time,
                                                          threadNamePrefix: Option[String],
                                                          replicationQuotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
-        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, replicationQuotaManager) {
+        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, replicationQuotaManager, () => metadataCache.metadataVersion()) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
             new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
-              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quotaManager.follower, Some(blockingSend)) {
+              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quotaManager.follower,
+              () => config.interBrokerProtocolVersion, Some(blockingSend)) {
 
               override def doWork(): Unit = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,

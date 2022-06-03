@@ -311,6 +311,7 @@ public class ReplicaFetcherThreadBenchmark {
                             return false;
                         }
                     },
+                    config::interBrokerProtocolVersion,
                     Option.empty());
             
             pool = partitions;
