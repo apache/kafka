@@ -65,8 +65,8 @@ class AbstractFetcherManagerTest {
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
 
-    when(fetcher.sourceBroker)
-      .thenReturn(new BrokerEndPoint(0, "localhost", 9092))
+    when(fetcher.leader)
+      .thenReturn(new MockLeaderEndPoint(new BrokerEndPoint(0, "localhost", 9092)))
     when(fetcher.addPartitions(Map(tp -> initialFetchState)))
       .thenReturn(Set(tp))
     when(fetcher.fetchState(tp))
@@ -127,8 +127,8 @@ class AbstractFetcherManagerTest {
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
 
-    when(fetcher.sourceBroker)
-      .thenReturn(new BrokerEndPoint(0, "localhost", 9092))
+    when(fetcher.leader)
+      .thenReturn(new MockLeaderEndPoint(new BrokerEndPoint(0, "localhost", 9092)))
     when(fetcher.addPartitions(Map(tp -> initialFetchState)))
       .thenReturn(Set(tp))
     when(fetcher.isThreadFailed).thenReturn(true)
@@ -174,8 +174,8 @@ class AbstractFetcherManagerTest {
       initOffset = fetchOffset)
 
     // Simulate calls to different fetchers due to different leaders
-    when(fetcher.sourceBroker)
-      .thenReturn(new BrokerEndPoint(0, "localhost", 9092))
+    when(fetcher.leader)
+      .thenReturn(new MockLeaderEndPoint(new BrokerEndPoint(0, "localhost", 9092)))
     when(fetcher.addPartitions(Map(tp1 -> initialFetchState1)))
       .thenReturn(Set(tp1))
     when(fetcher.addPartitions(Map(tp2 -> initialFetchState2)))
@@ -288,11 +288,31 @@ class AbstractFetcherManagerTest {
     Utils.abs(tp.hashCode) % brokerNum
   }
 
+  private class MockLeaderEndPoint(sourceBroker: BrokerEndPoint) extends LeaderEndPoint {
+    override def initiateClose(): Unit = {}
+
+    override def close(): Unit = {}
+
+    override def brokerEndPoint(): BrokerEndPoint = sourceBroker
+
+    override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
+
+    override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
+
+    override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
+
+    override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = ResultWithPartitions(None, Set.empty)
+
+    override val isTruncationOnFetchSupported: Boolean = false
+  }
+
   private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)
     extends AbstractFetcherThread(
       name = "test-resize-fetcher",
       clientId = "mock-fetcher",
-      sourceBroker,
+      leader = new MockLeaderEndPoint(sourceBroker),
       failedPartitions,
       fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {
@@ -305,8 +325,6 @@ class AbstractFetcherManagerTest {
 
     override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {}
 
-    override protected def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = ResultWithPartitions(None, Set.empty)
-
     override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = Some(0)
 
     override protected def logStartOffset(topicPartition: TopicPartition): Long = 1
@@ -315,16 +333,7 @@ class AbstractFetcherManagerTest {
 
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(OffsetAndEpoch(1, 0))
 
-    override protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
-
-    override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
-
-    override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
-
-    override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = 1
-
     override protected val isOffsetForLeaderEpochSupported: Boolean = false
-    override protected val isTruncationOnFetchSupported: Boolean = false
   }
 
 }
