@@ -30,6 +30,7 @@ import static org.junit.Assert.assertTrue;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -135,6 +136,7 @@ public class PauseResumeIntegrationTest {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        //properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
         return properties;
     }
 
@@ -464,7 +466,7 @@ public class PauseResumeIntegrationTest {
         kafkaStreams2.pause();
         kafkaStreams2.start();
         // Check for rebalancing instead?
-        waitForApplicationState(singletonList(kafkaStreams2), State.RUNNING, STARTUP_TIMEOUT);
+        //waitForApplicationState(singletonList(kafkaStreams2), State.RUNNING, STARTUP_TIMEOUT);
         assertTrue(kafkaStreams2.isPaused());
 
         // Verify no data?
@@ -473,11 +475,18 @@ public class PauseResumeIntegrationTest {
 
         // -- Verify that each instance is in rebalancing (after change to pause active task restoration)
 
+        System.out.println("JNH: calling close: " + kafkaStreams.state());
         // Close the other -- this causes a rebalance
         kafkaStreams2.close();
+        waitForApplicationState(singletonList(kafkaStreams2), State.NOT_RUNNING, STARTUP_TIMEOUT);
+
+        System.out.println("JNH: called close: " + kafkaStreams.state());
 
         // Resume paused instance
         kafkaStreams.resume();
+        System.out.println("JNH: called resume " + kafkaStreams.state());
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, STARTUP_TIMEOUT);
+        System.out.println("JNH: streams is running again " + new Date());
 
         // Observe all data processed
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3),
