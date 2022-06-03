@@ -318,6 +318,11 @@ class LogManager(logDirs: Seq[File],
     val jobs = ArrayBuffer.empty[Seq[Future[_]]]
     var numTotalLogs = 0
 
+    def handleIOException(logDirAbsolutePath: String, e: IOException): Unit = {
+      offlineDirs.add((logDirAbsolutePath, e))
+      error(s"Error while loading log dir $logDirAbsolutePath", e)
+    }
+
     for (dir <- liveLogDirs) {
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
@@ -376,8 +381,10 @@ class LogManager(logDirs: Seq[File],
                 s"($currentNumLoaded/${logsToLoad.length} loaded in $logDirAbsolutePath)")
             } catch {
               case e: IOException =>
-                offlineDirs.add((logDirAbsolutePath, e))
-                error(s"Error while loading log dir $logDirAbsolutePath", e)
+                handleIOException(logDirAbsolutePath, e)
+              case e: KafkaStorageException if e.getCause.isInstanceOf[IOException] =>
+                // KafkaStorageException might be thrown, ex: during writing LeaderEpochFileCache
+                // And while converting IOException to KafkaStorageException, we've already handled the exception. So we can ignore it here.
             }
           }
           runnable
@@ -386,8 +393,7 @@ class LogManager(logDirs: Seq[File],
         jobs += jobsForDir.map(pool.submit)
       } catch {
         case e: IOException =>
-          offlineDirs.add((logDirAbsolutePath, e))
-          error(s"Error while loading log dir $logDirAbsolutePath", e)
+          handleIOException(logDirAbsolutePath, e)
       }
     }
 

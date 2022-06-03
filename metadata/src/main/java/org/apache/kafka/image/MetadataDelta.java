@@ -29,7 +29,6 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
-import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
@@ -204,9 +203,6 @@ public final class MetadataDelta {
             case PRODUCER_IDS_RECORD:
                 replay((ProducerIdsRecord) record);
                 break;
-            case REMOVE_FEATURE_LEVEL_RECORD:
-                replay((RemoveFeatureLevelRecord) record);
-                break;
             case BROKER_REGISTRATION_CHANGE_RECORD:
                 replay((BrokerRegistrationChangeRecord) record);
                 break;
@@ -289,10 +285,6 @@ public final class MetadataDelta {
 
     public void replay(ProducerIdsRecord record) {
         getOrCreateProducerIdsDelta().replay(record);
-    }
-
-    public void replay(RemoveFeatureLevelRecord record) {
-        getOrCreateFeaturesDelta().replay(record);
     }
 
     public void replay(AccessControlEntryRecord record) {

@@ -23,14 +23,17 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.FenceBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -43,12 +46,15 @@ import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -57,8 +63,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class ClusterControlManagerTest {
-    @Test
-    public void testReplay() {
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_0_IV0", "IBP_3_3_IV2"})
+    public void testReplay(MetadataVersion metadataVersion) {
         MockTime time = new MockTime(0, 0, 0);
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
@@ -86,11 +93,29 @@ public class ClusterControlManagerTest {
         assertFalse(clusterControl.unfenced(0));
         assertFalse(clusterControl.unfenced(1));
 
-        UnfenceBrokerRecord unfenceBrokerRecord =
-            new UnfenceBrokerRecord().setId(1).setEpoch(100);
-        clusterControl.replay(unfenceBrokerRecord);
+        if (metadataVersion.isLessThan(IBP_3_3_IV2)) {
+            UnfenceBrokerRecord unfenceBrokerRecord =
+                    new UnfenceBrokerRecord().setId(1).setEpoch(100);
+            clusterControl.replay(unfenceBrokerRecord);
+        } else {
+            BrokerRegistrationChangeRecord changeRecord =
+                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced((byte) -1);
+            clusterControl.replay(changeRecord);
+        }
         assertFalse(clusterControl.unfenced(0));
         assertTrue(clusterControl.unfenced(1));
+
+        if (metadataVersion.isLessThan(IBP_3_3_IV2)) {
+            FenceBrokerRecord fenceBrokerRecord =
+                    new FenceBrokerRecord().setId(1).setEpoch(100);
+            clusterControl.replay(fenceBrokerRecord);
+        } else {
+            BrokerRegistrationChangeRecord changeRecord =
+                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced((byte) 1);
+            clusterControl.replay(changeRecord);
+        }
+        assertFalse(clusterControl.unfenced(0));
+        assertFalse(clusterControl.unfenced(1));
     }
 
     @Test
