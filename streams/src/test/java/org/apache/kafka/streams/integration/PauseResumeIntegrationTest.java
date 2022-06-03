@@ -136,7 +136,8 @@ public class PauseResumeIntegrationTest {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        //properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
+        properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         return properties;
     }
 
@@ -478,6 +479,7 @@ public class PauseResumeIntegrationTest {
         System.out.println("JNH: calling close: " + kafkaStreams.state());
         // Close the other -- this causes a rebalance
         kafkaStreams2.close();
+        kafkaStreams2.cleanUp();
         waitForApplicationState(singletonList(kafkaStreams2), State.NOT_RUNNING, STARTUP_TIMEOUT);
 
         System.out.println("JNH: called close: " + kafkaStreams.state());
