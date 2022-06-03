@@ -1171,9 +1171,9 @@ public class StreamsMetricsImplTest {
 
         final double valueToRecord1 = 18.0;
         final double valueToRecord2 = 42.0;
-        final double expectedCountMetricValue = 4;
+        final double expectedCountMetricValue = 2;
         verifyMetric(totalMetricNamePrefix + "-total", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedCountMetricValue);
-        final double expectedSumMetricValue = 2 * valueToRecord1 + 2 * valueToRecord2; // values are recorded once for each metric verification
+        final double expectedSumMetricValue = valueToRecord1 + valueToRecord2;
         verifyMetric(sumMetricNamePrefix + "-total", DESCRIPTION2, valueToRecord1, valueToRecord2, expectedSumMetricValue);
         assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
     }
