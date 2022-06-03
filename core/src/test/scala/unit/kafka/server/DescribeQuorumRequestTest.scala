@@ -57,7 +57,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
     for (version <- ApiKeys.DESCRIBE_QUORUM.allVersions.asScala) {
       val request = new DescribeQuorumRequest.Builder(
         singletonRequest(KafkaRaftServer.MetadataPartition)
-      ).build(version.asInstanceOf[Short])
+      ).build(version.toShort)
       val response = connectAndReceive[DescribeQuorumResponse](request)
 
       assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
@@ -79,18 +79,20 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
         .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
       assertTrue(leaderState.logEndOffset > 0)
 
-        val voterData = partitionData.currentVoters().asScala
-        val observerData = partitionData.observers().asScala
-        if (version == 0) {
-          voterData.foreach { state =>
-            assertEquals(-1, state.lastFetchTimestamp())
-            assertEquals(-1, state.lastCaughtUpTimestamp())
-          }
-          observerData.foreach { state =>
-            assertEquals(-1, state.lastFetchTimestamp())
-            assertEquals(-1, state.lastCaughtUpTimestamp())
-          }
+      val voterData = partitionData.currentVoters().asScala
+      val observerData = partitionData.observers().asScala
+      if (version == 0) {
+        voterData.foreach { state =>
+          assertTrue(0 < state.replicaId)
+          assertEquals(-1, state.lastFetchTimestamp())
+          assertEquals(-1, state.lastCaughtUpTimestamp())
         }
+        observerData.foreach { state =>
+          assertTrue(0 < state.replicaId)
+          assertEquals(-1, state.lastFetchTimestamp())
+          assertEquals(-1, state.lastCaughtUpTimestamp())
+        }
+      }
     }
   }
 

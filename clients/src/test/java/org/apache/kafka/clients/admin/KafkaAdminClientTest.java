@@ -583,12 +583,14 @@ public class KafkaAdminClientTest {
                 .setErrorCode(error.code()));
     }
 
-    private static QuorumInfo defaultQuorumInfo() {
-        return new QuorumInfo(Topic.METADATA_TOPIC_NAME, 0,
+    private static QuorumInfo defaultQuorumInfo(Boolean emptyOptionals) {
+        return new QuorumInfo(1,
                 singletonList(new QuorumInfo.ReplicaState(1, 100,
-                        OptionalLong.of(1000), OptionalLong.of(1000))),
+                        OptionalLong.of(emptyOptionals ? -1 : 1000),
+                        OptionalLong.of(emptyOptionals ? -1 : 1000))),
                 singletonList(new QuorumInfo.ReplicaState(1, 100,
-                        OptionalLong.of(1000), OptionalLong.of(1000))));
+                        OptionalLong.of(emptyOptionals ? -1 : 1000),
+                        OptionalLong.of(emptyOptionals ? -1 : 1000))));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(
@@ -597,26 +599,24 @@ public class KafkaAdminClientTest {
             Boolean topicCountError,
             Boolean topicNameError,
             Boolean partitionCountError,
-            Boolean partitionIndexError) {
+            Boolean partitionIndexError,
+            Boolean emptyOptionals) {
         String topicName = topicNameError ? "RANDOM" : Topic.METADATA_TOPIC_NAME;
         Integer partitionIndex = partitionIndexError ? 1 : Topic.METADATA_TOPIC_PARTITION.partition();
         List<DescribeQuorumResponseData.TopicData> topics = new ArrayList<>();
         List<DescribeQuorumResponseData.PartitionData> partitions = new ArrayList<>();
         for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
+            DescribeQuorumResponseData.ReplicaState replica = new DescribeQuorumResponseData.ReplicaState()
+                    .setReplicaId(1)
+                    .setLogEndOffset(100);
+            replica.setLastFetchTimestamp(emptyOptionals ? -1 : 1000);
+            replica.setLastCaughtUpTimestamp(emptyOptionals ? -1 : 1000);
             partitions.add(new DescribeQuorumResponseData.PartitionData().setPartitionIndex(partitionIndex)
-                    .setLeaderId(0)
+                    .setLeaderId(1)
                     .setLeaderEpoch(0)
                     .setHighWatermark(0)
-                    .setCurrentVoters(singletonList(new DescribeQuorumResponseData.ReplicaState()
-                            .setReplicaId(1)
-                            .setLogEndOffset(100)
-                            .setLastFetchTimestamp(1000)
-                            .setLastCaughtUpTimestamp(1000)))
-                    .setObservers(singletonList(new DescribeQuorumResponseData.ReplicaState()
-                            .setReplicaId(1)
-                            .setLogEndOffset(100)
-                            .setLastFetchTimestamp(1000)
-                            .setLastCaughtUpTimestamp(1000)))
+                    .setCurrentVoters(singletonList(replica))
+                    .setObservers(singletonList(replica))
                     .setErrorCode(partitionLevelError.code()));
         }
         for (int i = 0; i < (topicCountError ? 2 : 1); i++) {
@@ -4885,12 +4885,22 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,
                     ApiKeys.DESCRIBE_QUORUM.oldestVersion(),
                     ApiKeys.DESCRIBE_QUORUM.latestVersion()));
+
+            // Test with optional fields set
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, false, false));
-            final KafkaFuture<QuorumInfo> future = env.adminClient().describeMetadataQuorum().quorumInfo();
-            final QuorumInfo quorumInfo = future.get();
-            assertEquals(defaultQuorumInfo(), quorumInfo);
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, false, false, false));
+            KafkaFuture<QuorumInfo> future = env.adminClient().describeMetadataQuorum().quorumInfo();
+            QuorumInfo quorumInfo = future.get();
+            assertEquals(defaultQuorumInfo(false), quorumInfo);
+
+            // Test with optional fields empty
+            env.kafkaClient().prepareResponse(
+                    body -> body instanceof DescribeQuorumRequest,
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, false, false, true));
+            future = env.adminClient().describeMetadataQuorum().quorumInfo();
+            quorumInfo = future.get();
+            assertEquals(defaultQuorumInfo(true), quorumInfo);
         }
     }
 
@@ -4904,62 +4914,56 @@ public class KafkaAdminClientTest {
             // Test top level error
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.INVALID_REQUEST, Errors.NONE, false, false, false, false));
+                    prepareDescribeQuorumResponse(Errors.INVALID_REQUEST, Errors.NONE, false, false, false, false, false));
             KafkaFuture<QuorumInfo> future = env.adminClient().describeMetadataQuorum().quorumInfo();
-            TestUtils.assertFutureThrows(future, Errors.INVALID_REQUEST.exception().getClass());
-            future = null;
+            TestUtils.assertFutureThrows(future, InvalidRequestException.class);
 
             // Test incorrect topic count
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, true, false, false, false));
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, true, false, false, false, false));
             future = env.adminClient().describeMetadataQuorum().quorumInfo();
             TestUtils.assertFutureThrows(future, UnknownServerException.class);
-            future = null;
 
             // Test incorrect topic name
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, true, false, false));
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, true, false, false, false));
             future = env.adminClient().describeMetadataQuorum().quorumInfo();
             TestUtils.assertFutureThrows(future, UnknownServerException.class);
-            future = null;
 
             // Test incorrect partition count
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, true, false));
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, true, false, false));
             future = env.adminClient().describeMetadataQuorum().quorumInfo();
             TestUtils.assertFutureThrows(future, UnknownServerException.class);
-            future = null;
 
             // Test incorrect partition index
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, false, true));
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, false, true, false));
             future = env.adminClient().describeMetadataQuorum().quorumInfo();
             TestUtils.assertFutureThrows(future, UnknownServerException.class);
-            future = null;
 
             // Test partition level error
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.NONE, Errors.INVALID_REQUEST, false, false, false, false));
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.INVALID_REQUEST, false, false, false, false, false));
             future = env.adminClient().describeMetadataQuorum().quorumInfo();
-            TestUtils.assertFutureThrows(future, Errors.INVALID_REQUEST.exception().getClass());
+            TestUtils.assertFutureThrows(future, InvalidRequestException.class);
 
             // Test all incorrect and no errors
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, true, true, true, true));
+                    prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, true, true, true, true, false));
             future = env.adminClient().describeMetadataQuorum().quorumInfo();
             TestUtils.assertFutureThrows(future, UnknownServerException.class);
-            future = null;
 
             // Test all incorrect and both errors
             env.kafkaClient().prepareResponse(
                     body -> body instanceof DescribeQuorumRequest,
-                    prepareDescribeQuorumResponse(Errors.INVALID_REQUEST, Errors.INVALID_REQUEST, true, true, true, true));
+                    prepareDescribeQuorumResponse(Errors.INVALID_REQUEST, Errors.INVALID_REQUEST, true, true, true, true, false));
             future = env.adminClient().describeMetadataQuorum().quorumInfo();
             TestUtils.assertFutureThrows(future, Errors.INVALID_REQUEST.exception().getClass());
         }

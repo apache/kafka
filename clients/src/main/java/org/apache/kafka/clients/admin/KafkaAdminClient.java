@@ -4337,25 +4337,22 @@ public class KafkaAdminClient extends AdminClient {
         final Call call = new Call(
                 "describeMetadataQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
 
-            private QuorumInfo createQuorumResult(final DescribeQuorumResponse response) {
-                Integer partition = 0;
-                String topicName = response.getTopicNameByIndex(0);
-                Integer leaderId = response.getPartitionLeaderId(topicName, partition);
+            private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
                 List<QuorumInfo.ReplicaState> voters = new ArrayList<>();
                 List<QuorumInfo.ReplicaState> observers = new ArrayList<>();
-                response.getVoterInfo(topicName, partition).forEach(v -> {
+                partition.currentVoters().forEach(v -> {
                     voters.add(new QuorumInfo.ReplicaState(v.replicaId(),
                                 v.logEndOffset(),
                                 OptionalLong.of(v.lastFetchTimestamp()),
                                 OptionalLong.of(v.lastCaughtUpTimestamp())));
                 });
-                response.getObserverInfo(topicName, partition).forEach(o -> {
+                partition.observers().forEach(o -> {
                     observers.add(new QuorumInfo.ReplicaState(o.replicaId(),
                                 o.logEndOffset(),
                                 OptionalLong.of(o.lastFetchTimestamp()),
                                 OptionalLong.of(o.lastCaughtUpTimestamp())));
                 });
-                QuorumInfo info = new QuorumInfo(topicName, leaderId, voters, observers);
+                QuorumInfo info = new QuorumInfo(partition.leaderId(), voters, observers);
                 return info;
             }
 
@@ -4373,31 +4370,37 @@ public class KafkaAdminClient extends AdminClient {
                         throw Errors.forCode(quorumResponse.data().errorCode()).exception();
                     }
                     if (quorumResponse.data().topics().size() > 1) {
-                        log.error("DescribeMetadataQuorum received {} topics when 1 was expected",
+                        String msg = String.format("DescribeMetadataQuorum received {} topics when 1 was expected",
                                 quorumResponse.data().topics().size());
-                        throw new UnknownServerException();
+                        log.debug(msg);
+                        throw new UnknownServerException(msg);
                     }
                     DescribeQuorumResponseData.TopicData topic = quorumResponse.data().topics().get(0);
                     if (!topic.topicName().equals(METADATA_TOPIC_NAME)) {
-                        log.error("DescribeMetadataQuorum received a topic with name {} when {} was expected",
+                        String msg = String.format("DescribeMetadataQuorum received a topic with name {} when {} was expected",
                                 topic.topicName(), METADATA_TOPIC_NAME);
-                        throw new UnknownServerException();
+                        log.debug(msg);
+                        throw new UnknownServerException(msg);
                     }
                     if (topic.partitions().size() > 1) {
-                        log.error("DescribeMetadataQuorum received a topic {} with {} partitions when 1 was expected",
+                        String msg = String.format("DescribeMetadataQuorum received a topic {} with {} partitions when 1 was expected",
                                 topic.topicName(), topic.partitions().size());
-                        throw new UnknownServerException();
+                        log.debug(msg);
+                        throw new UnknownServerException(msg);
                     }
                     DescribeQuorumResponseData.PartitionData partition = topic.partitions().get(0);
                     if (partition.partitionIndex() != METADATA_TOPIC_PARTITION.partition()) {
-                        log.error("DescribeMetadataQuorum received a single partition with index {} when {} was expected",
+                        String msg = String.format("DescribeMetadataQuorum received a single partition with index {} when {} was expected",
                                 partition.partitionIndex(), METADATA_TOPIC_PARTITION.partition());
-                        throw new UnknownServerException();
+                        log.debug(msg);
+                        throw new UnknownServerException(msg);
                     }
                     if (partition.errorCode() != Errors.NONE.code()) {
                         throw Errors.forCode(partition.errorCode()).exception();
                     }
-                    future.complete(createQuorumResult(quorumResponse));
+                    future.complete(createQuorumResult(partition));
+                } catch (RuntimeException e) {
+                    throw e;
                 } catch (Exception e) {
                     future.completeExceptionally(e);
                 }

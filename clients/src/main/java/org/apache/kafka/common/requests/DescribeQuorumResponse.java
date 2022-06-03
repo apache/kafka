@@ -95,22 +95,6 @@ public class DescribeQuorumResponse extends AbstractResponse {
         return new DescribeQuorumResponse(new DescribeQuorumResponseData(new ByteBufferAccessor(buffer), version));
     }
 
-    public String getTopicNameByIndex(Integer index) {
-        return data.topics().get(index).topicName();
-    }
-
-    public Integer getPartitionLeaderId(String topicName, Integer partition) {
-        Integer leaderId = -1;
-        TopicData topic = data.topics().stream()
-            .filter(t -> t.topicName().equals(topicName))
-            .findFirst()
-            .orElse(null);
-        if (topic != null) {
-            leaderId = Integer.valueOf(topic.partitions().get(partition).leaderId());
-        }
-        return leaderId;
-    }
-
     /**
      * Get the replica info for the given topic name and partition.
      * @param topicName Name of the topic to fetch
@@ -129,14 +113,6 @@ public class DescribeQuorumResponse extends AbstractResponse {
             return replicaStates;
         }
         return null;
-    }
-
-    public List<ReplicaState> getVoterInfo(String topicName, Integer partition) {
-        return getReplicaInfo(topicName, partition, true);
-    }
-
-    public List<ReplicaState> getObserverInfo(String topicName, Integer partition) {
-        return getReplicaInfo(topicName, partition, false);
     }
 
 }

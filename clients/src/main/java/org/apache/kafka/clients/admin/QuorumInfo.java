@@ -24,20 +24,14 @@ import java.util.OptionalLong;
  * This is used to describe per-partition state in the DescribeQuorumResponse.
  */
 public class QuorumInfo {
-    private final String topic;
     private final Integer leaderId;
     private final List<ReplicaState> voters;
     private final List<ReplicaState> observers;
 
-    public QuorumInfo(String topic, Integer leaderId, List<ReplicaState> voters, List<ReplicaState> observers) {
-        this.topic = topic;
+    QuorumInfo(Integer leaderId, List<ReplicaState> voters, List<ReplicaState> observers) {
         this.leaderId = leaderId;
         this.voters = voters;
         this.observers = observers;
-    }
-
-    public String topic() {
-        return topic;
     }
 
     public Integer leaderId() {
@@ -57,22 +51,20 @@ public class QuorumInfo {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         QuorumInfo that = (QuorumInfo) o;
-        return topic.equals(that.topic)
-            && leaderId.equals(that.leaderId)
+        return leaderId.equals(that.leaderId)
             && voters.equals(that.voters)
             && observers.equals(that.observers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topic, leaderId, voters, observers);
+        return Objects.hash(leaderId, voters, observers);
     }
 
     @Override
     public String toString() {
         return "QuorumInfo(" +
-            "topic='" + topic + '\'' +
-            ", leaderId=" + leaderId +
+            "leaderId=" + leaderId +
             ", voters=" + voters.toString() +
             ", observers=" + observers.toString() +
             ')';
@@ -96,10 +88,18 @@ public class QuorumInfo {
             this.lastCaughtUpTimeMs = lastCaughtUpTimeMs;
         }
 
+        /**
+         * Return the ID for this replica.
+         * @return The ID for this replica
+         */
         public int replicaId() {
             return replicaId;
         }
 
+        /**
+         * Return the logEndOffset known by the leader for this replica.
+         * @return The logEndOffset for this replica
+         */
         public long logEndOffset() {
             return logEndOffset;
         }

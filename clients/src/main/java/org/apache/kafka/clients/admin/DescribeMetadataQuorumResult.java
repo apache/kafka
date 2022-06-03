@@ -20,7 +20,6 @@ import org.apache.kafka.common.KafkaFuture;
 
 /**
  * The result of {@link Admin#describeMetadataQuorum(DescribeMetadataQuorumOptions)}
- *
  */
 public class DescribeMetadataQuorumResult {
 
@@ -31,7 +30,7 @@ public class DescribeMetadataQuorumResult {
     }
 
     /**
-     * Returns a future QuorumInfo
+     * Returns a future containing the QuorumInfo
      */
     public KafkaFuture<QuorumInfo> quorumInfo() {
         return quorumInfo;

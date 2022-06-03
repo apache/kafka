@@ -1449,7 +1449,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Describes the state of the metadata quorum.
      * <p>
-     * This is a convenience method for {@link #describeMetadataQuorum(DescribeMetadataQuorumOptions)}  with default options.
+     * This is a convenience method for {@link #describeMetadataQuorum(DescribeMetadataQuorumOptions)} with default options.
      * See the overload for more details.
      *
      * @return the {@link DescribeMetadataQuorumResult} containing the result
