@@ -229,7 +229,6 @@ class DefaultAlterPartitionManager(
     inflightAlterPartitionItems: Seq[AlterPartitionItem],
   ): (AlterPartitionRequestData, Boolean, mutable.Map[Uuid, String]) = {
     val metadataVersion = metadataVersionSupplier()
-    println(metadataVersion)
     var canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
     val topicNamesByIds = mutable.HashMap[Uuid, String]()
 
@@ -263,7 +262,6 @@ class DefaultAlterPartitionManager(
       }
     }
 
-    println(s"$message $canUseTopicIds $topicNamesByIds")
     (message, canUseTopicIds, if (canUseTopicIds) topicNamesByIds else mutable.Map.empty[Uuid, String])
   }
 
@@ -288,7 +286,6 @@ class DefaultAlterPartitionManager(
         val partitionResponses = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
         data.topics.forEach { topic =>
           topic.partitions.forEach { partition =>
-            println(s"$topic $partition $topicNamesByIds")
             val tp = new TopicPartition(
               topicNamesByIds.getOrElse(topic.topicId, topic.topicName),
               partition.partitionIndex
