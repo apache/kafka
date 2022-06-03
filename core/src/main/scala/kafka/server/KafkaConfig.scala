@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Locale, Properties}
-
 import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
@@ -82,7 +81,7 @@ object Defaults {
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
   val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
-  val MetadataMaxIdleIntervalMs = 500
+  val MetadataMaxIdleIntervalMs = 5000
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -1792,6 +1791,37 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
   val interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
+
+  val fetchRequestVersion: Short =
+    if (interBrokerProtocolVersion.isAtLeast(IBP_3_1_IV0)) 13
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_7_IV1)) 12
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 11
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV2)) 10
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)) 8
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_1_1_IV0)) 7
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV1)) 5
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV0)) 4
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV1)) 3
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_0_IV0)) 2
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_9_0)) 1
+    else 0
+
+  val offsetForLeaderEpochRequestVersion: Short =
+    if (interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 4
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 3
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV1)) 2
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV0)) 1
+    else 0
+
+  val listOffsetRequestVersion: Short =
+    if (interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)) 7
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 6
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV1)) 5
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV1)) 4
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)) 3
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV0)) 2
+    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV2)) 1
+    else 0
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)
