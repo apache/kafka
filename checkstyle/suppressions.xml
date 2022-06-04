@@ -311,7 +311,7 @@
               files="(RemoteLogManagerConfig).java"/>
 
     <!-- benchmarks -->
-    <suppress checks="ClassDataAbstractionCoupling"
+    <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
 </suppressions>
