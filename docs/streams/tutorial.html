@@ -501,7 +501,7 @@ Global Stores:
 
     <p>
         As we can see above, the topology now contains two disconnected sub-topologies.
-        The first sub-topology's sink node <code>KSTREAM-SINK-0000000004</code> will write to a repartition topic <code>counts-repartition</code>,
+        The first sub-topology's sink node <code>KSTREAM-SINK-0000000004</code> will write to a repartition topic <code>counts-store-repartition</code>,
         which will be read by the second sub-topology's source node <code>KSTREAM-SOURCE-0000000006</code>.
         The repartition topic is used to "shuffle" the source stream by its aggregation key, which is in this case the value string.
         In addition, inside the first sub-topology a stateless <code>KSTREAM-FILTER-0000000005</code> node is injected between the grouping <code>KSTREAM-KEY-SELECT-0000000002</code> node and the sink node to filter out any intermediate record whose aggregate key is empty.
