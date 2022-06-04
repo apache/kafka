@@ -244,6 +244,68 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_3_IV2);
     }
 
+    public short fetchRequestVersion() {
+        if (this.isAtLeast(IBP_3_1_IV0)) {
+            return 13;
+        } else if (this.isAtLeast(IBP_2_7_IV1)) {
+            return 12;
+        } else if (this.isAtLeast(IBP_2_3_IV1)) {
+            return 11;
+        } else if (this.isAtLeast(IBP_2_1_IV2)) {
+            return 10;
+        } else if (this.isAtLeast(IBP_2_0_IV1)) {
+            return 8;
+        } else if (this.isAtLeast(IBP_1_1_IV0)) {
+            return 7;
+        } else if (this.isAtLeast(IBP_0_11_0_IV1)) {
+            return 5;
+        } else if (this.isAtLeast(IBP_0_11_0_IV0)) {
+            return 4;
+        } else if (this.isAtLeast(IBP_0_10_1_IV1)) {
+            return 3;
+        } else if (this.isAtLeast(IBP_0_10_0_IV0)) {
+            return 2;
+        } else if (this.isAtLeast(IBP_0_9_0)) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    public short offsetForLeaderEpochRequestVersion() {
+        if (this.isAtLeast(IBP_2_8_IV0)) {
+            return 4;
+        } else if (this.isAtLeast(IBP_2_3_IV1)) {
+            return 3;
+        } else if (this.isAtLeast(IBP_2_1_IV1)) {
+            return 2;
+        } else if (this.isAtLeast(IBP_2_0_IV0)) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    public short listOffsetRequestVersion() {
+        if (this.isAtLeast(IBP_3_0_IV1)) {
+            return 7;
+        } else if (this.isAtLeast(IBP_2_8_IV0)) {
+            return 6;
+        } else if (this.isAtLeast(IBP_2_2_IV1)) {
+            return 5;
+        } else if (this.isAtLeast(IBP_2_1_IV1)) {
+            return 4;
+        } else if (this.isAtLeast(IBP_2_0_IV1)) {
+            return 3;
+        } else if (this.isAtLeast(IBP_0_11_0_IV0)) {
+            return 2;
+        } else if (this.isAtLeast(IBP_0_10_1_IV2)) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
     static {
         {

@@ -103,14 +103,16 @@ class ReplicaFetcherThreadTest {
                                          leaderEndpointBlockingSend: BlockingSend): ReplicaFetcherThread = {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${leaderEndpointBlockingSend.brokerEndPoint().id}, fetcherId=$fetcherId] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, leaderEndpointBlockingSend.brokerEndPoint().id)
-    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler, brokerConfig, replicaMgr, quota)
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler,
+      brokerConfig, replicaMgr, quota, () => brokerConfig.interBrokerProtocolVersion)
     new ReplicaFetcherThread(name,
       leader,
       brokerConfig,
       failedPartitions,
       replicaMgr,
       quota,
-      logContext.logPrefix)
+      logContext.logPrefix,
+      () => brokerConfig.interBrokerProtocolVersion)
   }
 
   @Test
@@ -121,9 +123,9 @@ class ReplicaFetcherThreadTest {
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
-    assertEquals(ApiKeys.FETCH.latestVersion, config.fetchRequestVersion)
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.listOffsetRequestVersion)
+    assertEquals(ApiKeys.FETCH.latestVersion, config.interBrokerProtocolVersion.fetchRequestVersion())
+    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.interBrokerProtocolVersion.offsetForLeaderEpochRequestVersion)
+    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.interBrokerProtocolVersion.listOffsetRequestVersion)
   }
 
   @Test
@@ -581,8 +583,10 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new MockBlockingSender(Collections.emptyMap(), brokerEndPoint, new SystemTime())
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
-    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config, replicaManager, quota)
-    val thread = new ReplicaFetcherThread("bob", leader, config, failedPartitions, replicaManager, quota, logContext.logPrefix) {
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
+      replicaManager, quota, () => config.interBrokerProtocolVersion)
+    val thread = new ReplicaFetcherThread("bob", leader, config, failedPartitions,
+      replicaManager, quota, logContext.logPrefix, () => config.interBrokerProtocolVersion) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
     }
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialLEO), t1p1 -> initialFetchState(Some(topicId1), initialLEO)))
@@ -1036,14 +1040,16 @@ class ReplicaFetcherThreadTest {
 
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
-    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config, replicaManager, replicaQuota)
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config,
+      replicaManager, replicaQuota, () => config.interBrokerProtocolVersion)
     val thread = new ReplicaFetcherThread("bob",
       leader,
       config,
       failedPartitions,
       replicaManager,
       replicaQuota,
-      logContext.logPrefix)
+      logContext.logPrefix,
+      () => config.interBrokerProtocolVersion)
 
     val leaderEpoch = 1
 
