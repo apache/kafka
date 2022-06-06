@@ -558,7 +558,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // should try to find coordinator since we are commit async
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), (offsets, exception) -> {
-            fail("Commit should not get responses, but got offsets:" + offsets +", and exception:" + exception);
+            fail("Commit should not get responses, but got offsets:" + offsets + ", and exception:" + exception);
         });
         coordinator.poll(time.timer(0));
         assertTrue(coordinator.coordinatorUnknown());
