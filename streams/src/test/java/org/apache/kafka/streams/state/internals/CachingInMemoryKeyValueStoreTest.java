@@ -105,7 +105,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
-        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> inner = EasyMock.createMock(InMemoryKeyValueStore.class);
         final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
         EasyMock.expect(inner.name()).andStubReturn("store");
         inner.init((ProcessorContext) context, outer);
@@ -117,7 +117,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
     @Test
     public void shouldDelegateInit() {
-        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> inner = EasyMock.createMock(InMemoryKeyValueStore.class);
         final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
         EasyMock.expect(inner.name()).andStubReturn("store");
         inner.init((StateStoreContext) context, outer);
@@ -203,7 +203,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
         EasyMock.replay(underlyingStore);
         store = new CachingKeyValueStore(underlyingStore, false);
-        cache = EasyMock.niceMock(ThreadCache.class);
+        cache = EasyMock.createNiceMock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
         store.init((StateStoreContext) context, store);
