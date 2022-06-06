@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.integration.StandbyTaskCreationIntegrationTest;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetricsTest;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignorTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -31,8 +29,6 @@ import org.junit.runners.Suite;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
                         TaskMetricsTest.class,
-                        StickyTaskAssignorTest.class,
-                        StandbyTaskCreationIntegrationTest.class,
                     })
 public class TaskSuite {
 }

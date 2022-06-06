@@ -221,8 +221,6 @@ subprojects {
   task allDepInsight(type: DependencyInsightReportTask) doLast {}
 
   apply plugin: 'java-library'
-  apply plugin: 'checkstyle'
-  apply plugin: "com.github.spotbugs"
   apply plugin: 'org.gradle.test-retry'
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
@@ -660,41 +658,6 @@ subprojects {
     }
   }
 
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = checkstyleConfigProperties("import-control.xml")
-    toolVersion = versions.checkstyle
-  }
-
-  configure(checkstyleMain) {
-    group = 'Verification'
-    description = 'Run checkstyle on all main Java sources'
-  }
-
-  configure(checkstyleTest) {
-    group = 'Verification'
-    description = 'Run checkstyle on all test Java sources'
-  }
-
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
-
-  spotbugs {
-    toolVersion = versions.spotbugs
-    excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
-    ignoreFailures = false
-  }
-  test.dependsOn('spotbugsMain')
-
-  tasks.withType(com.github.spotbugs.snom.SpotBugsTask) {
-    reports {
-      // Continue supporting `xmlFindBugsReport` for compatibility
-      xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
-      html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
-    }
-    maxHeapSize = defaultMaxHeapSize
-    jvmArgs = defaultJvmArgs
-  }
-
   // Ignore core since its a scala project
   if (it.path != ':core') {
     if (userEnableTestCoverage) {
@@ -1108,10 +1071,6 @@ project(':core') {
 
   systemTestLibs.dependsOn('jar', 'testJar', 'copyDependantTestLibs')
 
-  checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-core.xml")
-  }
-
   sourceSets {
     // Set java/scala source folders in the `scala` block to enable joint compilation
     main {
@@ -1206,9 +1165,6 @@ project(':examples') {
     enabled = false
   }
 
-  checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-core.xml")
-  }
 }
 
 project(':generator') {
@@ -2338,9 +2294,6 @@ project(':jmh-benchmarks') {
     }
   }
 
-  checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-jmh-benchmarks.xml")
-  }
 
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 
