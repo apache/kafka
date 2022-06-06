@@ -258,23 +258,23 @@
   Current partition replica assignment
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2]},
-                {"topic":"foo1","partition":0,"replicas":[3,4]},
-                {"topic":"foo2","partition":2,"replicas":[1,2]},
-                {"topic":"foo2","partition":0,"replicas":[3,4]},
-                {"topic":"foo1","partition":1,"replicas":[2,3]},
-                {"topic":"foo2","partition":1,"replicas":[2,3]}]
+  "partitions":[{"topic":"foo1","partition":0,"replicas":[2,1]},
+                {"topic":"foo1","partition":1,"replicas":[1,3]},
+                {"topic":"foo1","partition":2,"replicas":[3,4]},
+                {"topic":"foo2","partition":0,"replicas":[4,2]},
+                {"topic":"foo2","partition":1,"replicas":[2,1]},
+                {"topic":"foo2","partition":2,"replicas":[1,3]}]
   }
 
   Proposed partition reassignment configuration
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6]},
-                {"topic":"foo1","partition":0,"replicas":[5,6]},
-                {"topic":"foo2","partition":2,"replicas":[5,6]},
-                {"topic":"foo2","partition":0,"replicas":[5,6]},
+  "partitions":[{"topic":"foo1","partition":0,"replicas":[6,5]},
                 {"topic":"foo1","partition":1,"replicas":[5,6]},
-                {"topic":"foo2","partition":1,"replicas":[5,6]}]
+                {"topic":"foo1","partition":2,"replicas":[6,5]},
+                {"topic":"foo2","partition":0,"replicas":[5,6]},
+                {"topic":"foo2","partition":1,"replicas":[6,5]},
+                {"topic":"foo2","partition":2,"replicas":[5,6]}]
   }</code></pre>
   <p>
   The tool generates a candidate assignment that will move all partitions from topics foo1,foo2 to brokers 5,6. Note, however, that at this point, the partition movement has not started, it merely tells you the current assignment and the proposed new assignment. The current assignment should be saved in case you want to rollback to it. The new assignment should be saved in a json file (e.g. expand-cluster-reassignment.json) to be input to the tool with the --execute option as follows:
@@ -282,34 +282,27 @@
   Current partition replica assignment
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2]},
-                {"topic":"foo1","partition":0,"replicas":[3,4]},
-                {"topic":"foo2","partition":2,"replicas":[1,2]},
-                {"topic":"foo2","partition":0,"replicas":[3,4]},
-                {"topic":"foo1","partition":1,"replicas":[2,3]},
-                {"topic":"foo2","partition":1,"replicas":[2,3]}]
+  "partitions":[{"topic":"foo1","partition":0,"replicas":[2,1]},
+                {"topic":"foo1","partition":1,"replicas":[1,3]},
+                {"topic":"foo1","partition":2,"replicas":[3,4]},
+                {"topic":"foo2","partition":0,"replicas":[4,2]},
+                {"topic":"foo2","partition":1,"replicas":[2,1]},
+                {"topic":"foo2","partition":2,"replicas":[1,3]}]
   }
 
   Save this to use as the --reassignment-json-file option during rollback
-  Successfully started reassignment of partitions
-  {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6]},
-                {"topic":"foo1","partition":0,"replicas":[5,6]},
-                {"topic":"foo2","partition":2,"replicas":[5,6]},
-                {"topic":"foo2","partition":0,"replicas":[5,6]},
-                {"topic":"foo1","partition":1,"replicas":[5,6]},
-                {"topic":"foo2","partition":1,"replicas":[5,6]}]
-  }</code></pre>
+  Successfully started partition reassignments for foo1-0,foo1-1,foo1-2,foo2-0,foo2-1,foo2-2
+  </code></pre>
   <p>
   Finally, the --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option:
   <pre class="line-numbers"><code class="language-bash">  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file expand-cluster-reassignment.json --verify
   Status of partition reassignment:
-  Reassignment of partition [foo1,0] completed successfully
-  Reassignment of partition [foo1,1] is in progress
-  Reassignment of partition [foo1,2] is in progress
-  Reassignment of partition [foo2,0] completed successfully
-  Reassignment of partition [foo2,1] completed successfully
-  Reassignment of partition [foo2,2] completed successfully</code></pre>
+  Reassignment of partition [foo1,0] is completed
+  Reassignment of partition [foo1,1] is still in progress
+  Reassignment of partition [foo1,2] is still in progress
+  Reassignment of partition [foo2,0] is completed
+  Reassignment of partition [foo2,1] is completed
+  Reassignment of partition [foo2,2] is completed</code></pre>
 
   <h5 class="anchor-heading"><a id="basic_ops_partitionassignment" class="anchor-link"></a><a href="#basic_ops_partitionassignment">Custom partition assignment and migration</a></h5>
   The partition reassignment tool can also be used to selectively move replicas of a partition to a specific set of brokers. When used in this manner, it is assumed that the user knows the reassignment plan and does not require the tool to generate a candidate reassignment, effectively skipping the --generate step and moving straight to the --execute step
@@ -329,17 +322,14 @@
   }
 
   Save this to use as the --reassignment-json-file option during rollback
-  Successfully started reassignment of partitions
-  {"version":1,
-  "partitions":[{"topic":"foo1","partition":0,"replicas":[5,6]},
-                {"topic":"foo2","partition":1,"replicas":[2,3]}]
-  }</code></pre>
+  Successfully started partition reassignments for foo1-0,foo2-1
+  </code></pre>
   <p>
   The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same custom-reassignment.json (used with the --execute option) should be used with the --verify option:
   <pre class="line-numbers"><code class="language-bash">  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file custom-reassignment.json --verify
   Status of partition reassignment:
-  Reassignment of partition [foo1,0] completed successfully
-  Reassignment of partition [foo2,1] completed successfully</code></pre>
+  Reassignment of partition [foo1,0] is completed
+  Reassignment of partition [foo2,1] is completed</code></pre>
 
   <h4 class="anchor-heading"><a id="basic_ops_decommissioning_brokers" class="anchor-link"></a><a href="#basic_ops_decommissioning_brokers">Decommissioning brokers</a></h4>
   The partition reassignment tool does not have the ability to automatically generate a reassignment plan for decommissioning brokers yet. As such, the admin has to come up with a reassignment plan to move the replica for all partitions hosted on the broker to be decommissioned, to the rest of the brokers. This can be relatively tedious as the reassignment needs to ensure that all the replicas are not moved from the decommissioned broker to only one other broker. To make this process effortless, we plan to add tooling support for decommissioning brokers in the future.
@@ -361,14 +351,12 @@
   "partitions":[{"topic":"foo","partition":0,"replicas":[5]}]}
 
   Save this to use as the --reassignment-json-file option during rollback
-  Successfully started reassignment of partitions
-  {"version":1,
-  "partitions":[{"topic":"foo","partition":0,"replicas":[5,6,7]}]}</code></pre>
+  Successfully started partition reassignment for foo-0</code></pre>
   <p>
   The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same increase-replication-factor.json (used with the --execute option) should be used with the --verify option:
   <pre class="line-numbers"><code class="language-bash">  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file increase-replication-factor.json --verify
   Status of partition reassignment:
-  Reassignment of partition [foo,0] completed successfully</code></pre>
+  Reassignment of partition [foo,0] is completed</code></pre>
   You can also verify the increase in replication factor with the kafka-topics tool:
   <pre class="line-numbers"><code class="language-bash">  > bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic foo --describe
   Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
@@ -382,12 +370,11 @@
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
   <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</code></pre>
   When you execute this script you will see the throttle engage:
-  <pre class="line-numbers"><code class="language-bash">  The throttle limit was set to 50000000 B/s
-  Successfully started reassignment of partitions.</code></pre>
-  <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command passing the same reassignment-json-file:</p>
-  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
-  There is an existing assignment running.
-  The throttle limit was set to 700000000 B/s</code></pre>
+  <pre class="line-numbers"><code class="language-bash">  The inter-broker throttle limit was set to 50000000 B/s
+  Successfully started partition reassignment for foo1-0</code></pre>
+  <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command with the --additional option passing the same reassignment-json-file:</p>
+  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --additional --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
+  The inter-broker throttle limit was set to 700000000 B/s</code></pre>
 
   <p>Once the rebalance completes the administrator can check the status of the rebalance using the --verify option.
       If the rebalance has completed, the throttle will be removed via the --verify command. It is important that
@@ -397,9 +384,11 @@
 
   <pre class="line-numbers"><code class="language-bash">  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --verify --reassignment-json-file bigger-cluster.json
   Status of partition reassignment:
-  Reassignment of partition [my-topic,1] completed successfully
-  Reassignment of partition [mytopic,0] completed successfully
-  Throttle was removed.</code></pre>
+  Reassignment of partition [my-topic,1] is completed
+  Reassignment of partition [my-topic,0] is completed
+
+  Clearing broker-level throttles on brokers 1,2,3
+  Clearing topic-level throttles on topic my-topic</code></pre>
 
   <p>The administrator can also validate the assigned configs using the kafka-configs.sh. There are two pairs of throttle
       configuration used to manage the throttling process. First pair refers to the throttle value itself. This is configured, at a broker

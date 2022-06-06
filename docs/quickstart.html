@@ -100,7 +100,7 @@ $ bin/kafka-server-start.sh config/server.properties</code></pre>
         </p>
 
         <pre class="line-numbers"><code class="language-bash">$ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
-Topic:quickstart-events  PartitionCount:1    ReplicationFactor:1 Configs:
+Topic: quickstart-events        TopicId: NPmZHyhbR9y00wMglMH2sg PartitionCount: 1       ReplicationFactor: 1	Configs:
     Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></pre>
     </div>
 
@@ -183,7 +183,7 @@ This is my second event</code></pre>
         </p>
 
         <pre class="brush: bash;">
-&gt; echo "plugin.path=lib/connect-file-{{fullDotVersion}}.jar"</pre>
+&gt; echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar"</pre>
 
         <p>
             Then, start by creating some seed data to test with:

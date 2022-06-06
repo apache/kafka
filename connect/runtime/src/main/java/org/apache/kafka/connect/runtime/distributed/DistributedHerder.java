@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -58,6 +57,10 @@ import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
+import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -138,6 +141,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
+    private static final long CONFIG_TOPIC_WRITE_PRIVILEGES_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
     private static final short BACKOFF_RETRIES = 5;
 
@@ -842,21 +846,134 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
-                                                                    ConfigDef configDef,
-                                                                    Map<String, String> config) {
-        Map<String, ConfigValue> validatedConfig = super.validateBasicConnectorConfig(connector, configDef, config);
-        if (connector instanceof SinkConnector) {
-            ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
-            String name = (String) validatedName.value();
-            if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
-                validatedName.addErrorMessage("Consumer group for sink connector named " + name +
-                        " conflicts with Connect worker group " + workerGroupId);
-            }
-        }
-        return validatedConfig;
+    protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
+        Map<String, ConfigValue> result = super.validateSinkConnectorConfig(connector, configDef, config);
+        validateSinkConnectorGroupId(result);
+        return result;
     }
 
+    @Override
+    protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
+        Map<String, ConfigValue> result = super.validateSourceConnectorConfig(connector, configDef, config);
+        validateSourceConnectorExactlyOnceSupport(config, result, connector);
+        validateSourceConnectorTransactionBoundary(config, result, connector);
+        return result;
+    }
+
+
+    private void validateSinkConnectorGroupId(Map<String, ConfigValue> validatedConfig) {
+        ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
+        String name = (String) validatedName.value();
+        if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
+            validatedName.addErrorMessage("Consumer group for sink connector named " + name +
+                    " conflicts with Connect worker group " + workerGroupId);
+        }
+    }
+
+    private void validateSourceConnectorExactlyOnceSupport(
+            Map<String, String> rawConfig,
+            Map<String, ConfigValue> validatedConfig,
+            SourceConnector connector) {
+        ConfigValue validatedExactlyOnceSupport = validatedConfig.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG);
+        if (validatedExactlyOnceSupport.errorMessages().isEmpty()) {
+            // Should be safe to parse the enum from the user-provided value since it's passed validation so far
+            SourceConnectorConfig.ExactlyOnceSupportLevel exactlyOnceSupportLevel =
+                    SourceConnectorConfig.ExactlyOnceSupportLevel.fromProperty(Objects.toString(validatedExactlyOnceSupport.value()));
+            if (SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED.equals(exactlyOnceSupportLevel)) {
+                if (!config.exactlyOnceSourceEnabled()) {
+                    validatedExactlyOnceSupport.addErrorMessage("This worker does not have exactly-once source support enabled.");
+                }
+
+                try {
+                    ExactlyOnceSupport exactlyOnceSupport = connector.exactlyOnceSupport(rawConfig);
+                    if (!ExactlyOnceSupport.SUPPORTED.equals(exactlyOnceSupport)) {
+                        final String validationErrorMessage;
+                        // Would do a switch here but that doesn't permit matching on null values
+                        if (exactlyOnceSupport == null) {
+                            validationErrorMessage = "The connector does not implement the API required for preflight validation of exactly-once "
+                                    + "source support. Please consult the documentation for the connector to determine whether it supports exactly-once "
+                                    + "guarantees, and then consider reconfiguring the connector to use the value \""
+                                    + SourceConnectorConfig.ExactlyOnceSupportLevel.REQUESTED
+                                    + "\" for this property (which will disable this preflight check and allow the connector to be created).";
+                        } else if (ExactlyOnceSupport.UNSUPPORTED.equals(exactlyOnceSupport)) {
+                            validationErrorMessage = "The connector does not support exactly-once delivery guarantees with the provided configuration.";
+                        } else {
+                            throw new ConnectException("Unexpected value returned from SourceConnector::exactlyOnceSupport: " + exactlyOnceSupport);
+                        }
+                        validatedExactlyOnceSupport.addErrorMessage(validationErrorMessage);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed while validating connector support for exactly-once guarantees", e);
+                    String validationErrorMessage = "An unexpected error occurred during validation";
+                    String failureMessage = e.getMessage();
+                    if (failureMessage != null && !failureMessage.trim().isEmpty()) {
+                        validationErrorMessage += ": " + failureMessage.trim();
+                    } else {
+                        validationErrorMessage += "; please see the worker logs for more details.";
+                    }
+                    validatedExactlyOnceSupport.addErrorMessage(validationErrorMessage);
+                }
+            }
+        }
+    }
+
+    private void validateSourceConnectorTransactionBoundary(
+            Map<String, String> rawConfig,
+            Map<String, ConfigValue> validatedConfig,
+            SourceConnector connector) {
+        ConfigValue validatedTransactionBoundary = validatedConfig.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG);
+        if (validatedTransactionBoundary.errorMessages().isEmpty()) {
+            // Should be safe to parse the enum from the user-provided value since it's passed validation so far
+            SourceTask.TransactionBoundary transactionBoundary =
+                    SourceTask.TransactionBoundary.fromProperty(Objects.toString(validatedTransactionBoundary.value()));
+            if (SourceTask.TransactionBoundary.CONNECTOR.equals(transactionBoundary)) {
+                try {
+                    ConnectorTransactionBoundaries connectorTransactionSupport = connector.canDefineTransactionBoundaries(rawConfig);
+                    if (connectorTransactionSupport == null) {
+                        validatedTransactionBoundary.addErrorMessage(
+                                "This connector has returned a null value from its canDefineTransactionBoundaries method, which is not permitted. " +
+                                        "The connector will be treated as if it cannot define its own transaction boundaries, and cannot be configured with " +
+                                        "'" + SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG + "' set to '" + SourceTask.TransactionBoundary.CONNECTOR + "'."
+                        );
+                    } else if (!ConnectorTransactionBoundaries.SUPPORTED.equals(connectorTransactionSupport)) {
+                        validatedTransactionBoundary.addErrorMessage(
+                                "The connector does not support connector-defined transaction boundaries with the given configuration. "
+                                        + "Please reconfigure it to use a different transaction boundary definition.");
+                    }
+                } catch (Exception e) {
+                    log.error("Failed while validating connector support for defining its own transaction boundaries", e);
+                    String validationErrorMessage = "An unexpected error occurred during validation";
+                    String failureMessage = e.getMessage();
+                    if (failureMessage != null && !failureMessage.trim().isEmpty()) {
+                        validationErrorMessage += ": " + failureMessage.trim();
+                    } else {
+                        validationErrorMessage += "; please see the worker logs for more details.";
+                    }
+                    validatedTransactionBoundary.addErrorMessage(validationErrorMessage);
+                }
+            }
+        }
+    }
+
+    @Override
+    protected boolean connectorUsesAdmin(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        return super.connectorUsesAdmin(connectorType, connProps)
+                || connectorUsesSeparateOffsetsTopicClients(connectorType, connProps);
+    }
+
+    @Override
+    protected boolean connectorUsesConsumer(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        return super.connectorUsesConsumer(connectorType, connProps)
+                || connectorUsesSeparateOffsetsTopicClients(connectorType, connProps);
+    }
+
+    private boolean connectorUsesSeparateOffsetsTopicClients(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        if (connectorType != org.apache.kafka.connect.health.ConnectorType.SOURCE) {
+            return false;
+        }
+        return config.exactlyOnceSourceEnabled()
+                || !connProps.getOrDefault(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "").trim().isEmpty();
+    }
 
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
@@ -897,7 +1014,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             // snapshot yet. The existing task info should still be accurate.
                             ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
                                 // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
-                                connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+                                connectorTypeForConfig(config));
                             callback.onCompletion(null, new Created<>(!exists, info));
                             return null;
                         },
