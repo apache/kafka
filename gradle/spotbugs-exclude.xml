@@ -30,7 +30,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             EI_EXPOSE_REP2: May expose internal representation by incorporating reference to mutable object
             MS_EXPOSE_REP: Public static method may expose internal representation by returning array
             MS_PKGPROTECT: Field should be package protected -->
-        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_EXPOSE_REP,MS_PKGPROTECT"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+            <Bug pattern="MS_EXPOSE_REP"/>
+            <Bug pattern="MS_PKGPROTECT"/>
+        </Or>
     </Match>
     <Match>
         <!-- Disable warnings about Random object.
@@ -48,6 +53,17 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Disable warnings about the lack of equals() when compareTo() is implemented.
             EQ_COMPARETO_USE_OBJECT_EQUALS: This class defines a compareTo method but no equals() method -->
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
+    </Match>
+    <Match>
+        <!-- Disable bug types introduced by the ThrowingExceptions detector with 4.7.0.
+            THROWS_METHOD_THROWS_RUNTIMEEXCEPTION: Method intentionally throws RuntimeException.
+            THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION: Method lists Exception in its throws clause.
+            THROWS_METHOD_THROWS_CLAUSE_THROWABLE: Method lists Throwable in its throws clause. -->
+        <Or>
+            <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
+            <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+            <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
+        </Or>
     </Match>
 
     <Match>
