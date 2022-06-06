@@ -150,11 +150,12 @@ public class ClusterConfig {
     }
 
     public static Builder defaultClusterBuilder() {
-        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT);
+        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT, MetadataVersion.latest());
     }
 
-    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
-        return new Builder(type, brokers, controllers, autoStart, securityProtocol);
+    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart,
+                                         SecurityProtocol securityProtocol, MetadataVersion metadataVersion) {
+        return new Builder(type, brokers, controllers, autoStart, securityProtocol, metadataVersion);
     }
 
     public static class Builder {
@@ -168,12 +169,13 @@ public class ClusterConfig {
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
 
-        Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
+        Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol, MetadataVersion metadataVersion) {
             this.type = type;
             this.brokers = brokers;
             this.controllers = controllers;
             this.autoStart = autoStart;
             this.securityProtocol = securityProtocol;
+            this.metadataVersion = metadataVersion;
         }
 
         public Builder type(Type type) {

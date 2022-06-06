@@ -179,7 +179,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 throw new IllegalStateException();
         }
 
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart, annot.securityProtocol());
+        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart,
+            annot.securityProtocol(), annot.metadataVersion());
         if (!annot.name().isEmpty()) {
             builder.name(annot.name());
         } else {
@@ -194,7 +195,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             properties.put(property.key(), property.value());
         }
 
-        builder.metadataVersion(annot.metadataVersion());
         ClusterConfig config = builder.build();
         config.serverProperties().putAll(properties);
         type.invocationContexts(config, testInvocations);

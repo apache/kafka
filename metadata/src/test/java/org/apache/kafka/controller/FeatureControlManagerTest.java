@@ -93,7 +93,7 @@ public class FeatureControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             build();
         snapshotRegistry.getOrCreateSnapshot(-1);
-        assertEquals(new FinalizedControllerFeatures(Collections.emptyMap(), -1),
+        assertEquals(new FinalizedControllerFeatures(Collections.singletonMap("metadata.version", (short) 1), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -131,7 +131,7 @@ public class FeatureControlManagerTest {
                 build();
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
-        assertEquals(new FinalizedControllerFeatures(versionMap("foo", 2), 123),
+        assertEquals(new FinalizedControllerFeatures(versionMap("metadata.version", 1, "foo", 2), 123),
             manager.finalizedFeatures(123));
     }
 
@@ -210,6 +210,9 @@ public class FeatureControlManagerTest {
                 Collections.emptyMap(), Collections.emptyMap(), false);
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                    setName("metadata.version").
+                    setFeatureLevel((short) 1), (short) 0)),
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("foo").
                 setFeatureLevel((short) 5), (short) 0)),
