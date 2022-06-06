@@ -541,18 +541,30 @@ public class ClusterControlManager {
             id -> brokerRegistrations.get(id).rack());
     }
 
+    /**
+     * Returns true if the broker is in fenced state; Returns false if it is
+     * not or if it does not exist.
+     */
     public boolean unfenced(int brokerId) {
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
         if (registration == null) return false;
         return !registration.fenced();
     }
 
+    /**
+     * Returns true if the broker is in controlled shutdown state; Returns false
+     * if it is not or if it does not exist.
+     */
     public boolean inControlledShutdown(int brokerId) {
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
         if (registration == null) return false;
         return registration.inControlledShutdown();
     }
 
+    /**
+     * Returns true if the broker is active. Active means not fenced nor in controlled
+     * shutdown; Returns false if it is not active or if it does not exist.
+     */
     public boolean active(int brokerId) {
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
         if (registration == null) return false;
