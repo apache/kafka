@@ -40,9 +40,8 @@ import org.junit.runners.Suite;
                         CompositeReadOnlySessionStoreTest.class,
                         GlobalStateStoreProviderTest.class,
                         StreamThreadStateStoreProviderTest.class,
-                        WrappingStoreProviderTest.class,
-                        QueryableStateIntegrationTest.class,
-                    })
+                        WrappingStoreProviderTest.class
+})
 public class StoreQuerySuite {
 }
 

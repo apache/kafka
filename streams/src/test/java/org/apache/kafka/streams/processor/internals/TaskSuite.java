@@ -30,13 +30,8 @@ import org.junit.runners.Suite;
  */
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-                        StreamTaskTest.class,
-                        StandbyTaskTest.class,
-                        GlobalStateTaskTest.class,
-                        TaskManagerTest.class,
                         TaskMetricsTest.class,
                         StickyTaskAssignorTest.class,
-                        StreamsPartitionAssignorTest.class,
                         StandbyTaskCreationIntegrationTest.class,
                     })
 public class TaskSuite {
