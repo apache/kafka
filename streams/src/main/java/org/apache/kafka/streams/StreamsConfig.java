@@ -1248,7 +1248,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param props properties that specify Kafka Streams and internal consumer/producer configuration
      */
     public StreamsConfig(final Map<?, ?> props) {
-        this(props, true);
+        this(props, false);
     }
 
     protected StreamsConfig(final Map<?, ?> props,
