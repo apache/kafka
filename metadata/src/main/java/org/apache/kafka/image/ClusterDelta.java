@@ -93,46 +93,35 @@ public final class ClusterDelta {
 
     public void replay(FenceBrokerRecord record) {
         BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "fence");
-        changedBrokers.put(record.id(), Optional.of(broker.cloneWithFencing(true)));
+        changedBrokers.put(record.id(), broker.maybeCloneWith(
+            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            Optional.empty()
+        ));
     }
 
     public void replay(UnfenceBrokerRecord record) {
         BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
-        changedBrokers.put(record.id(), Optional.of(broker.cloneWithFencing(false)));
+        changedBrokers.put(record.id(), broker.maybeCloneWith(
+            BrokerRegistrationFencingChange.FENCE.asBoolean(),
+            Optional.empty()
+        ));
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
         BrokerRegistration broker =
             getBrokerOrThrow(record.brokerId(), record.brokerEpoch(), "change");
-        Optional<BrokerRegistrationFencingChange> fencingChange =
-            BrokerRegistrationFencingChange.fromValue(record.fenced());
-        if (!fencingChange.isPresent()) {
-            throw new IllegalStateException(String.format("Unable to replay %s: unknown " +
-                "value for fenced field: %d", record.toString(), record.fenced()));
-        }
-        Optional<BrokerRegistrationInControlledShutdownChange> inControlledShutdownChange =
-            BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown());
-        if (!inControlledShutdownChange.isPresent()) {
-            throw new IllegalStateException(String.format("Unable to replay %s: unknown " +
-                "value for inControlledShutdown field: %d", record.toString(), record.inControlledShutdown()));
-        }
-
-        replayRegistration(record.brokerId(), broker, fencingChange.get(), inControlledShutdownChange.get());
-    }
-
-    private void replayRegistration(
-        int brokerId,
-        BrokerRegistration broker,
-        BrokerRegistrationFencingChange fencingChange,
-        BrokerRegistrationInControlledShutdownChange inControlledShutdownChange
-    ) {
-        if (fencingChange != BrokerRegistrationFencingChange.NONE
-            || inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
-            changedBrokers.put(brokerId, Optional.of(broker.cloneWith(
-                fencingChange.asBoolean(),
-                inControlledShutdownChange.asBoolean()
-            )));
-        }
+        BrokerRegistrationFencingChange fencingChange =
+            BrokerRegistrationFencingChange.fromValue(record.fenced()).orElseThrow(
+                () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                    "value for fenced field: %d", record, record.fenced())));
+        BrokerRegistrationInControlledShutdownChange inControlledShutdownChange =
+            BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).orElseThrow(
+                () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                    "value for inControlledShutdown field: %d", record, record.inControlledShutdown())));
+        changedBrokers.put(record.brokerId(), broker.maybeCloneWith(
+            fencingChange.asBoolean(),
+            inControlledShutdownChange.asBoolean()
+        ));
     }
 
     public ClusterImage apply() {

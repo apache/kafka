@@ -432,40 +432,49 @@ public class ClusterControlManager {
     }
 
     public void replay(FenceBrokerRecord record) {
-        replayRegistrationChange(record, record.id(), record.epoch(),
-            BrokerRegistrationFencingChange.UNFENCE,
-            BrokerRegistrationInControlledShutdownChange.NONE);
+        replayRegistrationChange(
+            record,
+            record.id(),
+            record.epoch(),
+            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
+        );
     }
 
     public void replay(UnfenceBrokerRecord record) {
-        replayRegistrationChange(record, record.id(), record.epoch(),
-            BrokerRegistrationFencingChange.FENCE,
-            BrokerRegistrationInControlledShutdownChange.NONE);
+        replayRegistrationChange(
+            record,
+            record.id(),
+            record.epoch(),
+            BrokerRegistrationFencingChange.FENCE.asBoolean(),
+            BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
+        );
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
-        Optional<BrokerRegistrationFencingChange> fencingChange =
-            BrokerRegistrationFencingChange.fromValue(record.fenced());
-        if (!fencingChange.isPresent()) {
-            throw new RuntimeException(String.format("Unable to replay %s: unknown " +
-                "value for fenced field: %d", record.toString(), record.fenced()));
-        }
-        Optional<BrokerRegistrationInControlledShutdownChange> inControlledShutdownChange =
-            BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown());
-        if (!inControlledShutdownChange.isPresent()) {
-            throw new RuntimeException(String.format("Unable to replay %s: unknown " +
-                "value for inControlledShutdown field: %d", record.toString(), record.inControlledShutdown()));
-        }
-        replayRegistrationChange(record, record.brokerId(), record.brokerEpoch(),
-            fencingChange.get(), inControlledShutdownChange.get());
+        BrokerRegistrationFencingChange fencingChange =
+            BrokerRegistrationFencingChange.fromValue(record.fenced()).orElseThrow(
+                () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                    "value for fenced field: %d", record, record.fenced())));
+        BrokerRegistrationInControlledShutdownChange inControlledShutdownChange =
+            BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).orElseThrow(
+                () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                    "value for inControlledShutdown field: %d", record, record.inControlledShutdown())));
+        replayRegistrationChange(
+            record,
+            record.brokerId(),
+            record.brokerEpoch(),
+            fencingChange.asBoolean(),
+            inControlledShutdownChange.asBoolean()
+        );
     }
 
     private void replayRegistrationChange(
         ApiMessage record,
         int brokerId,
         long brokerEpoch,
-        BrokerRegistrationFencingChange fencingChange,
-        BrokerRegistrationInControlledShutdownChange inControlledShutdownChange
+        Optional<Boolean> fencingChange,
+        Optional<Boolean> inControlledShutdownChange
     ) {
         BrokerRegistration curRegistration = brokerRegistrations.get(brokerId);
         if (curRegistration == null) {
@@ -475,12 +484,10 @@ public class ClusterControlManager {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration with that epoch found", record.toString()));
         } else {
-            BrokerRegistration nextRegistration = curRegistration;
-            if (fencingChange != BrokerRegistrationFencingChange.NONE
-                || inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
-                nextRegistration = nextRegistration.cloneWith(
-                    fencingChange.asBoolean(), inControlledShutdownChange.asBoolean());
-            }
+            BrokerRegistration nextRegistration = curRegistration.maybeCloneWith(
+                fencingChange,
+                inControlledShutdownChange
+            ).orElse(curRegistration);
             if (!curRegistration.equals(nextRegistration)) {
                 brokerRegistrations.put(brokerId, nextRegistration);
                 updateMetrics(curRegistration, nextRegistration);

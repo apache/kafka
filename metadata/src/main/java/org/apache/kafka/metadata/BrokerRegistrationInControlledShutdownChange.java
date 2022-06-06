@@ -24,6 +24,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public enum BrokerRegistrationInControlledShutdownChange {
+    // Note that Optional.of(true) is not a valid state change here. The only
+    // way to leave the in controlled shutdown state is by registering the
+    // broker with a new incarnation id.
     NONE(0, Optional.empty()),
     IN_CONTROLLED_SHUTDOWN(1, Optional.of(true));
 

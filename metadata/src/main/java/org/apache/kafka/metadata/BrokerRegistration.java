@@ -235,24 +235,25 @@ public class BrokerRegistration {
         return bld.toString();
     }
 
-    public BrokerRegistration cloneWithFencing(boolean fencing) {
-        return new BrokerRegistration(id, epoch, incarnationId, listeners,
-            supportedFeatures, rack, fencing, inControlledShutdown);
-    }
-
-    public BrokerRegistration cloneWith(
+    public Optional<BrokerRegistration> maybeCloneWith(
         Optional<Boolean> fencingChange,
         Optional<Boolean> inControlledShutdownChange
     ) {
-        return new BrokerRegistration(
+        boolean newFenced = fencingChange.orElse(fenced);
+        boolean newInControlledShutdownChange = inControlledShutdownChange.orElse(inControlledShutdown);
+
+        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown)
+            return Optional.empty();
+
+        return Optional.of(new BrokerRegistration(
             id,
             epoch,
             incarnationId,
             listeners,
             supportedFeatures,
             rack,
-            fencingChange.orElse(fenced),
-            inControlledShutdownChange.orElse(inControlledShutdown)
-        );
+            newFenced,
+            newInControlledShutdownChange
+        ));
     }
 }

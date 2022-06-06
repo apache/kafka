@@ -1183,7 +1183,8 @@ public class ReplicationControlManager {
      * @param records       The record list to append to.
      */
     void handleBrokerInControlledShutdown(int brokerId, long brokerEpoch, List<ApiMessageAndVersion> records) {
-        if (featureControl.metadataVersion().isInControlledShutdownStateSupported()) {
+        if (featureControl.metadataVersion().isInControlledShutdownStateSupported()
+                && !clusterControl.inControlledShutdown(brokerId)) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                 setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
                 setInControlledShutdown(BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()),
