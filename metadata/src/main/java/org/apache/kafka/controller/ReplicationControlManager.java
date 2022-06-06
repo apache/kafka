@@ -692,8 +692,14 @@ public class ReplicationControlManager {
                     List<Integer> replicas = partitions.get(partitionId);
                     List<Integer> isr = replicas.stream().
                         filter(clusterControl::active).collect(Collectors.toList());
-                    // We need to have at least one replica in the ISR.
-                    if (isr.isEmpty()) isr.add(replicas.get(0));
+                    // If the ISR is empty, it means that all brokers are fenced or
+                    // in controlled shutdown. To be consistent with the replica placer,
+                    // we reject the create topic request with INVALID_REPLICATION_FACTOR.
+                    if (isr.isEmpty()) {
+                        return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
+                            "Unable to replicate the partition " + replicationFactor +
+                                " time(s): All brokers are currently fenced or in controlled shutdown.");
+                    }
                     newParts.put(partitionId,
                         new PartitionRegistration(
                             Replicas.toArray(replicas),
@@ -1503,8 +1509,14 @@ public class ReplicationControlManager {
             List<Integer> replicas = placements.get(i);
             List<Integer> isr = isrs.get(i).stream().
                 filter(clusterControl::active).collect(Collectors.toList());
-            // We need to have at least one replica in the ISR.
-            if (isr.isEmpty()) isr.add(replicas.get(0));
+            // If the ISR is empty, it means that all brokers are fenced or
+            // in controlled shutdown. To be consistent with the replica placer,
+            // we reject the create topic request with INVALID_REPLICATION_FACTOR.
+            if (isr.isEmpty()) {
+                throw new InvalidReplicationFactorException(
+                    "Unable to replicate the partition " + replicationFactor +
+                        " time(s): All brokers are currently fenced or in controlled shutdown.");
+            }
             records.add(new ApiMessageAndVersion(new PartitionRecord().
                 setPartitionId(partitionId).
                 setTopicId(topicId).

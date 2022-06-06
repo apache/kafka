@@ -114,6 +114,7 @@ import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
 import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PARTITIONS;
+import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICATION_FACTOR;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT;
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
@@ -438,38 +439,53 @@ public class ReplicationControlManagerTest {
         CreateTopicsRequestData request = new CreateTopicsRequestData();
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(-1).setReplicationFactor((short) -1));
+
         ControllerResult<CreateTopicsResponseData> result =
             replicationControl.createTopics(request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
-            setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
+            setErrorCode(INVALID_REPLICATION_FACTOR.code()).
                 setErrorMessage("Unable to replicate the partition 3 time(s): All " +
                     "brokers are currently fenced."));
         assertEquals(expectedResponse, result.response());
 
         ctx.registerBrokers(0, 1, 2);
-        ctx.unfenceBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0);
+        ctx.inControlledShutdownBrokers(0);
+
         ControllerResult<CreateTopicsResponseData> result2 =
             replicationControl.createTopics(request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse2 = new CreateTopicsResponseData();
         expectedResponse2.topics().add(new CreatableTopicResult().setName("foo").
+            setErrorCode(INVALID_REPLICATION_FACTOR.code()).
+            setErrorMessage("Unable to replicate the partition 3 time(s): All " +
+                "brokers are currently fenced or in controlled shutdown."));
+        assertEquals(expectedResponse2, result2.response());
+
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+
+        ControllerResult<CreateTopicsResponseData> result3 =
+            replicationControl.createTopics(request, Collections.singleton("foo"));
+        CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
+        expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 3).
             setErrorMessage(null).setErrorCode((short) 0).
-            setTopicId(result2.response().topics().find("foo").topicId()));
-        assertEquals(expectedResponse2, result2.response());
-        ctx.replay(result2.records());
+            setTopicId(result3.response().topics().find("foo").topicId()));
+        assertEquals(expectedResponse3, result3.response());
+        ctx.replay(result3.records());
         assertEquals(new PartitionRegistration(new int[] {1, 2, 0},
             new int[] {1, 2, 0}, Replicas.NONE, Replicas.NONE, 1, LeaderRecoveryState.RECOVERED, 0, 0),
             replicationControl.getPartition(
-                ((TopicRecord) result2.records().get(0).message()).topicId(), 0));
-        ControllerResult<CreateTopicsResponseData> result3 =
+                ((TopicRecord) result3.records().get(0).message()).topicId(), 0));
+        ControllerResult<CreateTopicsResponseData> result4 =
                 replicationControl.createTopics(request, Collections.singleton("foo"));
-        CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
-        expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
+        CreateTopicsResponseData expectedResponse4 = new CreateTopicsResponseData();
+        expectedResponse4.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
                 setErrorMessage("Topic 'foo' already exists."));
-        assertEquals(expectedResponse3, result3.response());
-        Uuid fooId = result2.response().topics().find("foo").topicId();
+        assertEquals(expectedResponse4, result4.response());
+        Uuid fooId = result3.response().topics().find("foo").topicId();
         RecordTestUtils.assertBatchIteratorContains(asList(
             asList(new ApiMessageAndVersion(new PartitionRecord().
                     setPartitionId(0).setTopicId(fooId).
@@ -482,7 +498,7 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testCreateTopicsInvariants() throws Exception {
+    public void testCreateTopicsISRInvariants() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
 
@@ -634,7 +650,7 @@ public class ReplicationControlManagerTest {
         assertEquals(0, result.records().size());
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
-            setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
+            setErrorCode(INVALID_REPLICATION_FACTOR.code()).
             setErrorMessage("Unable to replicate the partition 4 time(s): The target " +
                 "replication factor of 4 cannot be reached because only 3 broker(s) " +
                 "are registered."));
@@ -1091,7 +1107,6 @@ public class ReplicationControlManagerTest {
         assertEmptyTopicConfigs(ctx, "foo");
     }
 
-
     @Test
     public void testCreatePartitions() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
@@ -1178,7 +1193,41 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testCreatePartitionsInvariants() throws Exception {
+    public void testCreatePartitionsFailsWhenAllBrokersAreFencedOrInControlledShutdown() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 2));
+
+        ctx.registerBrokers(0, 1);
+        ctx.unfenceBrokers(0, 1);
+
+        ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
+            createTopics(request, new HashSet<>(Arrays.asList("foo")));
+        ctx.replay(createTopicResult.records());
+
+        ctx.registerBrokers(0, 1);
+        ctx.unfenceBrokers(0);
+        ctx.inControlledShutdownBrokers(0);
+
+        List<CreatePartitionsTopic> topics = new ArrayList<>();
+        topics.add(new CreatePartitionsTopic().
+            setName("foo").setCount(2).setAssignments(null));
+        ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
+            replicationControl.createPartitions(topics);
+
+        assertEquals(
+            asList(new CreatePartitionsTopicResult().
+                setName("foo").
+                setErrorCode(INVALID_REPLICATION_FACTOR.code()).
+                setErrorMessage("Unable to replicate the partition 2 time(s): All " +
+                    "brokers are currently fenced or in controlled shutdown.")),
+            createPartitionsResult.response());
+    }
+
+    @Test
+    public void testCreatePartitionsISRInvariants() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
 
