@@ -297,7 +297,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
   //todo-tier it needs to be updated.
-  private val localLogStartOffset: Long = logStartOffset
+  private val _localLogStartOffset: Long = logStartOffset
+
+  def localLogStartOffset(): Long = _localLogStartOffset
 
   locally {
     initializePartitionMetadata()
@@ -1308,12 +1310,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val earliestLocalLogEpochEntry = leaderEpochCache.flatMap(cache =>
-          cache.epochForOffset(localLogStartOffset).flatMap(cache.epochEntry))
+          cache.epochForOffset(_localLogStartOffset).flatMap(cache.epochEntry))
         val epochOpt = earliestLocalLogEpochEntry match {
-          case Some(entry) if entry.startOffset <= localLogStartOffset => Optional.of[Integer](entry.epoch)
+          case Some(entry) if entry.startOffset <= _localLogStartOffset => Optional.of[Integer](entry.epoch)
           case _ => Optional.empty[Integer]()
         }
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, localLogStartOffset, epochOpt))
+        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, _localLogStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
@@ -1352,7 +1354,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           val segmentsCopy = logSegments.toBuffer
 
           val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
-          targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, localLogStartOffset))
+          targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, _localLogStartOffset))
         }
       }
     }

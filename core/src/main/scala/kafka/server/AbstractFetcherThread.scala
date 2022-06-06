@@ -662,7 +662,7 @@ abstract class AbstractFetcherThread(name: String,
      *
      * There is a potential for a mismatch between the logs of the two replicas here. We don't fix this mismatch as of now.
      */
-    val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
+    val (_, leaderEndOffset) = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
     if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
@@ -694,8 +694,8 @@ abstract class AbstractFetcherThread(name: String,
        * and the current leader's (local-log-start-offset or) log start offset.
        */
       val (epoch, leaderStartOffset) = if (fetchFromLocalLogStartOffset)
-        fetchEarliestLocalOffsetFromLeader(topicPartition, currentLeaderEpoch) else
-        fetchEarliestOffsetFromLeader(topicPartition, currentLeaderEpoch)
+        leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch) else
+        leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
 
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's start offset $leaderStartOffset")

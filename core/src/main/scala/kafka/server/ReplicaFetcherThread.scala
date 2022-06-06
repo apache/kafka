@@ -20,7 +20,6 @@ package kafka.server
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.EpochEntry
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -34,7 +33,7 @@ import org.apache.kafka.server.log.remote.storage.{RemoteStorageException, Remot
 import java.io.{BufferedReader, File, InputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardCopyOption}
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters._
 
 import scala.collection.mutable
 

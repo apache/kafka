@@ -83,7 +83,7 @@ trait LeaderEndPoint {
    *
    * @return A long representing the latest offset in the leader's topic partition.
    */
-  def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
+  def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
   /**
    * Fetches offset for leader epoch from the leader for each given topic partition
@@ -102,7 +102,7 @@ trait LeaderEndPoint {
    * @param currentLeaderEpoch
    * @return
    */
-  protected def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
+  def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
   /**
    * Builds a fetch request, given a partition map.

@@ -664,12 +664,13 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     var isErrorHandled = false
     val fetcher = new MockFetcherThread(new MockLeaderEndPoint) {
-      override protected def buildRemoteLogAuxState(topicPartition: TopicPartition,
-                                                    leaderEpoch: Int,
+      override protected def buildRemoteLogAuxState(partition: TopicPartition,
+                                                    currentLeaderEpoch: Int,
                                                     fetchOffset: Long,
+                                                    epochForFetchOffset: Int,
                                                     leaderLogStartOffset: Long): Long = {
         isErrorHandled = true
-        throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
+        throw new FencedLeaderEpochException(s"Epoch $currentLeaderEpoch is fenced")
       }
     }
 
@@ -704,7 +705,7 @@ class AbstractFetcherThreadTest {
         fetchedEarliestOffset = true
         throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
       }
-      override protected def fetchEarliestLocalOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
+      override def fetchEarliestLocalOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
         fetchedEarliestOffset = true
         throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
       }
@@ -776,7 +777,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     val fetcher: MockFetcherThread = new MockFetcherThread(new MockLeaderEndPoint {
       val tries = new AtomicInteger(0)
-      override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+      override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
         if (tries.getAndIncrement() == 0)
           throw new UnknownLeaderEpochException("Unexpected leader epoch")
         super.fetchLatestOffset(topicPartition, leaderEpoch)
@@ -1194,12 +1195,18 @@ class AbstractFetcherThreadTest {
       (leaderState.leaderEpoch, leaderState.logStartOffset)
     }
 
-    override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+    override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
-      leaderState.logEndOffset
+      (leaderState.leaderEpoch, leaderState.logEndOffset)
     }
 
+    override def fetchEarliestLocalOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
+      val leaderState = leaderPartitionState(topicPartition)
+      checkLeaderEpochAndThrow(leaderEpoch, leaderState)
+      (leaderState.leaderEpoch, leaderState.localLogStartOffset)
+
+    }
     override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
       val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
       partitions.forKeyValue { (partition, epochData) =>

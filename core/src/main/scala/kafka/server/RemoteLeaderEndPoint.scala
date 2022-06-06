@@ -98,11 +98,15 @@ class RemoteLeaderEndPoint(logPrefix: String,
     fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP)
   }
 
-  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
     fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.LATEST_TIMESTAMP)
   }
 
-  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long): Long = {
+  override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
+    fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)
+  }
+
+  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long): (Int, Long) = {
     val topic = new ListOffsetsTopic()
       .setName(topicPartition.topic)
       .setPartitions(Collections.singletonList(
@@ -122,9 +126,9 @@ class RemoteLeaderEndPoint(logPrefix: String,
     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE =>
         if (metadataVersion.isAtLeast(IBP_0_10_1_IV2))
-          responsePartition.offset
+          (responsePartition.leaderEpoch, responsePartition.offset)
         else
-          responsePartition.oldStyleOffsets.get(0)
+          (responsePartition.leaderEpoch, responsePartition.oldStyleOffsets.get(0))
       case error => throw error.exception
     }
   }
