@@ -20,7 +20,7 @@
 def doValidation() {
   sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+        rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
   """
 }
@@ -39,56 +39,6 @@ def doTest(env, target = "unitTest integrationTest") {
       --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
   junit '**/build/test-results/**/TEST-*.xml'
-}
-
-def doStreamsArchetype() {
-  echo 'Verify that Kafka Streams archetype compiles'
-
-  sh '''
-    ./gradlew streams:publishToMavenLocal clients:publishToMavenLocal connect:json:publishToMavenLocal connect:api:publishToMavenLocal \
-         || { echo 'Could not publish kafka-streams.jar (and dependencies) locally to Maven'; exit 1; }
-  '''
-
-  VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2', returnStdout: true).trim()
-
-  dir('streams/quickstart') {
-    sh '''
-      mvn clean install -Dgpg.skip  \
-          || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
-    '''
-
-    dir('test-streams-archetype') {
-      // Note the double quotes for variable interpolation
-      sh """ 
-        echo "Y" | mvn archetype:generate \
-            -DarchetypeCatalog=local \
-            -DarchetypeGroupId=org.apache.kafka \
-            -DarchetypeArtifactId=streams-quickstart-java \
-            -DarchetypeVersion=${VERSION} \
-            -DgroupId=streams.examples \
-            -DartifactId=streams.examples \
-            -Dversion=0.1 \
-            -Dpackage=myapps \
-            || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
-      """
-
-      dir('streams.examples') {
-        sh '''
-          mvn compile \
-              || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
-        '''
-      }
-    }
-  }
-}
-
-def tryStreamsArchetype() {
-  try {
-    doStreamsArchetype()
-  } catch(err) {
-    echo 'Failed to build Kafka Streams archetype, marking this build UNSTABLE'
-    currentBuild.result = 'UNSTABLE'
-  }
 }
 
 
@@ -119,7 +69,6 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            tryStreamsArchetype()
           }
         }
 
