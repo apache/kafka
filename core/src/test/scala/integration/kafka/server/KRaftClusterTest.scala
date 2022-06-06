@@ -799,7 +799,6 @@ class KRaftClusterTest {
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
         val quorumInfo = quorumState.quorumInfo().get()
 
-        assertEquals(KafkaRaftServer.MetadataTopic, quorumInfo.topic())
         assertEquals(0, quorumInfo.leaderId())
         assertEquals(3, quorumInfo.voters.size())
         assertEquals(0, quorumInfo.observers.size())
