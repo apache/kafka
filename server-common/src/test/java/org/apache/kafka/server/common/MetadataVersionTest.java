@@ -294,6 +294,7 @@ class MetadataVersionTest {
         assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV0));
         assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_2_8_IV1));
         assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_3_IV1, IBP_3_3_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_2_8_IV1));
 
         // Check that argument order doesn't matter
         assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_0_IV0, IBP_3_2_IV0));

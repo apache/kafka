@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -55,7 +56,7 @@ public class ConfigurationsImageTest {
         broker1Map.put("foobar", "foobaz");
         map1.put(new ConfigResource(BROKER, "1"),
             new ConfigurationImage(broker1Map));
-        IMAGE1 = new ConfigurationsImage(map1);
+        IMAGE1 = new ConfigurationsImage(map1, MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ConfigRecord().setResourceType(BROKER.id()).
@@ -78,7 +79,7 @@ public class ConfigurationsImageTest {
         broker1Map2.put("barfoo", "bazfoo");
         map2.put(new ConfigResource(BROKER, "1"),
             new ConfigurationImage(broker1Map2));
-        IMAGE2 = new ConfigurationsImage(map2);
+        IMAGE2 = new ConfigurationsImage(map2, MetadataVersion.latest());
     }
 
     @Test
@@ -93,7 +94,7 @@ public class ConfigurationsImageTest {
 
     @Test
     public void testApplyDelta1() throws Throwable {
-        assertEquals(IMAGE2, DELTA1.apply());
+        assertEquals(IMAGE2, DELTA1.apply(MetadataVersion.latest()));
     }
 
     @Test
@@ -106,7 +107,7 @@ public class ConfigurationsImageTest {
         image.write(writer);
         ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
-        ConfigurationsImage nextImage = delta.apply();
+        ConfigurationsImage nextImage = delta.apply(MetadataVersion.latest());
         assertEquals(image, nextImage);
     }
 }

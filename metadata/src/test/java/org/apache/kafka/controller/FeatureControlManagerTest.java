@@ -85,6 +85,13 @@ public class FeatureControlManagerTest {
         return result;
     }
 
+    static ControllerResult<Map<String, ApiError>> initializeMetadataVersion(FeatureControlManager manager, MetadataVersion initVersion) {
+        return manager.updateFeatures(
+            Collections.singletonMap(MetadataVersion.FEATURE_NAME, initVersion.featureLevel()),
+            Collections.singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
+            Collections.singletonMap(1, Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.ALL)), false);
+    }
+
     @Test
     public void testUpdateFeatures() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());

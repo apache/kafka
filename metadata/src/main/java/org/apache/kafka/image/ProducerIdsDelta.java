@@ -48,7 +48,7 @@ public final class ProducerIdsDelta {
         nextProducerId = record.nextProducerId();
     }
 
-    public ProducerIdsImage apply() {
-        return new ProducerIdsImage(nextProducerId);
+    public ProducerIdsImage apply(MetadataVersion metadataVersion) {
+        return new ProducerIdsImage(nextProducerId, metadataVersion);
     }
 }

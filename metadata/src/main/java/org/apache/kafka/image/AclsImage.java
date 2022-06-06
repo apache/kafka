@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,12 +38,15 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class AclsImage {
-    public static final AclsImage EMPTY = new AclsImage(Collections.emptyMap());
+    public static final AclsImage EMPTY = new AclsImage(Collections.emptyMap(), MetadataVersion.UNINITIALIZED);
 
     private final Map<Uuid, StandardAcl> acls;
 
-    public AclsImage(Map<Uuid, StandardAcl> acls) {
+    private final MetadataVersion metadataVersion;
+
+    public AclsImage(Map<Uuid, StandardAcl> acls, MetadataVersion metadataVersion) {
         this.acls = Collections.unmodifiableMap(acls);
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {

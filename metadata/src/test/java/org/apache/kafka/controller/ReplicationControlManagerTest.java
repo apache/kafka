@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -55,6 +56,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -76,6 +78,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -139,6 +142,7 @@ public class ReplicationControlManagerTest {
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
         final ControllerMetrics metrics = new MockControllerMetrics();
+        final QuorumFeatures quorumFeatures = QuorumFeatures.create(1, new ApiVersions(), QuorumFeatures.defaultFeatureMap(), Collections.emptyList());
         final ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
             setTime(time).
@@ -149,6 +153,12 @@ public class ReplicationControlManagerTest {
             build();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
+            build();
+        final FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(quorumFeatures).
+            setMetadataVersion(MetadataVersion.latest()).
             build();
         final ReplicationControlManager replicationControl;
 
@@ -171,7 +181,11 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setControllerMetrics(metrics).
                 setCreateTopicPolicy(createTopicPolicy).
+                setFeatureControl(featureControl).
                 build();
+            featureControl.replay(new FeatureLevelRecord()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.IBP_3_3_IV1.featureLevel()));
             clusterControl.activate();
         }
 

@@ -57,7 +57,7 @@ import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, C
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.raft.{OffsetAndEpoch => RaftOffsetAndEpoch}
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1066,7 +1066,7 @@ class ReplicaManagerTest {
   @Test
   def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdateIbp26(): Unit = {
     val extraProps = new Properties
-    extraProps.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_6_IV0.version)
+    extraProps.put(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_2_6_IV0.version)
     verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps, expectTruncation = true)
   }
 
@@ -3163,7 +3163,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true)
-      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply(MetadataVersion.latest()))
       val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
       val topicIdPartition = new TopicIdPartition(topicId, topicPartition)
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
@@ -3188,7 +3188,7 @@ class ReplicaManagerTest {
 
       // Change the local replica to follower
       val followerTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), localId, false)
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Append on a follower should fail
@@ -3220,7 +3220,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the follower
       val followerTopicsDelta = topicsCreateDelta(localId, false)
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3237,7 +3237,7 @@ class ReplicaManagerTest {
 
       // Change the local replica to leader
       val leaderTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), localId, true)
-      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply(MetadataVersion.latest()))
       val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
       val topicIdPartition = new TopicIdPartition(topicId, topicPartition)
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
@@ -3275,7 +3275,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the follower
       val followerTopicsDelta = topicsCreateDelta(localId, false)
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3313,7 +3313,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the follower
       val followerTopicsDelta = topicsCreateDelta(localId, false)
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3326,7 +3326,7 @@ class ReplicaManagerTest {
 
       // Apply changes that remove replica
       val notReplicaTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), otherId, true)
-      val notReplicaMetadataImage = imageFromTopics(notReplicaTopicsDelta.apply())
+      val notReplicaMetadataImage = imageFromTopics(notReplicaTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(notReplicaTopicsDelta, notReplicaMetadataImage)
 
       // Check that the partition was removed
@@ -3350,7 +3350,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the follower
       val followerTopicsDelta = topicsCreateDelta(localId, false)
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3363,7 +3363,7 @@ class ReplicaManagerTest {
 
       // Apply changes that remove topic and replica
       val removeTopicsDelta = topicsDeleteDelta(followerMetadataImage.topics())
-      val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply())
+      val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(removeTopicsDelta, removeMetadataImage)
 
       // Check that the partition was removed
@@ -3387,7 +3387,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true)
-      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3400,7 +3400,7 @@ class ReplicaManagerTest {
 
       // Apply changes that remove replica
       val notReplicaTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), otherId, true)
-      val notReplicaMetadataImage = imageFromTopics(notReplicaTopicsDelta.apply())
+      val notReplicaMetadataImage = imageFromTopics(notReplicaTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(notReplicaTopicsDelta, notReplicaMetadataImage)
 
       // Check that the partition was removed
@@ -3424,7 +3424,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true)
-      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3437,7 +3437,7 @@ class ReplicaManagerTest {
 
       // Apply changes that remove topic and replica
       val removeTopicsDelta = topicsDeleteDelta(leaderMetadataImage.topics())
-      val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply())
+      val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(removeTopicsDelta, removeMetadataImage)
 
       // Check that the partition was removed
@@ -3462,7 +3462,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true)
-      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3478,7 +3478,7 @@ class ReplicaManagerTest {
 
       // Change the local replica to follower
       val followerTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), localId, false)
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check that the produce failed because it changed to follower before replicating
@@ -3500,7 +3500,7 @@ class ReplicaManagerTest {
     try {
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true)
-      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply(MetadataVersion.latest()))
       val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
       val topicIdPartition = new TopicIdPartition(topicId, topicPartition)
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
@@ -3526,7 +3526,7 @@ class ReplicaManagerTest {
 
       // Change the local replica to follower
       val followerTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), localId, false)
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check that the produce failed because it changed to follower before replicating
@@ -3556,7 +3556,7 @@ class ReplicaManagerTest {
 
       // Make the local replica the leader
       val topicsDelta = topicsCreateDelta(localId, isStartIdLeader)
-      val leaderMetadataImage = imageFromTopics(topicsDelta.apply())
+      val leaderMetadataImage = imageFromTopics(topicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(topicsDelta, leaderMetadataImage)
 
       assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
@@ -3586,7 +3586,7 @@ class ReplicaManagerTest {
 
       // Make the local replica the follower
       var followerTopicsDelta = topicsCreateDelta(localId, false)
-      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition
@@ -3628,7 +3628,7 @@ class ReplicaManagerTest {
 
       // Apply changes that bumps the leader epoch.
       followerTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), localId, false)
-      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       assertFalse(followerPartition.isLeader)
@@ -3795,7 +3795,7 @@ class ReplicaManagerTest {
         .setLeaderEpoch(0)
         .setPartitionEpoch(0)
       )
-      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition.
@@ -3823,7 +3823,7 @@ class ReplicaManagerTest {
         .setReplicas(util.Arrays.asList(localId, localId + 1, localId + 2))
         .setIsr(util.Arrays.asList(localId, localId + 1))
       )
-      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       assertFalse(followerPartition.isLeader)
@@ -3846,7 +3846,7 @@ class ReplicaManagerTest {
         .setLeader(localId + 2)
       )
 
-      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       assertFalse(followerPartition.isLeader)
@@ -3927,7 +3927,7 @@ class ReplicaManagerTest {
       )
 
       // Apply the delta.
-      var metadataImage = imageFromTopics(topicsDelta.apply())
+      var metadataImage = imageFromTopics(topicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(topicsDelta, metadataImage)
 
       // Check the state of the partitions.
@@ -3971,7 +3971,7 @@ class ReplicaManagerTest {
         .setIsr(util.Arrays.asList(localId))
         .setLeader(NO_LEADER)
       )
-      metadataImage = imageFromTopics(topicsDelta.apply())
+      metadataImage = imageFromTopics(topicsDelta.apply(MetadataVersion.latest()))
       replicaManager.applyDelta(topicsDelta, metadataImage)
 
       // Partition foo0 and foo1 are updated.
@@ -4042,6 +4042,7 @@ class ReplicaManagerTest {
   private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
     new MetadataImage(
       new RaftOffsetAndEpoch(100, 10),
+      MetadataVersion.latest(),
       FeaturesImage.EMPTY,
       ClusterImageTest.IMAGE1,
       topicsImage,

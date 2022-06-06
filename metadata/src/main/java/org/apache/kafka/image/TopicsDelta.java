@@ -67,7 +67,7 @@ public final class TopicsDelta {
 
     public void replay(TopicRecord record) {
         TopicDelta delta = new TopicDelta(
-            new TopicImage(record.name(), record.topicId(), Collections.emptyMap()));
+            new TopicImage(record.name(), record.topicId(), Collections.emptyMap(), image.metadataVersion));
         changedTopics.put(record.topicId(), delta);
     }
 
@@ -122,7 +122,7 @@ public final class TopicsDelta {
         // no-op
     }
 
-    public TopicsImage apply() {
+    public TopicsImage apply(MetadataVersion metadataVersion) {
         Map<Uuid, TopicImage> newTopicsById = new HashMap<>(image.topicsById().size());
         Map<String, TopicImage> newTopicsByName = new HashMap<>(image.topicsByName().size());
         for (Entry<Uuid, TopicImage> entry : image.topicsById().entrySet()) {
@@ -135,19 +135,19 @@ public final class TopicsDelta {
                     newTopicsByName.put(prevTopicImage.name(), prevTopicImage);
                 }
             } else {
-                TopicImage newTopicImage = delta.apply();
+                TopicImage newTopicImage = delta.apply(metadataVersion);
                 newTopicsById.put(id, newTopicImage);
                 newTopicsByName.put(delta.name(), newTopicImage);
             }
         }
         for (Entry<Uuid, TopicDelta> entry : changedTopics.entrySet()) {
             if (!newTopicsById.containsKey(entry.getKey())) {
-                TopicImage newTopicImage = entry.getValue().apply();
+                TopicImage newTopicImage = entry.getValue().apply(metadataVersion);
                 newTopicsById.put(newTopicImage.id(), newTopicImage);
                 newTopicsByName.put(newTopicImage.name(), newTopicImage);
             }
         }
-        return new TopicsImage(newTopicsById, newTopicsByName);
+        return new TopicsImage(newTopicsById, newTopicsByName, metadataVersion);
     }
 
     public TopicDelta changedTopic(Uuid topicId) {

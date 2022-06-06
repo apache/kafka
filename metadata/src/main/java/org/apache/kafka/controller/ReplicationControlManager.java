@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.ElectionType;
@@ -204,22 +203,14 @@ public class ReplicationControlManager {
             if (configurationControl == null) {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
-                throw new IllegalStateException("Cluster controller must be set before building");
+                throw new IllegalStateException("Cluster control must be set before building");
             } else if (controllerMetrics == null) {
                 throw new IllegalStateException("Metrics must be set before building");
+            } else if (featureControl == null) {
+                throw new RuntimeException("Feature control must be set before building.");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
-            if (featureControl == null) {
-                featureControl = new FeatureControlManager.Builder().
-                    setLogContext(logContext).
-                    setSnapshotRegistry(snapshotRegistry).
-                    setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
-                        QuorumFeatures.defaultFeatureMap(),
-                        Collections.singletonList(0))).
-                    setMetadataVersion(MetadataVersion.latest()).
-                    build();
-            }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,
                 defaultReplicationFactor,
@@ -733,10 +724,11 @@ public class ReplicationControlManager {
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
             setTopicId(topicId), TOPIC_RECORD.highestSupportedVersion()));
+        MetadataVersion metadataVersion = featureControl.metadataVersion();
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex));
+            records.add(info.toRecord(topicId, partitionIndex, metadataVersion.isLeaderRecoverySupported()));
         }
         return ApiError.NONE;
     }
@@ -1796,10 +1788,12 @@ public class ReplicationControlManager {
     class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
         private final long epoch;
         private final Iterator<TopicControlInfo> iterator;
+        private final MetadataVersion metadataVersion;
 
         ReplicationControlIterator(long epoch) {
             this.epoch = epoch;
             this.iterator = topics.values(epoch).iterator();
+            this.metadataVersion = featureControl.metadataVersion(epoch);
         }
 
         @Override
@@ -1816,7 +1810,7 @@ public class ReplicationControlManager {
                 setName(topic.name).
                 setTopicId(topic.id), TOPIC_RECORD.highestSupportedVersion()));
             for (Entry<Integer, PartitionRegistration> entry : topic.parts.entrySet(epoch)) {
-                records.add(entry.getValue().toRecord(topic.id, entry.getKey()));
+                records.add(entry.getValue().toRecord(topic.id, entry.getKey(), metadataVersion.isLeaderRecoverySupported()));
             }
             return records;
         }

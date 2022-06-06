@@ -142,6 +142,10 @@ public class FeatureControlManager {
         return metadataVersion.get();
     }
 
+    MetadataVersion metadataVersion(long epoch) {
+        return metadataVersion.get(epoch);
+    }
+
     private ApiError updateFeature(
         String featureName,
         short newVersion,

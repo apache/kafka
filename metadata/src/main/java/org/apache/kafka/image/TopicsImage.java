@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Collections;
@@ -37,15 +38,22 @@ import java.util.stream.Collectors;
  */
 public final class TopicsImage {
     public static final TopicsImage EMPTY =
-        new TopicsImage(Collections.emptyMap(), Collections.emptyMap());
+        new TopicsImage(Collections.emptyMap(), Collections.emptyMap(), MetadataVersion.UNINITIALIZED);
 
     private final Map<Uuid, TopicImage> topicsById;
+
     private final Map<String, TopicImage> topicsByName;
 
-    public TopicsImage(Map<Uuid, TopicImage> topicsById,
-                       Map<String, TopicImage> topicsByName) {
+    final MetadataVersion metadataVersion;
+
+    public TopicsImage(
+        Map<Uuid, TopicImage> topicsById,
+        Map<String, TopicImage> topicsByName,
+        MetadataVersion metadataVersion
+    ) {
         this.topicsById = Collections.unmodifiableMap(topicsById);
         this.topicsByName = Collections.unmodifiableMap(topicsByName);
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {

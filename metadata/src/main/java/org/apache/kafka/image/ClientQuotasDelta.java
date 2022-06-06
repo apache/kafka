@@ -60,7 +60,7 @@ public final class ClientQuotasDelta {
         change.replay(record);
     }
 
-    public ClientQuotasImage apply() {
+    public ClientQuotasImage apply(MetadataVersion metadataVersion) {
         Map<ClientQuotaEntity, ClientQuotaImage> newEntities =
             new HashMap<>(image.entities().size());
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : image.entities().entrySet()) {
@@ -84,7 +84,7 @@ public final class ClientQuotasDelta {
                 }
             }
         }
-        return new ClientQuotasImage(newEntities);
+        return new ClientQuotasImage(newEntities, metadataVersion);
     }
 
     @Override

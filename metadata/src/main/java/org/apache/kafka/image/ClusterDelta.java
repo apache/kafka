@@ -109,7 +109,7 @@ public final class ClusterDelta {
         }
     }
 
-    public ClusterImage apply() {
+    public ClusterImage apply(MetadataVersion metadataVersion) {
         Map<Integer, BrokerRegistration> newBrokers = new HashMap<>(image.brokers().size());
         for (Entry<Integer, BrokerRegistration> entry : image.brokers().entrySet()) {
             int nodeId = entry.getKey();
@@ -129,7 +129,7 @@ public final class ClusterDelta {
                 }
             }
         }
-        return new ClusterImage(newBrokers);
+        return new ClusterImage(newBrokers, metadataVersion);
     }
 
     @Override
