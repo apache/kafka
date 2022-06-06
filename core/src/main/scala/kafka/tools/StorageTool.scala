@@ -97,12 +97,9 @@ object StorageTool extends Logging {
       help("The cluster ID to use.")
     formatParser.addArgument("--ignore-formatted", "-g").
       action(storeTrue())
-    formatParser.addArgument("--metadata-version", "-v").
-      action(store()).
-      help(s"The initial metadata.version feature flag level to use. Cannot be specified with --release-version.")
     formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"A release version to use for the initial metadata.version. Cannot be specified with --metadata-version. The default is (${MetadataVersion.latest().version()})")
+      help(s"A release version to use for the initial metadata.version. The default is (${MetadataVersion.latest().version()})")
 
     parser.parseArgsOrFail(args)
   }
@@ -117,17 +114,9 @@ object StorageTool extends Logging {
   def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
 
   def getMetadataVersion(namespace: Namespace): MetadataVersion = {
-    val mv = Option(namespace.getString("metadata_version"))
-    val rv = Option(namespace.getString("release_version"))
-    if (mv.isDefined && rv.isDefined) {
-      throw new TerseFailure(s"Cannot specify both --metadata-version and --release-version.")
-    } else if (mv.isDefined) {
-      mv.map(level => MetadataVersion.fromFeatureLevel(level.toShort)).get
-    } else if (rv.isDefined) {
-      rv.map(ver => MetadataVersion.fromVersionString(ver)).get
-    } else {
-      MetadataVersion.latest()
-    }
+    Option(namespace.getString("release_version"))
+      .map(ver => MetadataVersion.fromVersionString(ver))
+      .getOrElse(MetadataVersion.latest())
   }
 
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {

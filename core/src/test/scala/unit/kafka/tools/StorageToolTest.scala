@@ -205,18 +205,12 @@ Found problem:
       StorageTool.getMetadataVersion(namespace)
     }
 
-    var mv = parseMetadataVersion("--metadata-version", "1")
-    assertEquals(1, mv.featureLevel())
-
-    mv = parseMetadataVersion("--metadata-version", "3")
-    assertEquals(3, mv.featureLevel())
-
-    assertThrows(classOf[TerseFailure], () => parseMetadataVersion("--metadata-version", "3", "--release-version", "3.0"))
-
-    mv = parseMetadataVersion("--release-version", "3.0")
+    var mv = parseMetadataVersion("--release-version", "3.0")
     assertEquals("3.0", mv.shortVersion())
 
     mv = parseMetadataVersion("--release-version", "3.0-IV1")
     assertEquals(MetadataVersion.IBP_3_0_IV1, mv)
+
+    assertThrows(classOf[IllegalArgumentException], () => parseMetadataVersion("--release-version", "0.0"))
   }
 }
