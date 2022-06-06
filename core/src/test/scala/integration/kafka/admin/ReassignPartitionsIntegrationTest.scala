@@ -66,7 +66,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
   @ValueSource(strings = Array("zk")) // Note: KRaft requires AlterPartition
   def testReassignmentWithAlterPartitionDisabled(quorum: String): Unit = {
     // Test reassignment when the IBP is on an older version which does not use
-    // the `AlterIsr` API. In this case, the controller will register individual
+    // the `AlterPartition` API. In this case, the controller will register individual
     // watches for each reassigning partition so that the reassignment can be
     // completed as soon as the ISR is expanded.
     val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.version)
@@ -79,11 +79,11 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
   @ValueSource(strings = Array("zk")) // Note: KRaft requires AlterPartition
   def testReassignmentCompletionDuringPartialUpgrade(quorum: String): Unit = {
     // Test reassignment during a partial upgrade when some brokers are relying on
-    // `AlterIsr` and some rely on the old notification logic through Zookeeper.
+    // `AlterPartition` and some rely on the old notification logic through Zookeeper.
     // In this test case, broker 0 starts up first on the latest IBP and is typically
     // elected as controller. The three remaining brokers start up on the older IBP.
     // We want to ensure that reassignment can still complete through the ISR change
-    // notification path even though the controller expects `AlterIsr`.
+    // notification path even though the controller expects `AlterPartition`.
 
     // Override change notification settings so that test is not delayed by ISR
     // change notification delay
