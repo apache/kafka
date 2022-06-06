@@ -19,7 +19,7 @@
 
 def doValidation() {
   sh """
-    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
+    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala  \
         rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
   """
@@ -34,7 +34,7 @@ def retryFlagsString(env) {
     else ""
 }
 
-def doTest(env, target = "unitTest integrationTest") {
+def doTest(env, target = "streams:unitTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
