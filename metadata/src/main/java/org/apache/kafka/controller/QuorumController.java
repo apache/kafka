@@ -622,9 +622,14 @@ public final class QuorumController implements Controller {
         }
     }
 
-    // VisibleForTesting
+    // Visible for testing
     ReplicationControlManager replicationControl() {
         return replicationControl;
+    }
+
+    // Visible for testing
+    ClusterControlManager clusterControl() {
+        return clusterControl;
     }
 
     <T> CompletableFuture<T> appendReadEvent(
@@ -1557,6 +1562,11 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             build();
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
+        this.featureControl = new FeatureControlManager.Builder().
+            setLogContext(logContext).
+            setQuorumFeatures(quorumFeatures).
+            setSnapshotRegistry(snapshotRegistry).
+            build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
             setClusterId(clusterId).
@@ -1565,12 +1575,8 @@ public final class QuorumController implements Controller {
             setSessionTimeoutNs(sessionTimeoutNs).
             setReplicaPlacer(replicaPlacer).
             setControllerMetrics(controllerMetrics).
+            setFeatureControlManager(featureControl).
             build();
-        this.featureControl = new FeatureControlManager.Builder().
-                setLogContext(logContext).
-                setQuorumFeatures(quorumFeatures).
-                setSnapshotRegistry(snapshotRegistry).
-                build();
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;

@@ -397,15 +397,17 @@ public class ProcessorContextImplTest {
     @Test
     public void shouldNotSendRecordHeadersToChangelogTopic() {
         recordCollector.send(
-                CHANGELOG_PARTITION.topic(),
-                KEY_BYTES,
-                VALUE_BYTES,
-                null,
-                CHANGELOG_PARTITION.partition(),
-                TIMESTAMP,
-                BYTES_KEY_SERIALIZER,
-                BYTEARRAY_VALUE_SERIALIZER
-        );
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            null,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
+
         final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
 
         replay(recordCollector, task);
@@ -423,15 +425,16 @@ public class ProcessorContextImplTest {
         headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
                 PositionSerde.serialize(position).array()));
         recordCollector.send(
-                CHANGELOG_PARTITION.topic(),
-                KEY_BYTES,
-                VALUE_BYTES,
-                headers,
-                CHANGELOG_PARTITION.partition(),
-                TIMESTAMP,
-                BYTES_KEY_SERIALIZER,
-                BYTEARRAY_VALUE_SERIALIZER
-        );
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            headers,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
 
         final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
 

@@ -268,7 +268,7 @@ public class PartitionGroup {
             // get the buffer size of queue before poll
             final long oldBufferSize = queue.getTotalBytesBuffered();
             // get the first record from this queue.
-            record = queue.poll();
+            record = queue.poll(wallClockTime);
             // After polling, the buffer size would have reduced.
             final long newBufferSize = queue.getTotalBytesBuffered();
 
@@ -390,6 +390,12 @@ public class PartitionGroup {
         nonEmptyQueuesByTime.clear();
         totalBuffered = 0;
         streamTime = RecordQueue.UNKNOWN;
+    }
+
+    void close() {
+        for (final RecordQueue queue : partitionQueues.values()) {
+            queue.close();
+        }
     }
 
     // Below methods are for only testing.

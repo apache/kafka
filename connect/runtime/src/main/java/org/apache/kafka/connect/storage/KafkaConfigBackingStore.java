@@ -19,9 +19,14 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -39,7 +44,6 @@ import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -51,6 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.crypto.spec.SecretKeySpec;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -58,6 +63,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -233,21 +239,23 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // initialization as long as we always read the volatile variable "started" before we access the listener.
     private UpdateListener updateListener;
 
+    private final Map<String, Object> baseProducerProps;
+
     private final String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
     private final KafkaBasedLog<String, byte[]> configLog;
     // Connector -> # of tasks
-    private final Map<String, Integer> connectorTaskCounts = new HashMap<>();
+    final Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
-    private final Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
-    private final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+    final Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
+    final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private SharedTopicAdmin ownTopicAdmin;
 
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
-    private final Set<String> inconsistent = new HashSet<>();
+    final Set<String> inconsistent = new HashSet<>();
     // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
     // outstanding data to be applied.
     private volatile long offset;
@@ -257,22 +265,37 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // Connector -> Map[ConnectorTaskId -> Configs]
     private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
 
-    private final Map<String, TargetState> connectorTargetStates = new HashMap<>();
+    final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
     private final WorkerConfigTransformer configTransformer;
 
+    private final boolean usesFencableWriter;
+    private volatile Producer<String, byte[]> fencableProducer;
+    private final Map<String, Object> fencableProducerProps;
+
     @Deprecated
-    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer) {
+    public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
         this(converter, config, configTransformer, null);
     }
 
-    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier) {
+    public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
         this.offset = -1;
         this.topicAdminSupplier = adminSupplier;
 
+        this.baseProducerProps = baseProducerProps(config);
+        // By default, Connect disables idempotent behavior for all producers, even though idempotence became
+        // default for Kafka producers. This is to ensure Connect continues to work with many Kafka broker versions, including older brokers that do not support
+        // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
+        // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
+        // gets approved and scheduled for release.
+        baseProducerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+
+        this.fencableProducerProps = fencableProducerProps(config);
+
+        this.usesFencableWriter = config.transactionalLeaderEnabled();
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
         if (this.topic == null || this.topic.trim().length() == 0)
             throw new ConfigException("Must specify topic for connector configuration.");
@@ -291,7 +314,16 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         log.info("Starting KafkaConfigBackingStore");
         // Before startup, callbacks are *not* invoked. You can grab a snapshot after starting -- just take care that
         // updates can continue to occur in the background
-        configLog.start();
+        try {
+            configLog.start();
+        } catch (UnsupportedVersionException e) {
+            throw new ConnectException(
+                    "Enabling exactly-once support for source connectors requires a Kafka broker version that allows "
+                            + "admin clients to read consumer offsets. Please either disable the worker's exactly-once " +
+                            "support for source connectors, or use a newer Kafka broker version.",
+                    e
+            );
+        }
 
         int partitionCount = configLog.partitionCount();
         if (partitionCount > 1) {
@@ -309,14 +341,65 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @Override
     public void stop() {
         log.info("Closing KafkaConfigBackingStore");
-        try {
-            configLog.stop();
-        } finally {
-            if (ownTopicAdmin != null) {
-                ownTopicAdmin.close();
+
+        if (fencableProducer != null) {
+            Utils.closeQuietly(() -> fencableProducer.close(Duration.ZERO), "fencable producer for config topic");
+        }
+        Utils.closeQuietly(ownTopicAdmin, "admin for config topic");
+        Utils.closeQuietly(configLog::stop, "KafkaBasedLog for config topic");
+
+        log.info("Closed KafkaConfigBackingStore");
+    }
+
+    @Override
+    public void claimWritePrivileges() {
+        if (usesFencableWriter && fencableProducer == null) {
+            try {
+                fencableProducer = createFencableProducer();
+                fencableProducer.initTransactions();
+            } catch (Exception e) {
+                relinquishWritePrivileges();
+                throw new ConnectException("Failed to create and initialize fencable producer for config topic", e);
             }
         }
-        log.info("Closed KafkaConfigBackingStore");
+    }
+
+    private Map<String, Object> baseProducerProps(WorkerConfig workerConfig) {
+        Map<String, Object> producerProps = new HashMap<>(workerConfig.originals());
+        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(workerConfig);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
+        ConnectUtils.addMetricsContextProperties(producerProps, workerConfig, kafkaClusterId);
+        return producerProps;
+    }
+
+    // Visible for testing
+    Map<String, Object> fencableProducerProps(DistributedConfig workerConfig) {
+        Map<String, Object> result = new HashMap<>(baseProducerProps(workerConfig));
+
+        // Always require producer acks to all to ensure durable writes
+        result.put(ProducerConfig.ACKS_CONFIG, "all");
+        // We can set this to 5 instead of 1 without risking reordering because we are using an idempotent producer
+        result.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
+
+        ConnectUtils.ensureProperty(
+                result, ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true",
+                "for the worker's config topic producer when exactly-once source support is enabled or in preparation to be enabled",
+                false
+        );
+        ConnectUtils.ensureProperty(
+                result, ProducerConfig.TRANSACTIONAL_ID_CONFIG, workerConfig.transactionalProducerId(),
+                "for the worker's config topic producer when exactly-once source support is enabled or in preparation to be enabled",
+                true
+        );
+
+        return result;
+    }
+
+    // Visible in order to be mocked during testing
+    Producer<String, byte[]> createFencableProducer() {
+        return new KafkaProducer<>(fencableProducerProps);
     }
 
     /**
@@ -349,10 +432,15 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     /**
      * Write this connector configuration to persistent storage and wait until it has been acknowledged and read back by
-     * tailing the Kafka log with a consumer.
+     * tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling
+     * this method if the worker is configured to use a fencable producer for writes to the config topic.
      *
      * @param connector  name of the connector to write data for
      * @param properties the configuration to write
+     * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
+     * this method was called
+     * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
+     * and the write fails
      */
     @Override
     public void putConnectorConfig(String connector, Map<String, String> properties) {
@@ -360,19 +448,30 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
         connectConfig.put("properties", properties);
         byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
-        updateConnectorConfig(connector, serializedConfig);
+        try {
+            maybeSendFencably(CONNECTOR_KEY(connector), serializedConfig);
+            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write connector configuration to Kafka: ", e);
+            throw new ConnectException("Error writing connector configuration to Kafka", e);
+        }
     }
 
     /**
-     * Remove configuration for a given connector.
+     * Remove configuration for a given connector. {@link #claimWritePrivileges()} must be successfully invoked before calling
+     * this method if the worker is configured to use a fencable producer for writes to the config topic.
      * @param connector name of the connector to remove
+     * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
+     * this method was called
+     * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
+     * and the write fails
      */
     @Override
     public void removeConnectorConfig(String connector) {
         log.debug("Removing connector configuration for connector '{}'", connector);
         try {
-            configLog.send(CONNECTOR_KEY(connector), null);
-            configLog.send(TARGET_STATE_KEY(connector), null);
+            maybeSendFencably(CONNECTOR_KEY(connector), null);
+            maybeSendFencably(TARGET_STATE_KEY(connector), null);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to remove connector configuration from Kafka: ", e);
@@ -385,24 +484,20 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         throw new UnsupportedOperationException("Removal of tasks is not currently supported");
     }
 
-    private void updateConnectorConfig(String connector, byte[] serializedConfig) {
-        try {
-            configLog.send(CONNECTOR_KEY(connector), serializedConfig);
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            log.error("Failed to write connector configuration to Kafka: ", e);
-            throw new ConnectException("Error writing connector configuration to Kafka", e);
-        }
-    }
-
     /**
      * Write these task configurations and associated commit messages, unless an inconsistency is found that indicates
-     * that we would be leaving one of the referenced connectors with an inconsistent state.
+     * that we would be leaving one of the referenced connectors with an inconsistent state. {@link #claimWritePrivileges()}
+     * must be successfully invoked before calling this method if the worker is configured to use a fencable producer for
+     * writes to the config topic.
      *
      * @param connector the connector to write task configuration
      * @param configs list of task configurations for the connector
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
+     * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
+     * this method was called
+     * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
+     * and the write fails
      */
     @Override
     public void putTaskConfigs(String connector, List<Map<String, String>> configs) {
@@ -425,7 +520,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
             log.debug("Writing configuration for connector '{}' task {}", connector, index);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
-            configLog.send(TASK_KEY(connectorTaskId), serializedConfig);
+            maybeSendFencably(TASK_KEY(connectorTaskId), serializedConfig);
             index++;
         }
 
@@ -441,7 +536,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             connectConfig.put("tasks", taskCount);
             byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
             log.debug("Writing commit for connector '{}' with {} tasks.", connector, taskCount);
-            configLog.send(COMMIT_TASKS_KEY(connector), serializedConfig);
+            maybeSendFencably(COMMIT_TASKS_KEY(connector), serializedConfig);
 
             // Read to end to ensure all the commit messages have been written
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -460,6 +555,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
+    /**
+     * Write a new {@link TargetState} for the connector. Note that {@link #claimWritePrivileges()} does not need to be
+     * invoked before invoking this method.
+     * @param connector the name of the connector
+     * @param state the desired target state for the connector
+     */
     @Override
     public void putTargetState(String connector, TargetState state) {
         Struct connectTargetState = new Struct(TARGET_STATE_V0);
@@ -469,6 +570,16 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
     }
 
+    /**
+     * Write a session key to persistent storage and wait until it has been acknowledged and read back by tailing the Kafka log
+     * with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling this method if the worker
+     * is configured to use a fencable producer for writes to the config topic.
+     * @param sessionKey the session key to distributed
+     * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
+     * this method was called
+     * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
+     * and the write fails
+     */
     @Override
     public void putSessionKey(SessionKey sessionKey) {
         log.debug("Distributing new session key");
@@ -478,7 +589,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         sessionKeyStruct.put("creation-timestamp", sessionKey.creationTimestamp());
         byte[] serializedSessionKey = converter.fromConnectData(topic, SESSION_KEY_V0, sessionKeyStruct);
         try {
-            configLog.send(SESSION_KEY_KEY, serializedSessionKey);
+            maybeSendFencably(SESSION_KEY_KEY, serializedSessionKey);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write session key to Kafka: ", e);
@@ -486,6 +597,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
+    /**
+     * Write a restart request for the connector and optionally its tasks to persistent storage and wait until it has been
+     * acknowledged and read back by tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully
+     * invoked before calling this method if the worker is configured to use a fencable producer for writes to the config topic.
+     * @param restartRequest the restart request details
+     */
     @Override
     public void putRestartRequest(RestartRequest restartRequest) {
         log.debug("Writing {} to Kafka", restartRequest);
@@ -495,7 +612,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         value.put(ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed());
         byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
         try {
-            configLog.send(key, serializedValue);
+            maybeSendFencably(key, serializedValue);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write {} to Kafka: ", restartRequest, e);
@@ -505,24 +622,22 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
+        Map<String, Object> producerProps = new HashMap<>(baseProducerProps);
+
         String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         Map<String, Object> originals = config.originals();
-        Map<String, Object> producerProps = new HashMap<>(originals);
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
-        // By default, Connect disables idempotent behavior for all producers, even though idempotence became
-        // default for Kafka producers. This is to ensure Connect continues to work with many Kafka broker versions, including older brokers that do not support
-        // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
-        // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
-        // gets approved and scheduled for release.
-        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-        ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
+        if (config.exactlyOnceSourceEnabled()) {
+            ConnectUtils.ensureProperty(
+                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                    "for the worker's config topic consumer when exactly-once source support is enabled",
+                    true
+            );
+        }
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
@@ -545,6 +660,34 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 .build();
 
         return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
+    }
+
+    private void maybeSendFencably(String key, byte[] value) {
+        if (!usesFencableWriter) {
+            configLog.send(key, value);
+            return;
+        }
+
+        if (fencableProducer == null) {
+            throw new IllegalStateException("Cannot produce to config topic without claiming write privileges first");
+        }
+
+        try {
+            fencableProducer.beginTransaction();
+            fencableProducer.send(new ProducerRecord<>(topic, key, value));
+            fencableProducer.commitTransaction();
+        } catch (Exception e) {
+            log.warn("Failed to perform fencable send to config topic", e);
+            relinquishWritePrivileges();
+            throw new PrivilegedWriteException("Failed to perform fencable send to config topic", e);
+        }
+    }
+
+    private void relinquishWritePrivileges() {
+        if (fencableProducer != null) {
+            Utils.closeQuietly(() -> fencableProducer.close(Duration.ZERO), "fencable producer for config topic");
+            fencableProducer = null;
+        }
     }
 
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
@@ -606,7 +749,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         }
                         Object targetState = ((Map<String, Object>) value.value()).get("state");
                         if (!(targetState instanceof String)) {
-                            log.error("Invalid data for target state for connector '{}': 'state' field should be a Map but is {}",
+                            log.error("Invalid data for target state for connector '{}': 'state' field should be a String but is {}",
                                     connectorName, targetState == null ? null : targetState.getClass());
                             return;
                         }

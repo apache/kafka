@@ -130,7 +130,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="Worker(|Test).java"/>
     <suppress checks="MethodLength"
-              files="(KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
+              files="(DistributedHerder|KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
               files="Worker(SinkTask|SourceTask|Coordinator).java"/>
     <suppress checks="ParameterNumber"
@@ -213,7 +213,7 @@
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
-              files="(StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest).java"/>
+              files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest).java"/>
 
     <suppress checks="MethodLength"
               files="(EosIntegrationTest|EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest).java"/>
