@@ -586,11 +586,11 @@ public class KafkaAdminClientTest {
     private static QuorumInfo defaultQuorumInfo(Boolean emptyOptionals) {
         return new QuorumInfo(1,
                 singletonList(new QuorumInfo.ReplicaState(1, 100,
-                        OptionalLong.of(emptyOptionals ? -1 : 1000),
-                        OptionalLong.of(emptyOptionals ? -1 : 1000))),
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
                 singletonList(new QuorumInfo.ReplicaState(1, 100,
-                        OptionalLong.of(emptyOptionals ? -1 : 1000),
-                        OptionalLong.of(emptyOptionals ? -1 : 1000))));
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(

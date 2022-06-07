@@ -806,7 +806,7 @@ class KRaftClusterTest {
         admin.close()
       }
     } finally {
-      cluster.close
+      cluster.close()
     }
   }
 }

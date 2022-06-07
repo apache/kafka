@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.TopicData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -93,26 +92,6 @@ public class DescribeQuorumResponse extends AbstractResponse {
 
     public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {
         return new DescribeQuorumResponse(new DescribeQuorumResponseData(new ByteBufferAccessor(buffer), version));
-    }
-
-    /**
-     * Get the replica info for the given topic name and partition.
-     * @param topicName Name of the topic to fetch
-     * @param partition Index of the parition to fetch
-     * @param getVoterInfo Return the voter information if true, return observers otherwise
-     * @return List of {@link ReplicaState}
-     */
-    private List<ReplicaState> getReplicaInfo(String topicName, Integer partition, boolean getVoterInfo) {
-        TopicData topic = data.topics().stream()
-                .filter(t -> t.topicName().equals(topicName))
-                .findFirst()
-                .orElse(null);
-        if (topic != null) {
-            List<ReplicaState> replicaStates = getVoterInfo ? topic.partitions().get(partition).currentVoters()
-                    : topic.partitions().get(partition).observers();
-            return replicaStates;
-        }
-        return null;
     }
 
 }
