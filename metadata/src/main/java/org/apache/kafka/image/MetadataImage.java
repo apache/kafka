@@ -121,12 +121,7 @@ public final class MetadataImage {
     }
 
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
-        // We use the minimum KRaft metadata version if this image does
-        // not have a specific version set.
         MetadataVersion metadataVersion = features.metadataVersion();
-        if (metadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
-            metadataVersion = MetadataVersion.IBP_3_0_IV1;
-        }
         // Features should be written out first so we can include the metadata.version at the beginning of the
         // snapshot
         features.write(out);
