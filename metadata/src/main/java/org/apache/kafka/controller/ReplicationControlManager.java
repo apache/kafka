@@ -1410,11 +1410,6 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, rescheduleImmidiately);
     }
 
-    // Visible for testing
-    Boolean isBrokerUnfenced(int brokerId) {
-        return clusterControl.unfenced(brokerId);
-    }
-
     ControllerResult<List<CreatePartitionsTopicResult>>
             createPartitions(List<CreatePartitionsTopic> topics) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
