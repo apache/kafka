@@ -826,7 +826,6 @@ class ReplicaManager(val config: KafkaConfig,
 
       } catch {
         case e: KafkaStorageException =>
-          e.printStackTrace()
           warn("Unable to describe replica dirs for %s".format(absolutePath), e)
           new DescribeLogDirsResponseData.DescribeLogDirsResult()
             .setLogDir(absolutePath)
