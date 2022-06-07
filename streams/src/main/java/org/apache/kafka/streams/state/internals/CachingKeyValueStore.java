@@ -262,6 +262,9 @@ public class CachingKeyValueStore
     @Override
     public void put(final Bytes key,
                     final byte[] value) {
+        final boolean nullVal = value == null;
+        LOG.error("SOPHIE: calling put on key={}, value bytes length={}", key, nullVal ? null : value.length);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();

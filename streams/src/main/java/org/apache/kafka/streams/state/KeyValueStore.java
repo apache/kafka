@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
 
 /**
@@ -28,6 +30,7 @@ import java.util.List;
  * @param <V> The value type
  */
 public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K, V> {
+    Logger log = LoggerFactory.getLogger(KeyValueStore.class);
 
     /**
      * Update the value associated with this key.
@@ -37,7 +40,11 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
      *              if the serialized bytes are also {@code null} it is interpreted as deletes
      * @throws NullPointerException If {@code null} is used for key.
      */
-    void put(K key, V value);
+    default void put(K key, V value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling put on key={}, value={}", key, nullVal ? null : value);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
+    }
 
     /**
      * Update the value associated with this key, unless a value is already associated with the key.

@@ -51,10 +51,13 @@ import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.MemoryLRUCache;
 import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -84,6 +87,8 @@ public class InternalMockProcessorContext<KOut, VOut>
     private final Time time;
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
     private final boolean consistencyEnabled;
+    private static final Logger log = LoggerFactory.getLogger(InternalMockProcessorContext.class);
+
 
     public InternalMockProcessorContext() {
         this(null,
@@ -440,7 +445,8 @@ public class InternalMockProcessorContext<KOut, VOut>
                           final byte[] value,
                           final long timestamp,
                           final Position position) {
-
+        log.error("SOPHIE: attempting to send to collector key={}", key);
+        System.out.println("SOPHIE: attempting to send to collector key={}" + key);
         Headers headers = new RecordHeaders();
         if (!consistencyEnabled) {
             headers = null;
@@ -451,6 +457,7 @@ public class InternalMockProcessorContext<KOut, VOut>
                     ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
                     PositionSerde.serialize(position).array()));
         }
+
 
         recordCollector().send(
             storeName + "-changelog",

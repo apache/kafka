@@ -19,9 +19,7 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStoreTest;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest;
-import org.apache.kafka.streams.state.internals.GlobalStateStoreProviderTest;
-import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProviderTest;
-import org.apache.kafka.streams.state.internals.WrappingStoreProviderTest;
+
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -37,10 +35,7 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
                         CompositeReadOnlyKeyValueStoreTest.class,
                         CompositeReadOnlyWindowStoreTest.class,
-                        CompositeReadOnlySessionStoreTest.class,
-                        GlobalStateStoreProviderTest.class,
-                        StreamThreadStateStoreProviderTest.class,
-                        WrappingStoreProviderTest.class
+                        CompositeReadOnlySessionStoreTest.class
 })
 public class StoreQuerySuite {
 }

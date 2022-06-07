@@ -155,6 +155,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
+        final boolean nullVal = value == null;
+        LOG.error("SOPHIE: calling put on key={}, value bytes length={}", key, nullVal ? null : value.length);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
         removeExpiredSegments();
         observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
 

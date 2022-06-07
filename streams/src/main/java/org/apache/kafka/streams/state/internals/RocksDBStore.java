@@ -304,6 +304,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public synchronized void put(final Bytes key,
                                  final byte[] value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling put on key={}, value={}", key, nullVal ? null : value);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         dbAccessor.put(key.get(), value);

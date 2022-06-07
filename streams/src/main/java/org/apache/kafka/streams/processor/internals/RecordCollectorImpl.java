@@ -218,7 +218,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
                 }
 
-                if (!topic.endsWith("-changelog")) {
+                if (!topic.endsWith("-changelog") && processorNodeId != null) {
                     // we may not have created a sensor yet if the node uses dynamic topic routing
                     final Map<String, Sensor> producedSensorByTopic = sinkNodeToProducedSensorByTopic.get(processorNodeId);
                     if (producedSensorByTopic == null) {

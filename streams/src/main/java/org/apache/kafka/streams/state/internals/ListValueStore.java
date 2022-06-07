@@ -29,6 +29,9 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serde;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * A wrapper key-value store that serializes the record values bytes as a list.
  * As a result put calls would be interpreted as a get-append-put to the underlying RocksDB store.
@@ -42,6 +45,8 @@ public class ListValueStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, Bytes, byte[]>
     implements KeyValueStore<Bytes, byte[]> {
 
+    private static final Logger log = LoggerFactory.getLogger(ListValueStore.class);
+
     static private final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
 
     ListValueStore(final KeyValueStore<Bytes, byte[]> bytesStore) {
@@ -50,6 +55,10 @@ public class ListValueStore
 
     @Override
     public void put(final Bytes key, final byte[] addedValue) {
+        final boolean nullVal = addedValue == null;
+
+        log.error("SOPHIE: calling put on key={}, value bytes length={}", key, nullVal ? null : addedValue.length);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
         // if the value is null we can skip the get and blind delete
         if (addedValue == null) {
             wrapped().put(key, null);

@@ -83,6 +83,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     InMemorySessionStore(final String name,
                          final long retentionPeriod,
                          final String metricScope) {
+        LOG.error("SOPHIE: creating IM-SessionStore with name={}, retentionPeriod={}, metricsSCope={}", name, retentionPeriod, metricScope);
+        System.out.println("SOPHIE: calling name=" + name);
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;
@@ -91,12 +93,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public String name() {
-        return name;
+        LOG.error("SOPHIE: calling name={}", name);
+        System.out.println("SOPHIE: calling name=" + name);return name;
     }
 
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+
+        LOG.error("SOPHIE: initializing the store with old processor context");
+        System.out.println("SOPHIE: initializing the store with old processor context");
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
@@ -141,17 +147,25 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
+
+        LOG.error("SOPHIE: initializing the store with new statestore context");
+        System.out.println("SOPHIE: initializing the store with new statestore context");
         this.stateStoreContext = context;
         init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override
     public Position getPosition() {
+        LOG.error("SOPHIE: calling getPosition which is currently " + position);
+        System.out.println("SOPHIE: calling getPosition which is currently " + position);
         return position;
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+        final boolean nullVal = aggregate == null;
+        LOG.error("SOPHIE: calling put on key={}, value bytes length={}", sessionKey,  nullVal ? null : aggregate.length);
+        System.out.println("SOPHIE: calling put on key=" + sessionKey + ", value bytes null?=" + nullVal);
         removeExpiredSegments();
 
         final long windowEndTimestamp = sessionKey.window().end();
@@ -170,16 +184,24 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                 final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(windowEndTimestamp);
                 keyMap.computeIfAbsent(sessionKey.key(), t -> new ConcurrentSkipListMap<>());
                 keyMap.get(sessionKey.key()).put(sessionKey.window().start(), aggregate);
+                LOG.error("SOPHIE: successfully  put key={}, value bytes length={}", sessionKey,  nullVal ? null : aggregate.length);
+                System.out.println("SOPHIE: successfully  put key=" + sessionKey + ", value bytes null?=" + nullVal);
             } else {
+                LOG.error("SOPHIE: removing key={}, value bytes length={}", sessionKey,  nullVal ? null : aggregate.length);
+                System.out.println("SOPHIE: removing key=" + sessionKey + ", value bytes null?=" + nullVal);
                 remove(sessionKey);
             }
         }
 
         StoreQueryUtils.updatePosition(position, stateStoreContext);
+        LOG.error("SOPHIE: made it to the end of put for key={}, value bytes length={}", sessionKey,  nullVal ? null : aggregate.length);
+        System.out.println("SOPHIE: made it to the end of put for key=" + sessionKey + ", value bytes null?=" + nullVal);
     }
 
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
+        LOG.error("SOPHIE: calling remove on key={}", sessionKey);
+        System.out.println("SOPHIE: calling remove on key=" + sessionKey);
         final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(sessionKey.window().end());
         if (keyMap == null) {
             return;
@@ -204,6 +226,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public byte[] fetchSession(final Bytes key,
                                final long earliestSessionEndTime,
                                final long latestSessionStartTime) {
+        LOG.error("SOPHIE: fetchSession on key={} from earliestEnd={} to latestStart={}", key, earliestSessionEndTime, latestSessionStartTime);
+        System.out.println("SOPHIE: fetchSession on key=" + key);
         removeExpiredSegments();
 
         Objects.requireNonNull(key, "key cannot be null");
@@ -225,6 +249,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        LOG.error("SOPHIE: findSessions on key={} from earliestEnd={} to latestStart={}", key, earliestSessionEndTime, latestSessionStartTime);
+        System.out.println("SOPHIE: findSessions on key=" + key);
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -240,6 +266,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
                                                                           final long earliestSessionEndTime,
                                                                           final long latestSessionStartTime) {
+        LOG.error("SOPHIE: backwardFindSessions on key={} from earliestEnd={} to latestStart={}", key, earliestSessionEndTime, latestSessionStartTime);
+        System.out.println("SOPHIE: backwardFindSessions on key=" + key);
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -258,6 +286,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        LOG.error("SOPHIE: findSessions from key={} to keyTo={}, from earliestEnd={} to latestStart={}", keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        System.out.println("SOPHIE: findSessions from key=" + keyFrom + " to keyTo=" + keyTo);
         removeExpiredSegments();
 
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
@@ -277,6 +307,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                           final Bytes keyTo,
                                                                           final long earliestSessionEndTime,
                                                                           final long latestSessionStartTime) {
+        LOG.error("SOPHIE: backwardFindSessions from key={} to keyTo={}, from earliestEnd={} to latestStart={}", keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        System.out.println("SOPHIE: backwardFindSessions from key=" + keyFrom + " to keyTo=" + keyTo);
         removeExpiredSegments();
 
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
@@ -295,7 +327,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
-
+        LOG.error("SOPHIE: fetching key={}", key);
+        System.out.println("SOPHIE: fetching key=" + key);
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -305,7 +338,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes key) {
-
+        LOG.error("SOPHIE: backwardFetching key={}", key);
+        System.out.println("SOPHIE: backwardFetching key=" + key);
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -315,6 +349,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
+        LOG.error("SOPHIE: fetching key from={} to={}", keyFrom, keyTo);
+        System.out.println("SOPHIE: fetching key from=" + keyFrom + "keyTo=" + keyTo);
         removeExpiredSegments();
 
         return registerNewIterator(keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), true);
@@ -322,6 +358,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
+        LOG.error("SOPHIE: backwardFetching key from={} to={}", keyFrom, keyTo);
+        System.out.println("SOPHIE: backwardFetching key from=" + keyFrom + "keyTo=" + keyTo);
         removeExpiredSegments();
 
         return registerNewIterator(
@@ -360,6 +398,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public void close() {
+        LOG.error("SOPHIE: closing the store, map is {}", endTimeMap);
+        System.out.println("SOPHIE: closing the store, map is " + endTimeMap);
         if (openIterators.size() != 0) {
             LOG.warn("Closing {} open iterators for store {}", openIterators.size(), name);
             for (final InMemorySessionStoreIterator it : openIterators) {

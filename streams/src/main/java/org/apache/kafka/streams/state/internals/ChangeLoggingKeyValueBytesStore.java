@@ -26,6 +26,8 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
@@ -35,6 +37,8 @@ public class ChangeLoggingKeyValueBytesStore
         implements KeyValueStore<Bytes, byte[]> {
 
     InternalProcessorContext context;
+    private static final Logger log = LoggerFactory.getLogger(ChangeLoggingKeyValueBytesStore.class);
+
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
@@ -75,6 +79,9 @@ public class ChangeLoggingKeyValueBytesStore
     @Override
     public void put(final Bytes key,
                     final byte[] value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling put on key={}, value bytes length={}", key, nullVal ? null : value.length);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
         wrapped().put(key, value);
         log(key, value);
     }

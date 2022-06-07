@@ -42,15 +42,25 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        LOG.error("SOPHIE: calling range from={} to={}", from, to);
+
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                     "This may be due to range arguments set in the wrong order, " +
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                     "Note that the built-in numerical serdes do not follow this for negative numbers");
+            LOG.error("SOPHIE: returning empty iterator");
+
             return KeyValueIterators.emptyIterator();
         } else {
             final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+            LOG.error("SOPHIE: calling range -- treeMap={}", treeMap);
+            System.out.println("SOPHIE: calling range -- treeMap=" + treeMap);
+
             final Iterator<Bytes> keys = getIterator(treeMap, from, to, true);
+
+            LOG.error("SOPHIE: calling range -- keysIterator.hasNext(=" + keys.hasNext());
+            System.out.println("SOPHIE: calling range -- keysIterator.hasNext(=" + keys.hasNext());
             return new DelegatingPeekingKeyValueIterator<>(name(),
                     new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
         }
@@ -58,15 +68,22 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+        LOG.error("SOPHIE: calling reverseRange from={} to={}", from, to);
+
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                     "This may be due to range arguments set in the wrong order, " +
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                     "Note that the built-in numerical serdes do not follow this for negative numbers");
+            LOG.error("SOPHIE: returning empty iterator");
             return KeyValueIterators.emptyIterator();
         } else {
             final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+            LOG.error("SOPHIE: calling reverseRnge -- treeMap={}", treeMap);
+            System.out.println("SOPHIE: calling reverseRange -- treeMap=" + treeMap);
             final Iterator<Bytes> keys = getIterator(treeMap, from, to, false);
+            LOG.error("SOPHIE: calling range -- keysIterator.hasNext(=" + keys.hasNext());
+            System.out.println("SOPHIE: calling range -- keysIterator.hasNext(=" + keys.hasNext());
             return new DelegatingPeekingKeyValueIterator<>(name(),
                     new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
         }
@@ -100,11 +117,17 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public  KeyValueIterator<Bytes, byte[]> all() {
+        LOG.error("SOPHIE: calling all()");
+        System.out.println("SOPHIE: calling all()");
+
         return range(null, null);
     }
 
     @Override
     public  KeyValueIterator<Bytes, byte[]> reverseAll() {
+        LOG.error("SOPHIE: calling reverseAll()");
+        System.out.println("SOPHIE: calling reverseAll()");
+
         return reverseRange(null, null);
     }
 
@@ -118,6 +141,8 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         final Query<R> query,
         final PositionBound positionBound,
         final QueryConfig config) {
+        LOG.error("SOPHIE: calling query=" + query);
+        System.out.println("SOPHIE: calling query=" + query);
 
         return StoreQueryUtils.handleBasicQueries(
             query,
@@ -137,6 +162,8 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         private CacheIterator(final Iterator<Bytes> keys, final Map<Bytes, byte[]> entries) {
             this.keys = keys;
             this.entries = entries;
+            LOG.error("SOPHIE: creating cache iterator with entries=" + entries);
+            System.out.println("SOPHIE: creating cache iterator with entries=" + entries);
         }
 
         @Override

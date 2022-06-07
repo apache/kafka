@@ -31,7 +31,10 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
+import java.util.Objects;
 
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
@@ -48,8 +51,13 @@ import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserial
  */
 public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]> {
     final KeyValueStore<Bytes, byte[]> store;
+    private static final Logger log = LoggerFactory.getLogger(KeyValueToTimestampedKeyValueByteStoreAdapter.class);
+
 
     KeyValueToTimestampedKeyValueByteStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
+        log.error("SOPHIE: creating store adapter with inner store={}", store.getClass());
+        System.out.println("SOPHIE: creating store adapter with inner store=" + store.getClass());
+        System.out.println("SOPHIE: store class is " + store.getClass());
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
@@ -59,12 +67,19 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestamp) {
+        log.error("SOPHIE: calling put on key={}, value={}", key, valueWithTimestamp == null ? "null" : valueWithTimestamp);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + valueWithTimestamp.length);
+        System.out.println("SOPHIE: store class is " + store.getClass());
+
         store.put(key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp));
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
                               final byte[] valueWithTimestamp) {
+        log.error("SOPHIE: calling putIfAbsent on key={}, value={}", key, valueWithTimestamp == null ? "null" : valueWithTimestamp);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + valueWithTimestamp.length);
+        System.out.println("SOPHIE: store class is " + store.getClass());
         return convertToTimestampedFormat(store.putIfAbsent(
             key,
             valueWithTimestamp == null ? null : rawValue(valueWithTimestamp)));
@@ -72,6 +87,9 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        log.error("SOPHIE: calling putAll with entries={}", entries);
+        System.out.println("SOPHIE: calling putAll with entries="+ entries);
+        System.out.println("SOPHIE: store class is " + store.getClass());
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             final byte[] valueWithTimestamp = entry.value;
             store.put(entry.key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp));
@@ -80,6 +98,8 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     @Override
     public byte[] delete(final Bytes key) {
+        log.error("SOPHIE: attempting to delete key={}", key);
+        System.out.println("SOPHIE: attempting to delete key={}" + key);
         return convertToTimestampedFormat(store.delete(key));
     }
 
@@ -144,19 +164,27 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     }
 
     @Override
+
     public byte[] get(final Bytes key) {
+        log.error("SOPHIE: calling get on key={}", key);
+        System.out.println("SOPHIE: calling get on key=" + key);
+        Objects.requireNonNull(key);
         return convertToTimestampedFormat(store.get(key));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
+        log.error("SOPHIE: calling range from={} to={}", from, to);
+
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
+        log.error("SOPHIE: calling reverseRange from={} to={}", from, to);
+
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.reverseRange(from, to));
     }
 

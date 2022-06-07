@@ -43,6 +43,8 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
 
     private static final String STORE_NAME = "in-memory session store";
 
+
+
     @Override
     <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                  final Serde<K> keySerde,

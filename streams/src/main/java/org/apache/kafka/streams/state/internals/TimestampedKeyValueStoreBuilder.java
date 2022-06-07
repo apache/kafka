@@ -36,6 +36,8 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Objects;
 
@@ -43,6 +45,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
     extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> {
 
     private final KeyValueBytesStoreSupplier storeSupplier;
+    private static final Logger log = LoggerFactory.getLogger(TimestampedKeyValueStoreBuilder.class);
 
     public TimestampedKeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
                                            final Serde<K> keySerde,
@@ -117,6 +120,10 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         @Override
         public void put(final Bytes key,
                         final byte[] value) {
+            final boolean nullVal = value == null;
+            log.error("SOPHIE: calling put on key={}, value bytes length={}", key, nullVal ? null : value.length);
+            System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
+
             wrapped.put(key, value);
         }
 

@@ -26,7 +26,10 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.MemoryLRUCache;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -44,6 +47,9 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     public boolean closed = true;
     public final ArrayList<Integer> keys = new ArrayList<>();
     public final ArrayList<byte[]> values = new ArrayList<>();
+
+    private static final Logger log = LoggerFactory.getLogger(MockKeyValueStore.class);
+
 
     public MockKeyValueStore(final String name,
                              final boolean persistent) {
@@ -107,7 +113,11 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     };
 
     @Override
-    public void put(final Object key, final Object value) {}
+    public void put(final Object key, final Object value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling put on key={}, value={}", key, nullVal ? null : value);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
+    }
 
     @Override
     public Object putIfAbsent(final Object key, final Object value) {

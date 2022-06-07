@@ -30,6 +30,8 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,8 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     protected StateStoreContext context;
     private Position position = Position.emptyPosition();
+
+    private static final Logger log = LoggerFactory.getLogger(MemoryLRUCache.class);
 
     public interface EldestEntryRemovalListener {
         void apply(Bytes key, byte[] value);
@@ -67,6 +71,8 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
             @Override
             protected boolean removeEldestEntry(final Map.Entry<Bytes, byte[]> eldest) {
+                log.error("SOPHIE: evicting eldest entry=" + eldest);
+                System.out.println("SOPHIE: evicting eldest entry=" + eldest);
                 final boolean evict = super.size() > maxCacheSize;
                 if (evict && !restoring && listener != null) {
                     listener.apply(eldest.getKey(), eldest.getValue());
@@ -77,17 +83,23 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     void setWhenEldestRemoved(final EldestEntryRemovalListener listener) {
+        log.error("SOPHIE: setting 'whenEldestRemoved' to {}", listener);
+        System.out.println("SOPHIE: setting 'whenEldestRemoved' to " + listener);
         this.listener = listener;
     }
 
     @Override
     public String name() {
+        log.error("SOPHIE: calling name={}", name);
+        System.out.println("SOPHIE: calling name=" + name);
         return this.name;
     }
 
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+        log.error("SOPHIE: initializing the store with old processor context");
+        System.out.println("SOPHIE: initializing the store with old processor context");
 
         // register the store
         context.register(root, (key, value) -> {
@@ -99,6 +111,8 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
+        log.error("SOPHIE: initializing the store with new statestore context");
+        System.out.println("SOPHIE: initializing the store with new statestore context");
         final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
             context.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
@@ -125,21 +139,29 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public boolean persistent() {
+        log.error("SOPHIE: calling persistent()");
+        System.out.println("SOPHIE: calling persistent()");
         return false;
     }
 
     @Override
     public boolean isOpen() {
+        log.error("SOPHIE: calling isOpen()");
+        System.out.println("SOPHIE: calling isOpen()");
         return open;
     }
 
     @Override
     public Position getPosition() {
+        log.error("SOPHIE: calling getPosition()");
+        System.out.println("SOPHIE: calling getPosition()");
         return position;
     }
 
     @Override
     public synchronized byte[] get(final Bytes key) {
+        log.error("SOPHIE: calling get on key={}", key);
+        System.out.println("SOPHIE: calling get on key=" + key);
         Objects.requireNonNull(key);
 
         return this.map.get(key);
@@ -147,17 +169,32 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling put on key={}, value bytes length={}", key, nullVal ? null : value.length);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
+
+
         Objects.requireNonNull(key);
         if (value == null) {
+            log.error("SOPHIE: going to delete key={}, value={}", key, value);
+            System.out.println("SOPHIE: going to delete key=" + key + ", value bytes null?=" + nullVal);
             delete(key);
         } else {
+            log.error("SOPHIE: going to put key={}, value={}", key, value);
+            System.out.println("SOPHIE: going to put key=" + key + ", value bytes null?=" + nullVal);
+
             this.map.put(key, value);
         }
         StoreQueryUtils.updatePosition(position, context);
+        log.error("SOPHIE: successfully put key={}, value={}", key, value);
     }
 
     @Override
     public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling putIfAbsent on key={}, value bytes length={}", key, nullVal ? null : value.length);
+        System.out.println("SOPHIE: calling putIfAbsent on key=" + key + ", value bytes null?=" + nullVal);
+
         Objects.requireNonNull(key);
         final byte[] originalValue = get(key);
         if (originalValue == null) {
@@ -168,6 +205,8 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        log.error("SOPHIE: calling putAll with entries={}", entries);
+        System.out.println("SOPHIE: calling putAll with entries=" + entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             put(entry.key, entry.value);
         }
@@ -175,9 +214,16 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized byte[] delete(final Bytes key) {
+        log.error("SOPHIE: attempting to delete key={}", key);
+       System.out.println("SOPHIE: attempting to delete key={}" + key);
+
         Objects.requireNonNull(key);
         StoreQueryUtils.updatePosition(position, context);
-        return this.map.remove(key);
+        final byte[] ret = this.map.remove(key);
+        log.error("SOPHIE: success @ delete key={} with return value={}", key, ret);
+        System.out.println("SOPHIE: success @ delete key=" + key + "with return value=" + ret);
+
+        return ret;
     }
 
     /**
@@ -223,20 +269,28 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public long approximateNumEntries() {
+        log.error("SOPHIE: approximateNumEntries=" + map.size());
+        System.out.println("SOPHIE: approximateNumEntries=" + map.size());
         return this.map.size();
     }
 
     @Override
     public void flush() {
         // do-nothing since it is in-memory
+        log.error("SOPHIE: flushing for some reason, size=" + map.size());
+        System.out.println("SOPHIE: flushing for some reason, size=" + map.size());
     }
 
     @Override
     public void close() {
+        log.error("SOPHIE: calling close on store, current contents={}", map);
+        System.out.println("SOPHIE: calling close on store, current contents=" + map);
         open = false;
     }
 
     public int size() {
+        log.error("SOPHIE: size=" + map.size());
+        System.out.println("SOPHIE: size=" + map.size());
         return this.map.size();
     }
 }

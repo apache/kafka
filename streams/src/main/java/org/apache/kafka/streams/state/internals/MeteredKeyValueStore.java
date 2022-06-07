@@ -47,6 +47,8 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +94,9 @@ public class MeteredKeyValueStore<K, V>
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
+    private static final Logger log = LoggerFactory.getLogger(MeteredKeyValueStore.class);
+
+
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
         mkMap(
@@ -121,6 +126,8 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+        log.error("SOPHIE: initializing the store with old processor context, root={}", root);
+        System.out.println("SOPHIE: initializing the store with old processor context=" + root);
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
         taskId = context.taskId();
         initStoreSerde(context);
@@ -137,6 +144,9 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
+        log.error("SOPHIE: initializing the store with new statestore context, root={}", root);
+        System.out.println("SOPHIE: initializing the store with new statestore context=" + root);
+
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext<?, ?>) context : null;
         taskId = context.taskId();
         initStoreSerde(context);
@@ -325,6 +335,9 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void put(final K key,
                     final V value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling put on key={}, value={} with wrapped={}", key, nullVal ? null : value, wrapped());
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal + "with wrapped=" + wrapped());
         Objects.requireNonNull(key, "key cannot be null");
         try {
             maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
@@ -338,6 +351,9 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling putIfAbsent on key={}, value={} with wrapped={}", key, nullVal ? null : value, wrapped());
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal + "with wrapped=" + wrapped());
         Objects.requireNonNull(key, "key cannot be null");
         final V currentValue = maybeMeasureLatency(
             () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
@@ -350,6 +366,8 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
+        log.error("SOPHIE: calling putIfAbsent on entries={} with wrapped={}", entries, wrapped());
+        System.out.println("SOPHIE: calling putIfAbsent on entries={}" + entries + "with wrapped=" + wrapped());
         entries.forEach(entry -> Objects.requireNonNull(entry.key, "key cannot be null"));
         maybeMeasureLatency(() -> wrapped().putAll(innerEntries(entries)), time, putAllSensor);
     }

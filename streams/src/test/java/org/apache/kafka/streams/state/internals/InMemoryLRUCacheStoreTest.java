@@ -23,6 +23,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -34,9 +36,13 @@ import static org.junit.Assert.assertTrue;
 
 public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
+    private static final Logger log = LoggerFactory.getLogger(InMemoryLRUCacheStoreTest.class);
+
+
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
+
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.lruMap("my-store", 10),
                 (Serde<K>) context.keySerde(),
@@ -54,7 +60,12 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
                 KeyValue.pair(2, "2"),
                 KeyValue.pair(3, "3"));
 
+        System.out.println("SOPHIE: about to put(All)");
+        log.error("SOPHIE: about to put(All)");
         store.putAll(kvPairs);
+        System.out.println("SOPHIE: entries have been put(All)");
+        log.error("SOPHIE: entries have been put(All)");
+
 
         assertThat(store.approximateNumEntries(), equalTo(3L));
 

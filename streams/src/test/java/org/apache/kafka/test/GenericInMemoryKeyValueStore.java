@@ -25,6 +25,8 @@ import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,7 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
     private final String name;
     private final NavigableMap<K, V> map;
     private volatile boolean open = false;
+    private static final Logger log = LoggerFactory.getLogger(GenericInMemoryKeyValueStore.class);
 
     public GenericInMemoryKeyValueStore(final String name) {
         // it's not really a `WrappedStateStore` so we pass `null`
@@ -95,6 +98,10 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
     @Override
     public synchronized void put(final K key,
         final V value) {
+        final boolean nullVal = value == null;
+        log.error("SOPHIE: calling put on key={}, value={}", key, nullVal ? null : value);
+        System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
+
         if (value == null) {
             this.map.remove(key);
         } else {

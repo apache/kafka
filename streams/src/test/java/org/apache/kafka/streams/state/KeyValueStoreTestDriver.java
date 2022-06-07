@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
+import org.apache.kafka.streams.state.internals.MemoryLRUCache;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -46,6 +47,8 @@ import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
@@ -145,6 +148,8 @@ import static org.mockito.Mockito.when;
 public class KeyValueStoreTestDriver<K, V> {
 
     private final Properties props;
+    private static final Logger log = LoggerFactory.getLogger(KeyValueStoreTestDriver.class);
+
 
     /**
      * Create a driver object that will have a {@link #context()} that records messages
@@ -235,6 +240,9 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Serializer<V1> valueSerializer,
                                       final String processorNodeId,
                                       final InternalProcessorContext<Void, Void> context) {
+
+                log.error("SOPHIE: sending in KVStoreTestDriver with key={}, value={}", key, value);
+                System.out.println("SOPHIE: sending in KVStoreTestDriver with key=" + key + "value=" + value);
                 // for byte arrays we need to wrap it for comparison
 
                 final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
@@ -287,6 +295,8 @@ public class KeyValueStoreTestDriver<K, V> {
     }
 
     private void recordFlushed(final K key, final V value) {
+        log.error("SOPHIE: recordFlushed with key={}, value={}", key, value);
+        System.out.println("SOPHIE: recordFlushed with key=" + key + "value=" + value);
         if (value == null) {
             // This is a removal ...
             flushedRemovals.add(key);

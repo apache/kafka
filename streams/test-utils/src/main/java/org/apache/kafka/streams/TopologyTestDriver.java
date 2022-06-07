@@ -1196,6 +1196,10 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void put(final K key,
                         final V value) {
+            final boolean nullVal = value == null;
+            log.error("SOPHIE: calling put on key={}, value={}", key, nullVal ? null : value);
+            System.out.println("SOPHIE: calling put on key=" + key + ", value bytes null?=" + nullVal);
+
             inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP));
         }
 
