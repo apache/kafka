@@ -4368,7 +4368,7 @@ public class KafkaAdminClient extends AdminClient {
                 if (quorumResponse.data().errorCode() != Errors.NONE.code()) {
                     throw Errors.forCode(quorumResponse.data().errorCode()).exception();
                 }
-                if (quorumResponse.data().topics().size() > 1) {
+                if (quorumResponse.data().topics().size() != 1) {
                     String msg = String.format("DescribeMetadataQuorum received %d topics when 1 was expected",
                             quorumResponse.data().topics().size());
                     log.debug(msg);
@@ -4381,7 +4381,7 @@ public class KafkaAdminClient extends AdminClient {
                     log.debug(msg);
                     throw new UnknownServerException(msg);
                 }
-                if (topic.partitions().size() > 1) {
+                if (topic.partitions().size() != 1) {
                     String msg = String.format("DescribeMetadataQuorum received a topic %s with %d partitions when 1 was expected",
                             topic.topicName(), topic.partitions().size());
                     log.debug(msg);
