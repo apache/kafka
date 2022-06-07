@@ -309,13 +309,6 @@ public class ClusterControlManager {
             .collect(Collectors.toSet());
     }
 
-    private short registerBrokerRecordVersion() {
-        if (featureControl.metadataVersion().isInControlledShutdownStateSupported())
-            return (short) 1;
-        else
-            return (short) 0;
-    }
-
     /**
      * Process an incoming broker registration request.
      */
@@ -376,7 +369,8 @@ public class ClusterControlManager {
         heartbeatManager.register(brokerId, record.fenced());
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record, registerBrokerRecordVersion()));
+        records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
+            registerBrokerRecordVersion()));
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -484,10 +478,10 @@ public class ClusterControlManager {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
                 "registration with that epoch found", record.toString()));
         } else {
-            BrokerRegistration nextRegistration = curRegistration.maybeCloneWith(
+            BrokerRegistration nextRegistration = curRegistration.cloneWith(
                 fencingChange,
                 inControlledShutdownChange
-            ).orElse(curRegistration);
+            );
             if (!curRegistration.equals(nextRegistration)) {
                 brokerRegistrations.put(brokerId, nextRegistration);
                 updateMetrics(curRegistration, nextRegistration);
@@ -600,9 +594,15 @@ public class ClusterControlManager {
 
     class ClusterControlIterator implements Iterator<List<ApiMessageAndVersion>> {
         private final Iterator<Entry<Integer, BrokerRegistration>> iterator;
+        private final MetadataVersion metadataVersion;
 
         ClusterControlIterator(long epoch) {
             this.iterator = brokerRegistrations.entrySet(epoch).iterator();
+            if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+                this.metadataVersion = MetadataVersion.IBP_3_0_IV1;
+            } else {
+                this.metadataVersion = featureControl.metadataVersion();
+            }
         }
 
         @Override
@@ -637,10 +637,11 @@ public class ClusterControlManager {
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
                 setFenced(registration.fenced());
-            if (featureControl.metadataVersion().isInControlledShutdownStateSupported()) {
+            if (metadataVersion.isInControlledShutdownStateSupported()) {
                 record.setInControlledShutdown(registration.inControlledShutdown());
             }
-            return singletonList(new ApiMessageAndVersion(record, registerBrokerRecordVersion()));
+            return singletonList(new ApiMessageAndVersion(record,
+                metadataVersion.registerBrokerRecordVersion()));
         }
     }
 

@@ -92,23 +92,23 @@ public final class ClusterDelta {
     }
 
     public void replay(FenceBrokerRecord record) {
-        BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "fence");
-        changedBrokers.put(record.id(), broker.maybeCloneWith(
+        BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "fence");
+        changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
             BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
             Optional.empty()
-        ));
+        )));
     }
 
     public void replay(UnfenceBrokerRecord record) {
-        BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
-        changedBrokers.put(record.id(), broker.maybeCloneWith(
+        BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
+        changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
             BrokerRegistrationFencingChange.FENCE.asBoolean(),
             Optional.empty()
-        ));
+        )));
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
-        BrokerRegistration broker =
+        BrokerRegistration curRegistration =
             getBrokerOrThrow(record.brokerId(), record.brokerEpoch(), "change");
         BrokerRegistrationFencingChange fencingChange =
             BrokerRegistrationFencingChange.fromValue(record.fenced()).orElseThrow(
@@ -118,10 +118,13 @@ public final class ClusterDelta {
             BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).orElseThrow(
                 () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
                     "value for inControlledShutdown field: %d", record, record.inControlledShutdown())));
-        changedBrokers.put(record.brokerId(), broker.maybeCloneWith(
+        BrokerRegistration nextRegistration = curRegistration.cloneWith(
             fencingChange.asBoolean(),
             inControlledShutdownChange.asBoolean()
-        ));
+        );
+        if (!curRegistration.equals(nextRegistration)) {
+            changedBrokers.put(record.brokerId(), Optional.of(nextRegistration));
+        }
     }
 
     public ClusterImage apply() {

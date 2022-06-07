@@ -250,6 +250,14 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_3_IV3);
     }
 
+    public short registerBrokerRecordVersion() {
+        if (isInControlledShutdownStateSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
     static {
         {

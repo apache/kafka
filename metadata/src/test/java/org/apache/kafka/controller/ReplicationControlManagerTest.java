@@ -124,7 +124,6 @@ import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAIL
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2017,7 +2016,7 @@ public class ReplicationControlManagerTest {
 
         List<ApiMessageAndVersion> expectedRecords = new ArrayList<>();
 
-        if (metadataVersion.isAtLeast(IBP_3_3_IV3)) {
+        if (metadataVersion.isInControlledShutdownStateSupported()) {
             expectedRecords.add(new ApiMessageAndVersion(
                 new BrokerRegistrationChangeRecord()
                     .setBrokerEpoch(100)

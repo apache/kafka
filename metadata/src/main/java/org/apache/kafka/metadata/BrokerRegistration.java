@@ -188,9 +188,8 @@ public class BrokerRegistration {
                 setMaxSupportedVersion(entry.getValue().max()));
         }
 
-        short version = metadataVersion.isInControlledShutdownStateSupported() ?
-            (short) 1 : (short) 0;
-        return new ApiMessageAndVersion(registrationRecord, version);
+        return new ApiMessageAndVersion(registrationRecord,
+            metadataVersion.registerBrokerRecordVersion());
     }
 
     @Override
@@ -235,7 +234,7 @@ public class BrokerRegistration {
         return bld.toString();
     }
 
-    public Optional<BrokerRegistration> maybeCloneWith(
+    public BrokerRegistration cloneWith(
         Optional<Boolean> fencingChange,
         Optional<Boolean> inControlledShutdownChange
     ) {
@@ -243,9 +242,9 @@ public class BrokerRegistration {
         boolean newInControlledShutdownChange = inControlledShutdownChange.orElse(inControlledShutdown);
 
         if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown)
-            return Optional.empty();
+            return this;
 
-        return Optional.of(new BrokerRegistration(
+        return new BrokerRegistration(
             id,
             epoch,
             incarnationId,
@@ -254,6 +253,6 @@ public class BrokerRegistration {
             rack,
             newFenced,
             newInControlledShutdownChange
-        ));
+        );
     }
 }

@@ -18,9 +18,11 @@
 package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.record.RecordVersion;
-import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV1;
@@ -321,5 +323,20 @@ class MetadataVersionTest {
                 assertFalse(metadataVersion.isKRaftSupported());
             }
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testIsInControlledShutdownStateSupported(MetadataVersion metadataVersion) {
+        assertEquals(metadataVersion.isAtLeast(IBP_3_3_IV3),
+            metadataVersion.isInControlledShutdownStateSupported());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testRegisterBrokerRecordVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_3_3_IV3) ?
+            (short) 1 : (short) 0;
+        assertEquals(expectedVersion, metadataVersion.registerBrokerRecordVersion());
     }
 }

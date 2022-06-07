@@ -59,7 +59,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -269,7 +268,7 @@ public class ClusterControlManagerTest {
             123L,
             new FinalizedControllerFeatures(Collections.emptyMap(), 456L));
 
-        short expectedVersion = metadataVersion.isAtLeast(IBP_3_3_IV3) ? (short) 1 : (short) 0;
+        short expectedVersion = metadataVersion.registerBrokerRecordVersion();
 
         assertEquals(
             Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -402,7 +401,14 @@ public class ClusterControlManagerTest {
                 new UnfenceBrokerRecord().setId(i).setEpoch(100);
             clusterControl.replay(unfenceBrokerRecord);
         }
-        short expectedVersion = metadataVersion.isAtLeast(IBP_3_3_IV3) ? (short) 1 : (short) 0;
+        BrokerRegistrationChangeRecord registrationChangeRecord =
+            new BrokerRegistrationChangeRecord().
+                setBrokerId(0).
+                setBrokerEpoch(100).
+                setInControlledShutdown(BrokerRegistrationInControlledShutdownChange.
+                    IN_CONTROLLED_SHUTDOWN.value());
+        clusterControl.replay(registrationChangeRecord);
+        short expectedVersion = metadataVersion.registerBrokerRecordVersion();
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(0).setRack(null).
@@ -411,6 +417,7 @@ public class ClusterControlManagerTest {
                         setPort((short) 9092).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
+                setInControlledShutdown(metadataVersion.isInControlledShutdownStateSupported()).
                 setFenced(false), expectedVersion)),
             Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(1).setRack(null).
