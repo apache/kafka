@@ -100,7 +100,7 @@ public class TaskMetricsTest {
         );
 
 
-        final Sensor sensor = TaskMetrics.totalBytesSensor(THREAD_ID, TASK_ID, streamsMetrics);
+        final Sensor sensor = TaskMetrics.totalInputBufferBytesSensor(THREAD_ID, TASK_ID, streamsMetrics);
 
         assertThat(sensor, is(expectedSensor));
     }
