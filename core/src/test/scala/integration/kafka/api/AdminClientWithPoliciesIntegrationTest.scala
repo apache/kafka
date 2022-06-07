@@ -15,7 +15,6 @@ package kafka.api
 
 import java.util
 import java.util.Properties
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
