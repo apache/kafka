@@ -234,7 +234,7 @@ public class QuorumControllerTest {
 
             // Brokers are only registered and should still be fenced
             allBrokers.forEach(brokerId -> {
-                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                assertFalse(active.clusterControl().unfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -254,7 +254,7 @@ public class QuorumControllerTest {
             TestUtils.waitForCondition(() -> {
                     sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
-                        if (active.replicationControl().isBrokerUnfenced(brokerId)) {
+                        if (active.clusterControl().unfenced(brokerId)) {
                             return false;
                         }
                     }
@@ -268,11 +268,11 @@ public class QuorumControllerTest {
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
-                assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
+                assertTrue(active.clusterControl().unfenced(brokerId),
                     "Broker " + brokerId + " should have been unfenced");
             });
             brokersToFence.forEach(brokerId -> {
-                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                assertFalse(active.clusterControl().unfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -326,7 +326,7 @@ public class QuorumControllerTest {
 
             // Brokers are only registered and should still be fenced
             allBrokers.forEach(brokerId -> {
-                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                assertFalse(active.clusterControl().unfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -346,7 +346,7 @@ public class QuorumControllerTest {
                 () -> {
                     sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
-                        if (active.replicationControl().isBrokerUnfenced(brokerId)) {
+                        if (active.clusterControl().unfenced(brokerId)) {
                             return false;
                         }
                     }
@@ -361,11 +361,11 @@ public class QuorumControllerTest {
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
-                assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
+                assertTrue(active.clusterControl().unfenced(brokerId),
                     "Broker " + brokerId + " should have been unfenced");
             });
             brokersToFence.forEach(brokerId -> {
-                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                assertFalse(active.clusterControl().unfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -760,7 +760,7 @@ public class QuorumControllerTest {
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9092).setSecurityProtocol((short) 0)).iterator())).
                 setRack(null).
-                setFenced(false), (short) 0),
+                setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
@@ -770,7 +770,7 @@ public class QuorumControllerTest {
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9093).setSecurityProtocol((short) 0)).iterator())).
                 setRack(null).
-                setFenced(false), (short) 0),
+                setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
@@ -780,14 +780,14 @@ public class QuorumControllerTest {
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9094).setSecurityProtocol((short) 0)).iterator())).
                 setRack(null).
-                setFenced(false), (short) 0),
+                setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0),
+                setRack(null), (short) 1),
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).

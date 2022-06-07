@@ -159,7 +159,10 @@ public enum MetadataVersion {
     IBP_3_3_IV1(6, "3.3", "IV1", true),
 
     // In KRaft mode, use BrokerRegistrationChangeRecord instead of UnfenceBrokerRecord and FenceBrokerRecord.
-    IBP_3_3_IV2(7, "3.3", "IV2", true);
+    IBP_3_3_IV2(7, "3.3", "IV2", true),
+
+    // Adds InControlledShutdown state to RegisterBrokerRecord and BrokerRegistrationChangeRecord (KIP-841).
+    IBP_3_3_IV3(8, "3.3", "IV3", true);
 
     public static final String FEATURE_NAME = "metadata.version";
 
@@ -241,6 +244,18 @@ public enum MetadataVersion {
 
     public boolean isBrokerRegistrationChangeRecordSupported() {
         return this.isAtLeast(IBP_3_3_IV2);
+    }
+
+    public boolean isInControlledShutdownStateSupported() {
+        return this.isAtLeast(IBP_3_3_IV3);
+    }
+
+    public short registerBrokerRecordVersion() {
+        if (isInControlledShutdownStateSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
     }
 
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
