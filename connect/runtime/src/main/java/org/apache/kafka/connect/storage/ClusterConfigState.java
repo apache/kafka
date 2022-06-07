@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.distributed;
+package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.runtime.SessionKey;
@@ -46,12 +46,12 @@ public class ClusterConfigState {
 
     private final long offset;
     private final SessionKey sessionKey;
-    private final Map<String, Integer> connectorTaskCounts;
-    private final Map<String, Map<String, String>> connectorConfigs;
-    private final Map<String, TargetState> connectorTargetStates;
-    private final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
-    private final Set<String> inconsistentConnectors;
     private final WorkerConfigTransformer configTransformer;
+    final Map<String, Integer> connectorTaskCounts;
+    final Map<String, Map<String, String>> connectorConfigs;
+    final Map<String, TargetState> connectorTargetStates;
+    final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
+    final Set<String> inconsistentConnectors;
 
     public ClusterConfigState(long offset,
                               SessionKey sessionKey,

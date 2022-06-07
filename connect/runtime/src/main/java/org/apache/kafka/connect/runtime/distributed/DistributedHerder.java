@@ -49,6 +49,7 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.storage.PrivilegedWriteException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -61,6 +62,7 @@ import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -189,6 +191,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // herder's main thread.
     private Set<String> connectorTargetStateChanges = new HashSet<>();
     private boolean needsReconfigRebalance;
+    private volatile boolean fencedFromConfigTopic;
     private volatile int generation;
     private volatile long scheduledRebalance;
     private volatile SecretKey sessionKey;
@@ -288,6 +291,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         configState = ClusterConfigState.EMPTY;
         rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
         needsReconfigRebalance = false;
+        fencedFromConfigTopic = false;
         canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
         scheduledRebalance = Long.MAX_VALUE;
         keyExpiration = Long.MAX_VALUE;
@@ -372,18 +376,36 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             return;
         }
 
+        if (fencedFromConfigTopic) {
+            if (isLeader()) {
+                // We were accidentally fenced out, possibly by a zombie leader
+                try {
+                    log.debug("Reclaiming write privileges for config topic after being fenced out");
+                    configBackingStore.claimWritePrivileges();
+                    fencedFromConfigTopic = false;
+                    log.debug("Successfully reclaimed write privileges for config topic after being fenced out");
+                } catch (Exception e) {
+                    log.warn("Unable to claim write privileges for config topic. Will backoff and possibly retry if still the leader", e);
+                    backoff(CONFIG_TOPIC_WRITE_PRIVILEGES_BACKOFF_MS);
+                    return;
+                }
+            } else {
+                log.trace("Relinquished write privileges for config topic after being fenced out, since worker is no longer the leader of the cluster");
+                // We were meant to be fenced out because we fell out of the group and a new leader was elected
+                fencedFromConfigTopic = false;
+            }
+        }
+
         long now = time.milliseconds();
 
         if (checkForKeyRotation(now)) {
             log.debug("Distributing new session key");
             keyExpiration = Long.MAX_VALUE;
             try {
-                configBackingStore.putSessionKey(new SessionKey(
-                    keyGenerator.generateKey(),
-                    now
-                ));
+                SessionKey newSessionKey = new SessionKey(keyGenerator.generateKey(), now);
+                writeToConfigTopicAsLeader(() -> configBackingStore.putSessionKey(newSessionKey));
             } catch (Exception e) {
-                log.info("Failed to write new session key to config topic; forcing a read to the end of the config topic before possibly retrying");
+                log.info("Failed to write new session key to config topic; forcing a read to the end of the config topic before possibly retrying", e);
                 canReadConfigs = false;
                 return;
             }
@@ -492,6 +514,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         SecretKey key;
         long expiration;
         synchronized (this) {
+            // This happens on startup; the snapshot contains the session key,
+            // but no callback in the config update listener has been fired for it yet.
+            if (sessionKey == null && configState.sessionKey() != null) {
+                sessionKey = configState.sessionKey().key();
+                keyExpiration = configState.sessionKey().creationTimestamp() + keyRotationIntervalMs;
+            }
             key = sessionKey;
             expiration = keyExpiration;
         }
@@ -511,10 +539,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         + "than required by current worker configuration. Distributing new key now.");
                     return true;
                 }
-            } else if (key == null && configState.sessionKey() != null) {
-                // This happens on startup for follower workers; the snapshot contains the session key,
-                // but no callback in the config update listener has been fired for it yet.
-                sessionKey = configState.sessionKey().key();
             }
         }
         return false;
@@ -836,7 +860,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                 } else {
                     log.trace("Removing connector config {} {}", connName, configState.connectors());
-                    configBackingStore.removeConnectorConfig(connName);
+                    writeToConfigTopicAsLeader(() -> configBackingStore.removeConnectorConfig(connName));
                     callback.onCompletion(null, new Created<>(false, null));
                 }
                 return null;
@@ -1008,7 +1032,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             }
 
                             log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                            configBackingStore.putConnectorConfig(connName, config);
+                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config));
 
                             // Note that we use the updated connector config despite the fact that we don't have an updated
                             // snapshot yet. The existing task info should still be accurate.
@@ -1107,7 +1131,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 else if (!configState.contains(connName))
                     callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                 else {
-                    configBackingStore.putTaskConfigs(connName, configs);
+                    writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, configs));
                     callback.onCompletion(null, null);
                 }
                 return null;
@@ -1326,6 +1350,25 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (assignment == null)
             return null;
         return assignment.leaderUrl();
+    }
+
+    /**
+     * Perform an action that writes to the config topic, and if it fails because the leader has been fenced out, make note of that
+     * fact so that we can try to reclaim write ownership (if still the leader of the cluster) in a subsequent iteration of the tick loop.
+     * Note that it is not necessary to wrap every write to the config topic in this method, only the writes that should be performed
+     * exclusively by the leader. For example, {@link ConfigBackingStore#putTargetState(String, TargetState)} does not require this
+     * method, as it can be invoked by any worker in the cluster.
+     * @param write the action that writes to the config topic, such as {@link ConfigBackingStore#putSessionKey(SessionKey)} or
+     *              {@link ConfigBackingStore#putConnectorConfig(String, Map)}.
+     */
+    private void writeToConfigTopicAsLeader(Runnable write) {
+        try {
+            write.run();
+        } catch (PrivilegedWriteException e) {
+            log.warn("Failed to write to config topic as leader; will rejoin group if necessary and, if still leader, attempt to reclaim write privileges for the config topic", e);
+            fencedFromConfigTopic = true;
+            throw new ConnectException("Failed to write to config topic; this may be due to a transient error and the request can be safely retried", e);
+        }
     }
 
     /**
@@ -1700,7 +1743,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (changed) {
                 List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
                 if (isLeader()) {
-                    configBackingStore.putTaskConfigs(connName, rawTaskProps);
+                    writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
                     cb.onCompletion(null, null);
                 } else {
                     // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
@@ -2009,12 +2052,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 herderMetrics.rebalanceStarted(time.milliseconds());
             }
 
-            // Delete the statuses of all connectors and tasks removed prior to the start of this rebalance. This
-            // has to be done after the rebalance completes to avoid race conditions as the previous generation
-            // attempts to change the state to UNASSIGNED after tasks have been stopped.
             if (isLeader()) {
+                // Delete the statuses of all connectors and tasks removed prior to the start of this rebalance. This
+                // has to be done after the rebalance completes to avoid race conditions as the previous generation
+                // attempts to change the state to UNASSIGNED after tasks have been stopped.
                 updateDeletedConnectorStatus();
                 updateDeletedTaskStatus();
+                // As the leader, we're now allowed to write directly to the config topic for important things like
+                // connector configs, session keys, and task count records
+                try {
+                    configBackingStore.claimWritePrivileges();
+                } catch (Exception e) {
+                    fencedFromConfigTopic = true;
+                    log.error("Unable to claim write privileges for config topic after being elected leader during rebalance", e);
+                }
             }
 
             // We *must* interrupt any poll() call since this could occur when the poll starts, and we might then
