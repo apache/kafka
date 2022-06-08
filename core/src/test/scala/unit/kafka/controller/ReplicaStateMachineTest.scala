@@ -202,29 +202,61 @@ class ReplicaStateMachineTest {
   }
 
   @Test
-  def testOnlineReplicaToOfflineReplicaTransition(): Unit = {
+  def testOnlineReplicaToOfflineReplicaTransitionWithReplicaLeader(): Unit = {
     val otherBrokerId = brokerId + 1
     val replicaIds = List(brokerId, otherBrokerId)
+    val initialLeaderAndIsr = LeaderAndIsr(brokerId, replicaIds)
+    val expectedLeaderAndIsr = initialLeaderAndIsr.newLeaderAndIsr(LeaderAndIsr.NoLeader, List(otherBrokerId))
+    testOnlineReplicaToOfflineReplicaTransition(replicaIds, initialLeaderAndIsr, expectedLeaderAndIsr)
+  }
+
+  @Test
+  def testOnlineReplicaToOfflineReplicaTransitionWithReplicaInIsr(): Unit = {
+    val otherBrokerId1 = brokerId + 1
+    val otherBrokerId2 = brokerId + 2
+    val replicaIds = List(brokerId, otherBrokerId1, otherBrokerId2)
+    val initialLeaderAndIsr = LeaderAndIsr(otherBrokerId1, replicaIds)
+    val expectedLeaderAndIsr = initialLeaderAndIsr.newLeaderAndIsr(otherBrokerId1, List(otherBrokerId1, otherBrokerId2))
+    testOnlineReplicaToOfflineReplicaTransition(replicaIds, initialLeaderAndIsr, expectedLeaderAndIsr)
+  }
+
+  @Test
+  def testOnlineReplicaToOfflineReplicaTransitionWhenReplicaOutOfIsr(): Unit = {
+    val otherBrokerId1 = brokerId + 1
+    val otherBrokerId2 = brokerId + 2
+    val replicaIds = List(brokerId, otherBrokerId1, otherBrokerId2)
+    val initialLeaderAndIsr = LeaderAndIsr(otherBrokerId1, List(otherBrokerId1))
+    val expectedLeaderAndIsr = initialLeaderAndIsr.newEpoch
+    testOnlineReplicaToOfflineReplicaTransition(replicaIds, initialLeaderAndIsr, expectedLeaderAndIsr)
+  }
+
+  private def testOnlineReplicaToOfflineReplicaTransition(
+    replicaIds: Seq[Int],
+    initialLeaderAndIsr: LeaderAndIsr,
+    expectedLeaderAndIsr: LeaderAndIsr
+  ): Unit = {
     controllerContext.putReplicaState(replica, OnlineReplica)
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicaIds))
-    val leaderAndIsr = LeaderAndIsr(brokerId, replicaIds)
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(initialLeaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    val adjustedLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(LeaderAndIsr.NoLeader, List(otherBrokerId))
-    val updatedLeaderAndIsr = adjustedLeaderAndIsr.withPartitionEpoch(adjustedLeaderAndIsr.partitionEpoch + 1)
+    val updatedLeaderAndIsr = expectedLeaderAndIsr.withPartitionEpoch(expectedLeaderAndIsr.partitionEpoch + 1)
     val updatedLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch)
+
     when(mockZkClient.getTopicPartitionStatesRaw(partitions)).thenReturn(
       Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
-    when(mockZkClient.updateLeaderAndIsr(Map(partition -> adjustedLeaderAndIsr), controllerEpoch, controllerContext.epochZkVersion))
+    when(mockZkClient.updateLeaderAndIsr(Map(partition -> expectedLeaderAndIsr), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 
     replicaStateMachine.handleStateChanges(replicas, OfflineReplica)
     verify(mockControllerBrokerRequestBatch).newBatch()
-    verify(mockControllerBrokerRequestBatch).addStopReplicaRequestForBrokers(ArgumentMatchers.eq(Seq(brokerId)), ArgumentMatchers.eq(partition), ArgumentMatchers.eq(false))
-    verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(otherBrokerId),
+    verify(mockControllerBrokerRequestBatch).addStopReplicaRequestForBrokers(
+      ArgumentMatchers.eq(Seq(brokerId)), ArgumentMatchers.eq(partition), ArgumentMatchers.eq(false))
+
+    val otherReplicaIds = replicaIds.filterNot(_ == brokerId)
+    verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(otherReplicaIds,
       partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment(replicaIds), isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
     verify(mockZkClient).getTopicPartitionStatesRaw(any())

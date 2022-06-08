@@ -2653,7 +2653,7 @@ case class PartitionAndReplica(topicPartition: TopicPartition, replica: Int) {
   def partition: Int = topicPartition.partition
 
   override def toString: String = {
-    s"[Topic=$topic,Partition=$partition,Replica=$replica]"
+    s"[TopicPartition=$topicPartition,Replica=$replica]"
   }
 }
 

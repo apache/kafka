@@ -218,22 +218,28 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           controllerContext.putReplicaState(replica, OnlineReplica)
         }
       case OfflineReplica =>
-        validReplicas.foreach { replica =>
-          controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId), replica.topicPartition, deletePartition = false)
-        }
         val (replicasWithLeadershipInfo, replicasWithoutLeadershipInfo) = validReplicas.partition { replica =>
           controllerContext.partitionLeadershipInfo(replica.topicPartition).isDefined
         }
-        val updatedLeaderIsrAndControllerEpochs = removeReplicasFromIsr(replicaId, replicasWithLeadershipInfo.map(_.topicPartition))
+        val updatedLeaderIsrAndControllerEpochs = fenceReplicas(replicaId, replicasWithLeadershipInfo.map(_.topicPartition))
         updatedLeaderIsrAndControllerEpochs.forKeyValue { (partition, leaderIsrAndControllerEpoch) =>
-          stateLogger.info(s"Partition $partition state changed to $leaderIsrAndControllerEpoch after removing replica $replicaId from the ISR as part of transition to $OfflineReplica")
+          stateLogger.info(s"Partition $partition state changed to $leaderIsrAndControllerEpoch " +
+            s"after transitioning replica $replicaId to $OfflineReplica")
           if (!controllerContext.isTopicQueuedUpForDeletion(partition.topic)) {
             val recipients = controllerContext.partitionReplicaAssignment(partition).filterNot(_ == replicaId)
             controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(recipients,
               partition,
               leaderIsrAndControllerEpoch,
-              controllerContext.partitionFullReplicaAssignment(partition), isNew = false)
+              controllerContext.partitionFullReplicaAssignment(partition),
+              isNew = false
+            )
           }
+          controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(
+            Seq(replicaId),
+            partition,
+            deletePartition = false
+          )
+
           val replica = PartitionAndReplica(partition, replicaId)
           val currentState = controllerContext.replicaState(replica)
           if (traceEnabled)
@@ -245,7 +251,15 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           val currentState = controllerContext.replicaState(replica)
           if (traceEnabled)
             logSuccessfulTransition(stateLogger, replicaId, replica.topicPartition, currentState, OfflineReplica)
-          controllerBrokerRequestBatch.addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(replica.topicPartition))
+          controllerBrokerRequestBatch.addUpdateMetadataRequestForBrokers(
+            controllerContext.liveOrShuttingDownBrokerIds.toSeq,
+            Set(replica.topicPartition)
+          )
+          controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(
+            Seq(replicaId),
+            replica.topicPartition,
+            deletePartition = false
+          )
           controllerContext.putReplicaState(replica, OfflineReplica)
         }
       case ReplicaDeletionStarted =>
@@ -286,27 +300,27 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   }
 
   /**
-   * Repeatedly attempt to remove a replica from the isr of multiple partitions until there are no more remaining partitions
+   * Repeatedly attempt to fence a replica of multiple partitions until there are no more remaining partitions
    * to retry.
-   * @param replicaId The replica being removed from isr of multiple partitions
-   * @param partitions The partitions from which we're trying to remove the replica from isr
-   * @return The updated LeaderIsrAndControllerEpochs of all partitions for which we successfully removed the replica from isr.
+   * @param replicaId The replica being fenced from multiple partitions
+   * @param partitions The partitions from which we're trying to fence the replica from
+   * @return The updated LeaderIsrAndControllerEpochs of all partitions for which we successfully fenced
    */
-  private def removeReplicasFromIsr(
+  private def fenceReplicas(
     replicaId: Int,
     partitions: Seq[TopicPartition]
   ): Map[TopicPartition, LeaderIsrAndControllerEpoch] = {
     var results = Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
-    var remaining = partitions
-    while (remaining.nonEmpty) {
-      val (finishedRemoval, removalsToRetry) = doRemoveReplicasFromIsr(replicaId, remaining)
-      remaining = removalsToRetry
+    var remainingPartitions = partitions
+    while (remainingPartitions.nonEmpty) {
+      val (finishedPartitions, partitionsToRetry) = tryFenceReplicas(replicaId, remainingPartitions)
+      remainingPartitions = partitionsToRetry
 
-      finishedRemoval.foreach {
+      finishedPartitions.foreach {
         case (partition, Left(e)) =>
-            val replica = PartitionAndReplica(partition, replicaId)
-            val currentState = controllerContext.replicaState(replica)
-            logFailedStateChange(replica, currentState, OfflineReplica, e)
+          val replica = PartitionAndReplica(partition, replicaId)
+          val currentState = controllerContext.replicaState(replica)
+          logFailedStateChange(replica, currentState, OfflineReplica, e)
         case (partition, Right(leaderIsrAndEpoch)) =>
           results += partition -> leaderIsrAndEpoch
       }
@@ -315,35 +329,43 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   }
 
   /**
-   * Try to remove a replica from the isr of multiple partitions.
-   * Removing a replica from isr updates partition state in zookeeper.
+   * Fence an existing replica by bumping the leader epoch. The bumped leader epoch
+   * ensures 1) that the follower can no longer fetch with the old epoch, and 2)
+   * that it will accept a `StopReplica` request with the bumped epoch.
    *
-   * @param replicaId The replica being removed from isr of multiple partitions
-   * @param partitions The partitions from which we're trying to remove the replica from isr
+   * - If the replica is the current leader, then the leader will be changed to
+   *   [[LeaderAndIsr.NoLeader]], and it will remain in the ISR.
+   * - If the replica is not the current leader and it is in the ISR, then it
+   *   will be removed from the ISR.
+   * - Otherwise, the epoch will be bumped and the leader and ISR will be unchanged.
+   *
+   * Fencing a replica updates partition state in zookeeper.
+   *
+   * @param replicaId The replica being fenced from multiple partitions
+   * @param partitions The partitions from which we're trying to fence the replica from
    * @return A tuple of two elements:
    *         1. The updated Right[LeaderIsrAndControllerEpochs] of all partitions for which we successfully
-   *         removed the replica from isr. Or Left[Exception] corresponding to failed removals that should
-   *         not be retried
+   *         fenced the replica. Or Left[Exception] for failures which need to be retries
    *         2. The partitions that we should retry due to a zookeeper BADVERSION conflict. Version conflicts can occur if
    *         the partition leader updated partition state while the controller attempted to update partition state.
    */
-  private def doRemoveReplicasFromIsr(
+  private def tryFenceReplicas(
     replicaId: Int,
     partitions: Seq[TopicPartition]
   ): (Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]], Seq[TopicPartition]) = {
     val (leaderAndIsrs, partitionsWithNoLeaderAndIsrInZk) = getTopicPartitionStatesFromZk(partitions)
-    val (leaderAndIsrsWithReplica, leaderAndIsrsWithoutReplica) = leaderAndIsrs.partition { case (_, result) =>
-      result.map { leaderAndIsr =>
-        leaderAndIsr.isr.contains(replicaId)
-      }.getOrElse(false)
-    }
-
-    val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
+    val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrs.flatMap {
       case (partition, result) =>
         result.toOption.map { leaderAndIsr =>
-          val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
-          val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
-          partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
+          if (leaderAndIsr.isr.contains(replicaId)) {
+            val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
+            val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
+            partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
+          } else {
+            // Even if the replica is not in the ISR. We must bump the epoch to ensure the replica
+            // is fenced from replication and the `StopReplica` can be sent with a bumped epoch.
+            partition -> leaderAndIsr.newEpoch
+          }
         }
     }
 
@@ -362,13 +384,13 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       }.toMap
 
     val leaderIsrAndControllerEpochs: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
-      (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result) =>
+      finishedPartitions.map { case (partition, result) =>
         (partition, result.map { leaderAndIsr =>
           val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
           controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
           leaderIsrAndControllerEpoch
         })
-      }
+      }.toMap
 
     if (isDebugEnabled) {
       updatesToRetry.foreach { partition =>
