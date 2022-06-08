@@ -262,6 +262,12 @@ public class ClientTelemetry implements Closeable {
                 return;
             }
 
+            // If we never fetched a subscription, we can't really push anything.
+            if (subscription == null) {
+                log.debug("Telemetry subscription not loaded, not attempting terminating push");
+                return;
+            }
+
             try {
                 log.debug("About to wait {} ms. for terminal telemetry push to be submitted", timeout);
 
@@ -292,6 +298,13 @@ public class ClientTelemetry implements Closeable {
             }
         } finally {
             instanceStateLock.writeLock().unlock();
+        }
+
+        if (shouldClose) {
+            metrics.close();
+
+            for (MetricsCollector mc : metricsCollectors)
+                mc.close();
         }
 
         if (shouldClose) {
