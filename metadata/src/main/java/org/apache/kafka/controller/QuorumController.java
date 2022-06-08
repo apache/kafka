@@ -782,6 +782,13 @@ public final class QuorumController implements Controller {
         }
     }
 
+    private <T> CompletableFuture<T> prependWriteEvent(String name,
+                                                       ControllerWriteOperation<T> op) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+        queue.prepend(event);
+        return event.future();
+    }
+
     private <T> CompletableFuture<T> appendWriteEvent(String name,
                                                       OptionalLong deadlineNs,
                                                       ControllerWriteOperation<T> op) {
@@ -936,7 +943,7 @@ public final class QuorumController implements Controller {
                                     "at least 1. Got " + bootstrapMetadata.metadataVersion().featureLevel()));
                         } else {
                             metadataVersion = bootstrapMetadata.metadataVersion();
-                            future = appendWriteEvent("bootstrapMetadata", OptionalLong.empty(), () -> {
+                            future = prependWriteEvent("bootstrapMetadata", () -> {
                                 if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
                                     log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
                                 } else {
