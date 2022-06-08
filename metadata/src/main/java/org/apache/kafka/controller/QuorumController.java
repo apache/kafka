@@ -489,7 +489,7 @@ public final class QuorumController implements Controller {
             if (!snapshotRegistry.hasSnapshot(committedOffset)) {
                 throw new RuntimeException(
                     String.format(
-                        "Cannot generate a snapshot at committed offset %s because it does not exists in the snapshot registry.",
+                        "Cannot generate a snapshot at committed offset %d because it does not exists in the snapshot registry.",
                         committedOffset
                     )
                 );
@@ -857,7 +857,7 @@ public final class QuorumController implements Controller {
                     if (isActiveController()) {
                         throw new IllegalStateException(
                             String.format(
-                                "Asked to load snapshot (%s) when it is the active controller (%s)",
+                                "Asked to load snapshot (%s) when it is the active controller (%d)",
                                 reader.snapshotId(),
                                 curClaimEpoch
                             )
