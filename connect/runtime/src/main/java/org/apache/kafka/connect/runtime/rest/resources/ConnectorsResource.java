@@ -271,8 +271,8 @@ public class ConnectorsResource {
     @Operation(summary = "Restart the specified connector")
     public Response restartConnector(final @PathParam("connector") String connector,
                                  final @Context HttpHeaders headers,
-                                 final @DefaultValue("false") @QueryParam("includeTasks") Boolean includeTasks,
-                                 final @DefaultValue("false") @QueryParam("onlyFailed") Boolean onlyFailed,
+                                 final @DefaultValue("false") @QueryParam("includeTasks") @Parameter(description = "Whether to also restart tasks") Boolean includeTasks,
+                                 final @DefaultValue("false") @QueryParam("onlyFailed") @Parameter(description = "Whether to only restart failed tasks/connectors")Boolean onlyFailed,
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         RestartRequest restartRequest = new RestartRequest(connector, onlyFailed, includeTasks);
         String forwardingPath = "/connectors/" + connector + "/restart";

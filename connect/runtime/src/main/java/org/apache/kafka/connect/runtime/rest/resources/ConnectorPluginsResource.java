@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.PredicatedTransformation;
@@ -136,7 +137,9 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/")
     @Operation(summary = "List all connector plugins installed")
-    public List<PluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
+    public List<PluginInfo> listConnectorPlugins(
+            @DefaultValue("true") @QueryParam("connectorsOnly") @Parameter(description = "Whether to list only connectors instead of all plugins") boolean connectorsOnly
+    ) {
         synchronized (this) {
             if (connectorsOnly) {
                 return Collections.unmodifiableList(connectorPlugins.stream()

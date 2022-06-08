@@ -37,7 +37,7 @@ public class RootResource {
 
     @GET
     @Path("/")
-    @Operation(summary = "Get details about the Connect cluster")
+    @Operation(summary = "Get details about this Connect worker and the id of the Kafka cluster it is connected to")
     public ServerInfo serverInfo() {
         return new ServerInfo(herder.kafkaClusterId());
     }
