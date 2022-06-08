@@ -2240,6 +2240,24 @@ class KafkaController(val config: KafkaConfig,
     alterPartitionRequestVersion: Short,
     callback: AlterPartitionResponseData => Unit
   ): Unit = {
+    try {
+      doProcessAlterPartition(
+        alterPartitionRequest,
+        alterPartitionRequestVersion,
+        callback
+      )
+    } catch {
+      case e: Throwable =>
+        error(s"Error when processing AlterPartition: $alterPartitionRequest", e)
+        callback(new AlterPartitionResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code))
+    }
+  }
+
+  private def doProcessAlterPartition(
+    alterPartitionRequest: AlterPartitionRequestData,
+    alterPartitionRequestVersion: Short,
+    callback: AlterPartitionResponseData => Unit
+  ): Unit = {
     val useTopicsIds = alterPartitionRequestVersion > 1
 
     // Handle a few short-circuits
@@ -2281,7 +2299,7 @@ class KafkaController(val config: KafkaConfig,
           topicReq.partitions.forEach { partitionReq =>
             topicResponse.partitions.add(new AlterPartitionResponseData.PartitionData()
               .setPartitionIndex(partitionReq.partitionIndex)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))
           }
 
         case Some(topicName) =>

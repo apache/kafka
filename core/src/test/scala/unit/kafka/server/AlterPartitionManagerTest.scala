@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.AlterPartitionResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractResponse
+import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
@@ -101,6 +102,7 @@ class AlterPartitionManagerTest {
   @ParameterizedTest
   @MethodSource(Array("provideMetadataVersions"))
   def testOverwriteWithinBatch(metadataVersion: MetadataVersion): Unit = {
+    val canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
@@ -118,8 +120,10 @@ class AlterPartitionManagerTest {
 
     // Simulate response
     val alterPartitionResp = partitionResponse(tp0, Errors.NONE)
-    val resp = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, alterPartitionResp)
+    val resp = makeClientResponse(
+      response = alterPartitionResp,
+      version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+    )
     verify(brokerToController).sendRequest(capture.capture(), callbackCapture.capture())
     callbackCapture.getValue.onComplete(resp)
 
@@ -203,8 +207,7 @@ class AlterPartitionManagerTest {
 
   private def testRetryOnTopLevelError(error: Errors): Unit = {
     val alterPartitionResp = new AlterPartitionResponse(new AlterPartitionResponseData().setErrorCode(error.code))
-    val response = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, alterPartitionResp)
+    val response = makeClientResponse(alterPartitionResp, ApiKeys.ALTER_PARTITION.latestVersion)
     testRetryOnErrorResponse(response)
   }
 
@@ -232,8 +235,7 @@ class AlterPartitionManagerTest {
 
     // After a successful response, we can submit another AlterIsrItem
     val retryAlterPartitionResponse = partitionResponse(tp0, Errors.NONE)
-    val retryResponse = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, retryAlterPartitionResponse)
+    val retryResponse = makeClientResponse(retryAlterPartitionResponse, ApiKeys.ALTER_PARTITION.latestVersion)
 
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
     callbackCapture.getValue.onComplete(retryResponse)
@@ -283,8 +285,7 @@ class AlterPartitionManagerTest {
     reset(brokerToController)
 
     val alterPartitionResp = partitionResponse(tp, error)
-    val resp = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, alterPartitionResp)
+    val resp = makeClientResponse(alterPartitionResp, ApiKeys.ALTER_PARTITION.latestVersion)
     callbackCapture.getValue.onComplete(resp)
     assertTrue(future.isCompletedExceptionally)
     assertFutureThrows(future, error.exception.getClass)
@@ -314,8 +315,7 @@ class AlterPartitionManagerTest {
     reset(brokerToController)
 
     val alterPartitionResp = new AlterPartitionResponse(new AlterPartitionResponseData())
-    val resp = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, alterPartitionResp)
+    val resp = makeClientResponse(alterPartitionResp, ApiKeys.ALTER_PARTITION.latestVersion)
     callbackCapture.getValue.onComplete(resp)
   }
 
@@ -354,7 +354,10 @@ class AlterPartitionManagerTest {
     val future3 = alterPartitionManager.submit(tp2, leaderAndIsr, controlledEpoch)
 
     // Respond to the first request, which will also allow the next request to get sent
-    callback1.onComplete(makeClientResponse(partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR)))
+    callback1.onComplete(makeClientResponse(
+      response = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR),
+      version = expectedVersion
+    ))
     assertFutureThrows(future1, classOf[UnknownServerException])
     assertFalse(future2.isDone)
     assertFalse(future3.isDone)
@@ -364,7 +367,10 @@ class AlterPartitionManagerTest {
       expectedTopicPartitions = Set(tp1, tp2),
       expectedVersion = expectedVersion
     ))
-    callback2.onComplete(makeClientResponse(partitionResponse(tp2, Errors.UNKNOWN_SERVER_ERROR)))
+    callback2.onComplete(makeClientResponse(
+      response = partitionResponse(tp2, Errors.UNKNOWN_SERVER_ERROR),
+      version = expectedVersion
+    ))
     assertFutureThrows(future3, classOf[UnknownServerException])
     assertFalse(future2.isDone)
 
@@ -373,7 +379,10 @@ class AlterPartitionManagerTest {
       expectedTopicPartitions = Set(tp1),
       expectedVersion = expectedVersion
     ))
-    callback3.onComplete(makeClientResponse(partitionResponse(tp1, Errors.UNKNOWN_SERVER_ERROR)))
+    callback3.onComplete(makeClientResponse(
+      response = partitionResponse(tp1, Errors.UNKNOWN_SERVER_ERROR),
+      version = expectedVersion
+    ))
     assertFutureThrows(future2, classOf[UnknownServerException])
   }
 
@@ -417,9 +426,10 @@ class AlterPartitionManagerTest {
     val future3 = alterPartitionManager.submit(bar, leaderAndIsr, controlledEpoch)
 
     // Completes the first request. That triggers the next one.
-    callback1.onComplete(makeClientResponse(makeAlterPartition(Seq(
-      makeAlterPartitionTopicData(zar, Errors.NONE),
-    ))))
+    callback1.onComplete(makeClientResponse(
+      response = makeAlterPartition(Seq(makeAlterPartitionTopicData(zar, Errors.NONE))),
+      version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+    ))
 
     assertTrue(future1.isDone)
     assertFalse(future2.isDone)
@@ -432,10 +442,13 @@ class AlterPartitionManagerTest {
     ))
 
     // Completes the second request.
-    callback2.onComplete(makeClientResponse(makeAlterPartition(Seq(
-      makeAlterPartitionTopicData(foo, Errors.NONE),
-      makeAlterPartitionTopicData(bar, Errors.NONE),
-    ))))
+    callback2.onComplete(makeClientResponse(
+      response = makeAlterPartition(Seq(
+        makeAlterPartitionTopicData(foo, Errors.NONE),
+        makeAlterPartitionTopicData(bar, Errors.NONE),
+      )),
+      version = 1
+    ))
 
     assertTrue(future1.isDone)
     assertTrue(future2.isDone)
@@ -478,8 +491,12 @@ class AlterPartitionManagerTest {
     }
   }
 
-  private def makeClientResponse(response: AbstractResponse): ClientResponse = {
-    new ClientResponse(null, null, "", 0L, 0L,
+  private def makeClientResponse(
+    response: AbstractResponse,
+    version: Short
+  ): ClientResponse = {
+    val requestHeader = new RequestHeader(response.apiKey, version, "", 0)
+    new ClientResponse(requestHeader, null, "", 0L, 0L,
       false, null, null, response)
   }
 

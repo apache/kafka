@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
-public class IneligibleReplica extends ApiException {
-    public IneligibleReplica(String message) {
+public class NewLeaderElectedException extends ApiException {
+    public NewLeaderElectedException(String message) {
         super(message);
     }
 }

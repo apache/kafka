@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.AlterPartitionRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
@@ -126,7 +127,7 @@ class DefaultAlterPartitionManager(
 ) extends AlterPartitionManager with Logging with KafkaMetricsGroup {
 
   // Used to allow only one pending ISR update per partition (visible for testing).
-  // Note that we key item by TopicPartition despite using TopicIdPartition while
+  // Note that we key items by TopicPartition despite using TopicIdPartition while
   // submitting it. We do this because we don't always have a topic id to rely on.
   private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterPartitionItem] = new ConcurrentHashMap[TopicPartition, AlterPartitionItem]()
 
@@ -195,9 +196,9 @@ class DefaultAlterPartitionManager(
             } else if (response.versionMismatch != null) {
               Errors.UNSUPPORTED_VERSION
             } else {
-              val body = response.responseBody.asInstanceOf[AlterPartitionResponse]
               handleAlterPartitionResponse(
-                body,
+                response.requestHeader,
+                response.responseBody.asInstanceOf[AlterPartitionResponse],
                 message.brokerEpoch,
                 inflightAlterPartitionItems,
                 topicNamesByIds
@@ -230,6 +231,10 @@ class DefaultAlterPartitionManager(
   ): (AlterPartitionRequestData, Boolean, mutable.Map[Uuid, String]) = {
     val metadataVersion = metadataVersionSupplier()
     var canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
+    // We build this mapping in order to map topic id back to their name when we
+    // receive the response. We cannot rely on the metadata cache for this because
+    // the metadata cache is updated after the partition state so it might not know
+    // yet about a topic id already used here.
     val topicNamesByIds = mutable.HashMap[Uuid, String]()
 
     val message = new AlterPartitionRequestData()
@@ -266,6 +271,7 @@ class DefaultAlterPartitionManager(
   }
 
   def handleAlterPartitionResponse(
+    requestHeader: RequestHeader,
     alterPartitionResp: AlterPartitionResponse,
     sentBrokerEpoch: Long,
     inflightAlterPartitionItems: Seq[AlterPartitionItem],
@@ -285,33 +291,35 @@ class DefaultAlterPartitionManager(
         // Collect partition-level responses to pass to the callbacks
         val partitionResponses = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
         data.topics.forEach { topic =>
-          topic.partitions.forEach { partition =>
-            val tp = new TopicPartition(
-              topicNamesByIds.getOrElse(topic.topicId, topic.topicName),
-              partition.partitionIndex
-            )
-
-            val apiError = Errors.forCode(partition.errorCode)
-            debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
-            if (apiError == Errors.NONE) {
-              LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
-                case Some(leaderRecoveryState) =>
-                  partitionResponses(tp) = Right(
-                    LeaderAndIsr(
-                      partition.leaderId,
-                      partition.leaderEpoch,
-                      partition.isr.asScala.toList.map(_.toInt),
-                      leaderRecoveryState,
-                      partition.partitionEpoch
+          // Topic IDs are used since version 2 of the AlterPartition API.
+          val topicName = if (requestHeader.apiVersion > 1) topicNamesByIds.get(topic.topicId).orNull else topic.topicName
+          if (topicName == null || topicName.isEmpty) {
+            error(s"Received an unexpected topic $topic in the alter partition response, ignoring it.")
+          } else {
+            topic.partitions.forEach { partition =>
+              val tp = new TopicPartition(topicName, partition.partitionIndex)
+              val apiError = Errors.forCode(partition.errorCode)
+              debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
+              if (apiError == Errors.NONE) {
+                LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
+                  case Some(leaderRecoveryState) =>
+                    partitionResponses(tp) = Right(
+                      LeaderAndIsr(
+                        partition.leaderId,
+                        partition.leaderEpoch,
+                        partition.isr.asScala.toList.map(_.toInt),
+                        leaderRecoveryState,
+                        partition.partitionEpoch
+                      )
                     )
-                  )
 
-                case None =>
-                  error(s"Controller returned an invalid leader recovery state (${partition.leaderRecoveryState}) for $tp: $partition")
-                  partitionResponses(tp) = Left(Errors.UNKNOWN_SERVER_ERROR)
+                  case None =>
+                    error(s"Controller returned an invalid leader recovery state (${partition.leaderRecoveryState}) for $tp: $partition")
+                    partitionResponses(tp) = Left(Errors.UNKNOWN_SERVER_ERROR)
+                }
+              } else {
+                partitionResponses(tp) = Left(apiError)
               }
-            } else {
-              partitionResponses(tp) = Left(apiError)
             }
           }
         }
