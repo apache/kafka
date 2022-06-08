@@ -53,10 +53,13 @@ trait QuorumImplementation {
   def shutdown(): Unit
 }
 
-class ZooKeeperQuorumImplementation(val zookeeper: EmbeddedZookeeper,
-                                    val zkClient: KafkaZkClient,
-                                    val adminZkClient: AdminZkClient,
-                                    val log: Logging) extends QuorumImplementation {
+class ZooKeeperQuorumImplementation(
+  val zookeeper: EmbeddedZookeeper,
+  val zkConnect: String,
+  val zkClient: KafkaZkClient,
+  val adminZkClient: AdminZkClient,
+  val log: Logging
+) extends QuorumImplementation {
   override def createBroker(config: KafkaConfig,
                             time: Time,
                             startup: Boolean): KafkaBroker = {
@@ -320,8 +323,10 @@ abstract class QuorumTestHarness extends Logging {
     val zookeeper = new EmbeddedZookeeper()
     var zkClient: KafkaZkClient = null
     var adminZkClient: AdminZkClient = null
+    val zkConnect = s"127.0.0.1:${zookeeper.port}"
     try {
-      zkClient = KafkaZkClient(s"127.0.0.1:${zookeeper.port}",
+      zkClient = KafkaZkClient(
+        zkConnect,
         zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
         zkSessionTimeout,
         zkConnectionTimeout,
@@ -336,10 +341,13 @@ abstract class QuorumTestHarness extends Logging {
         if (zkClient != null) CoreUtils.swallow(zkClient.close(), this)
         throw t
     }
-    new ZooKeeperQuorumImplementation(zookeeper,
+    new ZooKeeperQuorumImplementation(
+      zookeeper,
+      zkConnect,
       zkClient,
       adminZkClient,
-      this)
+      this
+    )
   }
 
   @AfterEach
