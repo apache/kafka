@@ -82,6 +82,11 @@ public interface Selectable {
     Collection<NetworkReceive> completedReceives();
 
     /**
+     * The spiffeId that corresponds to a specific channel id
+     */
+    String completedReceiveSpiffeId(String channelId);
+
+    /**
      * The connections that finished disconnecting on the last {@link #poll(long) poll()}
      * call. Channel state indicates the local channel state at the time of disconnection.
      */

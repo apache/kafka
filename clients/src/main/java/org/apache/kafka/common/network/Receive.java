@@ -25,6 +25,26 @@ import java.nio.channels.ScatteringByteChannel;
  */
 public interface Receive extends Closeable {
 
+    public class SpiffeIdAndbytesRead {
+
+        private long bytesRead;
+        private String spiffeId;
+
+        public SpiffeIdAndbytesRead(long bytesRead, String spiffeId) {
+
+            this.bytesRead = bytesRead;
+            this.spiffeId = spiffeId;
+        }
+
+        public long getBytesRead(){
+            return bytesRead;
+        }
+
+        public String getSpiffeId(){
+            return spiffeId;
+        }
+    }
+
     /**
      * The numeric id of the source from which we are receiving data.
      */
@@ -41,7 +61,7 @@ public interface Receive extends Closeable {
      * @return The number of bytes read
      * @throws IOException If the reading fails
      */
-    long readFrom(ScatteringByteChannel channel) throws IOException;
+    SpiffeIdAndbytesRead readFrom(ScatteringByteChannel channel) throws IOException;
 
     /**
      * Do we know yet how much memory we require to fully read this

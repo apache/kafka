@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,8 +90,11 @@ public class NetworkReceive implements Receive {
         return !size.hasRemaining() && buffer != null && !buffer.hasRemaining();
     }
 
-    public long readFrom(ScatteringByteChannel channel) throws IOException {
+    public SpiffeIdAndbytesRead readFrom(ScatteringByteChannel channel) throws IOException {
         int read = 0;
+        ByteBuffer spiffeId = ByteBuffer.allocate(4);
+        int spiffeIdSize = channel.read(spiffeId);
+
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
             if (bytesRead < 0)
@@ -121,7 +125,7 @@ public class NetworkReceive implements Receive {
             read += bytesRead;
         }
 
-        return read;
+        return new SpiffeIdAndbytesRead(read, new ByteBufferAccessor(spiffeId).readString(spiffeIdSize));
     }
 
     @Override

@@ -1023,8 +1023,10 @@ private[kafka] class Processor(val id: Int,
               } else {
                 val connectionId = receive.source
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol,
+                  channel.principal(selector.completedReceiveSpiffeId(channel.id)), listenerName, securityProtocol,
                   channel.channelMetadataRegistry.clientInformation, isPrivilegedListener, channel.principalSerde)
+
+                //                println(s"@@@@ Principal used: ${context.principal}")
 
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
@@ -1358,8 +1360,8 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   def updateIpConnectionRateQuota(ip: Option[InetAddress], maxConnectionRate: Option[Int]): Unit = synchronized {
     def isIpConnectionRateMetric(metricName: MetricName) = {
       metricName.name == ConnectionRateMetricName &&
-      metricName.group == MetricsGroup &&
-      metricName.tags.containsKey(IpMetricTag)
+        metricName.group == MetricsGroup &&
+        metricName.tags.containsKey(IpMetricTag)
     }
 
     def shouldUpdateQuota(metric: KafkaMetric, quotaLimit: Int) = {
