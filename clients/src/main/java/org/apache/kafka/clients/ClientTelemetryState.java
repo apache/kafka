@@ -29,13 +29,14 @@ import org.apache.kafka.common.utils.Utils;
  */
 public enum ClientTelemetryState {
 
-    subscription_needed,
-    subscription_in_progress,
-    push_needed,
-    push_in_progress,
-    terminating_push_needed,
-    terminating_push_in_progress,
-    terminated;
+//    broker_unsupported,             // The broker is down-version or does not have plugin configured
+    subscription_needed,            // Subscription is needed from the broker
+    subscription_in_progress,       // Network I/O in progress to retrieve subscription
+    push_needed,                    // Awaiting timeout for pushing telemetry to broker
+    push_in_progress,               // Network I/O in progress for pushing telemetry payload
+    terminating_push_needed,        // Need to push the terminal payload
+    terminating_push_in_progress,   // Network I/O in progress for pushing terminal telemetry payload
+    terminated;                     // No more work should be performed
 
     private final static Map<ClientTelemetryState, List<ClientTelemetryState>> VALID_NEXT_STATES = new EnumMap<>(ClientTelemetryState.class);
 

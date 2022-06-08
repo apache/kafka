@@ -2583,6 +2583,7 @@ public class KafkaConsumerTest {
                 metrics,
                 metricGroupPrefix,
                 Optional.empty(),
+                Optional.empty(),
                 time,
                 autoCommitEnabled,
                 autoCommitIntervalMs,

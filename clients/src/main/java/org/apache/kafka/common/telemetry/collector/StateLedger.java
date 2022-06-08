@@ -65,7 +65,7 @@ public class StateLedger {
     }
 
     public void init(List<KafkaMetric> metrics) {
-        log.debug("initializing Kafka metrics collector");
+        log.debug("initializing Kafka metrics");
         for (KafkaMetric m : metrics) {
             metricMap.put(metricNamingStrategy.metricKey(m.metricName()), m);
         }

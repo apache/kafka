@@ -174,7 +174,7 @@ public class TransactionManagerTest {
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
                 deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
-                (short) -1, Optional.empty());
+                Optional.empty());
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics),

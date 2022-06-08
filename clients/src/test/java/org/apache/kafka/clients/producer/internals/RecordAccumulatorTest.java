@@ -416,7 +416,7 @@ public class RecordAccumulatorTest {
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
-            (short) -1, Optional.empty());
+            Optional.empty());
 
         long now = time.milliseconds();
         accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
@@ -794,7 +794,7 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
-            (short) -1, Optional.empty());
+            Optional.empty());
         assertThrows(UnsupportedVersionException.class,
             () -> accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds(), cluster));
     }
@@ -1398,7 +1398,6 @@ public class RecordAccumulatorTest {
             new ApiVersions(),
             txnManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
-            (short) -1,
             Optional.empty());
     }
 }

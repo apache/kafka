@@ -30,7 +30,6 @@ import org.apache.kafka.common.record.CompressionType;
  */
 public class ClientTelemetrySubscription {
 
-    private final long fetchMs;
     private final long throttleTimeMs;
     private final Uuid clientInstanceId;
     private final int subscriptionId;
@@ -39,15 +38,13 @@ public class ClientTelemetrySubscription {
     private final boolean deltaTemporality;
     private final Predicate<? super MetricKeyable> selector;
 
-    public ClientTelemetrySubscription(long fetchMs,
-        long throttleTimeMs,
+    public ClientTelemetrySubscription(long throttleTimeMs,
         Uuid clientInstanceId,
         int subscriptionId,
         List<CompressionType> acceptedCompressionTypes,
         long pushIntervalMs,
         boolean deltaTemporality,
         Predicate<? super MetricKeyable> selector) {
-        this.fetchMs = fetchMs;
         this.throttleTimeMs = throttleTimeMs;
         this.clientInstanceId = clientInstanceId;
         this.subscriptionId = subscriptionId;
@@ -55,10 +52,6 @@ public class ClientTelemetrySubscription {
         this.pushIntervalMs = pushIntervalMs;
         this.deltaTemporality = deltaTemporality;
         this.selector = selector;
-    }
-
-    public long fetchMs() {
-        return fetchMs;
     }
 
     public long throttleTimeMs() {
@@ -92,7 +85,6 @@ public class ClientTelemetrySubscription {
     @Override
     public String toString() {
         return new StringJoiner(", ", ClientTelemetrySubscription.class.getSimpleName() + "[", "]")
-            .add("fetchMs=" + fetchMs)
             .add("throttleTimeMs=" + throttleTimeMs)
             .add("clientInstanceId=" + clientInstanceId)
             .add("subscriptionId=" + subscriptionId)

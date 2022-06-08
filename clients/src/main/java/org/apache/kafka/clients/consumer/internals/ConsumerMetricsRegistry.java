@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.clients.ClientTelemetryMetricsRegistry;
@@ -33,17 +34,9 @@ public class ConsumerMetricsRegistry extends ClientTelemetryMetricsRegistry {
 
     private final static String PREFIX = "org.apache.kafka.client.consumer.";
 
-    private final static String POLL_INTERVAL_NAME = PREFIX + "poll.interval";
-
-    private final static String POLL_INTERVAL_DESCRIPTION =  "The interval at which the application calls poll(), in seconds.";
-
     private final static String POLL_LAST_NAME = PREFIX + "poll.last";
 
     private final static String POLL_LAST_DESCRIPTION = "The number of seconds since the last poll() invocation.";
-
-    private final static String POLL_LATENCY_NAME = PREFIX + "poll.latency";
-
-    private final static String POLL_LATENCY_DESCRIPTION = "The time it takes poll() to return a new message to the application.";
 
     private final static String COMMIT_COUNT_NAME = PREFIX + "commit.count";
 
@@ -81,13 +74,9 @@ public class ConsumerMetricsRegistry extends ClientTelemetryMetricsRegistry {
 
     private final static String RECORD_APPLICATION_BYTES_DESCRIPTION = "Memory of records consumed by application.";
 
-    private final static String ERROR_LABEL = "error";
-
-    public final MetricName pollInterval;
+    private final static String REASON_LABEL = "reason";
 
     public final MetricName pollLast;
-
-    public final MetricName pollLatency;
 
     public final MetricName commitCount;
 
@@ -110,16 +99,14 @@ public class ConsumerMetricsRegistry extends ClientTelemetryMetricsRegistry {
     public ConsumerMetricsRegistry(Metrics metrics) {
         super(metrics);
 
-        Set<String> errorTags = appendTags(tags, ERROR_LABEL);
+        Set<String> reasonTags = appendTags(tags, REASON_LABEL);
 
-        this.pollInterval = createMetricName(POLL_INTERVAL_NAME, POLL_INTERVAL_DESCRIPTION);
         this.pollLast = createMetricName(POLL_LAST_NAME, POLL_LAST_DESCRIPTION);
-        this.pollLatency = createMetricName(POLL_LATENCY_NAME, POLL_LATENCY_DESCRIPTION);
         this.commitCount = createMetricName(COMMIT_COUNT_NAME, COMMIT_COUNT_DESCRIPTION);
         this.groupAssignmentPartitionCount = createMetricName(GROUP_ASSIGNMENT_PARTITION_COUNT_NAME, GROUP_ASSIGNMENT_PARTITION_COUNT_DESCRIPTION);
         this.assignmentPartitionCount = createMetricName(ASSIGNMENT_PARTITION_COUNT_NAME, ASSIGNMENT_PARTITION_COUNT_DESCRIPTION);
         this.groupRebalanceCount = createMetricName(GROUP_REBALANCE_COUNT_NAME, GROUP_REBALANCE_COUNT_DESCRIPTION);
-        this.groupErrorCount = createMetricNameTemplate(GROUP_ERROR_COUNT_NAME, GROUP_ERROR_COUNT_DESCRIPTION, errorTags);
+        this.groupErrorCount = createMetricNameTemplate(GROUP_ERROR_COUNT_NAME, GROUP_ERROR_COUNT_DESCRIPTION, reasonTags);
         this.recordQueueCount = createMetricName(RECORD_QUEUE_COUNT_NAME, RECORD_QUEUE_COUNT_DESCRIPTION);
         this.recordQueueBytes = createMetricName(RECORD_QUEUE_BYTES_NAME, RECORD_QUEUE_BYTES_DESCRIPTION);
         this.recordApplicationCount = createMetricName(RECORD_APPLICATION_COUNT_NAME, RECORD_APPLICATION_COUNT_DESCRIPTION);
@@ -131,11 +118,12 @@ public class ConsumerMetricsRegistry extends ClientTelemetryMetricsRegistry {
     }
 
     private MetricNameTemplate createMetricNameTemplate(String name, String description, Set<String> tags) {
-        return createMetricNameTemplate(name, GROUP_NAME, description, tags);
+        return new MetricNameTemplate(name, GROUP_NAME, description, tags);
     }
 
-    public MetricName groupErrorCount(Map<String, String> tags) {
-        return this.metrics.metricInstance(groupErrorCount, tags);
+    public MetricName groupErrorCount(String reason) {
+        Map<String, String> metricsTags = Collections.singletonMap(REASON_LABEL, reason);
+        return this.metrics.metricInstance(groupErrorCount, metricsTags);
     }
 
 }
