@@ -177,7 +177,7 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verify(changelogReader, times(1)).enforceRestoreActive();
-        verify(changelogReader, atLeast(1)).restore(anyMap());
+        verify(changelogReader, atLeast(3)).restore(anyMap());
         verify(task).completeRestoration(offsetResetter);
         verify(changelogReader, never()).transitToUpdateStandby();
     }

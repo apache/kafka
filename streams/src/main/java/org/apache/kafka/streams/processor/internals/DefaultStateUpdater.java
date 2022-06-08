@@ -236,12 +236,11 @@ public class DefaultStateUpdater implements StateUpdater {
                 addTaskToRestoredTasks((StreamTask) task);
                 log.debug("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
             } else {
+                updatingTasks.put(task.id(), task);
                 if (task.isActive()) {
-                    updatingTasks.put(task.id(), task);
                     log.debug("Stateful active task " + task.id() + " was added to the updating tasks of the state updater");
                     changelogReader.enforceRestoreActive();
                 } else {
-                    updatingTasks.put(task.id(), task);
                     log.debug("Standby task " + task.id() + " was added to the updating tasks of the state updater");
                     if (updatingTasks.size() == 1) {
                         changelogReader.transitToUpdateStandby();
@@ -396,25 +395,6 @@ public class DefaultStateUpdater implements StateUpdater {
         final List<ExceptionAndTasks> result = new ArrayList<>();
         exceptionsAndFailedTasks.drainTo(result);
         return result;
-    }
-
-    public Set<Task> getAllTasks() {
-        tasksAndActionsLock.lock();
-        restoredActiveTasksLock.lock();
-        try {
-            final Set<Task> allTasks = new HashSet<>();
-            allTasks.addAll(tasksAndActions.stream()
-                .filter(t -> t.getAction() == Action.ADD)
-                .map(TaskAndAction::getTask)
-                .collect(Collectors.toList())
-            );
-            allTasks.addAll(stateUpdaterThread.getUpdatingTasks());
-            allTasks.addAll(restoredActiveTasks);
-            return Collections.unmodifiableSet(allTasks);
-        } finally {
-            restoredActiveTasksLock.unlock();
-            tasksAndActionsLock.unlock();
-        }
     }
 
     public Set<StandbyTask> getUpdatingStandbyTasks() {
