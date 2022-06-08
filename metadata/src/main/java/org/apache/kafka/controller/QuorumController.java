@@ -929,6 +929,11 @@ public final class QuorumController implements Controller {
                             curEpoch);
                     }
 
+                    curClaimEpoch = newEpoch;
+                    controllerMetrics.setActive(true);
+                    updateWriteOffset(lastCommittedOffset);
+                    clusterControl.activate();
+
                     // Check if we need to bootstrap metadata into the log. This must happen before we can
                     // write any other records to the log since we need the metadata.version to determine the correct
                     // record version
@@ -943,6 +948,8 @@ public final class QuorumController implements Controller {
                                     "at least 1. Got " + bootstrapMetadata.metadataVersion().featureLevel()));
                         } else {
                             metadataVersion = bootstrapMetadata.metadataVersion();
+                            // We prepend the bootstrap event in order to ensure the bootstrap metadata is written before
+                            // any external controller write events are processed.
                             future = prependWriteEvent("bootstrapMetadata", () -> {
                                 if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
                                     log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
@@ -967,11 +974,6 @@ public final class QuorumController implements Controller {
                     } else {
                         metadataVersion = featureControl.metadataVersion();
                     }
-
-                    curClaimEpoch = newEpoch;
-                    controllerMetrics.setActive(true);
-                    updateWriteOffset(lastCommittedOffset);
-                    clusterControl.activate();
 
                     log.info(
                         "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
