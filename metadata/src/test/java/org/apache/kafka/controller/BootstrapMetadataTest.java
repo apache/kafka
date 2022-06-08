@@ -65,7 +65,7 @@ public class BootstrapMetadataTest {
     public void testEmptyBootstrapFile() throws Exception {
         Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         Files.createFile(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE));
-        assertThrows(RuntimeException.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION),
+        assertThrows(Exception.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION),
             "Should fail to load if no metadata.version is set");
     }
 
@@ -77,7 +77,7 @@ public class BootstrapMetadataTest {
         byte[] data = new byte[100];
         random.nextBytes(data);
         Files.write(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE), data, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        assertThrows(RuntimeException.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION),
+        assertThrows(Exception.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION),
             "Should fail on invalid data");
     }
 }
