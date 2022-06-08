@@ -163,6 +163,8 @@ public enum MetadataVersion {
     // Adds InControlledShutdown state to RegisterBrokerRecord and BrokerRegistrationChangeRecord (KIP-841).
     IBP_3_3_IV3(7, "3.3", "IV3", true);
 
+    // NOTE: update the default version in @ClusterTest annotation to point to the latest version
+    
     public static final String FEATURE_NAME = "metadata.version";
 
     public static final MetadataVersion MINIMUM_KRAFT_VERSION = IBP_3_0_IV1;
