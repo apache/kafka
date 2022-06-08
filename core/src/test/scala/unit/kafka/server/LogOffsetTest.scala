@@ -18,11 +18,12 @@
 package kafka.server
 
 import kafka.log.{ClientRecordDeletion, LogSegment, UnifiedLog}
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
@@ -41,11 +42,7 @@ import scala.jdk.CollectionConverters._
 @Timeout(300)
 class LogOffsetTest extends BaseRequestTest {
 
-  private lazy val time = new MockTime
-
   override def brokerCount = 1
-
-  protected override def brokerTime(brokerId: Int) = time
 
   protected override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put("log.flush.interval.messages", "1")
@@ -225,7 +222,7 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush(false)
 
-    val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
+    val now = Time.SYSTEM.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
     val offsets = log.legacyFetchOffsetsBefore(now, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
