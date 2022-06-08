@@ -4169,7 +4169,7 @@ class ReplicaManagerTest {
     assertEquals(mockLogMgr.liveLogDirs.size, responses.size)
     responses.foreach { response =>
       assertEquals(Errors.NONE.code, response.errorCode)
-      assertTrue(response.totalBytes >= 0)
+      assertTrue(response.totalBytes > 0)
       assertTrue(response.usableBytes >= 0)
     }
   }
