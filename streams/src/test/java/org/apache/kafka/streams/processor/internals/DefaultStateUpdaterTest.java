@@ -460,7 +460,7 @@ class DefaultStateUpdaterTest {
             mkEntry(task1.id(), task1),
             mkEntry(task2.id(), task2)
         );
-        doNothing().doThrow(streamsException).doNothing().when(changelogReader).restore(updatingTasks);
+        doNothing().doThrow(streamsException).when(changelogReader).restore(updatingTasks);
 
         stateUpdater.add(task1);
         stateUpdater.add(task2);
