@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
 
 import java.util
-import java.util.{Arrays, Collections, Optional}
+import java.util.{Arrays, Collections, Optional, OptionalLong}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
@@ -799,9 +799,17 @@ class KRaftClusterTest {
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
         val quorumInfo = quorumState.quorumInfo().get()
 
-        assertEquals(0, quorumInfo.leaderId())
-        assertEquals(3, quorumInfo.voters.size())
+        assertEquals(3000, quorumInfo.leaderId())
         assertEquals(0, quorumInfo.observers.size())
+        assertEquals(3, quorumInfo.voters.size())
+        quorumInfo.voters().forEach( voter => {
+          assertTrue(2999 < voter.replicaId() && 3003 > voter.replicaId(),
+            s"Voter ID ${voter.replicaId()} was not within expected range.")
+          assertTrue(0 < voter.logEndOffset(),
+            s"logEndOffset for voter with ID ${voter.replicaId()} was ${voter.logEndOffset()}")
+          assertEquals(OptionalLong.empty(), voter.lastFetchTimeMs())
+          assertEquals(OptionalLong.empty(), voter.lastCaughtUpTimeMs())
+        })
       } finally {
         admin.close()
       }
