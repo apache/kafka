@@ -71,7 +71,8 @@ class MetadataVersionIntegrationTest {
     val admin = clusterInstance.createAdminClient()
     val describeResult = admin.describeFeatures()
     val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
-    assertEquals(ff.minVersionLevel(), MetadataVersion.latest().featureLevel())
+    assertEquals(ff.minVersionLevel(), MetadataVersion.latest().featureLevel(),
+      "If this test fails, check the default MetadataVersion in the @ClusterTest annotation")
     assertEquals(ff.maxVersionLevel(), MetadataVersion.latest().featureLevel())
   }
 }

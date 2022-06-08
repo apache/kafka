@@ -110,8 +110,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
           .setTimestamp(earliestOrLatest)))
-    val meteadataVersion = metadataVersionSupplier()
-    val requestBuilder = ListOffsetsRequest.Builder.forReplica(meteadataVersion.listOffsetRequestVersion(), brokerConfig.brokerId)
+    val metadataVersion = metadataVersionSupplier()
+    val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion(), brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = blockingSender.sendRequest(requestBuilder)
@@ -121,7 +121,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE =>
-        if (meteadataVersion.isAtLeast(IBP_0_10_1_IV2))
+        if (metadataVersion.isAtLeast(IBP_0_10_1_IV2))
           responsePartition.offset
         else
           responsePartition.oldStyleOffsets.get(0)
