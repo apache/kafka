@@ -759,7 +759,7 @@ public final class QuorumController implements Controller {
                 int i = 1;
                 for (ApiMessageAndVersion message : result.records()) {
                     try {
-                        replay(message.message(), Optional.empty());
+                        replay(message.message(), Optional.empty(), writeOffset + i);
                     } catch (Throwable e) {
                         String failureMessage = String.format("Unable to apply %s record, which was " +
                             "%d of %d record(s) in the batch following last writeOffset %d.",
@@ -883,7 +883,7 @@ public final class QuorumController implements Controller {
                             int i = 1;
                             for (ApiMessageAndVersion message : messages) {
                                 try {
-                                    replay(message.message(), Optional.empty());
+                                    replay(message.message(), Optional.empty(), offset);
                                 } catch (Throwable e) {
                                     String failureMessage = String.format("Unable to apply %s record on standby " +
                                             "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
@@ -938,7 +938,7 @@ public final class QuorumController implements Controller {
                         int i = 1;
                         for (ApiMessageAndVersion message : messages) {
                             try {
-                                replay(message.message(), Optional.of(reader.snapshotId()));
+                                replay(message.message(), Optional.of(reader.snapshotId()), offset);
                             } catch (Throwable e) {
                                 String failureMessage = String.format("Unable to apply %s record " +
                                         "from snapshot %s on standby controller, which was %d of " +
@@ -1305,12 +1305,11 @@ public final class QuorumController implements Controller {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId) {
+    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
-                clusterControl.replay((RegisterBrokerRecord) message);
+                clusterControl.replay((RegisterBrokerRecord) message, offset);
                 break;
             case UNREGISTER_BROKER_RECORD:
                 clusterControl.replay((UnregisterBrokerRecord) message);
@@ -1874,8 +1873,13 @@ public final class QuorumController implements Controller {
 
                 @Override
                 public ControllerResult<BrokerHeartbeatReply> generateRecordsAndResult() {
+                    Long offsetForRegisterBrokerRecord = clusterControl.registerBrokerRecordOffset(brokerId);
+                    if (offsetForRegisterBrokerRecord == null) {
+                        throw new RuntimeException(
+                            String.format("Receive a heartbeat from broker %d before registration", brokerId));
+                    }
                     ControllerResult<BrokerHeartbeatReply> result = replicationControl.
-                        processBrokerHeartbeat(request, lastCommittedOffset);
+                        processBrokerHeartbeat(request, offsetForRegisterBrokerRecord);
                     inControlledShutdown = result.response().inControlledShutdown();
                     rescheduleMaybeFenceStaleBrokers();
                     return result;

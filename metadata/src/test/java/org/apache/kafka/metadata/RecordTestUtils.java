@@ -66,7 +66,18 @@ public class RecordTestUtils {
                         Optional.class);
                     method.invoke(target, record, Optional.empty());
                 } catch (NoSuchMethodException t) {
-                    // ignore
+                    try {
+                        Method method = target.getClass().getMethod("replay",
+                            record.getClass(),
+                            long.class);
+                        method.invoke(target, record, 0L);
+                    } catch (NoSuchMethodException i) {
+                        // ignore
+                    } catch (InvocationTargetException i) {
+                        throw new RuntimeException(i);
+                    } catch (IllegalAccessException i) {
+                        throw new RuntimeException(i);
+                    }
                 } catch (InvocationTargetException t) {
                     throw new RuntimeException(t);
                 } catch (IllegalAccessException t) {
@@ -119,7 +130,7 @@ public class RecordTestUtils {
      * @param delta the metadata delta on which to replay the records
      * @param highestOffset highest offset from the list of record batches
      * @param highestEpoch highest epoch from the list of record batches
-     * @param recordsAndVersions list of batches of records
+     * @param batches list of batches of records
      */
     public static void replayAllBatches(
         MetadataDelta delta,

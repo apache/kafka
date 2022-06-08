@@ -218,6 +218,14 @@ public class ClusterControlManager {
     private final TimelineHashMap<Integer, BrokerRegistration> brokerRegistrations;
 
     /**
+     * Save the offset of each broker registration record, we will only unfence a
+     * broker when its high watermark has reached its broker registration record,
+     * this is not necessarily the exact offset of each broker registration record
+     * but should not be smaller than it.
+     */
+    private final TimelineHashMap<Integer, Long> registerBrokerRecordOffsets;
+
+    /**
      * A reference to the controller's metrics registry.
      */
     private final ControllerMetrics controllerMetrics;
@@ -255,6 +263,7 @@ public class ClusterControlManager {
         this.sessionTimeoutNs = sessionTimeoutNs;
         this.replicaPlacer = replicaPlacer;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.registerBrokerRecordOffsets = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
         this.controllerMetrics = metrics;
@@ -366,7 +375,12 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
-    public void replay(RegisterBrokerRecord record) {
+    public Long registerBrokerRecordOffset(int brokerId) {
+        return registerBrokerRecordOffsets.get(brokerId);
+    }
+
+    public void replay(RegisterBrokerRecord record, long offset) {
+        registerBrokerRecordOffsets.put(record.brokerId(), offset);
         int brokerId = record.brokerId();
         List<Endpoint> listeners = new ArrayList<>();
         for (BrokerEndpoint endpoint : record.endPoints()) {
@@ -401,14 +415,15 @@ public class ClusterControlManager {
     }
 
     public void replay(UnregisterBrokerRecord record) {
+        registerBrokerRecordOffsets.remove(record.brokerId());
         int brokerId = record.brokerId();
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
         if (registration == null) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
-                "registration found for that id", record.toString()));
+                "registration found for that id", record));
         } else if (registration.epoch() != record.brokerEpoch()) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
-                "registration with that epoch found", record.toString()));
+                "registration with that epoch found", record));
         } else {
             if (heartbeatManager != null) heartbeatManager.remove(brokerId);
             brokerRegistrations.remove(brokerId);

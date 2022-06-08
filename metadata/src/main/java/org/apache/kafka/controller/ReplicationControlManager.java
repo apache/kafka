@@ -1355,13 +1355,14 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<BrokerHeartbeatReply> processBrokerHeartbeat(
-                BrokerHeartbeatRequestData request, long lastCommittedOffset) {
+                BrokerHeartbeatRequestData request, long registerBrokerRecordOffset) {
         int brokerId = request.brokerId();
         long brokerEpoch = request.brokerEpoch();
+        boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
         clusterControl.checkBrokerEpoch(brokerId, brokerEpoch);
         BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
         BrokerControlStates states = heartbeatManager.calculateNextBrokerState(brokerId,
-            request, lastCommittedOffset, () -> brokersToIsrs.hasLeaderships(brokerId));
+            request, registerBrokerRecordOffset, () -> brokersToIsrs.hasLeaderships(brokerId));
         List<ApiMessageAndVersion> records = new ArrayList<>();
         if (states.current() != states.next()) {
             switch (states.next()) {
@@ -1382,7 +1383,6 @@ public class ReplicationControlManager {
         heartbeatManager.touch(brokerId,
             states.next().fenced(),
             request.currentMetadataOffset());
-        boolean isCaughtUp = request.currentMetadataOffset() >= lastCommittedOffset;
         BrokerHeartbeatReply reply = new BrokerHeartbeatReply(isCaughtUp,
                 states.next().fenced(),
                 states.next().inControlledShutdown(),
