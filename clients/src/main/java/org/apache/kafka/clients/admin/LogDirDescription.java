@@ -64,10 +64,18 @@ public class LogDirDescription {
         return unmodifiableMap(replicaInfos);
     }
 
+    /**
+     * The total size of the volume this log directory is on or empty if the broker did not return a value.
+     * For volumes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     */
     public OptionalLong totalBytes() {
         return totalBytes;
     }
 
+    /**
+     * The usable size on the volume this log directory is on or empty if the broker did not return a value.
+     * For usable sizes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     */
     public OptionalLong usableBytes() {
         return usableBytes;
     }
