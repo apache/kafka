@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
-import org.apache.kafka.common.telemetry.emitter.Context;
 import org.apache.kafka.common.telemetry.metrics.InvalidMetricTypeException;
 import org.apache.kafka.common.telemetry.metrics.MetricKeyable;
 import org.apache.kafka.common.telemetry.metrics.MetricKey;
@@ -41,17 +40,10 @@ public class ClientTelemetryEmitter implements Emitter {
 
     private final Predicate<? super MetricKeyable> selector;
 
-    private final Context context;
-
     private final List<Metric> emitted;
 
-    public ClientTelemetryEmitter() {
-        this(i -> true, new Context());
-    }
-
-    public ClientTelemetryEmitter(Predicate<? super MetricKeyable> selector, Context context) {
+    public ClientTelemetryEmitter(Predicate<? super MetricKeyable> selector) {
         this.selector = selector;
-        this.context = context;
         this.emitted = new ArrayList<>();
     }
 
@@ -66,7 +58,7 @@ public class ClientTelemetryEmitter implements Emitter {
         return true;
     }
 
-    public byte[] payload() {
+    public byte[] payload(Map<String, String> context) {
         Resource resource = resource(context);
 
         MetricsData.Builder builder = MetricsData.newBuilder();
@@ -87,9 +79,9 @@ public class ClientTelemetryEmitter implements Emitter {
         return builder.build().toByteArray();
     }
 
-    private Resource resource(Context context) {
+    private Resource resource(Map<String, String> context) {
         Resource.Builder rb = Resource.newBuilder();
-        context.tags().forEach((k, v) -> rb.addAttributesBuilder()
+        context.forEach((k, v) -> rb.addAttributesBuilder()
             .setKey(k)
             .setValue(AnyValue.newBuilder().setStringValue(v)));
         return rb.build();
@@ -125,10 +117,6 @@ public class ClientTelemetryEmitter implements Emitter {
                 }
 
                 return sum(metricKey, at, point);
-
-            case histogram:
-                // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-1876
-                throw new UnsupportedOperationException("Histograms are not yet implemented - see CLIENTS-1876");
 
             default:
                 throw new InvalidMetricTypeException(String.format("The metric %s (%s) was of unexpected type ", metric.key(), metric.metricType()));

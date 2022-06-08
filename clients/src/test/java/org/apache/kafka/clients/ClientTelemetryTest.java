@@ -125,7 +125,6 @@ public class ClientTelemetryTest extends BaseClientTelemetryTest {
         ClientTelemetry clientTelemetry = newClientTelemetry();
         clientTelemetry.setSubscription(new ClientTelemetrySubscription(
                 0,
-                0,
                 Uuid.randomUuid(),
                 42,
                 Collections.singletonList(CompressionType.NONE),
@@ -136,7 +135,7 @@ public class ClientTelemetryTest extends BaseClientTelemetryTest {
         assertEquals(ClientTelemetryState.push_in_progress, clientTelemetry.state());
         PushTelemetryResponseData data = new PushTelemetryResponseData();
         data.setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
-        clientTelemetry.pushResponseReceived(data);
+        clientTelemetry.handleSuccessfulResponse(data);
         assertEquals(ClientTelemetryState.subscription_needed, clientTelemetry.state());
 
         clientTelemetry.close();

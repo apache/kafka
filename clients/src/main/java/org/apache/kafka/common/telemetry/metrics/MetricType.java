@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.common.telemetry.metrics;
 
+/**
+ * {@code MetricType} is a simple enum that helps distinguish between the currently
+ * supported metric types for client telemetry.
+ */
 public enum MetricType {
 
-    gauge, histogram, sum
+    gauge, sum
 
 }

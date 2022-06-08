@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import static org.apache.kafka.clients.ClientTelemetry.DEFAULT_PUSH_INTERVAL_MS;
 import static org.apache.kafka.clients.ClientTelemetry.MAX_TERMINAL_PUSH_WAIT_MS;
 import static org.apache.kafka.common.Uuid.ZERO_UUID;
 
@@ -33,15 +34,12 @@ import java.util.function.Predicate;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.internals.ProducerMetricsRegistry;
-import org.apache.kafka.clients.producer.internals.ProducerTopicMetricsRegistry;
 import org.apache.kafka.common.telemetry.emitter.Context;
 import org.apache.kafka.common.telemetry.metrics.MetricType;
 import org.apache.kafka.clients.ClientInstanceMetricsRegistry.ConnectionErrorReason;
 import org.apache.kafka.common.telemetry.metrics.InvalidMetricTypeException;
 import org.apache.kafka.common.telemetry.metrics.MetricKeyable;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.header.Header;
@@ -49,7 +47,6 @@ import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.metrics.stats.Histogram;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
@@ -177,7 +174,7 @@ public class ClientTelemetryUtils {
     }
 
     @SuppressWarnings("fallthrough")
-    public static long timeToNextUpdate(ClientTelemetryState state, ClientTelemetrySubscription subscription, long requestTimeoutMs, Time time) {
+    public static long timeToNextUpdate(ClientTelemetryState state, long lastFetchMs, long requestTimeoutMs, Time time) {
         final long t;
 
         switch (state) {
@@ -194,21 +191,9 @@ public class ClientTelemetryUtils {
                 break;
 
             case subscription_needed:
-                if (subscription == null)
-                    t = 0;
-                else
-                    t = timeToNextUpdate(subscription, time);
-
-                break;
-
             case push_needed:
-                if (subscription != null) {
-                    t = timeToNextUpdate(subscription, time);
-                    break;
-                } else {
-                    log.warn("Telemetry subscription was null when determining time for next update in state {}", state);
-                    // Fall through...
-                }
+                t = timeToNextUpdate(lastFetchMs, requestTimeoutMs, time);
+                break;
 
             default:
                 // Should never get to here
@@ -218,10 +203,8 @@ public class ClientTelemetryUtils {
         return t;
     }
 
-    public static long timeToNextUpdate(ClientTelemetrySubscription subscription, Time time) {
-        long fetchMs = subscription.fetchMs();
-        long pushIntervalMs = subscription.pushIntervalMs();
-        long timeRemainingBeforePush = fetchMs + pushIntervalMs - time.milliseconds();
+    public static long timeToNextUpdate(long lastFetchMs, long pushIntervalMs, Time time) {
+        long timeRemainingBeforePush = lastFetchMs + pushIntervalMs - time.milliseconds();
 
         final long t;
 
@@ -231,6 +214,56 @@ public class ClientTelemetryUtils {
             t = timeRemainingBeforePush;
 
         return t;
+    }
+
+    /**
+     * Examine the response data and handle different error code accordingly:
+     *
+     * <ul>
+     *     <li>Authorization Failed: Retry 30min later</li>
+     *     <li>Invalid Record: Retry 5min later</li>
+     *     <li>UnknownSubscription or Unsupported Compression: Retry</li>
+     * </ul>
+     *
+     * @param errorCode response body error code
+     */
+    public static Optional<Long> errorPushIntervalMs(short errorCode) {
+        if (errorCode == Errors.NONE.code())
+            return Optional.empty();
+
+        long pushIntervalMs = -1;
+        String reason = null;
+
+        // We might want to wait and retry or retry after some failures are received
+        if (isAuthorizationFailedError(errorCode)) {
+            pushIntervalMs = 30 * 60 * 1000;
+            reason = "The client is not authorized to send metrics";
+        } else if (errorCode == Errors.INVALID_RECORD.code()) {
+            pushIntervalMs = 5 * 60 * 1000;
+            reason = "The broker failed to decode or validate the client’s encoded metrics";
+        } else if (errorCode == Errors.CLIENT_METRICS_PLUGIN_NOT_FOUND.code()) {
+            pushIntervalMs = DEFAULT_PUSH_INTERVAL_MS;
+            reason = "The broker does not have any client metrics plugin configured";
+        } else if (errorCode == Errors.UNKNOWN_CLIENT_METRICS_SUBSCRIPTION_ID.code() ||
+            errorCode == Errors.UNSUPPORTED_COMPRESSION_TYPE.code()) {
+            pushIntervalMs = 0;
+            reason = Errors.forCode(errorCode).message();
+        }
+
+        if (pushIntervalMs >= 0) {
+            log.warn("Error code: {}, reason: {}. Retry automatically in {} ms.", errorCode, reason, pushIntervalMs);
+            return Optional.of(pushIntervalMs);
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    public static boolean isAuthorizationFailedError(short errorCode) {
+        return errorCode == Errors.CLUSTER_AUTHORIZATION_FAILED.code() ||
+            errorCode == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code() ||
+            errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code() ||
+            errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code() ||
+            errorCode == Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED.code();
     }
 
     public static Predicate<? super MetricKeyable> validateMetricNames(List<String> requestedMetrics) {
@@ -274,8 +307,8 @@ public class ClientTelemetryUtils {
 
     public static int validatePushIntervalMs(int pushIntervalMs) {
         if (pushIntervalMs <= 0) {
-            log.warn("Telemetry subscription push interval value from broker was invalid ({}), substituting a value of {}", pushIntervalMs, ClientTelemetry.DEFAULT_PUSH_INTERVAL_MS);
-            return ClientTelemetry.DEFAULT_PUSH_INTERVAL_MS;
+            log.warn("Telemetry subscription push interval value from broker was invalid ({}), substituting a value of {}", pushIntervalMs, DEFAULT_PUSH_INTERVAL_MS);
+            return DEFAULT_PUSH_INTERVAL_MS;
         }
 
         log.debug("Telemetry subscription push interval value from broker was {}", pushIntervalMs);
@@ -297,9 +330,6 @@ public class ClientTelemetryUtils {
 
         if (measurable instanceof Gauge) {
             return MetricType.gauge;
-        } else if (measurable instanceof Histogram) {
-            // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-1876
-            throw new UnsupportedOperationException("Histograms are not yet implemented - see CLIENTS-1876");
         } else if (measurable instanceof CumulativeSum) {
             return MetricType.sum;
         } else {
@@ -324,12 +354,10 @@ public class ClientTelemetryUtils {
     }
 
     public static String convertToReason(Throwable error) {
-        // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2286
         return String.valueOf(error);
     }
 
     public static Optional<ConnectionErrorReason> convertToConnectionErrorReason(Errors errors) {
-        // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2287
         switch (errors) {
             case NETWORK_EXCEPTION:
                 return Optional.of(ConnectionErrorReason.disconnect);
@@ -347,7 +375,6 @@ public class ClientTelemetryUtils {
                 return Optional.of(ConnectionErrorReason.timeout);
 
             default:
-                // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2288
                 return Optional.empty();
         }
     }
@@ -357,8 +384,6 @@ public class ClientTelemetryUtils {
         byte[] key,
         byte[] value,
         Header[] headers) {
-        // TODO: TELEMETRY_TODO: need to know the proper place to call this
-        // TODO: TELEMETRY_TODO: need to know the proper means/place to determine the size
         int offsetDelta = -1;
         byte magic = apiVersions.maxUsableProduceMagic();
 
@@ -372,59 +397,6 @@ public class ClientTelemetryUtils {
             return LegacyRecord.recordSize(magic,
                 key != null ? key.length : 0,
                 value != null ? value.length : 0);
-        }
-    }
-
-    public static void incrementProducerQueueMetrics(ClientTelemetry clientTelemetry,
-        ApiVersions apiVersions,
-        short acks,
-        TopicPartition tp,
-        long timestamp,
-        byte[] key,
-        byte[] value,
-        Header[] headers) {
-        // TODO: TELEMETRY_TODO: need to know the proper place to call this
-        // TODO: TELEMETRY_TODO: need to know the proper means/place to determine the size
-        int size = calculateQueueBytes(apiVersions, timestamp, key, value, headers);
-
-        ProducerMetricsRegistry producerMetricsRegistry = clientTelemetry.producerMetricsRegistry();
-        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueBytes).record(size);
-        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueCount).record(1);
-
-        ProducerTopicMetricsRegistry producerTopicMetricsRegistry = clientTelemetry.producerTopicMetricsRegistry();
-        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueBytes(tp, acks)).record(size);
-        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueCount(tp, acks)).record(1);
-    }
-
-    public static void decrementProducerQueueMetrics(ClientTelemetry clientTelemetry,
-        short acks,
-        TopicPartition tp,
-        int size) {
-        // TODO: TELEMETRY_TODO: we need an accurate record count passed in. I don't yet know
-        //       how to get it from the RecordBatch or MemoryRecord or ???
-        // TODO: TELEMETRY_TODO: need to know the proper place to call this
-        // TODO: TELEMETRY_TODO: need to know the proper means/place to determine the size
-        int recordCount = 0;
-
-        ProducerMetricsRegistry producerMetricsRegistry = clientTelemetry.producerMetricsRegistry();
-        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueBytes).record(-size);
-        producerMetricsRegistry.gaugeSensor(producerMetricsRegistry.recordQueueCount).record(-recordCount);
-
-        ProducerTopicMetricsRegistry producerTopicMetricsRegistry = clientTelemetry.producerTopicMetricsRegistry();
-        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueBytes(tp, acks)).record(-size);
-        producerTopicMetricsRegistry.gaugeSensor(producerTopicMetricsRegistry.recordQueueCount(tp, acks)).record(-recordCount);
-    }
-
-    public static String formatAcks(short acks) {
-        switch (acks) {
-            case 0:
-                return "none";
-
-            case 1:
-                return "leader";
-
-            default:
-                return "all";
         }
     }
 

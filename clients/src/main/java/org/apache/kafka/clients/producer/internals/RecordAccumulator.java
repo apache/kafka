@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import static org.apache.kafka.clients.ClientTelemetryUtils.decrementProducerQueueMetrics;
-import static org.apache.kafka.clients.ClientTelemetryUtils.incrementProducerQueueMetrics;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -89,8 +86,9 @@ public final class RecordAccumulator {
     private int drainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
-    private final short acks;
     private final Optional<ClientTelemetry> clientTelemetry;
+    private final Optional<ProducerMetricsRegistry> producerMetricsRegistry;
+    private final Optional<ProducerTopicMetricsRegistry> producerTopicMetricsRegistry;
 
     /**
      * Create a new record accumulator
@@ -122,7 +120,6 @@ public final class RecordAccumulator {
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool,
-                             short acks,
                              Optional<ClientTelemetry> clientTelemetry) {
         this.log = logContext.logger(RecordAccumulator.class);
         this.drainIndex = 0;
@@ -141,8 +138,9 @@ public final class RecordAccumulator {
         this.time = time;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
-        this.acks = acks;
         this.clientTelemetry = clientTelemetry;
+        this.producerMetricsRegistry = clientTelemetry.map(ct -> new ProducerMetricsRegistry(ct.metrics()));
+        this.producerTopicMetricsRegistry = clientTelemetry.map(ct -> new ProducerTopicMetricsRegistry(ct.metrics()));
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -281,16 +279,21 @@ public final class RecordAccumulator {
             if (future == null) {
                 last.closeForRecordAppends();
             } else {
-                clientTelemetry.ifPresent(ct ->
-                    incrementProducerQueueMetrics(ct,
-                        apiVersions,
-                        acks,
-                        tp,
-                        timestamp,
-                        key,
-                        value,
-                        headers)
-                );
+                if (producerMetricsRegistry.isPresent() || producerTopicMetricsRegistry.isPresent()) {
+                    int queueBytes = last.records().sizeInBytes();
+                    int queueCount = last.recordCount;
+
+                    producerMetricsRegistry.ifPresent(pmr -> {
+                        pmr.gaugeSensor(pmr.recordQueueBytes).record(queueBytes);
+                        pmr.gaugeSensor(pmr.recordQueueCount).record(queueCount);
+                    });
+
+                    producerTopicMetricsRegistry.ifPresent(ptmr -> {
+                        ptmr.gaugeSensor(ptmr.recordQueueBytes(tp)).record(queueBytes);
+                        ptmr.gaugeSensor(ptmr.recordQueueCount(tp)).record(queueCount);
+                    });
+                }
+
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false);
             }
         }
@@ -654,12 +657,20 @@ public final class RecordAccumulator {
 
             batch.close();
 
-            clientTelemetry.ifPresent(ct ->
-                decrementProducerQueueMetrics(ct,
-                    acks,
-                    tp,
-                    batch.records().sizeInBytes())
-            );
+            if (producerMetricsRegistry.isPresent() || producerTopicMetricsRegistry.isPresent()) {
+                int queueBytes = batch.records().sizeInBytes();
+                int queueCount = batch.recordCount;
+
+                producerMetricsRegistry.ifPresent(pmr -> {
+                    pmr.gaugeSensor(pmr.recordQueueBytes).record(-queueBytes);
+                    pmr.gaugeSensor(pmr.recordQueueCount).record(-queueCount);
+                });
+
+                producerTopicMetricsRegistry.ifPresent(ptmr -> {
+                    ptmr.gaugeSensor(ptmr.recordQueueBytes(tp)).record(-queueBytes);
+                    ptmr.gaugeSensor(ptmr.recordQueueCount(tp)).record(-queueCount);
+                });
+            }
 
             size += batch.records().sizeInBytes();
             ready.add(batch);

@@ -66,8 +66,7 @@ public interface MetricNamingStrategy<T> {
      * <p/>
      *
      * Some metrics may be derived from others by the collector itself. For example, a delta
-     * metric might be created from a cumulative counter, or a cumulative metric might be
-     * created from a histogram.
+     * metric might be created from a cumulative counter.
      *
      * <p/>
      *

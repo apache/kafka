@@ -23,6 +23,7 @@ import java.lang.management.OperatingSystemMXBean;
 import java.time.Duration;
 import org.apache.kafka.common.telemetry.collector.AbstractMetricsCollector;
 import org.apache.kafka.common.telemetry.emitter.Emitter;
+import org.apache.kafka.common.telemetry.metrics.MetricType;
 import org.apache.kafka.common.utils.Time;
 
 /**
@@ -42,10 +43,10 @@ public class HostProcessInfoMetricsCollector extends AbstractMetricsCollector {
 
     @Override
     public void collect(Emitter emitter) {
-        maybeEmitGaugeLong(emitter, registry.cpuSystemTime, hostProcessInfo::cpuSystemTimeSec);
-        maybeEmitGaugeLong(emitter, registry.cpuUserTime, hostProcessInfo::cpuUserTimeSec);
-        maybeEmitGaugeLong(emitter, registry.memoryBytes, hostProcessInfo::memoryBytes);
-        maybeEmitGaugeLong(emitter, registry.pid, hostProcessInfo::pid);
+        maybeEmitLong(emitter, registry.cpuSystemTime, MetricType.sum, hostProcessInfo::cpuSystemTimeSec);
+        maybeEmitLong(emitter, registry.cpuUserTime, MetricType.sum, hostProcessInfo::cpuUserTimeSec);
+        maybeEmitLong(emitter, registry.memoryBytes, MetricType.gauge, hostProcessInfo::memoryBytes);
+        maybeEmitLong(emitter, registry.pid, MetricType.gauge, hostProcessInfo::pid);
     }
     public static class HostProcessInfo {
 
@@ -61,7 +62,7 @@ public class HostProcessInfoMetricsCollector extends AbstractMetricsCollector {
             }
         }
 
-        public long cpuUserTimeSec() {
+        public Long cpuUserTimeSec() {
             if (osMxBean != null) {
                 long nanos = osMxBean.getProcessCpuTime();
 
@@ -70,23 +71,22 @@ public class HostProcessInfoMetricsCollector extends AbstractMetricsCollector {
                     return Duration.ofNanos(nanos).getSeconds();
             }
 
-            return -1;
+            return null;
         }
 
-        public long cpuSystemTimeSec() {
-            return -1;
+        public Long cpuSystemTimeSec() {
+            return null;
         }
 
-        public long memoryBytes() {
+        public Long memoryBytes() {
             MemoryMXBean bean = ManagementFactory.getMemoryMXBean();
             MemoryUsage heap = bean.getHeapMemoryUsage();
             MemoryUsage nonHeap = bean.getNonHeapMemoryUsage();
             return heap.getUsed() + nonHeap.getUsed();
         }
 
-        public long pid() {
-            // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2289
-            return -1;
+        public Long pid() {
+            return -1L;
         }
 
     }

@@ -154,6 +154,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                Metrics metrics,
                                String metricGrpPrefix,
                                Optional<ClientTelemetry> clientTelemetry,
+                               Optional<ConsumerMetricsRegistry> consumerMetricsRegistry,
                                Time time,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
@@ -165,7 +166,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               metrics,
               metricGrpPrefix,
               time,
-              clientTelemetry);
+              clientTelemetry,
+              consumerMetricsRegistry);
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
@@ -308,8 +310,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
-        clientTelemetry.ifPresent(ct -> {
-            ConsumerMetricsRegistry cmr = ct.consumerMetricsRegistry();
+        consumerMetricsRegistry.ifPresent(cmr -> {
             cmr.sumSensor(cmr.groupRebalanceCount).record(1);
             cmr.gaugeSensor(cmr.assignmentPartitionCount).record(assignedPartitions.size());
             cmr.gaugeSensor(cmr.groupAssignmentPartitionCount).record(assignedPartitions.size());

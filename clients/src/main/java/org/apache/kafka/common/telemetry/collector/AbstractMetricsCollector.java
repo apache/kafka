@@ -49,63 +49,49 @@ public abstract class AbstractMetricsCollector implements MetricsCollector {
         return Instant.ofEpochMilli(time.milliseconds());
     }
 
-    protected boolean maybeEmitSum(Emitter emitter, MetricKeyable metricKeyable, double value) {
+    protected boolean maybeEmitDouble(Emitter emitter, MetricKeyable metricKeyable, MetricType metricType, double value) {
         if (!emitter.shouldEmitMetric(metricKeyable))
             return false;
 
         Instant timestamp = now();
-        Metric metric = new Metric(metricKeyable, MetricType.sum, value, timestamp);
+        Metric metric = new Metric(metricKeyable, metricType, value, timestamp);
         return emitter.emitMetric(metric);
     }
 
-    protected boolean maybeEmitSum(Emitter emitter, MetricKeyable metricKeyable, long value) {
+    protected boolean maybeEmitLong(Emitter emitter, MetricKeyable metricKeyable, MetricType metricType, long value) {
         if (!emitter.shouldEmitMetric(metricKeyable))
             return false;
 
         Instant timestamp = now();
-        Metric metric = new Metric(metricKeyable, MetricType.sum, value, timestamp);
+        Metric metric = new Metric(metricKeyable, metricType, value, timestamp);
         return emitter.emitMetric(metric);
     }
 
-    protected boolean maybeEmitGauge(Emitter emitter, MetricKeyable metricKeyable, double value) {
+    protected boolean maybeEmitDouble(Emitter emitter, MetricKeyable metricKeyable, MetricType metricType, Supplier<Double> valueSupplier) {
         if (!emitter.shouldEmitMetric(metricKeyable))
+            return false;
+
+        Double value = valueSupplier.get();
+
+        if (value == null)
             return false;
 
         Instant timestamp = now();
-        Metric metric = new Metric(metricKeyable, MetricType.gauge, value, timestamp);
+        Metric metric = new Metric(metricKeyable, metricType, value, timestamp);
         return emitter.emitMetric(metric);
     }
 
-    protected boolean maybeEmitGauge(Emitter emitter, MetricKeyable metricKeyable, long value) {
+    protected boolean maybeEmitLong(Emitter emitter, MetricKeyable metricKeyable, MetricType metricType, Supplier<Long> valueSupplier) {
         if (!emitter.shouldEmitMetric(metricKeyable))
+            return false;
+
+        Long value = valueSupplier.get();
+
+        if (value == null)
             return false;
 
         Instant timestamp = now();
-        Metric metric = new Metric(metricKeyable, MetricType.gauge, value, timestamp);
-        return emitter.emitMetric(metric);
-    }
-
-    protected boolean maybeEmitGaugeDouble(Emitter emitter, MetricKeyable metricKeyable, Supplier<Double> valueSupplier) {
-        return maybeEmit(emitter, metricKeyable, () -> {
-            Double value = valueSupplier.get();
-            Instant timestamp = now();
-            return new Metric(metricKeyable, MetricType.gauge, value, timestamp);
-        });
-    }
-
-    protected boolean maybeEmitGaugeLong(Emitter emitter, MetricKeyable metricKeyable, Supplier<Long> valueSupplier) {
-        return maybeEmit(emitter, metricKeyable, () -> {
-            Long value = valueSupplier.get();
-            Instant timestamp = now();
-            return new Metric(metricKeyable, MetricType.gauge, value, timestamp);
-        });
-    }
-
-    protected boolean maybeEmit(Emitter emitter, MetricKeyable metricKeyable, Supplier<Metric> supplier) {
-        if (!emitter.shouldEmitMetric(metricKeyable))
-            return false;
-
-        Metric metric = supplier.get();
+        Metric metric = new Metric(metricKeyable, metricType, value, timestamp);
         return emitter.emitMetric(metric);
     }
 

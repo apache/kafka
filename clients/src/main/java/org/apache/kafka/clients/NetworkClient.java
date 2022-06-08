@@ -22,7 +22,6 @@ import org.apache.kafka.clients.ClientInstanceMetricsRegistry.ConnectionErrorRea
 import org.apache.kafka.clients.ClientInstanceMetricsRegistry.RequestErrorReason;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -137,7 +136,7 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
-    private final Optional<TelemetryUpdater> telemetryUpdater;
+    private final Optional<ClientTelemetryUpdater> clientTelemetryUpdater;
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -295,15 +294,8 @@ public class NetworkClient implements KafkaClient {
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
-
-        if (clientTelemetry.isPresent()) {
-            ClientTelemetry ct = clientTelemetry.get();
-            this.clientInstanceMetricsRegistry = Optional.of(ct.clientInstanceMetricsRegistry());
-            this.telemetryUpdater = Optional.of(new TelemetryUpdater(ct));
-        } else {
-            this.clientInstanceMetricsRegistry = Optional.empty();
-            this.telemetryUpdater = Optional.empty();
-        }
+        this.clientInstanceMetricsRegistry = clientTelemetry.map(ct -> new ClientInstanceMetricsRegistry(ct.metrics()));
+        this.clientTelemetryUpdater = clientTelemetry.map(ClientTelemetryUpdater::new);
     }
 
     /**
@@ -377,10 +369,9 @@ public class NetworkClient implements KafkaClient {
                     responses.add(request.disconnected(now, null));
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
-            } else if (telemetryUpdater.isPresent() && request.header.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS) {
-                telemetryUpdater.get().subscriptionFailed(null);
-            } else if (telemetryUpdater.isPresent() && request.header.apiKey() == ApiKeys.PUSH_TELEMETRY) {
-                telemetryUpdater.get().pushFailed(null);
+            } else if (clientTelemetryUpdater.isPresent()) {
+                ClientTelemetryUpdater ctu = clientTelemetryUpdater.get();
+                ctu.handleFailedRequest(request.header.apiKey(), Optional.empty());
             }
         }
     }
@@ -544,10 +535,10 @@ public class NetworkClient implements KafkaClient {
                 abortedSends.add(clientResponse);
             else if (clientRequest.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleFailedRequest(now, Optional.of(unsupportedVersionException));
-            else if (telemetryUpdater.isPresent() && clientRequest.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS)
-                telemetryUpdater.get().subscriptionFailed(unsupportedVersionException);
-            else if (telemetryUpdater.isPresent() && clientRequest.apiKey() == ApiKeys.PUSH_TELEMETRY)
-                telemetryUpdater.get().pushFailed(unsupportedVersionException);
+            else if (clientTelemetryUpdater.isPresent()) {
+                ClientTelemetryUpdater ctu = clientTelemetryUpdater.get();
+                ctu.handleFailedRequest(clientRequest.apiKey(), Optional.of(unsupportedVersionException));
+            }
         }
     }
 
@@ -594,7 +585,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
-        long telemetryTimeout = telemetryUpdater.isPresent() ? telemetryUpdater.get().maybeUpdate(now) : Integer.MAX_VALUE;
+        long telemetryTimeout = clientTelemetryUpdater.isPresent() ? clientTelemetryUpdater.get().maybeUpdate(now) : Integer.MAX_VALUE;
         try {
             this.selector.poll(Utils.min(timeout, metadataTimeout, telemetryTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
@@ -932,11 +923,14 @@ public class NetworkClient implements KafkaClient {
                 metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
             else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) response);
-            else if (req.isInternalRequest && telemetryUpdater.isPresent() && response instanceof GetTelemetrySubscriptionResponse)
-                telemetryUpdater.get().subscriptionResponseReceived((GetTelemetrySubscriptionResponse) response);
-            else if (req.isInternalRequest && telemetryUpdater.isPresent() && response instanceof PushTelemetryResponse)
-                telemetryUpdater.get().pushResponseReceived((PushTelemetryResponse) response);
-            else
+            else if (req.isInternalRequest && clientTelemetryUpdater.isPresent()) {
+                ClientTelemetryUpdater ctu = clientTelemetryUpdater.get();
+
+                if (response instanceof GetTelemetrySubscriptionResponse)
+                    ctu.handleSuccessfulResponse((GetTelemetrySubscriptionResponse) response);
+                else if (response instanceof PushTelemetryResponse)
+                    ctu.handleSuccessfulResponse((PushTelemetryResponse) response);
+            } else
                 responses.add(req.completed(response, now));
         }
     }
@@ -1034,9 +1028,7 @@ public class NetworkClient implements KafkaClient {
     private void updateQueueCountTelemetry(InFlightRequest inFlightRequest, int value) {
         clientInstanceMetricsRegistry.ifPresent(cimr -> {
             String brokerId = inFlightRequest.destination;
-
-            MetricName mn = cimr.requestQueueCount(brokerId);
-            cimr.gaugeSensor(mn).record(value);
+            cimr.gaugeSensor(cimr.requestQueueCount(brokerId)).record(value);
         });
     }
 
@@ -1044,9 +1036,7 @@ public class NetworkClient implements KafkaClient {
         clientInstanceMetricsRegistry.ifPresent(cimr -> {
             String brokerId = inFlightRequest.destination;
             String requestType = inFlightRequest.request.apiKey().messageType.name;
-
-            MetricName mn = cimr.requestSuccess(brokerId, requestType);
-            cimr.sumSensor(mn).record(1);
+            cimr.sumSensor(cimr.requestSuccess(brokerId, requestType)).record(1);
         });
     }
 
@@ -1069,17 +1059,13 @@ public class NetworkClient implements KafkaClient {
             for (Map.Entry<ApiKeys, Integer> entry : requestErrorCounts.entrySet()) {
                 String requestType = entry.getKey().name();
                 int count = entry.getValue();
-                MetricName mn = cimr.requestErrors(brokerId, requestType, reason);
-                cimr.sumSensor(mn).record(count);
+                cimr.sumSensor(cimr.requestErrors(brokerId, requestType, reason)).record(count);
             }
         });
     }
 
     private void incrementConnectionErrorsTelemetry(ConnectionErrorReason reason) {
-        clientInstanceMetricsRegistry.ifPresent(cimr -> {
-            MetricName mn = cimr.connectionErrors(reason);
-            cimr.sumSensor(mn).record(1);
-        });
+        clientInstanceMetricsRegistry.ifPresent(cimr -> cimr.sumSensor(cimr.connectionErrors(reason)).record(1));
     }
 
     /**
@@ -1099,12 +1085,9 @@ public class NetworkClient implements KafkaClient {
                     this.socketReceiveBuffer);
 
             clientInstanceMetricsRegistry.ifPresent(cimr -> {
-                MetricName mn = cimr.connectionCreations(nodeConnectionId);
-                cimr.sumSensor(mn).record(1);
+                cimr.sumSensor(cimr.connectionCreations(nodeConnectionId)).record(1);
                 cimr.gaugeSensor(cimr.connectionActive).record(1);
             });
-
-
         } catch (IOException e) {
             log.warn("Error connecting to node {}", node, e);
             // Attempt failed, we'll try again after the backoff
@@ -1296,13 +1279,13 @@ public class NetworkClient implements KafkaClient {
 
     }
 
-    class TelemetryUpdater {
+    class ClientTelemetryUpdater {
 
         private final ClientTelemetry clientTelemetry;
 
         private Node stickyNode;
 
-        public TelemetryUpdater(ClientTelemetry clientTelemetry) {
+        public ClientTelemetryUpdater(ClientTelemetry clientTelemetry) {
             this.clientTelemetry = clientTelemetry;
         }
 
@@ -1365,20 +1348,16 @@ public class NetworkClient implements KafkaClient {
             return Long.MAX_VALUE;
         }
 
-        public void subscriptionFailed(KafkaException maybeFatalException) {
-            clientTelemetry.subscriptionFailed(maybeFatalException);
+        public void handleFailedRequest(ApiKeys apiKey, Optional<KafkaException> maybeFatalException) {
+            clientTelemetry.handleFailedRequest(apiKey, maybeFatalException);
         }
 
-        public void pushFailed(KafkaException maybeFatalException) {
-            clientTelemetry.pushFailed(maybeFatalException);
+        public void handleSuccessfulResponse(GetTelemetrySubscriptionResponse response) {
+            clientTelemetry.handleSuccessfulResponse(response.data());
         }
 
-        public void subscriptionResponseReceived(GetTelemetrySubscriptionResponse response) {
-            clientTelemetry.subscriptionResponseReceived(response.data());
-        }
-
-        public void pushResponseReceived(PushTelemetryResponse response) {
-            clientTelemetry.pushResponseReceived(response.data());
+        public void handleSuccessfulResponse(PushTelemetryResponse response) {
+            clientTelemetry.handleSuccessfulResponse(response.data());
         }
 
     }

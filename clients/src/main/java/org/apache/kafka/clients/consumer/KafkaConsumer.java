@@ -571,6 +571,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     // Visible for testing
     final Metrics metrics;
     final Optional<ClientTelemetry> clientTelemetry;
+    final Optional<ConsumerMetricsRegistry> consumerMetricsRegistry;
     final KafkaConsumerMetrics kafkaConsumerMetrics;
 
     private Logger log;
@@ -704,6 +705,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.time = Time.SYSTEM;
             this.metrics = buildMetrics(config, time, clientId);
             this.clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
+            this.consumerMetricsRegistry = clientTelemetry.map(ct -> new ConsumerMetricsRegistry(ct.metrics()));
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
@@ -790,6 +792,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         metrics,
                         metricGrpPrefix,
                         clientTelemetry,
+                        consumerMetricsRegistry,
                         this.time,
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
@@ -816,7 +819,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.requestTimeoutMs,
                     isolationLevel,
                     apiVersions,
-                    clientTelemetry.map(ClientTelemetry::consumerMetricsRegistry));
+                    consumerMetricsRegistry);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
 
@@ -864,6 +867,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.time = time;
         this.client = client;
         this.clientTelemetry = ClientTelemetryUtils.create(enableMetricsPush, time, clientId);
+        this.consumerMetricsRegistry = clientTelemetry.map(ct -> new ConsumerMetricsRegistry(ct.metrics()));
         this.metrics = metrics;
         this.subscriptions = subscriptions;
         this.metadata = metadata;
@@ -1135,10 +1139,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metadata.requestUpdateForNewTopics();
             }
 
-            clientTelemetry.ifPresent(ct -> {
-                ConsumerMetricsRegistry cmr = ct.consumerMetricsRegistry();
-                cmr.gaugeSensor(cmr.assignmentPartitionCount).record(partitions.size());
-            });
+            consumerMetricsRegistry.ifPresent(cmr -> cmr.gaugeSensor(cmr.assignmentPartitionCount).record(partitions.size()));
         } finally {
             release();
         }
@@ -1239,10 +1240,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
             Duration timeSinceLastPollMs = Duration.ofMillis(this.kafkaConsumerMetrics.timeSinceLastPollMs());
 
-            clientTelemetry.ifPresent(ct -> {
-                ConsumerMetricsRegistry cmr = ct.consumerMetricsRegistry();
-                cmr.gaugeSensor(cmr.pollLast).record(timeSinceLastPollMs.getSeconds());
-            });
+            consumerMetricsRegistry.ifPresent(cmr -> cmr.gaugeSensor(cmr.pollLast).record(timeSinceLastPollMs.getSeconds()));
 
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
@@ -1525,11 +1523,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
         } finally {
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
-
-            clientTelemetry.ifPresent(ct -> {
-                ConsumerMetricsRegistry cmr = ct.consumerMetricsRegistry();
-                cmr.sumSensor(cmr.commitCount).record(offsets.size());
-            });
+            consumerMetricsRegistry.ifPresent(cmr -> cmr.sumSensor(cmr.commitCount).record(offsets.size()));
             release();
         }
     }

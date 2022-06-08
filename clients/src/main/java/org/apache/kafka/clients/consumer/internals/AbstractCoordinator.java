@@ -151,6 +151,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected MemberState state = MemberState.UNJOINED;
 
     protected final Optional<ClientTelemetry> clientTelemetry;
+    protected final Optional<ConsumerMetricsRegistry> consumerMetricsRegistry;
 
     /**
      * Initialize the coordination manager.
@@ -161,7 +162,8 @@ public abstract class AbstractCoordinator implements Closeable {
                                Metrics metrics,
                                String metricGrpPrefix,
                                Time time,
-                               Optional<ClientTelemetry> clientTelemetry) {
+                               Optional<ClientTelemetry> clientTelemetry,
+                               Optional<ConsumerMetricsRegistry> consumerMetricsRegistry) {
         Objects.requireNonNull(rebalanceConfig.groupId,
                                "Expected a non-null group id for coordinator construction");
         this.rebalanceConfig = rebalanceConfig;
@@ -171,6 +173,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.clientTelemetry = clientTelemetry;
+        this.consumerMetricsRegistry = consumerMetricsRegistry;
     }
 
     /**

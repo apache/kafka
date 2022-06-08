@@ -38,11 +38,9 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import java.util.function.Predicate;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetricsRegistry;
-import org.apache.kafka.clients.producer.internals.ProducerMetricsRegistry;
-import org.apache.kafka.clients.producer.internals.ProducerTopicMetricsRegistry;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.telemetry.emitter.Context;
 import org.apache.kafka.common.telemetry.collector.KafkaMetricsCollector;
 import org.apache.kafka.common.telemetry.collector.MetricsCollector;
@@ -56,7 +54,6 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.telemetry.metrics.MetricKey;
@@ -137,25 +134,19 @@ public class ClientTelemetry implements Closeable {
 
     private final List<MetricsCollector> metricsCollectors;
 
-    private final ReadWriteLock subscriptionLock = new ReentrantReadWriteLock();
-
-    private final Condition subscriptionLoaded = subscriptionLock.writeLock().newCondition();
-
-    private ClientTelemetrySubscription subscription;
-
     private final ReadWriteLock stateLock = new ReentrantReadWriteLock();
+
+    private final Condition subscriptionLoaded = stateLock.writeLock().newCondition();
 
     private final Condition terminalPushInProgress = stateLock.writeLock().newCondition();
 
     private ClientTelemetryState state = ClientTelemetryState.subscription_needed;
 
-    private final ClientInstanceMetricsRegistry clientInstanceMetricsRegistry;
+    private ClientTelemetrySubscription subscription;
 
-    private final ConsumerMetricsRegistry consumerMetricsRegistry;
+    private long lastFetchMs;
 
-    private final ProducerMetricsRegistry producerMetricsRegistry;
-
-    private final ProducerTopicMetricsRegistry producerTopicMetricsRegistry;
+    private long pushIntervalMs;
 
     public ClientTelemetry(Time time, String clientId) {
         this.time = Objects.requireNonNull(time, "time cannot be null");
@@ -180,11 +171,14 @@ public class ClientTelemetry implements Closeable {
             Collections.singletonList(kafkaMetricsCollector),
             time,
             metricsContext);
+    }
 
-        this.clientInstanceMetricsRegistry = new ClientInstanceMetricsRegistry(this.metrics);
-        this.consumerMetricsRegistry = new ConsumerMetricsRegistry(this.metrics);
-        this.producerMetricsRegistry = new ProducerMetricsRegistry(this.metrics);
-        this.producerTopicMetricsRegistry = new ProducerTopicMetricsRegistry(this.metrics);
+    public Metrics metrics() {
+        return metrics;
+    }
+
+    public Context context() {
+        return context;
     }
 
     public void initiateClose(Duration timeout) {
@@ -195,20 +189,21 @@ public class ClientTelemetry implements Closeable {
         if (timeoutMs < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
 
-        // If we never had a subscription, we can't really push anything.
-        if (subscription() == null) {
-            log.debug("Telemetry subscription not loaded, not attempting terminating push");
-            return;
-        }
-
-        try {
-            setState(ClientTelemetryState.terminating_push_needed);
-        } catch (IllegalClientTelemetryStateException e) {
-            log.warn("Error initiating client telemetry close", e);
-        }
-
         try {
             stateLock.writeLock().lock();
+
+            // If we never fetched a subscription, we can't really push anything.
+            if (subscription == null) {
+                log.debug("Telemetry subscription not loaded, not attempting terminating push");
+                return;
+            }
+
+            try {
+                setState(ClientTelemetryState.terminating_push_needed);
+            } catch (IllegalClientTelemetryStateException e) {
+                log.warn("Error initiating client telemetry close", e);
+            }
+
 
             try {
                 log.debug("About to wait {} ms. for terminal telemetry push to be submitted", timeout);
@@ -227,50 +222,85 @@ public class ClientTelemetry implements Closeable {
     public void close() {
         log.trace("close");
 
+        boolean shouldClose = false;
+
         try {
             stateLock.writeLock().lock();
-            ClientTelemetryState newState = ClientTelemetryState.terminated;
 
-            if (state() != newState) {
-                try {
-                    // This *shouldn't* throw an exception, but let's wrap it anyway so that we're
-                    // sure to close the metrics object.
-                    setState(ClientTelemetryState.terminated);
-                } finally {
-                    metrics.close();
-
-                    for (MetricsCollector mc : metricsCollectors)
-                        mc.close();
-                }
+            if (this.state != ClientTelemetryState.terminated) {
+                // This *shouldn't* throw an exception, but let's wrap it anyway so that we're
+                // sure to close the metrics object.
+                setState(ClientTelemetryState.terminated);
+                shouldClose = true;
             } else {
                 log.debug("Ignoring subsequent {} close", ClientTelemetry.class.getSimpleName());
             }
         } finally {
             stateLock.writeLock().unlock();
         }
+
+        if (shouldClose) {
+            metrics.close();
+
+            for (MetricsCollector mc : metricsCollectors)
+                mc.close();
+        }
     }
 
-    void setSubscription(ClientTelemetrySubscription newSubscription) {
+    /**
+     * Updates the {@link ClientTelemetrySubscription}, {@link #pushIntervalMs}, and
+     * {@link #lastFetchMs}.
+     *
+     * <p/>
+     *
+     * The entire contents of the method are guarded by the {@link #stateLock}.
+     *
+     * <p/>
+     *
+     * After the update, the {@link #subscriptionLoaded} condition is signaled so any threads
+     * waiting on the subscription can be unblocked.
+     *
+     * @param subscription Updated subscription that will replace any current subscription
+     */
+    void setSubscription(ClientTelemetrySubscription subscription) {
         try {
-            subscriptionLock.writeLock().lock();
+            stateLock.writeLock().lock();
 
-            log.trace("Setting subscription from {} to {}", this.subscription, newSubscription);
-            this.subscription = newSubscription;
+            this.subscription = subscription;
+            this.pushIntervalMs = this.subscription.pushIntervalMs();
+            this.lastFetchMs = time.milliseconds();
+
+            log.trace("Updating subscription - subscription: {}; pushIntervalMs: {}, lastFetchMs: {}", this.subscription, pushIntervalMs, lastFetchMs);
 
             // In some cases we have to wait for this signal in the clientInstanceId method so that
             // we know that we have a subscription to pull from.
             subscriptionLoaded.signalAll();
         } finally {
-            subscriptionLock.writeLock().unlock();
+            stateLock.writeLock().unlock();
         }
     }
 
-    ClientTelemetrySubscription subscription() {
+    /**
+     * Updates <em>only</em> the {@link #pushIntervalMs} and {@link #lastFetchMs}.
+     *
+     * <p/>
+     *
+     * The entire contents of the method are guarded by the {@link #stateLock}.
+     *
+     * <p/>
+     *
+     * No condition is signaled here, unlike {@link #setSubscription(ClientTelemetrySubscription)}.
+     */
+    private void setFetchAndPushInterval(long pushIntervalMs) {
         try {
-            subscriptionLock.readLock().lock();
-            return subscription;
+            stateLock.writeLock().lock();
+
+            this.pushIntervalMs = pushIntervalMs;
+            this.lastFetchMs = time.milliseconds();
+
+            log.trace("Updating pushIntervalMs: {}, lastFetchMs: {}", pushIntervalMs, lastFetchMs);
         } finally {
-            subscriptionLock.readLock().unlock();
+            stateLock.writeLock().unlock();
         }
     }
 
@@ -303,10 +333,8 @@ public class ClientTelemetry implements Closeable {
         if (timeoutMs < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
 
-        ClientTelemetryState state = state();
-
         try {
-            subscriptionLock.writeLock().lock();
+            stateLock.writeLock().lock();
 
             // We can use the instance variable directly here because we're handling the locking...
             if (subscription == null) {
@@ -336,7 +364,7 @@ public class ClientTelemetry implements Closeable {
 
             return Optional.of(clientInstanceId.toString());
         } finally {
-            subscriptionLock.writeLock().unlock();
+            stateLock.writeLock().unlock();
         }
     }
 
@@ -353,6 +381,7 @@ public class ClientTelemetry implements Closeable {
         }
     }
 
+    // Visible for testing
     ClientTelemetryState state() {
         try {
             stateLock.readLock().lock();
@@ -362,52 +391,55 @@ public class ClientTelemetry implements Closeable {
         }
     }
 
-    public void subscriptionFailed(Throwable error) {
-        if (error == null)
-            error = new Exception();
+    public void handleFailedRequest(ApiKeys apiKey, Optional<KafkaException> maybeFatalException) {
+        KafkaException fatalError = maybeFatalException.orElse(null);
+        log.warn("The broker generated an error for the {} API request", apiKey.messageType.name, fatalError);
 
-        log.warn("Failed to retrieve telemetry subscription; using existing subscription", error);
-        setState(ClientTelemetryState.subscription_needed);
+        try {
+            stateLock.writeLock().lock();
+
+            boolean shouldWait = false;
+
+            if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS) {
+                shouldWait = fatalError != null;
+                setState(ClientTelemetryState.subscription_needed);
+            } else if (apiKey == ApiKeys.PUSH_TELEMETRY) {
+                if (state == ClientTelemetryState.push_in_progress) {
+                    shouldWait = fatalError != null;
+                    setState(ClientTelemetryState.subscription_needed);
+                } else if (state == ClientTelemetryState.terminating_push_in_progress) {
+                    setState(ClientTelemetryState.terminated);
+                } else {
+                    throw new IllegalClientTelemetryStateException(String.format("Could not transition state after failed push telemetry from state %s", state));
+                }
+            }
+
+            // The broker does not support telemetry. Let's sleep for a while before
+            // trying things again. We may disconnect from the broker and connect to
+            // a broker that supports client telemetry.
+            if (shouldWait)
+                setFetchAndPushInterval(DEFAULT_PUSH_INTERVAL_MS);
+        } finally {
+            stateLock.writeLock().unlock();
+        }
     }
 
-    public void pushFailed(Throwable error) {
-        if (error == null)
-            error = new Exception();
+    public void handleSuccessfulResponse(GetTelemetrySubscriptionsResponseData data) {
+        Optional<Long> pushIntervalMsOpt = ClientTelemetryUtils.errorPushIntervalMs(data.errorCode());
 
-        log.warn("Failed to push telemetry", error);
-
-        ClientTelemetryState state = state();
-
-        if (state == ClientTelemetryState.push_in_progress)
-            setState(ClientTelemetryState.subscription_needed);
-        else if (state == ClientTelemetryState.terminating_push_in_progress)
-            setState(ClientTelemetryState.terminated);
-        else
-            throw new IllegalClientTelemetryStateException(String.format("Could not transition state after failed push telemetry from state %s", state));
-    }
-
-    public void subscriptionResponseReceived(GetTelemetrySubscriptionsResponseData data) {
-        if (data == null) {
-            // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2284
-            log.warn("null GetTelemetrySubscriptionsResponseData, re-fetching subscription from the broker");
-            setState(ClientTelemetryState.subscription_needed);
+        if (pushIntervalMsOpt.isPresent()) {
+            setFetchAndPushInterval(pushIntervalMsOpt.get());
             return;
         }
 
-        if (data.errorCode() != Errors.NONE.code()) {
-            handleResponseErrorCode(data.errorCode());
-        } else {
-            log.debug("Successfully get telemetry subscription; response: {}", data);
-        }
-
+        log.debug("Successfully retrieved telemetry subscription; response: {}", data);
         List<String> requestedMetrics = data.requestedMetrics();
         Predicate<? super MetricKeyable> selector = validateMetricNames(requestedMetrics);
         List<CompressionType> acceptedCompressionTypes = validateAcceptedCompressionTypes(data.acceptedCompressionTypes());
         Uuid clientInstanceId = validateClientInstanceId(data.clientInstanceId());
-        final int pushIntervalMs = getPushIntervalMs(data);
+        int pushIntervalMs = getPushIntervalMs(data);
 
-        ClientTelemetrySubscription clientTelemetrySubscription = new ClientTelemetrySubscription(time.milliseconds(),
-            data.throttleTimeMs(),
+        ClientTelemetrySubscription clientTelemetrySubscription = new ClientTelemetrySubscription(data.throttleTimeMs(),
             clientInstanceId,
             data.subscriptionId(),
             acceptedCompressionTypes,
@@ -427,10 +459,40 @@ public class ClientTelemetry implements Closeable {
         }
     }
 
-    private int getPushIntervalMs(final GetTelemetrySubscriptionsResponseData data) {
-        int pushIntervalMs = validatePushIntervalMs(data.pushIntervalMs() > 0 ? data.pushIntervalMs() : DEFAULT_PUSH_INTERVAL_MS);
+    public void handleSuccessfulResponse(PushTelemetryResponseData data) {
+        Optional<Long> pushIntervalMsOpt = ClientTelemetryUtils.errorPushIntervalMs(data.errorCode());
 
-        if (subscription() == null) {
+        if (!pushIntervalMsOpt.isPresent())
+            log.debug("Successfully pushed telemetry; response: {}", data);
+
+        try {
+            stateLock.writeLock().lock();
+
+            if (state == ClientTelemetryState.push_in_progress)
+                setState(ClientTelemetryState.subscription_needed);
+            else if (state == ClientTelemetryState.terminating_push_in_progress)
+                setState(ClientTelemetryState.terminated);
+            else
+                throw new IllegalClientTelemetryStateException(String.format("Could not transition state after successful push telemetry from state %s", state));
+
+            pushIntervalMsOpt.ifPresent(this::setFetchAndPushInterval);
+        } finally {
+            stateLock.writeLock().unlock();
+        }
+    }
+
+    private int getPushIntervalMs(GetTelemetrySubscriptionsResponseData data) {
+        int pushIntervalMs = validatePushIntervalMs(data.pushIntervalMs() > 0 ? data.pushIntervalMs() : DEFAULT_PUSH_INTERVAL_MS);
+        boolean isFirstRequest;
+
+        try {
+            stateLock.readLock().lock();
+            isFirstRequest = lastFetchMs == 0;
+        } finally {
+            stateLock.readLock().unlock();
+        }
+
+        if (isFirstRequest) {
             // if this is the first request, subscription() returns null, and we want to
             // equally spread all the request between 0.5 pushInterval and 1.5 pushInterval.
             double rand = ThreadLocalRandom.current().nextDouble(0.5, 1.5);
@@ -440,110 +502,29 @@ public class ClientTelemetry implements Closeable {
         return pushIntervalMs;
     }
 
-    public void pushResponseReceived(PushTelemetryResponseData data) {
-        if (data == null) {
-            // TODO: https://confluentinc.atlassian.net/browse/CLIENTS-2285
-            log.warn("null PushTelemetryResponseData, re-fetching subscription from the broker");
-            setState(ClientTelemetryState.subscription_needed);
-            return;
-        }
-
-        if (data.errorCode() != Errors.NONE.code()) {
-            handleResponseErrorCode(data.errorCode());
-        } else {
-            log.debug("Successfully pushed telemetry; response: {}", data);
-        }
-
-        ClientTelemetryState state = state();
-
-        if (state == ClientTelemetryState.push_in_progress)
-            setState(ClientTelemetryState.subscription_needed);
-        else if (state == ClientTelemetryState.terminating_push_in_progress)
-            setState(ClientTelemetryState.terminated);
-        else
-            throw new IllegalClientTelemetryStateException(String.format("Could not transition state after successful push telemetry from state %s", state));
-    }
-
-    /**
-     * Examine the response data and handle different error code accordingly.
-     *  - Authorization Failed: Retry 30min later
-     *  - Invalid Record: Retry 5min later
-     *  - UnknownSubscription or Unsupported Compression: Retry
-     *  After a new subscription is created, the current state is transitioned to push_needed to wait for another push.
-     *
-     * @param errorCode response body error code.
-     * @throws IllegalClientTelemetryStateException when subscription is null.
-     */
-    void handleResponseErrorCode(short errorCode) {
-        if (errorCode == Errors.CLIENT_METRICS_PLUGIN_NOT_FOUND.code()) {
-            log.warn("Error code: {}. Reason: Broker does not have any client metrics plugin configured.", errorCode);
-            return;
-        }
-
-        ClientTelemetrySubscription currentSubscription = subscription();
-
-        // The broker will indicate an error when there are no plugins configured, and it won't
-        // return any subscription information, so we may not have it here.
-        if (currentSubscription == null)
-            return;
-
-        long pushIntervalMs = -1;
-        String reason = null;
-
-        // We might want to wait and retry or retry after some failures are received
-        if (isAuthorizationFailedError(errorCode)) {
-            pushIntervalMs = 30 * 60 * 1000;
-            reason = "Client is not permitted to send metrics";
-        } else if (errorCode == Errors.INVALID_RECORD.code()) {
-            pushIntervalMs = 5 * 60 * 1000;
-            reason = "Broker failed to decode or validate the client’s encoded metrics";
-        } else if (errorCode == Errors.UNKNOWN_CLIENT_METRICS_SUBSCRIPTION_ID.code() ||
-                errorCode == Errors.UNSUPPORTED_COMPRESSION_TYPE.code()) {
-            pushIntervalMs = 0;
-            reason = Errors.forCode(errorCode).message();
-        }
-
-        if (pushIntervalMs >= 0) {
-            log.warn("Error code: {}, reason: {}. Retry automatically in {} ms.", errorCode, reason, pushIntervalMs);
-
-            // Create a temporary subscription based on the last one that we had so that we have
-            // something to use. The temporary subscription is largely the same as the current
-            // subscription except thta it has new fetch time and push interval values so that
-            // we can determine the correct next push time.
-            long fetchMs = time.milliseconds();
-            ClientTelemetrySubscription tempSub = new ClientTelemetrySubscription(fetchMs,
-                currentSubscription.throttleTimeMs(),
-                currentSubscription.clientInstanceId(),
-                currentSubscription.subscriptionId(),
-                currentSubscription.acceptedCompressionTypes(),
-                pushIntervalMs,
-                currentSubscription.deltaTemporality(),
-                currentSubscription.selector());
-            setSubscription(tempSub);
-        }
-    }
-
-    private static boolean isAuthorizationFailedError(short errorCode) {
-        return errorCode == Errors.CLUSTER_AUTHORIZATION_FAILED.code() ||
-                errorCode == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code() ||
-                errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code() ||
-                errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code() ||
-                errorCode == Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED.code();
-    }
-
     public long timeToNextUpdate(long requestTimeoutMs) {
-        ClientTelemetrySubscription subscription = subscription();
         ClientTelemetryState state = state();
-        long t = ClientTelemetryUtils.timeToNextUpdate(state, subscription, requestTimeoutMs, time);
+        long t = ClientTelemetryUtils.timeToNextUpdate(state, lastFetchMs, requestTimeoutMs, time);
         log.trace("For telemetry state {}, returning {} for time to next telemetry update", state, t);
         return t;
     }
 
     public Optional<AbstractRequest.Builder<?>> createRequest() {
-        ClientTelemetryState state = state();
-        ClientTelemetrySubscription subscription = subscription();
+        ClientTelemetryState state;
+        ClientTelemetrySubscription subscription;
+
+        try {
+            stateLock.readLock().lock();
+            state = this.state;
+            subscription = this.subscription;
+        } finally {
+            stateLock.readLock().unlock();
+        }
+
         AbstractRequest.Builder<?> requestBuilder;
         ClientTelemetryState newState;
+
+        log.debug("createRequest - state: {}, subscription: {}", state, subscription);
 
         if (state == ClientTelemetryState.subscription_needed) {
             requestBuilder = createGetTelemetrySubscriptionRequest(subscription);
@@ -556,13 +537,13 @@ public class ClientTelemetry implements Closeable {
 
             byte[] payload;
 
-            try (ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(subscription.selector(), context)) {
+            try (ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(subscription.selector())) {
                 emitter.init();
 
                 for (MetricsCollector mc : metricsCollectors)
                     mc.collect(emitter);
 
-                payload = emitter.payload();
+                payload = emitter.payload(context.tags());
             }
 
             boolean terminating = state == ClientTelemetryState.terminating_push_needed;
@@ -577,29 +558,9 @@ public class ClientTelemetry implements Closeable {
             return Optional.empty();
         }
 
-        log.debug("Created new {} and preparing to set state to {}", requestBuilder.getClass().getName(), newState);
+        log.debug("createRequest - created new {} and preparing to set state to {}", requestBuilder.getClass().getName(), newState);
         setState(newState);
         return Optional.of(requestBuilder);
-    }
-
-    public ProducerMetricsRegistry producerMetricsRegistry() {
-        return producerMetricsRegistry;
-    }
-
-    public ProducerTopicMetricsRegistry producerTopicMetricsRegistry() {
-        return producerTopicMetricsRegistry;
-    }
-
-    public ConsumerMetricsRegistry consumerMetricsRegistry() {
-        return consumerMetricsRegistry;
-    }
-
-    public ClientInstanceMetricsRegistry clientInstanceMetricsRegistry() {
-        return clientInstanceMetricsRegistry;
-    }
-
-    public Context context() {
-        return context;
     }
 
 }

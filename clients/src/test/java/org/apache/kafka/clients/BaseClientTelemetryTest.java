@@ -47,8 +47,7 @@ public abstract class BaseClientTelemetryTest {
     }
 
     protected ClientTelemetrySubscription newTelemetrySubscription(Time time) {
-        return new ClientTelemetrySubscription(time.milliseconds(),
-            0,
+        return new ClientTelemetrySubscription(0,
             Uuid.randomUuid(),
             42,
             Collections.singletonList(CompressionType.NONE),

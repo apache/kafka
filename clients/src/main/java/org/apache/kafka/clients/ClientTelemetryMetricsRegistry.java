@@ -16,21 +16,17 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.metrics.stats.LinearHistogram;
 
 /**
  * A metrics registry used by client telemetry that provides basic utility methods to create
@@ -50,20 +46,13 @@ public abstract class ClientTelemetryMetricsRegistry {
 
     protected final Set<String> tags;
 
-    protected final List<MetricNameTemplate> allTemplates;
-
     protected ClientTelemetryMetricsRegistry(Metrics metrics) {
         this.metrics = metrics;
         this.tags = this.metrics.config().tags().keySet();
-        this.allTemplates = new ArrayList<>();
     }
 
     public Sensor gaugeSensor(MetricName mn) {
         return measurableStatSensor(mn, SimpleGauge::new);
-    }
-
-    public Sensor histogramSensor(MetricName mn, int maxBin, int numBin) {
-        return compoundStatSensor(mn, () -> new LinearHistogram(numBin, maxBin, mn));
     }
 
     public Sensor sumSensor(MetricName mn) {
@@ -71,14 +60,8 @@ public abstract class ClientTelemetryMetricsRegistry {
     }
 
     protected MetricName createMetricName(String name, String groupName, String description) {
-        MetricNameTemplate mnt = createMetricNameTemplate(name, groupName, description, tags);
+        MetricNameTemplate mnt = new MetricNameTemplate(name, groupName, description, tags);
         return metrics.metricInstance(mnt);
-    }
-
-    protected MetricNameTemplate createMetricNameTemplate(String name, String group, String description, Set<String> tags) {
-        MetricNameTemplate template = new MetricNameTemplate(name, group, description, tags);
-        allTemplates.add(template);
-        return template;
     }
 
     protected static Set<String> appendTags(Set<String> existingTags, String... newTags) {
@@ -102,18 +85,6 @@ public abstract class ClientTelemetryMetricsRegistry {
             sensor = metrics.sensor(mn.name());
             MeasurableStat stat = statSupplier.get();
             sensor.add(mn, stat);
-        }
-
-        return sensor;
-    }
-
-    private synchronized Sensor compoundStatSensor(MetricName mn, Supplier<CompoundStat> statSupplier) {
-        Sensor sensor = metrics.getSensor(mn.name());
-
-        if (sensor == null) {
-            sensor = metrics.sensor(mn.name());
-            CompoundStat stat = statSupplier.get();
-            sensor.add(stat);
         }
 
         return sensor;

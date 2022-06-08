@@ -32,8 +32,6 @@ import org.apache.kafka.common.metrics.Metrics;
  */
 public class ProducerTopicMetricsRegistry extends ClientTelemetryMetricsRegistry {
 
-    public final static String ACKS_LABEL = "acks";
-
     public final static String PARTITION_LABEL = "partition";
 
     public final static String REASON_LABEL = "reason";
@@ -49,14 +47,6 @@ public class ProducerTopicMetricsRegistry extends ClientTelemetryMetricsRegistry
     private final static String RECORD_QUEUE_COUNT_NAME = PREFIX + "record.queue.count";
 
     private final static String RECORD_QUEUE_COUNT_DESCRIPTION = "Number of records queued on partition queue.";
-
-    private final static String RECORD_LATENCY_NAME = PREFIX + "record.latency";
-
-    private final static String RECORD_LATENCY_DESCRIPTION = "Total produce record latency, from application calling send()/produce() to ack received from broker.";
-
-    private final static String RECORD_QUEUE_LATENCY_NAME = PREFIX + "record.queue.latency";
-
-    private final static String RECORD_QUEUE_LATENCY_DESCRIPTION = "Time between send()/produce() and record being sent to broker.";
 
     private final static String RECORD_RETRIES_NAME = PREFIX + "record.retries";
 
@@ -76,10 +66,6 @@ public class ProducerTopicMetricsRegistry extends ClientTelemetryMetricsRegistry
 
     private final MetricNameTemplate recordQueueCount;
 
-    private final MetricNameTemplate recordLatency;
-
-    private final MetricNameTemplate queueLatency;
-
     private final MetricNameTemplate recordRetries;
 
     private final MetricNameTemplate recordFailures;
@@ -89,60 +75,49 @@ public class ProducerTopicMetricsRegistry extends ClientTelemetryMetricsRegistry
     public ProducerTopicMetricsRegistry(Metrics metrics) {
         super(metrics);
 
-        Set<String> topicPartitionAcksTags = appendTags(tags, TOPIC_LABEL, PARTITION_LABEL, ACKS_LABEL);
-        Set<String> topicPartitionAcksReasonTags = appendTags(topicPartitionAcksTags, REASON_LABEL);
+        Set<String> topicPartitionTags = appendTags(tags, TOPIC_LABEL, PARTITION_LABEL);
+        Set<String> topicPartitionReasonTags = appendTags(topicPartitionTags, REASON_LABEL);
 
-        this.recordQueueBytes = createMetricNameTemplate(RECORD_QUEUE_BYTES_NAME, RECORD_QUEUE_BYTES_DESCRIPTION, topicPartitionAcksTags);
-        this.recordQueueCount = createMetricNameTemplate(RECORD_QUEUE_COUNT_NAME, RECORD_QUEUE_COUNT_DESCRIPTION, topicPartitionAcksTags);
-        this.recordLatency = createMetricNameTemplate(RECORD_LATENCY_NAME, RECORD_LATENCY_DESCRIPTION, topicPartitionAcksTags);
-        this.queueLatency = createMetricNameTemplate(RECORD_QUEUE_LATENCY_NAME, RECORD_QUEUE_LATENCY_DESCRIPTION, topicPartitionAcksTags);
-        this.recordRetries = createMetricNameTemplate(RECORD_RETRIES_NAME, RECORD_RETRIES_DESCRIPTION, topicPartitionAcksTags);
-        this.recordFailures = createMetricNameTemplate(RECORD_FAILURES_NAME, RECORD_FAILURES_DESCRIPTION, topicPartitionAcksReasonTags);
-        this.recordSuccess = createMetricNameTemplate(RECORD_SUCCESS_NAME, RECORD_SUCCESS_DESCRIPTION, topicPartitionAcksTags);
+        this.recordQueueBytes = createMetricNameTemplate(RECORD_QUEUE_BYTES_NAME, RECORD_QUEUE_BYTES_DESCRIPTION, topicPartitionTags);
+        this.recordQueueCount = createMetricNameTemplate(RECORD_QUEUE_COUNT_NAME, RECORD_QUEUE_COUNT_DESCRIPTION, topicPartitionTags);
+        this.recordRetries = createMetricNameTemplate(RECORD_RETRIES_NAME, RECORD_RETRIES_DESCRIPTION, topicPartitionTags);
+        this.recordFailures = createMetricNameTemplate(RECORD_FAILURES_NAME, RECORD_FAILURES_DESCRIPTION, topicPartitionReasonTags);
+        this.recordSuccess = createMetricNameTemplate(RECORD_SUCCESS_NAME, RECORD_SUCCESS_DESCRIPTION, topicPartitionTags);
     }
 
     private MetricNameTemplate createMetricNameTemplate(String name, String description, Set<String> tags) {
-        return createMetricNameTemplate(name, GROUP_NAME, description, tags);
+        return new MetricNameTemplate(name, GROUP_NAME, description, tags);
     }
 
-    public MetricName recordQueueBytes(TopicPartition topicPartition, short acks) {
-        Map<String, String> metricsTags = getMetricsTags(topicPartition, acks);
+    public MetricName recordQueueBytes(TopicPartition topicPartition) {
+        Map<String, String> metricsTags = getMetricsTags(topicPartition);
         return metrics.metricInstance(recordQueueBytes, metricsTags);
     }
 
-    public MetricName recordQueueCount(TopicPartition topicPartition, short acks) {
-        Map<String, String> metricsTags = getMetricsTags(topicPartition, acks);
+    public MetricName recordQueueCount(TopicPartition topicPartition) {
+        Map<String, String> metricsTags = getMetricsTags(topicPartition);
         return metrics.metricInstance(recordQueueCount, metricsTags);
     }
 
-    public MetricName recordLatency(Map<String, String> tags) {
-        return metrics.metricInstance(recordLatency, tags);
-    }
-
-    public MetricName queueLatency(Map<String, String> tags) {
-        return metrics.metricInstance(queueLatency, tags);
-    }
-
-    public MetricName recordRetries(TopicPartition topicPartition, short acks) {
-        Map<String, String> metricsTags = getMetricsTags(topicPartition, acks);
+    public MetricName recordRetries(TopicPartition topicPartition) {
+        Map<String, String> metricsTags = getMetricsTags(topicPartition);
         return metrics.metricInstance(recordRetries, metricsTags);
     }
 
-    public MetricName recordFailures(TopicPartition topicPartition, short acks, Throwable error) {
+    public MetricName recordFailures(TopicPartition topicPartition, Throwable error) {
         String reason = ClientTelemetryUtils.convertToReason(error);
-        Map<String, String> metricsTags = getMetricsTags(topicPartition, acks);
+        Map<String, String> metricsTags = getMetricsTags(topicPartition);
         metricsTags.put(REASON_LABEL, reason);
         return metrics.metricInstance(recordFailures, metricsTags);
     }
 
-    public MetricName recordSuccess(TopicPartition topicPartition, short acks) {
-        Map<String, String> metricsTags = getMetricsTags(topicPartition, acks);
+    public MetricName recordSuccess(TopicPartition topicPartition) {
+        Map<String, String> metricsTags = getMetricsTags(topicPartition);
         return metrics.metricInstance(recordSuccess, metricsTags);
     }
 
-    private Map<String, String> getMetricsTags(TopicPartition topicPartition, short acks) {
+    private Map<String, String> getMetricsTags(TopicPartition topicPartition) {
         Map<String, String> metricsTags = new HashMap<>();
-        metricsTags.put(ACKS_LABEL, ClientTelemetryUtils.formatAcks(acks));
         metricsTags.put(PARTITION_LABEL, String.valueOf(topicPartition.partition()));
         metricsTags.put(TOPIC_LABEL, topicPartition.topic());
         return metricsTags;

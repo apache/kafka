@@ -62,14 +62,6 @@ public class ClientInstanceMetricsRegistry extends ClientTelemetryMetricsRegistr
 
     private final static String CONNECTION_ERRORS_DESCRIPTION = "Total number of broker connection failures.";
 
-    private final static String REQUEST_RTT_NAME = PREFIX + "request.rtt";
-
-    private final static String REQUEST_RTT_DESCRIPTION = "Average request latency / round-trip-time to broker and back.";
-
-    private final static String REQUEST_QUEUE_LATENCY_NAME = PREFIX + "request.queue.latency";
-
-    private final static String REQUEST_QUEUE_LATENCY_DESCRIPTION = "Average request queue latency waiting for request to be sent to broker.";
-
     private final static String REQUEST_QUEUE_COUNT_NAME = PREFIX + "request.queue.count";
 
     private final static String REQUEST_QUEUE_COUNT_DESCRIPTION = "Number of requests in queue waiting to be sent to broker.";
@@ -81,10 +73,6 @@ public class ClientInstanceMetricsRegistry extends ClientTelemetryMetricsRegistr
     private final static String REQUEST_ERRORS_NAME = PREFIX + "request.errors";
 
     private final static String REQUEST_ERRORS_DESCRIPTION = "Number of failed requests.";
-
-    private final static String IO_WAIT_TIME_NAME = PREFIX + "io.wait.time";
-
-    private final static String IO_WAIT_TIME_DESCRIPTION = "Amount of time waiting for socket I/O writability (POLLOUT). A high number indicates socket send buffer congestion.";
 
     private final static String BROKER_ID_LABEL = "broker_id";
 
@@ -100,17 +88,11 @@ public class ClientInstanceMetricsRegistry extends ClientTelemetryMetricsRegistr
 
     private final MetricNameTemplate connectionErrors;
 
-    private final MetricNameTemplate requestRtt;
-
-    private final MetricNameTemplate requestQueueLatency;
-
     private final MetricNameTemplate requestQueueCount;
 
     private final MetricNameTemplate requestSuccess;
 
     private final MetricNameTemplate requestErrors;
-
-    public final MetricName ioWaitTime;
 
     public ClientInstanceMetricsRegistry(Metrics metrics) {
         super(metrics);
@@ -123,12 +105,9 @@ public class ClientInstanceMetricsRegistry extends ClientTelemetryMetricsRegistr
         this.connectionCreations = createMetricNameTemplate(CONNECTION_CREATIONS_NAME, CONNECTION_CREATIONS_DESCRIPTION, brokerIdTags);
         this.connectionActive = createMetricName(CONNECTION_ACTIVE_NAME, CONNECTION_ACTIVE_DESCRIPTION);
         this.connectionErrors = createMetricNameTemplate(CONNECTION_ERRORS_NAME, CONNECTION_ERRORS_DESCRIPTION, reasonTags);
-        this.requestRtt = createMetricNameTemplate(REQUEST_RTT_NAME, REQUEST_RTT_DESCRIPTION, brokerIdRequestTypeTags);
-        this.requestQueueLatency = createMetricNameTemplate(REQUEST_QUEUE_LATENCY_NAME, REQUEST_QUEUE_LATENCY_DESCRIPTION, brokerIdTags);
         this.requestQueueCount = createMetricNameTemplate(REQUEST_QUEUE_COUNT_NAME, REQUEST_QUEUE_COUNT_DESCRIPTION, brokerIdTags);
         this.requestSuccess = createMetricNameTemplate(REQUEST_SUCCESS_NAME, REQUEST_SUCCESS_NAME_DESCRIPTION, brokerIdRequestTypeTags);
         this.requestErrors = createMetricNameTemplate(REQUEST_ERRORS_NAME, REQUEST_ERRORS_DESCRIPTION, brokerIdRequestTypeReasonTags);
-        this.ioWaitTime = createMetricName(IO_WAIT_TIME_NAME, IO_WAIT_TIME_DESCRIPTION);
     }
 
     private MetricName createMetricName(String name, String description) {
@@ -136,7 +115,7 @@ public class ClientInstanceMetricsRegistry extends ClientTelemetryMetricsRegistr
     }
 
     private MetricNameTemplate createMetricNameTemplate(String name, String description, Set<String> tags) {
-        return createMetricNameTemplate(name, GROUP_NAME, description, tags);
+        return new MetricNameTemplate(name, GROUP_NAME, description, tags);
     }
 
     public MetricName connectionCreations(String brokerId) {
@@ -147,14 +126,6 @@ public class ClientInstanceMetricsRegistry extends ClientTelemetryMetricsRegistr
     public MetricName connectionErrors(ConnectionErrorReason connectionErrorReason) {
         Map<String, String> metricsTags = Collections.singletonMap(REASON_LABEL, connectionErrorReason.toString());
         return this.metrics.metricInstance(connectionErrors, metricsTags);
-    }
-
-    public MetricName requestRtt(Map<String, String> tags) {
-        return this.metrics.metricInstance(requestRtt, tags);
-    }
-
-    public MetricName requestQueueLatency(Map<String, String> tags) {
-        return this.metrics.metricInstance(requestQueueLatency, tags);
     }
 
     public MetricName requestQueueCount(String brokerId) {

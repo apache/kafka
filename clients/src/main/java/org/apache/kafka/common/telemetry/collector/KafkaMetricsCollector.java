@@ -221,10 +221,10 @@ public class KafkaMetricsCollector extends AbstractMetricsCollector implements M
             double value = (Double) metricValue;
 
             if (measurable instanceof WindowedCount || measurable instanceof CumulativeSum) {
-                maybeEmitSum(emitter, metricKey, value);
+                maybeEmitDouble(emitter, metricKey, MetricType.sum, value);
                 maybeEmitDelta(emitter, metricKey, value);
             } else {
-                maybeEmitGauge(emitter, metricKey, value);
+                maybeEmitDouble(emitter, metricKey, MetricType.sum, value);
             }
         } else if (metricValue instanceof Number) {
             // For non-measurable Gauge metrics, collect the metric only if its value is a number.
@@ -232,9 +232,9 @@ public class KafkaMetricsCollector extends AbstractMetricsCollector implements M
 
             // Map integer types to long and any other number type to double.
             if (value instanceof Integer || value instanceof Long)
-                maybeEmitGauge(emitter, metricKey, value.longValue());
+                maybeEmitLong(emitter, metricKey, MetricType.gauge, value::longValue);
             else
-                maybeEmitGauge(emitter, metricKey, value.doubleValue());
+                maybeEmitDouble(emitter, metricKey, MetricType.gauge, value::doubleValue);
         } else {
             // skip non-measurable metrics
             log.debug("Skipping non-measurable gauge metric {}", metricKey.name());
