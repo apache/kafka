@@ -99,7 +99,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"A release version to use for the initial metadata.version. The default is (${MetadataVersion.latest().version()})")
+      help(s"A release version (e.g., 3.2, 3.3) to use for the initial metadata version. The default is (${MetadataVersion.latest().version()})")
 
     parser.parseArgsOrFail(args)
   }

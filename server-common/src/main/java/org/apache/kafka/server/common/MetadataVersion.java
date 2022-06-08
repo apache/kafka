@@ -326,7 +326,6 @@ public enum MetadataVersion {
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
     static {
         {
-            // Make a copy of values() and omit UNINITIALIZED
             MetadataVersion[] enumValues = MetadataVersion.values();
             VERSIONS = Arrays.copyOf(enumValues, enumValues.length);
 

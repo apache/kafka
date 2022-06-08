@@ -946,7 +946,7 @@ public final class QuorumController implements Controller {
                                 if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
                                     log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
                                 } else {
-                                    log.info("Upgrading from KRaft preview. Initializing metadata.version to {}",
+                                    log.info("Upgrading KRaft cluster and initializing metadata.version to {}",
                                         metadataVersion.featureLevel());
                                 }
                                 return ControllerResult.atomicOf(bootstrapMetadata.records(), null);

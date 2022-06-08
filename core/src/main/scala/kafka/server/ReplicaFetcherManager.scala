@@ -29,7 +29,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
                             time: Time,
                             threadNamePrefix: Option[String] = None,
                             quotaManager: ReplicationQuotaManager,
-                            val metadataVersionSupplier: () => MetadataVersion)
+                            metadataVersionSupplier: () => MetadataVersion)
       extends AbstractFetcherManager[ReplicaFetcherThread](
         name = "ReplicaFetcherManager on broker " + brokerConfig.brokerId,
         clientId = "Replica",

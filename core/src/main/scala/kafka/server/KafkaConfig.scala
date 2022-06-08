@@ -1793,6 +1793,15 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val interBrokerProtocolVersion = if (processRoles.isEmpty) {
     MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
   } else {
+    if (originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
+      // A user-supplied IBP was given
+      val configuredVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
+      if (!configuredVersion.isKRaftSupported) {
+        throw new ConfigException(s"A non-KRaft version ${interBrokerProtocolVersionString} given for ${KafkaConfig.InterBrokerProtocolVersionProp}")
+      } else {
+        warn(s"${KafkaConfig.InterBrokerProtocolVersionProp} is deprecated in KRaft mode as of 3.3. See kafka-storage.sh help for details.")
+      }
+    }
     // In KRaft mode, we pin this value to the minimum KRaft-supported version. This prevents inadvertent usage of
     // the static IBP config in broker components running in KRaft mode
     MetadataVersion.MINIMUM_KRAFT_VERSION
