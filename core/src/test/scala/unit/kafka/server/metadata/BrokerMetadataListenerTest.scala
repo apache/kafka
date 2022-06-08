@@ -20,14 +20,13 @@ package kafka.server.metadata
 import java.util
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Optional}
-
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -211,16 +210,21 @@ class BrokerMetadataListenerTest {
       listener.getImageRecords().get()
       assertEquals(200L, listener.highestMetadataOffset)
 
-      // Check that we generate at least one snapshot once we see enough records.
+      // Check that we won't generate snapshot even we see enough records since we haven't started publishing.
       assertEquals(-1L, snapshotter.prevCommittedOffset)
       generateManyRecords(listener, 1000L)
-      assertEquals(1000L, snapshotter.prevCommittedOffset)
-      assertEquals(1000L, snapshotter.activeSnapshotOffset)
+      assertEquals(-1L, snapshotter.prevCommittedOffset)
+      assertEquals(-1L, snapshotter.activeSnapshotOffset)
       snapshotter.activeSnapshotOffset = -1L
 
       // Test creating a new snapshot after publishing it.
       val publisher = new MockMetadataPublisher()
       listener.startPublishing(publisher).get()
+      // Check that we generate at least one snapshot since we see enough records.
+      assertEquals(1000L, snapshotter.prevCommittedOffset)
+      assertEquals(1000L, snapshotter.activeSnapshotOffset)
+
+      snapshotter.activeSnapshotOffset = -1L
       generateManyRecords(listener, 2000L)
       listener.getImageRecords().get()
       assertEquals(2000L, snapshotter.activeSnapshotOffset)
@@ -238,6 +242,40 @@ class BrokerMetadataListenerTest {
     } finally {
       listener.close()
     }
+  }
+
+  @Test
+  def testNotSnapshotBeforePublishing(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
+
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), 100L)
+    listener.getImageRecords().get()
+    assertEquals(-1L, snapshotter.activeSnapshotOffset, "We won't generate snapshot before starting publishing")
+  }
+
+  @Test
+  def testSnapshotWhenStarting(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
+
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), 100L)
+    listener.startPublishing(new MockMetadataPublisher()).get()
+    assertEquals(100L, snapshotter.activeSnapshotOffset, "We should try to generate snapshot when starting publishing")
+  }
+
+  @Test
+  def testSnapshotAfterMetadataVersionChange(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
+    listener.startPublishing(new MockMetadataPublisher()).get()
+
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV2.featureLevel(), 100L)
+    listener.getImageRecords().get()
+    assertEquals(100L, snapshotter.activeSnapshotOffset, "We should generate snapshot on feature update")
   }
 
   private def registerBrokers(
@@ -280,6 +318,25 @@ class BrokerMetadataListenerTest {
             setIsr(replicas.map(Int.box).asJava).
             setLeader(0).
             setReplicas(replicas.map(Int.box).asJava), 0.toShort)
+        )
+      )
+    )
+  }
+
+  private def updateFeature(
+    listener: BrokerMetadataListener,
+    feature: String,
+    version: Short,
+    endOffset: Long
+  ): Unit = {
+    listener.handleCommit(
+      RecordTestUtils.mockBatchReader(
+        endOffset,
+        0,
+        util.Arrays.asList(
+          new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(feature).
+            setFeatureLevel(version), 0.toShort)
         )
       )
     )
