@@ -60,7 +60,7 @@ trait MetadataCache {
 
   def isBrokerFenced(brokerId: Int): Boolean
 
-  def isBrokerInControlledShutdown(brokerId: Int): Boolean
+  def isBrokerShuttingDown(brokerId: Int): Boolean
 
   def getAliveBrokers(): Iterable[BrokerMetadata]
 

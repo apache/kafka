@@ -57,6 +57,14 @@ public class AlterPartitionRequest extends AbstractRequest {
 
         private final AlterPartitionRequestData data;
 
+        /**
+         * Constructs a builder for AlterPartitionRequest.
+         *
+         * @param data The data to be sent. Note that because the version of the
+         *             request is not known at this time, it is expected that all
+         *             topics have a topic id and a topic name set.
+         * @param canUseTopicIds True if version 2 and above can be used.
+         */
         public Builder(AlterPartitionRequestData data, boolean canUseTopicIds) {
             super(
                 ApiKeys.ALTER_PARTITION,

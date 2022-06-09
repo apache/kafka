@@ -143,7 +143,6 @@ sealed trait PartitionState {
    * the high watermark as well as determining which replicas are required for acks=all produce requests.
    *
    * Only applicable as of IBP 2.7-IV2, for older versions this will return the committed ISR
-   *
    */
   def maximalIsr: Set[Int]
 
@@ -159,7 +158,7 @@ sealed trait PartitionState {
 }
 
 sealed trait PendingPartitionChange extends PartitionState {
-  def lastCommittedState: PartitionState
+  def lastCommittedState: CommittedPartitionState
   def sentLeaderAndIsr: LeaderAndIsr
 
   override val leaderRecoveryState: LeaderRecoveryState = LeaderRecoveryState.RECOVERED
@@ -168,11 +167,11 @@ sealed trait PendingPartitionChange extends PartitionState {
 }
 
 case class PendingExpandIsr(
-  isr: Set[Int],
   newInSyncReplicaId: Int,
   sentLeaderAndIsr: LeaderAndIsr,
-  lastCommittedState: PartitionState
+  lastCommittedState: CommittedPartitionState
 ) extends PendingPartitionChange {
+  val isr = lastCommittedState.isr
   val maximalIsr = isr + newInSyncReplicaId
   val isInflight = true
 
@@ -191,11 +190,11 @@ case class PendingExpandIsr(
 }
 
 case class PendingShrinkIsr(
-  isr: Set[Int],
   outOfSyncReplicaIds: Set[Int],
   sentLeaderAndIsr: LeaderAndIsr,
-  lastCommittedState: PartitionState
+  lastCommittedState: CommittedPartitionState
 ) extends PendingPartitionChange  {
+  val isr = lastCommittedState.isr
   val maximalIsr = isr
   val isInflight = true
 
@@ -869,7 +868,7 @@ class Partition(val topicPartition: TopicPartition,
     val current = partitionState
     !current.isInflight &&
       !current.isr.contains(followerReplicaId) &&
-      isBrokerIsrEligible(followerReplicaId)
+      isReplicaIsrEligible(followerReplicaId)
   }
 
   private def isFollowerInSync(followerReplica: Replica): Boolean = {
@@ -879,10 +878,10 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def isBrokerIsrEligible(brokerId: Int): Boolean = {
+  private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
     // In KRaft mode, only replicas which are not fenced nor in controlled shutdown are
     // allowed to join the ISR. This does not apply to ZK mode.
-    !metadataCache.isBrokerFenced(brokerId) && !metadataCache.isBrokerInControlledShutdown(brokerId)
+    !metadataCache.isBrokerFenced(followerReplicaId) && !metadataCache.isBrokerShuttingDown(followerReplicaId)
   }
 
   /*
@@ -1534,10 +1533,12 @@ class Partition(val topicPartition: TopicPartition,
       partitionEpoch
     )
     val updatedState = PendingExpandIsr(
-      partitionState.isr,
       newInSyncReplicaId,
       newLeaderAndIsr,
-      partitionState
+      // The current partition state must be of type CommittedPartitionState
+      // if we are here. CommittedPartitionState is the only one with `isInflight`
+      // equals to false.
+      partitionState.asInstanceOf[CommittedPartitionState]
     )
     partitionState = updatedState
     updatedState
@@ -1556,10 +1557,12 @@ class Partition(val topicPartition: TopicPartition,
       partitionEpoch
     )
     val updatedState = PendingShrinkIsr(
-      partitionState.isr,
       outOfSyncReplicaIds,
       newLeaderAndIsr,
-      partitionState
+      // The current partition state must be of type CommittedPartitionState
+      // if we are here. CommittedPartitionState is the only one with `isInflight`
+      // equals to false.
+      partitionState.asInstanceOf[CommittedPartitionState]
     )
     partitionState = updatedState
     updatedState
@@ -1621,7 +1624,7 @@ class Partition(val topicPartition: TopicPartition,
       case Errors.OPERATION_NOT_ATTEMPTED =>
         // Since the operation was not attempted, it is safe to reset back to the committed state.
         partitionState = proposedIsrState.lastCommittedState
-        debug(s"Failed to alter partition to $proposedIsrState since there is a pending AlterPartition still inflight. " +
+        info(s"Failed to alter partition to $proposedIsrState since there is a pending AlterPartition still inflight. " +
           s"Partition state has been reset to the latest committed state $partitionState")
         false
       case Errors.INELIGIBLE_REPLICA =>
@@ -1629,33 +1632,37 @@ class Partition(val topicPartition: TopicPartition,
         // assumes that the current state was still the correct expected state.
         // This is only raised in KRaft mode.
         partitionState = proposedIsrState.lastCommittedState
-        debug(s"Failed to alter partition to $proposedIsrState since the controller rejected at least one replica " +
+        info(s"Failed to alter partition to $proposedIsrState since the controller rejected at least one replica " +
           s"because it is ineligible to join the ISR. Partition state has been reset to the latest committed state $partitionState.")
         false
       case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
         debug(s"Failed to alter partition to $proposedIsrState since the controller doesn't know about " +
-          "this topic or partition. Giving up.")
+          "this topic or partition. Partition state may be out of thing, awaiting new the latest metadata.")
         false
       case Errors.UNKNOWN_TOPIC_ID =>
         debug(s"Failed to alter partition to $proposedIsrState since the controller doesn't know about " +
-          "this topic. Giving up.")
+          "this topic. Partition state may be out of thing, awaiting new the latest metadata.")
         false
       case Errors.FENCED_LEADER_EPOCH =>
-        debug(s"Failed to alter partition to $proposedIsrState since the leader epoch is old. Giving up.")
+        debug(s"Failed to alter partition to $proposedIsrState since the leader epoch is old. " +
+          "Partition state may be out of thing, awaiting new the latest metadata.")
         false
       case Errors.INVALID_UPDATE_VERSION =>
-        debug(s"Failed to alter partition to $proposedIsrState because the partition epoch is invalid. Giving up.")
+        debug(s"Failed to alter partition to $proposedIsrState because the partition epoch is invalid. " +
+          "Partition state may be out of thing, awaiting new the latest metadata.")
         false
       case Errors.INVALID_REQUEST =>
-        debug(s"Failed to alter partition to $proposedIsrState because the request is invalid. Giving up.")
+        debug(s"Failed to alter partition to $proposedIsrState because the request is invalid. " +
+          "Partition state may be out of thing, awaiting new the latest metadata.")
         false
       case Errors.NEW_LEADER_ELECTED =>
         // The operation completed successfully but this replica got removed from the replica set by the controller
         // while completing a ongoing reassignment. This replica is no longer the leader but it does not know it
         // yet. It should remain in the current pending state until the metadata overrides it.
         // This is only raised in KRaft mode.
-        debug("The alter partition request successfully updated the partition state but this replica got " +
-          "removed from the replica set while completing a reassignment. Waiting on new metadata to clean up this replica.")
+        debug(s"The alter partition request successfully updated the partition state to $proposedIsrState but " +
+          "this replica got removed from the replica set while completing a reassignment. " +
+          "Waiting on new metadata to clean up this replica.")
         false
       case _ =>
         warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")

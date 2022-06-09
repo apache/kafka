@@ -322,11 +322,6 @@ class AlterPartitionManagerTest {
   @ParameterizedTest
   @MethodSource(Array("provideMetadataVersions"))
   def testPartitionMissingInResponse(metadataVersion: MetadataVersion): Unit = {
-    val expectedVersion = if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0))
-      ApiKeys.ALTER_PARTITION.latestVersion
-    else
-      1.toShort
-
     val leaderAndIsr = LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10)
     val controlledEpoch = 0
     val brokerEpoch = 2
@@ -346,7 +341,7 @@ class AlterPartitionManagerTest {
     val future1 = alterPartitionManager.submit(tp0, leaderAndIsr, controlledEpoch)
     val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(tp0),
-      expectedVersion = expectedVersion
+      expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
     ))
 
     // Additional calls while the `AlterIsr` request is inflight will be queued
@@ -356,7 +351,7 @@ class AlterPartitionManagerTest {
     // Respond to the first request, which will also allow the next request to get sent
     callback1.onComplete(makeClientResponse(
       response = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR),
-      version = expectedVersion
+      version = ApiKeys.ALTER_PARTITION.latestVersion
     ))
     assertFutureThrows(future1, classOf[UnknownServerException])
     assertFalse(future2.isDone)
@@ -365,11 +360,11 @@ class AlterPartitionManagerTest {
     // Verify the second request includes both expected partitions, but only respond with one of them
     val callback2 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(tp1, tp2),
-      expectedVersion = expectedVersion
+      expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
     ))
     callback2.onComplete(makeClientResponse(
       response = partitionResponse(tp2, Errors.UNKNOWN_SERVER_ERROR),
-      version = expectedVersion
+      version = ApiKeys.ALTER_PARTITION.latestVersion
     ))
     assertFutureThrows(future3, classOf[UnknownServerException])
     assertFalse(future2.isDone)
@@ -377,11 +372,11 @@ class AlterPartitionManagerTest {
     // The missing partition should be retried
     val callback3 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(tp1),
-      expectedVersion = expectedVersion
+      expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
     ))
     callback3.onComplete(makeClientResponse(
       response = partitionResponse(tp1, Errors.UNKNOWN_SERVER_ERROR),
-      version = expectedVersion
+      version = ApiKeys.ALTER_PARTITION.latestVersion
     ))
     assertFutureThrows(future2, classOf[UnknownServerException])
   }
@@ -389,8 +384,6 @@ class AlterPartitionManagerTest {
   @ParameterizedTest
   @MethodSource(Array("provideMetadataVersions"))
   def testPartialTopicIds(metadataVersion: MetadataVersion): Unit = {
-    val canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
-
     val foo = new TopicIdPartition(Uuid.ZERO_UUID, 0, "foo")
     val bar = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
     val zar = new TopicIdPartition(Uuid.randomUuid(), 0, "zar")
@@ -413,11 +406,11 @@ class AlterPartitionManagerTest {
     // Submits an alter isr update with zar, which has a topic id.
     val future1 = alterPartitionManager.submit(zar, leaderAndIsr, controlledEpoch)
 
-    // The latest version is expected if IBP >= 2.8 is used and all the submitted partitions
+    // The latest version is expected if all the submitted partitions
     // have topic ids; version 1 should be used otherwise.
     val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(zar),
-      expectedVersion = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+      expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
     ))
 
     // Submits two additional alter isr changes with foo and bar while the previous one
@@ -428,7 +421,7 @@ class AlterPartitionManagerTest {
     // Completes the first request. That triggers the next one.
     callback1.onComplete(makeClientResponse(
       response = makeAlterPartition(Seq(makeAlterPartitionTopicData(zar, Errors.NONE))),
-      version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+      version = ApiKeys.ALTER_PARTITION.latestVersion
     ))
 
     assertTrue(future1.isDone)

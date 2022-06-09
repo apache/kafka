@@ -19,6 +19,7 @@ package kafka.controller
 
 import java.util.Properties
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
+import java.util.stream.{Stream => JStream}
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
@@ -28,6 +29,7 @@ import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpoc
 import org.apache.kafka.common.message.AlterPartitionRequestData
 import org.apache.kafka.common.message.AlterPartitionResponseData
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
@@ -37,12 +39,25 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
+
+object ControllerIntegrationTest {
+  def testAlterPartitionSource(): JStream[Arguments] = {
+    Seq(MetadataVersion.IBP_2_7_IV0, MetadataVersion.latest).asJava.stream.flatMap { metadataVersion =>
+      ApiKeys.ALTER_PARTITION.allVersions.stream.map { alterPartitionVersion =>
+        Arguments.of(metadataVersion, alterPartitionVersion)
+      }
+    }
+  }
+}
 
 class ControllerIntegrationTest extends QuorumTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -847,6 +862,72 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource(Array("testAlterPartitionSource"))
+  def testAlterPartition(metadataVersion: MetadataVersion, alterPartitionVersion: Short): Unit = {
+    servers = makeServers(2, interBrokerProtocolVersion = Some(metadataVersion))
+
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val otherBroker = servers.find(_.config.brokerId != controllerId).get
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    val controller = getController().kafkaController
+    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val topicId = controller.controllerContext.topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID)
+    val brokerId = otherBroker.config.brokerId
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(otherBroker.config.brokerId)
+
+    val alterPartitionRequest = new AlterPartitionRequestData()
+      .setBrokerId(brokerId)
+      .setBrokerEpoch(brokerEpoch)
+      .setTopics(Seq(new AlterPartitionRequestData.TopicData()
+        .setTopicName(if (alterPartitionVersion <= 1) tp.topic else "")
+        .setTopicId(if (alterPartitionVersion > 1) topicId else Uuid.ZERO_UUID)
+        .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setNewIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    val future = new CompletableFuture[AlterPartitionResponseData]()
+    controller.eventManager.put(AlterPartitionReceived(
+      alterPartitionRequest,
+      alterPartitionVersion,
+      future.complete
+    ))
+
+    val expectedAlterPartitionResponse =
+      if (!metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1) {
+        // If the controller is not on IBP 2.8 or above, it does not know about
+        // topic id. Therefore using alter partition version 2 or above results
+        // in a UNSUPPORTED_VERSION error.
+        new AlterPartitionResponseData()
+          .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+      } else {
+        new AlterPartitionResponseData()
+          .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+            .setTopicName(if (alterPartitionVersion <= 1) tp.topic else "")
+            .setTopicId(if (alterPartitionVersion > 1) topicId else Uuid.ZERO_UUID)
+            .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+              .setPartitionIndex(tp.partition)
+              .setLeaderId(brokerId)
+              .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+              .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+              .setIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+              .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+            ).asJava)
+          ).asJava)
+      }
+
+    assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
+  }
+
   @Test
   def testIdempotentAlterPartition(): Unit = {
     servers = makeServers(2)
@@ -859,7 +940,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val controller = getController().kafkaController
     val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
     val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
-    val topicId = controller.controllerContext.topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID)
+    val topicId = controller.controllerContext.topicIds(tp.topic)
     val brokerId = otherBroker.config.brokerId
     val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(otherBroker.config.brokerId)
 

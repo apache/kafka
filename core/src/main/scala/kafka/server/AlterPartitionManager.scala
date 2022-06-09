@@ -114,7 +114,6 @@ object AlterPartitionManager {
   ): AlterPartitionManager = {
     new ZkAlterPartitionManager(scheduler, time, zkClient)
   }
-
 }
 
 class DefaultAlterPartitionManager(
@@ -128,7 +127,18 @@ class DefaultAlterPartitionManager(
 
   // Used to allow only one pending ISR update per partition (visible for testing).
   // Note that we key items by TopicPartition despite using TopicIdPartition while
-  // submitting it. We do this because we don't always have a topic id to rely on.
+  // submitting changes. We do this to ensure that topics with the same name but
+  // with a different topic id or no topic id collide here. There are two cases to
+  // consider:
+  // 1) When the cluster is upgraded from IBP < 2.8 to IBP >= 2.8, the ZK controller
+  //    assigns topic ids to the partitions. So partitions will start sending updates
+  //    with a topic id while they might still have updates without topic ids in this
+  //    Map. This would break the contract of only allowing one pending ISR update per
+  //    partition.
+  // 2) When a topic is deleted and re-created, we cannot have two entries in this Map
+  //    especially if we cannot use an AlterPartition request version which supports
+  //    topic ids in the end because the two updates with the same name would be merged
+  //    together.
   private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterPartitionItem] = new ConcurrentHashMap[TopicPartition, AlterPartitionItem]()
 
   // Used to allow only one in-flight request at a time
@@ -176,13 +186,14 @@ class DefaultAlterPartitionManager(
   }
 
   private def sendRequest(inflightAlterPartitionItems: Seq[AlterPartitionItem]): Unit = {
-    val (message, canUseTopicIds, topicNamesByIds) = buildRequest(inflightAlterPartitionItems)
-    debug(s"Sending AlterPartition to controller $message")
+    val brokerEpoch = brokerEpochSupplier()
+    val (request, topicNamesByIds) = buildRequest(inflightAlterPartitionItems, brokerEpoch)
+    debug(s"Sending AlterPartition to controller $request")
 
     // We will not timeout AlterPartition request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
     // which causes the response for those partitions to be ignored.
-    controllerChannelManager.sendRequest(new AlterPartitionRequest.Builder(message, canUseTopicIds),
+    controllerChannelManager.sendRequest(request,
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
           debug(s"Received AlterPartition response $response")
@@ -199,7 +210,7 @@ class DefaultAlterPartitionManager(
               handleAlterPartitionResponse(
                 response.requestHeader,
                 response.responseBody.asInstanceOf[AlterPartitionResponse],
-                message.brokerEpoch,
+                brokerEpoch,
                 inflightAlterPartitionItems,
                 topicNamesByIds
               )
@@ -226,27 +237,43 @@ class DefaultAlterPartitionManager(
       })
   }
 
+  /**
+   * Builds an AlterPartition request.
+   *
+   * While building the request, we don't know which version of the AlterPartition API is
+   * supported by the controller. The final decision is taken when the AlterPartitionRequest
+   * is built in the network client based on the advertised api versions of the controller.
+   *
+   * We could use version 2 or above if all the pending changes have an topic id defined;
+   * otherwise we must use version 1 or below.
+   *
+   * @return A tuple containing the AlterPartitionRequest.Builder and a mapping from
+   *         topic id to topic name. This mapping is used in the response handling.
+   */
   private def buildRequest(
     inflightAlterPartitionItems: Seq[AlterPartitionItem],
-  ): (AlterPartitionRequestData, Boolean, mutable.Map[Uuid, String]) = {
+    brokerEpoch: Long
+  ): (AlterPartitionRequest.Builder, mutable.Map[Uuid, String]) = {
     val metadataVersion = metadataVersionSupplier()
-    var canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
     // We build this mapping in order to map topic id back to their name when we
     // receive the response. We cannot rely on the metadata cache for this because
     // the metadata cache is updated after the partition state so it might not know
     // yet about a topic id already used here.
     val topicNamesByIds = mutable.HashMap[Uuid, String]()
+    // We can use topic ids only if all the pending changed have one defined.
+    var canUseTopicIds = true
 
     val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
-      .setBrokerEpoch(brokerEpochSupplier())
+      .setBrokerEpoch(brokerEpoch)
 
     inflightAlterPartitionItems.groupBy(_.topicIdPartition.topic).foreach { case (topicName, items) =>
       val topicId = items.head.topicIdPartition.topicId
-      // We use topic ids only if all the topics have one defined.
       canUseTopicIds &= topicId != Uuid.ZERO_UUID
       topicNamesByIds(topicId) = topicName
 
+      // Both the topic name and the topic id are set here because at this stage
+      // we don't know which version of the request will be used.
       val topicData = new AlterPartitionRequestData.TopicData()
         .setTopicName(topicName)
         .setTopicId(topicId)
@@ -259,7 +286,7 @@ class DefaultAlterPartitionManager(
           .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
-        if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_2_IV0)) {
+        if (metadataVersion.isLeaderRecoverySupported) {
           partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
         }
 
@@ -267,7 +294,9 @@ class DefaultAlterPartitionManager(
       }
     }
 
-    (message, canUseTopicIds, if (canUseTopicIds) topicNamesByIds else mutable.Map.empty[Uuid, String])
+    // If we cannot use topic ids, the builder will ensure that version 1 is used
+    // at most.
+    (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds)
   }
 
   def handleAlterPartitionResponse(
@@ -289,7 +318,7 @@ class DefaultAlterPartitionManager(
 
       case Errors.NONE =>
         // Collect partition-level responses to pass to the callbacks
-        val partitionResponses = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+        val partitionResponses = new mutable.HashMap[TopicIdPartition, Either[Errors, LeaderAndIsr]]()
         data.topics.forEach { topic =>
           // Topic IDs are used since version 2 of the AlterPartition API.
           val topicName = if (requestHeader.apiVersion > 1) topicNamesByIds.get(topic.topicId).orNull else topic.topicName
@@ -297,7 +326,7 @@ class DefaultAlterPartitionManager(
             error(s"Received an unexpected topic $topic in the alter partition response, ignoring it.")
           } else {
             topic.partitions.forEach { partition =>
-              val tp = new TopicPartition(topicName, partition.partitionIndex)
+              val tp = new TopicIdPartition(topic.topicId, partition.partitionIndex, topicName)
               val apiError = Errors.forCode(partition.errorCode)
               debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
               if (apiError == Errors.NONE) {
@@ -328,7 +357,7 @@ class DefaultAlterPartitionManager(
         // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
         // the leaderIsrUpdateLock write lock in Partition#sendAlterPartitionRequest
         inflightAlterPartitionItems.foreach { inflightAlterPartition =>
-          partitionResponses.get(inflightAlterPartition.topicIdPartition.topicPartition) match {
+          partitionResponses.get(inflightAlterPartition.topicIdPartition) match {
             case Some(leaderAndIsrOrError) =>
               try {
                 leaderAndIsrOrError match {

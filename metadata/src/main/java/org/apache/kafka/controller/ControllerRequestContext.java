@@ -17,40 +17,25 @@
 
 package org.apache.kafka.controller;
 
+
 import org.apache.kafka.common.message.RequestHeaderData;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import java.util.OptionalLong;
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
 public class ControllerRequestContext {
-    public static final ControllerRequestContext ANONYMOUS_CONTEXT =
-        new ControllerRequestContext(
-            new RequestHeaderData(),
-            KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty());
 
     public static OptionalLong requestTimeoutMsToDeadlineNs(
         Time time,
         int millisecondsOffset
     ) {
         return OptionalLong.of(time.nanoseconds() + NANOSECONDS.convert(millisecondsOffset, MILLISECONDS));
-    }
-
-    public static ControllerRequestContext anonymousContextFor(ApiKeys apiKeys) {
-        return new ControllerRequestContext(
-            new RequestHeaderData()
-                .setRequestApiKey(apiKeys.id)
-                .setRequestApiVersion(apiKeys.latestVersion()),
-            KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty()
-        );
     }
 
     private final KafkaPrincipal principal;

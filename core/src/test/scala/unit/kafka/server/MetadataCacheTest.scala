@@ -675,7 +675,7 @@ class MetadataCacheTest {
 
     metadataCache.setImage(delta.apply())
 
-    assertFalse(metadataCache.isBrokerInControlledShutdown(0))
+    assertFalse(metadataCache.isBrokerShuttingDown(0))
 
     delta.replay(new BrokerRegistrationChangeRecord()
       .setBrokerId(0)
@@ -683,6 +683,6 @@ class MetadataCacheTest {
 
     metadataCache.setImage(delta.apply())
 
-    assertTrue(metadataCache.isBrokerInControlledShutdown(0))
+    assertTrue(metadataCache.isBrokerShuttingDown(0))
   }
 }

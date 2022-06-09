@@ -55,7 +55,6 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.Lis
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
-import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -65,7 +64,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -105,7 +103,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -131,6 +128,7 @@ import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
 import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
+import static org.apache.kafka.controller.ControllerRequestContextTest.anonymousContextFor;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -332,7 +330,7 @@ public class ReplicationControlManagerTest {
                 .setPartitions(singletonList(partitionData));
 
             ControllerRequestContext requestContext =
-                ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION);
+                anonymousContextFor(ApiKeys.ALTER_PARTITION);
             ControllerResult<AlterPartitionResponseData> alterPartition = replicationControl.alterPartition(
                 requestContext,
                 new AlterPartitionRequestData()
@@ -908,13 +906,8 @@ public class ReplicationControlManagerTest {
                 .setPartitions(asList(new PartitionData()
                     .setPartitionIndex(0)))));
 
-        ControllerRequestContext requestContext = new ControllerRequestContext(
-            new RequestHeaderData()
-                .setRequestApiKey(ApiKeys.ALTER_PARTITION.id)
-                .setRequestApiVersion(version),
-            KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty()
-        );
+        ControllerRequestContext requestContext =
+            anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> result =
             replicationControl.alterPartition(requestContext, request);
@@ -1034,7 +1027,7 @@ public class ReplicationControlManagerTest {
         request.topics().add(topicData);
         topicData.partitions().add(partitionData);
 
-        ControllerRequestContext requestContext = ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION);
+        ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.ALTER_PARTITION);
         ControllerResult<AlterPartitionResponseData> result = replicationControl.alterPartition(requestContext, request);
         RecordTestUtils.replayAll(replicationControl, result.records());
         return result;
@@ -1453,13 +1446,8 @@ public class ReplicationControlManagerTest {
                         setErrorMessage(null)))))),
             cancelResult);
         log.info("running final alterPartition...");
-        ControllerRequestContext requestContext = new ControllerRequestContext(
-            new RequestHeaderData()
-                .setRequestApiVersion(ApiKeys.ALTER_PARTITION.id)
-                .setRequestApiVersion(version),
-            KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty()
-        );
+        ControllerRequestContext requestContext =
+            anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             requestContext,
             new AlterPartitionRequestData().setBrokerId(3).setBrokerEpoch(103).
@@ -1525,13 +1513,8 @@ public class ReplicationControlManagerTest {
                     .setLeaderEpoch(1)
                     .setNewIsr(asList(1, 2, 3, 4))))));
 
-        ControllerRequestContext requestContext = new ControllerRequestContext(
-            new RequestHeaderData()
-                .setRequestApiVersion(ApiKeys.ALTER_PARTITION.id)
-                .setRequestApiVersion(version),
-            KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty()
-        );
+        ControllerRequestContext requestContext =
+            anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
             replication.alterPartition(requestContext, alterIsrRequest);
@@ -1606,13 +1589,8 @@ public class ReplicationControlManagerTest {
                     .setLeaderEpoch(0)
                     .setNewIsr(asList(1, 2, 3, 4))))));
 
-        ControllerRequestContext requestContext = new ControllerRequestContext(
-            new RequestHeaderData()
-                .setRequestApiVersion(ApiKeys.ALTER_PARTITION.id)
-                .setRequestApiVersion(version),
-            KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty()
-        );
+        ControllerRequestContext requestContext =
+            anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
             replication.alterPartition(requestContext, alterIsrRequest);
@@ -1703,7 +1681,7 @@ public class ReplicationControlManagerTest {
             new ListPartitionReassignmentsTopics().setName("bar").
                 setPartitionIndexes(asList(0, 1, 2)))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
-            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
+            anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(4).setBrokerEpoch(104).
                 setTopics(asList(new TopicData().setTopicId(barId).setPartitions(asList(
                     new PartitionData().setPartitionIndex(0).setPartitionEpoch(2).
@@ -2002,7 +1980,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
-            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
+            anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(2).setBrokerEpoch(102).
                 setTopics(asList(new AlterPartitionRequestData.TopicData().setTopicId(fooId).
                     setPartitions(asList(
@@ -2089,7 +2067,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(1);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
-            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
+            anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(2).setBrokerEpoch(102).
                 setTopics(asList(new AlterPartitionRequestData.TopicData().setTopicId(fooId).
                     setPartitions(asList(new AlterPartitionRequestData.PartitionData().
@@ -2122,7 +2100,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0);
 
         alterPartitionResult = replication.alterPartition(
-            ControllerRequestContext.anonymousContextFor(ApiKeys.ALTER_PARTITION),
+            anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(2).setBrokerEpoch(102).
                 setTopics(asList(new AlterPartitionRequestData.TopicData().setTopicId(fooId).
                     setPartitions(asList(new AlterPartitionRequestData.PartitionData().
