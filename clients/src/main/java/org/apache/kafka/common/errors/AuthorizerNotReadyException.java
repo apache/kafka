@@ -25,4 +25,8 @@ public class AuthorizerNotReadyException extends RetriableException {
     public AuthorizerNotReadyException() {
         super();
     }
+
+    public AuthorizerNotReadyException(String message) {
+        super(message);
+    }
 }

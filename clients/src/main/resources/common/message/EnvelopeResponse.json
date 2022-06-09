@@ -18,7 +18,9 @@
   "type": "response",
   "name": "EnvelopeResponse",
   // Response struct for forwarding.
-  "validVersions": "0",
+  //
+  // Version 1 adds support for the AUTHORIZER_NOT_READY error.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ResponseData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",

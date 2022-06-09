@@ -19,7 +19,9 @@
   "listeners": ["controller"],
   "name": "EnvelopeRequest",
   // Request struct for forwarding.
-  "validVersions": "0",
+  //
+  // Version 1 is the same as version 0.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "RequestData", "type": "bytes", "versions": "0+", "zeroCopy": true,
