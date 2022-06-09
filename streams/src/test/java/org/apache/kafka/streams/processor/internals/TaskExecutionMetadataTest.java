@@ -41,8 +41,7 @@ public class TaskExecutionMetadataTest {
         final Set<String> topologies = Collections.singleton(UNNAMED_TOPOLOGY);
         final Set<String> pausedTopologies = ConcurrentHashMap.newKeySet();
 
-        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(topologies,
-            pausedTopologies);
+        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(topologies, pausedTopologies);
 
         final Task mockTask = createMockTask(UNNAMED_TOPOLOGY);
 
