@@ -96,7 +96,7 @@ public class WorkerConfigTransformer implements AutoCloseable {
             }
         };
         HerderRequest request = worker.herder().restartConnector(ttl, connectorName, cb);
-        connectorRequests.putIfAbsent(path, request);
+        connectorRequests.put(path, request);
     }
 
     @Override
