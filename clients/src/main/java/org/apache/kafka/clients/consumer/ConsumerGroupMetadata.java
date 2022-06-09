@@ -29,23 +29,27 @@ public class ConsumerGroupMetadata {
     final private String groupId;
     final private int generationId;
     final private String memberId;
-    final private Optional<String> groupInstanceId;
+    final private String groupInstanceId;
 
     public ConsumerGroupMetadata(String groupId,
                                  int generationId,
                                  String memberId,
-                                 Optional<String> groupInstanceId) {
+                                 String groupInstanceId) {
         this.groupId = Objects.requireNonNull(groupId, "group.id can't be null");
         this.generationId = generationId;
         this.memberId = Objects.requireNonNull(memberId, "member.id can't be null");
-        this.groupInstanceId = Objects.requireNonNull(groupInstanceId, "group.instance.id can't be null");
+        this.groupInstanceId = groupInstanceId;
+    }
+
+    public ConsumerGroupMetadata(String groupId, int generationId, String memberId) {
+        this(groupId, generationId, memberId, null);
     }
 
     public ConsumerGroupMetadata(String groupId) {
         this(groupId,
             JoinGroupRequest.UNKNOWN_GENERATION_ID,
             JoinGroupRequest.UNKNOWN_MEMBER_ID,
-            Optional.empty());
+            null);
     }
 
     public String groupId() {
@@ -61,7 +65,7 @@ public class ConsumerGroupMetadata {
     }
 
     public Optional<String> groupInstanceId() {
-        return groupInstanceId;
+        return Optional.ofNullable(groupInstanceId);
     }
 
     @Override
@@ -70,7 +74,7 @@ public class ConsumerGroupMetadata {
             groupId,
             generationId,
             memberId,
-            groupInstanceId.orElse(""));
+            groupInstanceId);
     }
 
     @Override

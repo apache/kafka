@@ -98,7 +98,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Exchanger;
@@ -1554,7 +1553,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
             ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId,
-                generationId, memberId, Optional.of(groupInstanceId));
+                generationId, memberId, groupInstanceId);
 
             producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata);
             producer.commitTransaction();
@@ -1568,7 +1567,7 @@ public class KafkaProducerTest {
 
     @Test
     public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
-        verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
+        verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID));
     }
 
     private void verifyInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {

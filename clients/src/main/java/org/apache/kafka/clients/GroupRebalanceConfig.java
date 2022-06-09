@@ -41,9 +41,10 @@ public class GroupRebalanceConfig {
     public final int rebalanceTimeoutMs;
     public final int heartbeatIntervalMs;
     public final String groupId;
-    public final Optional<String> groupInstanceId;
     public final long retryBackoffMs;
     public final boolean leaveGroupOnClose;
+
+    private final String groupInstanceId;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
@@ -63,12 +64,10 @@ public class GroupRebalanceConfig {
             String groupInstanceId = config.getString(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
             if (groupInstanceId != null) {
                 JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
-                this.groupInstanceId = Optional.of(groupInstanceId);
-            } else {
-                this.groupInstanceId = Optional.empty();
             }
+            this.groupInstanceId = groupInstanceId;
         } else {
-            this.groupInstanceId = Optional.empty();
+            this.groupInstanceId = null;
         }
 
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
@@ -86,7 +85,7 @@ public class GroupRebalanceConfig {
                                 final int rebalanceTimeoutMs,
                                 final int heartbeatIntervalMs,
                                 String groupId,
-                                Optional<String> groupInstanceId,
+                                String groupInstanceId,
                                 long retryBackoffMs,
                                 boolean leaveGroupOnClose) {
         this.sessionTimeoutMs = sessionTimeoutMs;
@@ -96,5 +95,9 @@ public class GroupRebalanceConfig {
         this.groupInstanceId = groupInstanceId;
         this.retryBackoffMs = retryBackoffMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
+    }
+
+    public Optional<String> groupInstanceId() {
+        return Optional.ofNullable(groupInstanceId);
     }
 }

@@ -551,7 +551,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setGroupId(rebalanceConfig.groupId)
                         .setSessionTimeoutMs(this.rebalanceConfig.sessionTimeoutMs)
                         .setMemberId(this.generation.memberId)
-                        .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
+                        .setGroupInstanceId(this.rebalanceConfig.groupInstanceId().orElse(null))
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
                         .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
@@ -640,7 +640,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // for join-group request, even if the generation has changed we would not expect the instance id
                 // gets fenced, and hence we always treat this as a fatal error
                 log.error("JoinGroup failed: The group instance id {} has been fenced by another instance. " +
-                              "Sent generation was {}", rebalanceConfig.groupInstanceId, sentGeneration);
+                              "Sent generation was {}", rebalanceConfig.groupInstanceId(), sentGeneration);
                 future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
                     || error == Errors.INVALID_SESSION_TIMEOUT
@@ -694,7 +694,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 .setMemberId(generation.memberId)
                                 .setProtocolType(protocolType())
                                 .setProtocolName(generation.protocolName)
-                                .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
+                                .setGroupInstanceId(this.rebalanceConfig.groupInstanceId().orElse(null))
                                 .setGenerationId(generation.generationId)
                                 .setAssignments(Collections.emptyList())
                 );
@@ -727,7 +727,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                     .setMemberId(generation.memberId)
                                     .setProtocolType(protocolType())
                                     .setProtocolName(generation.protocolName)
-                                    .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
+                                    .setGroupInstanceId(this.rebalanceConfig.groupInstanceId().orElse(null))
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
                     );
@@ -812,7 +812,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
                     // gets fenced, and hence we always treat this as a fatal error
                     log.error("SyncGroup failed: The group instance id {} has been fenced by another instance. " +
-                        "Sent generation was {}", rebalanceConfig.groupInstanceId, sentGeneration);
+                        "Sent generation was {}", rebalanceConfig.groupInstanceId(), sentGeneration);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
@@ -1120,7 +1120,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected boolean isDynamicMember() {
-        return !rebalanceConfig.groupInstanceId.isPresent();
+        return !rebalanceConfig.groupInstanceId().isPresent();
     }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
@@ -1155,7 +1155,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 new HeartbeatRequest.Builder(new HeartbeatRequestData()
                         .setGroupId(rebalanceConfig.groupId)
                         .setMemberId(this.generation.memberId)
-                        .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
+                        .setGroupInstanceId(this.rebalanceConfig.groupInstanceId().orElse(null))
                         .setGenerationId(this.generation.generationId));
         return client.send(coordinator, requestBuilder)
                 .compose(new HeartbeatResponseHandler(generation));
@@ -1197,14 +1197,14 @@ public abstract class AbstractCoordinator implements Closeable {
                        error == Errors.FENCED_INSTANCE_ID) {
                 if (generationUnchanged()) {
                     log.info("Attempt to heartbeat with {} and group instance id {} failed due to {}, resetting generation",
-                        sentGeneration, rebalanceConfig.groupInstanceId, error);
+                        sentGeneration, rebalanceConfig.groupInstanceId(), error);
                     // don't reset generation member ID when ILLEGAL_GENERATION, since the member ID is still valid
                     resetStateOnResponseError(ApiKeys.HEARTBEAT, error, error != Errors.ILLEGAL_GENERATION);
                     future.raise(error);
                 } else {
                     // if the generation has changed, then ignore this error
                     log.info("Attempt to heartbeat with stale {} and group instance id {} failed due to {}, ignoring the error",
-                        sentGeneration, rebalanceConfig.groupInstanceId, error);
+                        sentGeneration, rebalanceConfig.groupInstanceId(), error);
                     future.complete(null);
                 }
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
@@ -1484,7 +1484,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                             // however, then the session timeout may expire before we can rejoin.
                                             heartbeat.receiveHeartbeat();
                                         } else if (e instanceof FencedInstanceIdException) {
-                                            log.error("Caught fenced group.instance.id {} error in heartbeat thread", rebalanceConfig.groupInstanceId);
+                                            log.error("Caught fenced group.instance.id {} error in heartbeat thread", rebalanceConfig.groupInstanceId());
                                             heartbeatThread.failed.set(e);
                                         } else {
                                             heartbeat.failHeartbeat();

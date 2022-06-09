@@ -92,7 +92,7 @@ public class MockConsumerTest {
         assertEquals(2L, consumer.position(tp));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-        assertEquals(new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty()),
+        assertEquals(new ConsumerGroupMetadata("dummy.group.id", 1, "1"),
             consumer.groupMetadata());
     }
 

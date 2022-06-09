@@ -176,7 +176,7 @@ public class KafkaConsumerTest {
     private final String groupId = "mock-group";
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";
-    private final Optional<String> groupInstanceId = Optional.of("mock-instance");
+    private final String groupInstanceId = "mock-instance";
     private Map<String, Uuid> topicIds = Stream.of(
             new AbstractMap.SimpleEntry<>(topic, topicId),
             new AbstractMap.SimpleEntry<>(topic2, topicId2),
@@ -834,7 +834,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
-                true, groupId, Optional.empty(), false);
+                true, groupId, null, false);
         consumer.assign(singletonList(tp0));
         consumer.seek(tp0, 20L);
         consumer.poll(Duration.ZERO);
@@ -1737,7 +1737,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, Optional.empty());
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, null);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -2143,7 +2143,7 @@ public class KafkaConsumerTest {
         assertEquals(groupId, groupMetadataOnStart.groupId());
         assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadataOnStart.memberId());
         assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadataOnStart.generationId());
-        assertEquals(groupInstanceId, groupMetadataOnStart.groupInstanceId());
+        assertEquals(groupInstanceId, groupMetadataOnStart.groupInstanceId().get());
 
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -2156,7 +2156,7 @@ public class KafkaConsumerTest {
         assertEquals(groupId, groupMetadataAfterPoll.groupId());
         assertEquals(memberId, groupMetadataAfterPoll.memberId());
         assertEquals(1, groupMetadataAfterPoll.generationId());
-        assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
+        assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId().get());
     }
 
     @Test
@@ -2507,7 +2507,7 @@ public class KafkaConsumerTest {
                                                       ConsumerMetadata metadata,
                                                       ConsumerPartitionAssignor assignor,
                                                       boolean autoCommitEnabled,
-                                                      Optional<String> groupInstanceId) {
+                                                      String groupInstanceId) {
         return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId, false);
     }
 
@@ -2525,7 +2525,7 @@ public class KafkaConsumerTest {
                                                       ConsumerPartitionAssignor assignor,
                                                       boolean autoCommitEnabled,
                                                       String groupId,
-                                                      Optional<String> groupInstanceId,
+                                                      String groupInstanceId,
                                                       boolean throwOnStableOffsetNotSupported) {
         return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId,
         Optional.of(new StringDeserializer()), throwOnStableOffsetNotSupported);
@@ -2538,7 +2538,7 @@ public class KafkaConsumerTest {
                                                       ConsumerPartitionAssignor assignor,
                                                       boolean autoCommitEnabled,
                                                       String groupId,
-                                                      Optional<String> groupInstanceId,
+                                                      String groupInstanceId,
                                                       Optional<Deserializer<String>> valueDeserializer,
                                                       boolean throwOnStableOffsetNotSupported) {
         String clientId = "mock-consumer";

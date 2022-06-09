@@ -679,8 +679,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             LogContext logContext;
 
             // If group.instance.id is set, we will append it to the log context.
-            if (groupRebalanceConfig.groupInstanceId.isPresent()) {
-                logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
+            if (groupRebalanceConfig.groupInstanceId().isPresent()) {
+                logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId().get() +
                         ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
             } else {
                 logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");

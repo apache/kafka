@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -37,7 +38,7 @@ public class ConsumerGroupMetadataTest {
         String groupInstanceId = "instance";
 
         ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId,
-            generationId, memberId, Optional.of(groupInstanceId));
+            generationId, memberId, groupInstanceId);
 
         assertEquals(groupId, groupMetadata.groupId());
         assertEquals(generationId, groupMetadata.generationId());
@@ -62,7 +63,7 @@ public class ConsumerGroupMetadataTest {
         int generationId = 2;
 
         assertThrows(NullPointerException.class, () -> new ConsumerGroupMetadata(
-            null, generationId, memberId, Optional.empty())
+            null, generationId, memberId)
         );
     }
 
@@ -71,17 +72,29 @@ public class ConsumerGroupMetadataTest {
         int generationId = 2;
 
         assertThrows(NullPointerException.class, () -> new ConsumerGroupMetadata(
-            groupId, generationId, null, Optional.empty())
+            groupId, generationId, null)
         );
     }
 
     @Test
-    public void testInvalidInstanceId() {
+    public void testNullGroupInstanceId() {
         String memberId = "member";
         int generationId = 2;
 
-        assertThrows(NullPointerException.class, () -> new ConsumerGroupMetadata(
-            groupId, generationId, memberId, null)
-        );
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId, generationId, memberId, null);
+
+        assertInstanceOf(Optional.class, groupMetadata.groupInstanceId());
+        assertFalse(groupMetadata.groupInstanceId().isPresent());
+    }
+
+    @Test
+    public void testWithoutGroupInstanceId() {
+        String memberId = "member";
+        int generationId = 2;
+
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId, generationId, memberId);
+
+        assertInstanceOf(Optional.class, groupMetadata.groupInstanceId());
+        assertFalse(groupMetadata.groupInstanceId().isPresent());
     }
 }

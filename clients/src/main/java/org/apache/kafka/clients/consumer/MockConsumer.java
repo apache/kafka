@@ -555,7 +555,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public ConsumerGroupMetadata groupMetadata() {
-        return new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty());
+        return new ConsumerGroupMetadata("dummy.group.id", 1, "1");
     }
 
     @Override

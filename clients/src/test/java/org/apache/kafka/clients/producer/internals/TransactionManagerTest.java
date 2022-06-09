@@ -929,7 +929,7 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
             singletonMap(tp, new OffsetAndMetadata(39L)),
-            new ConsumerGroupMetadata(consumerGroupId, 5, fencedMemberId, Optional.of(groupInstanceId)));
+            new ConsumerGroupMetadata(consumerGroupId, 5, fencedMemberId, groupInstanceId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
@@ -963,7 +963,7 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
             singletonMap(tp, new OffsetAndMetadata(39L)),
-            new ConsumerGroupMetadata(consumerGroupId, 5, unknownMemberId, Optional.empty()));
+            new ConsumerGroupMetadata(consumerGroupId, 5, unknownMemberId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
@@ -996,8 +996,7 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
             singletonMap(tp, new OffsetAndMetadata(39L)),
-            new ConsumerGroupMetadata(consumerGroupId, illegalGenerationId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                Optional.empty()));
+            new ConsumerGroupMetadata(consumerGroupId, illegalGenerationId, JoinGroupRequest.UNKNOWN_MEMBER_ID));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
@@ -2335,7 +2334,7 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
 
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            offsets, new ConsumerGroupMetadata(consumerGroupId, generationId, memberId, Optional.of(groupInstanceId)));
+            offsets, new ConsumerGroupMetadata(consumerGroupId, generationId, memberId, groupInstanceId));
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
 
         sender.runOnce();  // send AddOffsetsToTxnResult

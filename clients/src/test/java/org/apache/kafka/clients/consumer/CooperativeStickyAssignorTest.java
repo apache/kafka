@@ -50,7 +50,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
     @Override
     public Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
-        assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id", Optional.empty()));
+        assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id"));
         return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions);
     }
 
@@ -63,7 +63,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         assertEquals(encodedGeneration.get(), DEFAULT_GENERATION);
 
         int generation = 10;
-        assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id", Optional.empty()));
+        assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id"));
 
         subscription = new Subscription(topics(topic), assignor.subscriptionUserData(new HashSet<>(topics(topic))));
         encodedGeneration = ((CooperativeStickyAssignor) assignor).memberData(subscription).generation;
