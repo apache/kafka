@@ -73,7 +73,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -86,6 +85,8 @@ import static org.mockito.Mockito.when;
 
 public class SaslServerAuthenticatorTest {
 
+    private final String clientId = "clientId";
+    
     @Test
     public void testOversizeRequest() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class);
@@ -110,7 +111,7 @@ public class SaslServerAuthenticatorTest {
         SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
                 SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
-        RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
+        RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, clientId, 13243);
         ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
@@ -145,19 +146,19 @@ public class SaslServerAuthenticatorTest {
     }
 
     @Test
-    public void testSessionExpirationLeftAsNullButLifetimeReturnedToTheClientWhenReauthDisabled() throws IOException {
+    public void testSessionExpiresAtTokenExpiryDespiteNoReauthIsSet() throws IOException {
         String mechanism = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
-        Duration tokenExpirationDuration = Duration.ofSeconds(100);
+        Duration tokenExpirationDuration = Duration.ofSeconds(1);
         SaslServer saslServer = mock(SaslServer.class);
 
         MockTime time = new MockTime();
         try (
                 MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpirationDuration);
-                MockedStatic<?> ignored2 = mockKafkaPrincipal()
+                MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+                TransportLayer transportLayer = mockTransportLayer()
         ) {
-            TransportLayer transportLayer = mockTransportLayer();
 
-            SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, null);
+            SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, 0L);
 
             mockRequest(saslHandshakeRequest(mechanism), transportLayer);
             authenticator.authenticate();
@@ -166,7 +167,8 @@ public class SaslServerAuthenticatorTest {
             mockRequest(saslAuthenticateRequest(), transportLayer);
             authenticator.authenticate();
 
-            assertNull(authenticator.serverSessionExpirationTimeNanos());
+            long atTokenExpiryNanos = time.nanoseconds() + tokenExpirationDuration.toNanos();
+            assertEquals(atTokenExpiryNanos, authenticator.serverSessionExpirationTimeNanos());
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
@@ -185,9 +187,9 @@ public class SaslServerAuthenticatorTest {
 
         try (
                 MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpiryGreaterThanMaxReauth);
-                MockedStatic<?> ignored2 = mockKafkaPrincipal()
+                MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+                TransportLayer transportLayer = mockTransportLayer()
         ) {
-            TransportLayer transportLayer = mockTransportLayer();
 
             SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, maxReauthMs);
 
@@ -198,8 +200,8 @@ public class SaslServerAuthenticatorTest {
             mockRequest(saslAuthenticateRequest(), transportLayer);
             authenticator.authenticate();
 
-            long afterMaxReauthNanos = time.nanoseconds() + Duration.ofMillis(maxReauthMs).toNanos();
-            assertEquals(afterMaxReauthNanos, authenticator.serverSessionExpirationTimeNanos());
+            long atMaxReauthNanos = time.nanoseconds() + Duration.ofMillis(maxReauthMs).toNanos();
+            assertEquals(atMaxReauthNanos, authenticator.serverSessionExpirationTimeNanos());
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
@@ -218,9 +220,9 @@ public class SaslServerAuthenticatorTest {
 
         try (
                 MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpiryShorterThanMaxReauth);
-                MockedStatic<?> ignored2 = mockKafkaPrincipal()
+                MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+                TransportLayer transportLayer = mockTransportLayer()
         ) {
-            TransportLayer transportLayer = mockTransportLayer();
 
             SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, maxReauthMs);
 
@@ -258,9 +260,9 @@ public class SaslServerAuthenticatorTest {
         return Mockito.mockStatic(Sasl.class, (Answer<SaslServer>) invocation -> saslServer);
     }
 
-    private MockedStatic<?> mockKafkaPrincipal() {
+    private MockedStatic<?> mockKafkaPrincipal(String principalType, String name) {
         KafkaPrincipalBuilder kafkaPrincipalBuilder = mock(KafkaPrincipalBuilder.class);
-        when(kafkaPrincipalBuilder.build(any())).thenReturn(new KafkaPrincipal("[principal-type]", "[principal-name"));
+        when(kafkaPrincipalBuilder.build(any())).thenReturn(new KafkaPrincipal(principalType, name));
         MockedStatic<ChannelBuilders> channelBuilders = Mockito.mockStatic(ChannelBuilders.class, Answers.RETURNS_MOCKS);
         channelBuilders.when(() ->
                 ChannelBuilders.createPrincipalBuilder(anyMap(), any(KerberosShortNamer.class), any(SslPrincipalMapper.class))
@@ -320,7 +322,7 @@ public class SaslServerAuthenticatorTest {
     }
 
     private void mockRequest(AbstractRequest request, TransportLayer transportLayer) throws IOException {
-        mockRequest(new RequestHeader(request.apiKey(), request.apiKey().latestVersion(), "clientId", 0), request, transportLayer);
+        mockRequest(new RequestHeader(request.apiKey(), request.apiKey().latestVersion(), clientId, 0), request, transportLayer);
     }
 
     private void mockRequest(RequestHeader header, AbstractRequest request, TransportLayer transportLayer) throws IOException {
@@ -348,7 +350,7 @@ public class SaslServerAuthenticatorTest {
         ChannelMetadataRegistry metadataRegistry = new DefaultChannelMetadataRegistry();
         SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName(), metadataRegistry);
 
-        RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
+        RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, clientId, 0);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
         mockRequest(header, request, transportLayer);
 
