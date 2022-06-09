@@ -24,7 +24,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.mockito.Mockito.mock;
@@ -40,7 +39,7 @@ public class TaskExecutionMetadataTest {
     @Test
     public void testCanProcessWithoutNamedTopologies() {
         final Set<String> topologies = Collections.singleton(UNNAMED_TOPOLOGY);
-        final Set<String> pausedTopologies = ConcurrentHashMap.newKeySet();
+        final Set<String> pausedTopologies = new HashSet<>();
 
         final TaskExecutionMetadata metadata = new TaskExecutionMetadata(topologies, pausedTopologies);
 
@@ -55,7 +54,7 @@ public class TaskExecutionMetadataTest {
 
     @Test
     public void testNamedTopologiesCanBePausedIndependently() {
-        final Set<String> pausedTopologies = ConcurrentHashMap.newKeySet();
+        final Set<String> pausedTopologies = new HashSet<>();
         final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES, pausedTopologies);
 
         final Task mockTask1 = createMockTask(TOPOLOGY1);
@@ -75,7 +74,7 @@ public class TaskExecutionMetadataTest {
 
     @Test
     public void testNamedTopologiesCanBeStartedPaused() {
-        final Set<String> pausedTopologies = ConcurrentHashMap.newKeySet();
+        final Set<String> pausedTopologies = new HashSet<>();
         pausedTopologies.add(TOPOLOGY1);
 
         final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES,
@@ -94,7 +93,7 @@ public class TaskExecutionMetadataTest {
 
     @Test
     public void testNamedTopologiesCanBackoff() {
-        final Set<String> pausedTopologies = ConcurrentHashMap.newKeySet();
+        final Set<String> pausedTopologies = new HashSet<>();
 
         final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES,
             pausedTopologies);

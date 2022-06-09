@@ -49,6 +49,7 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -88,9 +89,13 @@ public class PauseResumeIntegrationTest {
     private static final List<KeyValue<String, Long>> STANDARD_INPUT_DATA =
         asList(pair("A", 100L), pair("B", 200L), pair("A", 300L), pair("C", 400L), pair("C", -50L));
     private static final List<KeyValue<String, Long>> COUNT_OUTPUT_DATA =
-        asList(pair("B", 1L), pair("A", 2L), pair("C", 2L));
+        asList(pair("A", 1L), pair("B", 1L), pair("A", 2L), pair("C", 1L), pair("C", 2L));
     private static final List<KeyValue<String, Long>> COUNT_OUTPUT_DATA2 =
-        asList(pair("B", 2L), pair("A", 4L), pair("C", 4L));
+        asList(pair("A", 3L), pair("B", 2L), pair("A", 4L), pair("C", 3L), pair("C", 4L));
+    private static final List<KeyValue<String, Long>> COUNT_OUTPUT_DATA_ALL = new ArrayList<KeyValue<String, Long>>() {{
+            addAll(COUNT_OUTPUT_DATA);
+            addAll(COUNT_OUTPUT_DATA2);
+        }};
 
     private String appId;
     private KafkaStreams kafkaStreams, kafkaStreams2;
@@ -127,8 +132,8 @@ public class PauseResumeIntegrationTest {
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         return properties;
@@ -163,13 +168,13 @@ public class PauseResumeIntegrationTest {
         assertNoLag(kafkaStreams);
 
         waitUntilStreamsHasPolled(kafkaStreams, 2);
-        assertTopicSize(OUTPUT_STREAM_1, 3);
+        assertTopicSize(OUTPUT_STREAM_1, 5);
 
         kafkaStreams.resume();
         assertFalse(kafkaStreams.isPaused());
 
         awaitOutput(OUTPUT_STREAM_1, 3, COUNT_OUTPUT_DATA2);
-        assertTopicSize(OUTPUT_STREAM_1, 6);
+        assertTopicSize(OUTPUT_STREAM_1, 10);
     }
 
     @Test
@@ -189,7 +194,7 @@ public class PauseResumeIntegrationTest {
         kafkaStreams.resume();
         assertFalse(kafkaStreams.isPaused());
         awaitOutput(OUTPUT_STREAM_1, 3, COUNT_OUTPUT_DATA);
-        assertTopicSize(OUTPUT_STREAM_1, 3);
+        assertTopicSize(OUTPUT_STREAM_1, 5);
     }
 
     @Test
@@ -206,8 +211,8 @@ public class PauseResumeIntegrationTest {
 
         awaitOutput(OUTPUT_STREAM_1, 3, COUNT_OUTPUT_DATA);
         awaitOutput(OUTPUT_STREAM_2, 3, COUNT_OUTPUT_DATA);
-        assertTopicSize(OUTPUT_STREAM_1, 3);
-        assertTopicSize(OUTPUT_STREAM_2, 3);
+        assertTopicSize(OUTPUT_STREAM_1, 5);
+        assertTopicSize(OUTPUT_STREAM_2, 5);
 
         streamsNamedTopologyWrapper.pauseNamedTopology(TOPOLOGY1);
         assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
@@ -220,8 +225,8 @@ public class PauseResumeIntegrationTest {
         assertNoLag(streamsNamedTopologyWrapper);
 
         awaitOutput(OUTPUT_STREAM_2, 3, COUNT_OUTPUT_DATA2);
-        assertTopicSize(OUTPUT_STREAM_1, 3);
-        assertTopicSize(OUTPUT_STREAM_2, 6);
+        assertTopicSize(OUTPUT_STREAM_1, 5);
+        assertTopicSize(OUTPUT_STREAM_2, 10);
 
         streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
         assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
@@ -253,16 +258,16 @@ public class PauseResumeIntegrationTest {
         assertNoLag(streamsNamedTopologyWrapper);
 
         waitUntilStreamsHasPolled(streamsNamedTopologyWrapper, 2);
-        assertTopicSize(OUTPUT_STREAM_1, 3);
-        assertTopicSize(OUTPUT_STREAM_2, 3);
+        assertTopicSize(OUTPUT_STREAM_1, 5);
+        assertTopicSize(OUTPUT_STREAM_2, 5);
 
         streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
         assertFalse(streamsNamedTopologyWrapper.isPaused());
         assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
         assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
         awaitOutput(OUTPUT_STREAM_1, 3, COUNT_OUTPUT_DATA2);
-        assertTopicSize(OUTPUT_STREAM_1, 6);
-        assertTopicSize(OUTPUT_STREAM_2, 3);
+        assertTopicSize(OUTPUT_STREAM_1, 10);
+        assertTopicSize(OUTPUT_STREAM_2, 5);
     }
 
     @Test
@@ -297,16 +302,16 @@ public class PauseResumeIntegrationTest {
 
         waitUntilStreamsHasPolled(streamsNamedTopologyWrapper, 2);
         assertTopicSize(OUTPUT_STREAM_1, 0);
-        assertTopicSize(OUTPUT_STREAM_2, 3);
+        assertTopicSize(OUTPUT_STREAM_2, 5);
 
         streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
         assertFalse(streamsNamedTopologyWrapper.isPaused());
         assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
         assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
 
-        awaitOutput(OUTPUT_STREAM_1, 3, COUNT_OUTPUT_DATA2);
-        assertTopicSize(OUTPUT_STREAM_1, 3);
-        assertTopicSize(OUTPUT_STREAM_2, 3);
+        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA_ALL);
+        assertTopicSize(OUTPUT_STREAM_1, 10);
+        assertTopicSize(OUTPUT_STREAM_2, 5);
     }
 
     @Test

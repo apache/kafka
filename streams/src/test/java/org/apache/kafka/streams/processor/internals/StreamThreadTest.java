@@ -149,6 +149,8 @@ public class StreamThreadTest {
     private final static String APPLICATION_ID = "stream-thread-test";
     private final static UUID PROCESS_ID = UUID.fromString("87bf53a8-54f2-485f-a4b6-acdbec0a8b3d");
     private final static String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
+    public static final String STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG = "stream-thread-test-count-one-changelog";
+    public static final String STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG = "stream-thread-test-table-two-changelog";
 
     private final int threadIdx = 1;
     private final Metrics metrics = new Metrics();
@@ -1642,9 +1644,9 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(
-            "stream-thread-test-count-one-changelog",
+            STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
             Collections.singletonList(
-                new PartitionInfo("stream-thread-test-count-one-changelog",
+                new PartitionInfo(STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
                                   0,
                                   null,
                                   new Node[0],
@@ -1653,7 +1655,7 @@ public class StreamThreadTest {
         );
 
         final HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 1), 0L);
+        offsets.put(new TopicPartition(STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG, 1), 0L);
         restoreConsumer.updateEndOffsets(offsets);
         restoreConsumer.updateBeginningOffsets(offsets);
 
@@ -1717,7 +1719,7 @@ public class StreamThreadTest {
     private void addActiveRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
         for (long i = 0L; i < 10L; i++) {
             restoreConsumer.addRecord(new ConsumerRecord<>(
-                "stream-thread-test-count-one-changelog",
+                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
                 2,
                 i,
                 ("K" + i).getBytes(),
@@ -1729,13 +1731,13 @@ public class StreamThreadTest {
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
         for (long i = 0L; i < 10L; i++) {
             restoreConsumer.addRecord(new ConsumerRecord<>(
-                "stream-thread-test-count-one-changelog",
+                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
                 1,
                 i,
                 ("K" + i).getBytes(),
                 ("V" + i).getBytes()));
             restoreConsumer.addRecord(new ConsumerRecord<>(
-                "stream-thread-test-table-two-changelog",
+                STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG,
                 1,
                 i,
                 ("K" + i).getBytes(),
