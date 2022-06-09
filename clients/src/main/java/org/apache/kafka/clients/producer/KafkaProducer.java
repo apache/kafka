@@ -331,13 +331,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 valueSerializer));
         try {
             Map<String, Object> userProvidedConfigs = config.originals();
-            this.producerConfig = config;
             this.time = time;
 
             String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
                     (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
 
-            this.clientId = buildClientId(config.getString(ProducerConfig.CLIENT_ID_CONFIG), transactionalId);
+            String configuredClientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
+
+            this.clientId = buildClientId(configuredClientId, transactionalId);
+
+            if (configuredClientId.isEmpty()) {
+                config.originals().put(ProducerConfig.CLIENT_ID_CONFIG, this.clientId);
+            }
+
+            this.producerConfig = config;
 
             LogContext logContext;
             if (transactionalId == null)

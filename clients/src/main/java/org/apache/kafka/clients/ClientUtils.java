@@ -111,6 +111,10 @@ public final class ClientUtils {
 
     static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(host);
+        log.debug("Resolved {} and got addresses: ", host);
+        for (InetAddress address: addresses) {
+            log.debug(address.getHostAddress() + ";");
+        }
         if (ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup) {
             return filterPreferredAddresses(addresses);
         } else {

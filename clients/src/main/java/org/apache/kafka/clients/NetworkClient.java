@@ -905,6 +905,7 @@ public class NetworkClient implements KafkaClient {
             int nodeId = -1;
             for (InetSocketAddress address : addresses) {
                 newNodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
+                log.debug("created Node with IP address: {}", address.getAddress().getHostAddress());
             }
 
             int offset = this.randOffset.nextInt(newNodes.size());
