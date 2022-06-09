@@ -16,25 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.KeyValue.pair;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getTopicSize;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilStreamsHasPolled;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -66,6 +47,26 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Properties;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.KeyValue.pair;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getTopicSize;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilStreamsHasPolled;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class PauseResumeIntegrationTest {
@@ -309,7 +310,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @Test
-    public void pauseResumehouldWorkAcrossInstances() throws Exception {
+    public void pauseResumeShouldWorkAcrossInstances() throws Exception {
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
         kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
@@ -322,6 +323,7 @@ public class PauseResumeIntegrationTest {
         kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_2);
         kafkaStreams2.pause();
         kafkaStreams2.start();
+        waitForApplicationState(singletonList(kafkaStreams2), State.RUNNING, STARTUP_TIMEOUT);
         assertTrue(kafkaStreams2.isPaused());
 
         waitUntilStreamsHasPolled(kafkaStreams, 2);
