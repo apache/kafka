@@ -81,7 +81,7 @@ public class WorkerConfigTransformer implements AutoCloseable {
         Map<String, HerderRequest> connectorRequests = requests.get(connectorName);
         if (connectorRequests == null) {
             connectorRequests = new ConcurrentHashMap<>();
-            requests.put(connectorName, connectorRequests);
+            requests.putIfAbsent(connectorName, connectorRequests);
         } else {
             HerderRequest previousRequest = connectorRequests.get(path);
             if (previousRequest != null) {
@@ -96,7 +96,7 @@ public class WorkerConfigTransformer implements AutoCloseable {
             }
         };
         HerderRequest request = worker.herder().restartConnector(ttl, connectorName, cb);
-        connectorRequests.put(path, request);
+        connectorRequests.putIfAbsent(path, request);
     }
 
     @Override
