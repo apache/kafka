@@ -39,16 +39,16 @@ public class BootstrapMetadataTest {
 
         assertTrue(Files.exists(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE)));
 
-        BootstrapMetadata newMetadata = BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION);
+        BootstrapMetadata newMetadata = BootstrapMetadata.load(tmpDir, () -> MetadataVersion.MINIMUM_KRAFT_VERSION);
         assertEquals(metadata, newMetadata);
     }
 
     @Test
     public void testNoBootstrapFile() throws Exception {
         Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
-        BootstrapMetadata metadata = BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION);
+        BootstrapMetadata metadata = BootstrapMetadata.load(tmpDir, () -> MetadataVersion.MINIMUM_KRAFT_VERSION);
         assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, metadata.metadataVersion());
-        metadata = BootstrapMetadata.load(tmpDir, MetadataVersion.IBP_3_2_IV0);
+        metadata = BootstrapMetadata.load(tmpDir, () -> MetadataVersion.IBP_3_2_IV0);
         assertEquals(MetadataVersion.IBP_3_2_IV0, metadata.metadataVersion());
     }
 
@@ -65,7 +65,7 @@ public class BootstrapMetadataTest {
     public void testEmptyBootstrapFile() throws Exception {
         Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         Files.createFile(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE));
-        assertThrows(Exception.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION),
+        assertThrows(Exception.class, () -> BootstrapMetadata.load(tmpDir, () -> MetadataVersion.MINIMUM_KRAFT_VERSION),
             "Should fail to load if no metadata.version is set");
     }
 
@@ -77,7 +77,7 @@ public class BootstrapMetadataTest {
         byte[] data = new byte[100];
         random.nextBytes(data);
         Files.write(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE), data, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        assertThrows(Exception.class, () -> BootstrapMetadata.load(tmpDir, MetadataVersion.MINIMUM_KRAFT_VERSION),
+        assertThrows(Exception.class, () -> BootstrapMetadata.load(tmpDir, () -> MetadataVersion.MINIMUM_KRAFT_VERSION),
             "Should fail on invalid data");
     }
 }
