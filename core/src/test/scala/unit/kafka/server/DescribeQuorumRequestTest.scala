@@ -81,19 +81,19 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
       val voterData = partitionData.currentVoters().asScala
       val observerData = partitionData.observers().asScala
-      if (version == 0) {
-        voterData.foreach { state =>
-          assertTrue(0 < state.replicaId)
-          assertTrue(0 < state.logEndOffset())
-          assertEquals(-1, state.lastFetchTimestamp())
-          assertEquals(-1, state.lastCaughtUpTimestamp())
-        }
-        observerData.foreach { state =>
-          assertTrue(0 < state.replicaId)
-          assertTrue(0 < state.logEndOffset())
-          assertEquals(-1, state.lastFetchTimestamp())
-          assertEquals(-1, state.lastCaughtUpTimestamp())
-        }
+      assertEquals(1, voterData.size)
+      assertEquals(0, observerData.size)
+      voterData.foreach { state =>
+        assertTrue(0 < state.replicaId)
+        assertTrue(0 < state.logEndOffset())
+        assertEquals(-1, state.lastFetchTimestamp())
+        assertEquals(-1, state.lastCaughtUpTimestamp())
+      }
+      observerData.foreach { state =>
+        assertTrue(0 < state.replicaId)
+        assertTrue(0 < state.logEndOffset())
+        assertEquals(-1, state.lastFetchTimestamp())
+        assertEquals(-1, state.lastCaughtUpTimestamp())
       }
     }
   }

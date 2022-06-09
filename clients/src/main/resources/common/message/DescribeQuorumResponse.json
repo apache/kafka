@@ -17,7 +17,7 @@
   "apiKey": 55,
   "type": "response",
   "name": "DescribeQuorumResponse",
-  // Version 1 adds LastFetchTimeStamp and LastCaughtUpTimestamp in ReplicaState (KIP-836)
+  // Version 1 adds LastFetchTimeStamp and LastCaughtUpTimestamp in ReplicaState (KIP-836).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [

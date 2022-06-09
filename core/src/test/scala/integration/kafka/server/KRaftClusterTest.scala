@@ -797,19 +797,20 @@ class KRaftClusterTest {
       val admin = Admin.create(props)
       try {
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
-        val quorumInfo = quorumState.quorumInfo().get()
+        val quorumInfo = quorumState.quorumInfo.get()
 
-        assertEquals(3000, quorumInfo.leaderId())
         assertEquals(0, quorumInfo.observers.size())
         assertEquals(3, quorumInfo.voters.size())
-        quorumInfo.voters().forEach( voter => {
-          assertTrue(2999 < voter.replicaId() && 3003 > voter.replicaId(),
-            s"Voter ID ${voter.replicaId()} was not within expected range.")
-          assertTrue(0 < voter.logEndOffset(),
-            s"logEndOffset for voter with ID ${voter.replicaId()} was ${voter.logEndOffset()}")
-          assertEquals(OptionalLong.empty(), voter.lastFetchTimeMs())
-          assertEquals(OptionalLong.empty(), voter.lastCaughtUpTimeMs())
-        })
+        assertTrue(2999 < quorumInfo.leaderId && 3003 > quorumInfo.leaderId,
+          s"Leader ID ${quorumInfo.leaderId} was not within expected range.")
+        quorumInfo.voters.forEach { voter =>
+          assertTrue(2999 < voter.replicaId && 3003 > voter.replicaId,
+            s"Voter ID ${voter.replicaId} was not within expected range.")
+          assertTrue(0 < voter.logEndOffset,
+            s"logEndOffset for voter with ID ${voter.replicaId} was ${voter.logEndOffset}")
+          assertEquals(OptionalLong.empty(), voter.lastFetchTimeMs)
+          assertEquals(OptionalLong.empty(), voter.lastCaughtUpTimeMs)
+        }
       } finally {
         admin.close()
       }

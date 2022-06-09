@@ -4337,23 +4337,19 @@ public class KafkaAdminClient extends AdminClient {
         final Call call = new Call(
                 "describeMetadataQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
 
+            private QuorumInfo.ReplicaState translateReplicaState(DescribeQuorumResponseData.ReplicaState replica) {
+                return new QuorumInfo.ReplicaState(
+                        replica.replicaId(),
+                        replica.logEndOffset(),
+                        replica.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastFetchTimestamp()),
+                        replica.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastCaughtUpTimestamp()));
+            }
+
             private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
-                List<QuorumInfo.ReplicaState> voters = new ArrayList<>();
-                List<QuorumInfo.ReplicaState> observers = new ArrayList<>();
-                partition.currentVoters().forEach(v -> {
-                    voters.add(new QuorumInfo.ReplicaState(v.replicaId(),
-                            v.logEndOffset(),
-                            v.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(v.lastFetchTimestamp()),
-                            v.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(v.lastCaughtUpTimestamp())));
-                });
-                partition.observers().forEach(o -> {
-                    observers.add(new QuorumInfo.ReplicaState(o.replicaId(),
-                            o.logEndOffset(),
-                            o.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(o.lastFetchTimestamp()),
-                            o.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(o.lastCaughtUpTimestamp())));
-                });
-                QuorumInfo info = new QuorumInfo(partition.leaderId(), voters, observers);
-                return info;
+                return new QuorumInfo(
+                        partition.leaderId(),
+                        partition.currentVoters().stream().map(v -> translateReplicaState(v)).collect(Collectors.toList()),
+                        partition.observers().stream().map(o -> translateReplicaState(o)).collect(Collectors.toList()));
             }
 
             @Override

@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.OptionalLong;
 
 /**
- * This is used to describe per-partition state in the DescribeQuorumResponse.
+ * This class is used to describe the state of the quorum received in DescribeQuorumResponse.
  */
 public class QuorumInfo {
     private final Integer leaderId;
@@ -80,8 +80,12 @@ public class QuorumInfo {
             this(0, 0, OptionalLong.empty(), OptionalLong.empty());
         }
 
-        ReplicaState(int replicaId, long logEndOffset,
-                OptionalLong lastFetchTimeMs, OptionalLong lastCaughtUpTimeMs) {
+        ReplicaState(
+                int replicaId,
+                long logEndOffset,
+                OptionalLong lastFetchTimeMs,
+                OptionalLong lastCaughtUpTimeMs
+        ) {
             this.replicaId = replicaId;
             this.logEndOffset = logEndOffset;
             this.lastFetchTimeMs = lastFetchTimeMs;

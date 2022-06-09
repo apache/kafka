@@ -93,5 +93,4 @@ public class DescribeQuorumResponse extends AbstractResponse {
     public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {
         return new DescribeQuorumResponse(new DescribeQuorumResponseData(new ByteBufferAccessor(buffer), version));
     }
-
 }
