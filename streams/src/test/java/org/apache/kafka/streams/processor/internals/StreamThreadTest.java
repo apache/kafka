@@ -1743,12 +1743,12 @@ public class StreamThreadTest {
     }
 
     private void setupThread(final String storeName1,
-        final String storeName2,
-        final String changelogName1,
-        final String changelogName2,
-        final StreamThread thread,
-        final MockConsumer<byte[], byte[]> restoreConsumer,
-        final boolean addActiveTask) throws IOException {
+                             final String storeName2,
+                             final String changelogName1,
+                             final String changelogName2,
+                             final StreamThread thread,
+                             final MockConsumer<byte[], byte[]> restoreConsumer,
+                             final boolean addActiveTask) throws IOException {
         final TopicPartition activePartition = new TopicPartition(changelogName1, 2);
         final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
