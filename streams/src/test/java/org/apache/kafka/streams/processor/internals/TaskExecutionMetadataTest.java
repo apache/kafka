@@ -55,8 +55,7 @@ public class TaskExecutionMetadataTest {
     @Test
     public void testNamedTopologiesCanBePausedIndependently() {
         final Set<String> pausedTopologies = ConcurrentHashMap.newKeySet();
-        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES,
-            pausedTopologies);
+        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES, pausedTopologies);
 
         final Task mockTask1 = createMockTask(TOPOLOGY1);
         final Task mockTask2 = createMockTask(TOPOLOGY2);
