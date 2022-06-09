@@ -18,15 +18,17 @@
 package kafka.server
 
 import java.util.{Arrays, LinkedHashMap, Optional, Properties}
-
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.ApiVersionsRequest
+import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0}
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
@@ -45,6 +47,17 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     doSetup(testInfo, createOffsetsTopic = false)
+  }
+
+  @Test
+  def testAlterPartitionVersionWithOldIBP(): Unit = {
+    val request = new ApiVersionsRequest.Builder().build()
+    val response = connectAndReceive[ApiVersionsResponse](request, destination = controllerSocketServer)
+    val expectedVersion = new ApiVersion()
+      .setApiKey(ApiKeys.ALTER_PARTITION.id)
+      .setMinVersion(ApiKeys.ALTER_PARTITION.oldestVersion)
+      .setMaxVersion(1.toShort)
+    assertEquals(expectedVersion, response.apiVersion(ApiKeys.ALTER_PARTITION.id))
   }
 
   @Test

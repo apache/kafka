@@ -73,18 +73,35 @@ class DefaultApiVersionManager(
 ) extends ApiVersionManager {
 
   override def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse = {
+    val metadataVersion = metadataCache.metadataVersion()
     val supportedFeatures = features.supportedFeatures
     val finalizedFeatures = metadataCache.features()
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
-    ApiVersionsResponse.createApiVersionsResponse(
+    val response = ApiVersionsResponse.createApiVersionsResponse(
         throttleTimeMs,
-        metadataCache.metadataVersion().highestSupportedRecordVersion,
+        metadataVersion.highestSupportedRecordVersion,
         supportedFeatures,
         finalizedFeatures.features.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
         finalizedFeatures.epoch,
         controllerApiVersions.orNull,
-        listenerType)
+        listenerType
+    )
+
+    // In ZK mode if the deployed software of the controller uses version 2.8 or above
+    // but the IBP is below 2.8, the controller does not assign topic ids. In this case,
+    // it should not advertise the AlterPartition API version 2 and above.
+    val alterPartitionApiVersion = response.apiVersion(ApiKeys.ALTER_PARTITION.id)
+    if (alterPartitionApiVersion != null) {
+      alterPartitionApiVersion.setMaxVersion(
+        if (metadataVersion.isTopicIdsSupported)
+          alterPartitionApiVersion.maxVersion()
+        else
+          1.toShort
+      )
+    }
+
+    response
   }
 
   override def enabledApis: collection.Set[ApiKeys] = {
