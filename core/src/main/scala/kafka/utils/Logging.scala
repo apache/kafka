@@ -29,11 +29,11 @@ object Log4jControllerRegistration {
     val instance = log4jController.getDeclaredConstructor().newInstance()
     val success = CoreUtils.registerMBean(instance, "kafka:type=kafka.Log4jController")
     if (!success) {
-      throw new IllegalArgumentException()
+      throw new IllegalArgumentException
     }
     logger.info("Registered kafka:type=kafka.Log4jController MBean")
   } catch {
-    case _: Exception => logger.info("Couldn't register kafka:type=kafka.Log4jController MBean", Exception)
+    case _: Exception => logger.info("Couldn't register kafka:type=kafka.Log4jController MBean")
   }
 }
 
@@ -43,7 +43,7 @@ private object Logging {
 
 trait Logging {
 
-  protected lazy val logger = Logger(LoggerFactory.getLogger(loggerName))
+  protected lazy val logger: Logger = Logger(LoggerFactory.getLogger(loggerName))
 
   protected var logIdent: String = _
 

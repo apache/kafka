@@ -69,11 +69,9 @@ object KafkaMetricsReporter {
             reporter.init(verifiableProps)
             reporters += reporter
             reporter match {
-              case bean: KafkaMetricsReporterMBean =>
-                val success = CoreUtils.registerMBean(reporter, bean.getMBeanName)
-                if (!success) {
-                  throw new IllegalArgumentException(s"Couldn't register ${bean.getMBeanName} MBean")
-                }
+              // Note that we are silently ignoring if registration is not successful since we do not check the return
+              // type of `CoreUtils.registerMBean`
+              case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
               case _ =>
             }
           })
