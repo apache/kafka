@@ -22,11 +22,13 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.GroupRegexValidator;
 import org.apache.kafka.connect.transforms.util.Requirements;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
@@ -37,7 +39,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class ParseStructByRegex<R extends ConnectRecord<R>> implements Transformation<R> {
     public static final String OVERVIEW_DOC = "Generate key/value Struct objects supported by ordered Regex Group"
         + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
         + "or value (<code>" + Value.class.getName() + "</code>).";
@@ -53,7 +55,7 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         .define(ConfigName.MAPPING_KEY, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
             "Ordered Regex Group Mapping Keys");
 
-    private static final String PURPOSE = "Transform Struct by regex group mapping";
+    private static final String PURPOSE = "Parse Struct by regex group mapping";
 
     private String pattern;
     private List<String> fieldKeys;
@@ -67,6 +69,9 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         pattern = config.getString(ConfigName.REGEX);
         fieldKeys = config.getList(ConfigName.MAPPING_KEY);
 
+        if (fieldKeys.isEmpty()) {
+            throw new ConfigException("pattern must not be empty");
+        }
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
@@ -131,10 +136,15 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
         Pattern p = Pattern.compile(pattern);
         Matcher m = p.matcher(inputTargetStr);
         if (m.find()) {
+            if (m.groupCount() != fieldKeys.size()) {
+                throw new DataException("Unexpected different count data between mapping names and regex group : " + inputTargetStr);
+            }
             for (int i = 0; i < m.groupCount(); i++) {
                 String value = m.group(i + 1);
                 newEntryMap.put(fieldKeys.get(i), value);
             }
+        } else {
+            throw new DataException("Unexpected no match data with regex : " + inputTargetStr);
         }
         return newEntryMap;
     }
@@ -207,7 +217,7 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
-    public static class Key<R extends ConnectRecord<R>> extends ToStructByRegexTransform<R> {
+    public static class Key<R extends ConnectRecord<R>> extends ParseStructByRegex<R> {
 
         @Override
         protected Schema operatingSchema(R record) {
@@ -226,7 +236,7 @@ public abstract class ToStructByRegexTransform<R extends ConnectRecord<R>> imple
 
     }
 
-    public static class Value<R extends ConnectRecord<R>> extends ToStructByRegexTransform<R> {
+    public static class Value<R extends ConnectRecord<R>> extends ParseStructByRegex<R> {
 
         @Override
         protected Schema operatingSchema(R record) {

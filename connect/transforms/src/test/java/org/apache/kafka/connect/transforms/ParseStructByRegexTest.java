@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.Test;
 
@@ -28,8 +30,8 @@ import java.util.Map;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class ToStructByRegexTransformTest {
-    private ToStructByRegexTransform<SourceRecord> testForm = new ToStructByRegexTransform.Value<>();
+public class ParseStructByRegexTest {
+    private ParseStructByRegex<SourceRecord> testForm = new ParseStructByRegex.Value<>();
 
     @Test
     public void schemalessPlainTextTest() {
@@ -96,4 +98,77 @@ public class ToStructByRegexTransformTest {
 
     }
 
+
+    @Test(expected = ConfigException.class)
+    public void schemalessPlainTextMalformedRegexTest() {
+
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("mapping", "protocol,domain,path");
+        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*");
+        String message = "https://kafka.apache.org/documentation/#connect";
+
+        testForm.configure(configMap);
+        testForm.apply(new SourceRecord(null, null, "", 0, null, message));
+    }
+
+    @Test(expected = ConfigException.class)
+    public void emptyMappingConfigTest() {
+
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("mapping", "");
+        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*)");
+        String message = "https://kafka.apache.org/documentation/#connect";
+
+        testForm.configure(configMap);
+        testForm.apply(new SourceRecord(null, null, "", 0, null, message));
+    }
+
+    @Test(expected = ConfigException.class)
+    public void emptyRegexConfigTest() {
+
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("mapping", "protocol,domain,path");
+        configMap.put("regex", "");
+        String message = "https://kafka.apache.org/documentation/#connect";
+
+        testForm.configure(configMap);
+        testForm.apply(new SourceRecord(null, null, "", 0, null, message));
+    }
+
+    @Test(expected = DataException.class)
+    public void schemalessPlainTextNotMatchRegexTest() {
+
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("mapping", "protocol,domain,path");
+        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*)");
+        String message = "tcp://kafka.apache.org/documentation/#connect";
+
+        testForm.configure(configMap);
+        SourceRecord result = testForm.apply(new SourceRecord(null, null, "", 0, null, message));
+    }
+
+    @Test(expected = DataException.class)
+    public void schemalessPlainTextOverMappingTest() {
+
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("mapping", "protocol,domain,path,etc");
+        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*)");
+        String message = "https://kafka.apache.org/documentation/#connect";
+
+        testForm.configure(configMap);
+        testForm.apply(new SourceRecord(null, null, "", 0, null, message));
+    }
+
+
+    @Test(expected = DataException.class)
+    public void schemalessPlainTextOverRegexGroupTest() {
+
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("mapping", "protocol,domain");
+        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*)");
+        String message = "https://kafka.apache.org/documentation/#connect";
+
+        testForm.configure(configMap);
+        testForm.apply(new SourceRecord(null, null, "", 0, null, message));
+    }
 }
