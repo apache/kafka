@@ -41,6 +41,7 @@ plugins {
   id 'org.gradle.test-retry' version '1.3.1' apply false
   id 'org.scoverage' version '7.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
 }
 
 spotless {
@@ -1033,7 +1034,7 @@ project(':core') {
                                ':connect:runtime:genConnectPredicateDocs',
                                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
-                               ':connect:runtime:genConnectMetricsDocs'], type: Tar) {
+                               ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs'], type: Tar) {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -2518,6 +2519,8 @@ project(':connect:runtime') {
     implementation libs.jettyClient
     implementation libs.reflections
     implementation libs.mavenArtifact
+    implementation libs.swaggerJaxrs2
+    implementation libs.swaggerAnnotations
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
@@ -2596,6 +2599,26 @@ project(':connect:runtime') {
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
+  }
+
+  task setVersionInOpenAPISpec(type: Copy) {
+    from "$rootDir/gradle/openapi.template"
+    into "$buildDir/resources/docs"
+    rename ('openapi.template', 'openapi.yaml')
+    expand(kafkaVersion: "$rootProject.version")
+  }
+
+  task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
+    classpath = sourceSets.main.runtimeClasspath
+    buildClasspath = classpath
+    outputFileName = 'connect_rest'
+    outputFormat = 'YAML'
+    prettyPrint = 'TRUE'
+    sortOutput = 'TRUE'
+    openApiFile = file("$buildDir/resources/docs/openapi.yaml")
+    resourcePackages = ['org.apache.kafka.connect.runtime.rest.resources']
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    outputDir = file(generatedDocsDir)
   }
 
 }
