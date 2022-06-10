@@ -297,7 +297,8 @@ public class ConnectorsResource {
 
     @PUT
     @Path("/{connector}/pause")
-    @Operation(summary = "Pause the specified connector")
+    @Operation(summary = "Pause the specified connector",
+               description = "This operation is idempotent and has no effects if the connector is already paused")
     public Response pauseConnector(@PathParam("connector") String connector, final @Context HttpHeaders headers) {
         herder.pauseConnector(connector);
         return Response.accepted().build();
@@ -305,7 +306,8 @@ public class ConnectorsResource {
 
     @PUT
     @Path("/{connector}/resume")
-    @Operation(summary = "Resume the specified connector")
+    @Operation(summary = "Resume the specified connector",
+               description = "This operation is idempotent and has no effects if the connector is already running")
     public Response resumeConnector(@PathParam("connector") String connector) {
         herder.resumeConnector(connector);
         return Response.accepted().build();
