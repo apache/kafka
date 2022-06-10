@@ -501,6 +501,7 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks();
         verifyUpdatingTasks();
         verifyRestoredActiveTasks();
+        verifyNotCommitTasks(task1, task2);
     }
 
     @Test
@@ -537,6 +538,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(task2);
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
+        verifyNotCommitTasks(task1, task3);
     }
 
     @Test
@@ -562,6 +564,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(task3);
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
+        verifyNotCommitTasks(task1, task2);
     }
 
     @Test
@@ -583,6 +586,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
+        verifyNotCommitTasks(task1, task2);
     }
 
     @Test
