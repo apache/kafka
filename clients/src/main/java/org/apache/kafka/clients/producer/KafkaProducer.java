@@ -754,11 +754,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Commits the ongoing transaction. This method will flush any unsent records before actually committing the transaction.
-     *
+     * <p>
      * Further, if any of the {@link #send(ProducerRecord)} calls which were part of the transaction hit irrecoverable
      * errors, this method will throw the last received exception immediately and the transaction will not be committed.
      * So all {@link #send(ProducerRecord)} calls in a transaction must succeed in order for this method to succeed.
-     *
+     * <p>
+     * If the transaction is committed successfully and this method returns without throwing an exception, it is guaranteed
+     * that all {@link Callback callbacks} for records in the transaction will have been invoked and completed.
+     * Note that exceptions thrown by callbacks are ignored; the producer proceeds to commit the transaction in any case.
+     * <p>
      * Note that this method will raise {@link TimeoutException} if the transaction cannot be committed before expiration
      * of {@code max.block.ms}. Additionally, it will raise {@link InterruptException} if interrupted.
      * It is safe to retry in either case, but it is not possible to attempt a different operation (such as abortTransaction)
