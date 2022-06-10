@@ -99,7 +99,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is (${MetadataVersion.latest().version()})")
+      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.latest().version()}")
 
     parser.parseArgsOrFail(args)
   }
