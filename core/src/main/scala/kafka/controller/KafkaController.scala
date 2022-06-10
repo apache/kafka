@@ -2240,7 +2240,7 @@ class KafkaController(val config: KafkaConfig,
     alterPartitionRequestVersion: Short,
     callback: AlterPartitionResponseData => Unit
   ): Unit = {
-    try {
+    val partitionResponses = try {
       doProcessAlterPartition(
         alterPartitionRequest,
         alterPartitionRequestVersion,
@@ -2250,6 +2250,18 @@ class KafkaController(val config: KafkaConfig,
       case e: Throwable =>
         error(s"Error when processing AlterPartition: $alterPartitionRequest", e)
         callback(new AlterPartitionResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code))
+        mutable.Map.empty
+    }
+
+    // After we have returned the result of the `AlterPartition` request, we should check whether
+    // there are any reassignments which can be completed by a successful ISR expansion.
+    partitionResponses.forKeyValue { (topicPartition, partitionResponse) =>
+      if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
+        val isSuccessfulUpdate = partitionResponse.isRight
+        if (isSuccessfulUpdate) {
+          maybeCompleteReassignment(topicPartition)
+        }
+      }
     }
   }
 
@@ -2257,18 +2269,13 @@ class KafkaController(val config: KafkaConfig,
     alterPartitionRequest: AlterPartitionRequestData,
     alterPartitionRequestVersion: Short,
     callback: AlterPartitionResponseData => Unit
-  ): Unit = {
+  ): mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] = {
     val useTopicsIds = alterPartitionRequestVersion > 1
-
-    if (useTopicsIds && !config.usesTopicId) {
-      callback(new AlterPartitionResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code))
-      return
-    }
 
     // Handle a few short-circuits
     if (!isActive) {
       callback(new AlterPartitionResponseData().setErrorCode(Errors.NOT_CONTROLLER.code))
-      return
+      return mutable.Map.empty
     }
 
     val brokerId = alterPartitionRequest.brokerId
@@ -2277,13 +2284,13 @@ class KafkaController(val config: KafkaConfig,
     if (brokerEpochOpt.isEmpty) {
       info(s"Ignoring AlterPartition due to unknown broker $brokerId")
       callback(new AlterPartitionResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
-      return
+      return mutable.Map.empty
     }
 
     if (!brokerEpochOpt.contains(brokerEpoch)) {
       info(s"Ignoring AlterPartition due to stale broker epoch $brokerEpoch and local broker epoch $brokerEpochOpt for broker $brokerId")
       callback(new AlterPartitionResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
-      return
+      return mutable.Map.empty
     }
 
     val partitionsToAlter = new mutable.HashMap[TopicPartition, LeaderAndIsr]()
@@ -2435,16 +2442,7 @@ class KafkaController(val config: KafkaConfig,
 
     callback(alterPartitionResponse)
 
-    // After we have returned the result of the `AlterPartition` request, we should check whether
-    // there are any reassignments which can be completed by a successful ISR expansion.
-    partitionResponses.forKeyValue { (topicPartition, partitionResponse) =>
-      if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-        val isSuccessfulUpdate = partitionResponse.isRight
-        if (isSuccessfulUpdate) {
-          maybeCompleteReassignment(topicPartition)
-        }
-      }
-    }
+    partitionResponses
   }
 
   def allocateProducerIds(allocateProducerIdsRequest: AllocateProducerIdsRequestData,

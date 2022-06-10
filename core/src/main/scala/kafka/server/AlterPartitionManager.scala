@@ -260,8 +260,9 @@ class DefaultAlterPartitionManager(
     // the metadata cache is updated after the partition state so it might not know
     // yet about a topic id already used here.
     val topicNamesByIds = mutable.HashMap[Uuid, String]()
-    // We can use topic ids only if all the pending changed have one defined.
-    var canUseTopicIds = true
+    // We can use topic ids only if all the pending changed have one defined and
+    // we use IBP 2.8 or above.
+    var canUseTopicIds = metadataVersion.isTopicIdsSupported
 
     val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)

@@ -276,10 +276,13 @@ class PartitionLockTest extends Logging {
       logManager,
       alterIsrManager) {
 
-      override def prepareIsrShrink(outOfSyncReplicaIds: Set[Int]): PendingShrinkIsr = {
+      override def prepareIsrShrink(
+        currentState: CommittedPartitionState,
+        outOfSyncReplicaIds: Set[Int]
+      ): PendingShrinkIsr = {
         shrinkIsrSemaphore.acquire()
         try {
-          super.prepareIsrShrink(outOfSyncReplicaIds)
+          super.prepareIsrShrink(currentState, outOfSyncReplicaIds)
         } finally {
           shrinkIsrSemaphore.release()
         }

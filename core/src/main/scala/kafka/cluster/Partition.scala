@@ -180,8 +180,7 @@ case class PendingExpandIsr(
   }
 
   override def toString: String = {
-    s"PendingExpandIsr(isr=$isr" +
-    s", newInSyncReplicaId=$newInSyncReplicaId" +
+    s"PendingExpandIsr(newInSyncReplicaId=$newInSyncReplicaId" +
     s", sentLeaderAndIsr=$sentLeaderAndIsr" +
     s", leaderRecoveryState=$leaderRecoveryState" +
     s", lastCommittedState=$lastCommittedState" +
@@ -203,8 +202,7 @@ case class PendingShrinkIsr(
   }
 
   override def toString: String = {
-    s"PendingShrinkIsr(isr=$isr" +
-    s", outOfSyncReplicaIds=$outOfSyncReplicaIds" +
+    s"PendingShrinkIsr(outOfSyncReplicaIds=$outOfSyncReplicaIds" +
     s", sentLeaderAndIsr=$sentLeaderAndIsr" +
     s", leaderRecoveryState=$leaderRecoveryState" +
     s", lastCommittedState=$lastCommittedState" +
@@ -848,10 +846,11 @@ class Partition(val topicPartition: TopicPartition,
     if (needsIsrUpdate) {
       val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
         // check if this replica needs to be added to the ISR
-        if (!partitionState.isInflight && needsExpandIsr(followerReplica)) {
-          Some(prepareIsrExpand(followerReplica.brokerId))
-        } else {
-          None
+        partitionState match {
+          case currentState: CommittedPartitionState if needsExpandIsr(followerReplica) =>
+            Some(prepareIsrExpand(currentState, followerReplica.brokerId))
+          case _ =>
+            None
         }
       }
       // Send the AlterPartition request outside of the LeaderAndIsr lock since the completion logic
@@ -1031,21 +1030,22 @@ class Partition(val topicPartition: TopicPartition,
       val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
         leaderLogIfLocal.flatMap { leaderLog =>
           val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-          if (!partitionState.isInflight && outOfSyncReplicaIds.nonEmpty) {
-            val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
-              val logEndOffsetMessage = getReplica(replicaId)
-                .map(_.stateSnapshot.logEndOffset.toString)
-                .getOrElse("unknown")
-              s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
-            }.mkString(" ")
-            val newIsrLog = (partitionState.isr -- outOfSyncReplicaIds).mkString(",")
-            info(s"Shrinking ISR from ${partitionState.isr.mkString(",")} to $newIsrLog. " +
-              s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
-              s"endOffset: ${leaderLog.logEndOffset}). " +
-              s"Out of sync replicas: $outOfSyncReplicaLog.")
-            Some(prepareIsrShrink(outOfSyncReplicaIds))
-          } else {
-            None
+          partitionState match {
+            case currentState: CommittedPartitionState if outOfSyncReplicaIds.nonEmpty =>
+              val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
+                val logEndOffsetMessage = getReplica(replicaId)
+                  .map(_.stateSnapshot.logEndOffset.toString)
+                  .getOrElse("unknown")
+                s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
+              }.mkString(" ")
+              val newIsrLog = (partitionState.isr -- outOfSyncReplicaIds).mkString(",")
+              info(s"Shrinking ISR from ${partitionState.isr.mkString(",")} to $newIsrLog. " +
+                s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
+                s"endOffset: ${leaderLog.logEndOffset}). " +
+                s"Out of sync replicas: $outOfSyncReplicaLog.")
+              Some(prepareIsrShrink(currentState, outOfSyncReplicaIds))
+            case _ =>
+              None
           }
         }
       }
@@ -1518,7 +1518,10 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def prepareIsrExpand(newInSyncReplicaId: Int): PendingExpandIsr = {
+  private def prepareIsrExpand(
+    currentState: CommittedPartitionState,
+    newInSyncReplicaId: Int
+  ): PendingExpandIsr = {
     // When expanding the ISR, we assume that the new replica will make it into the ISR
     // before we receive confirmation that it has. This ensures that the HW will already
     // reflect the updated ISR even if there is a delay before we receive the confirmation.
@@ -1535,16 +1538,16 @@ class Partition(val topicPartition: TopicPartition,
     val updatedState = PendingExpandIsr(
       newInSyncReplicaId,
       newLeaderAndIsr,
-      // The current partition state must be of type CommittedPartitionState
-      // if we are here. CommittedPartitionState is the only one with `isInflight`
-      // equals to false.
-      partitionState.asInstanceOf[CommittedPartitionState]
+      currentState
     )
     partitionState = updatedState
     updatedState
   }
 
-  private[cluster] def prepareIsrShrink(outOfSyncReplicaIds: Set[Int]): PendingShrinkIsr = {
+  private[cluster] def prepareIsrShrink(
+    currentState: CommittedPartitionState,
+    outOfSyncReplicaIds: Set[Int]
+  ): PendingShrinkIsr = {
     // When shrinking the ISR, we cannot assume that the update will succeed as this could
     // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
     // for `PendingShrinkIsr` is the the current ISR.
@@ -1559,10 +1562,7 @@ class Partition(val topicPartition: TopicPartition,
     val updatedState = PendingShrinkIsr(
       outOfSyncReplicaIds,
       newLeaderAndIsr,
-      // The current partition state must be of type CommittedPartitionState
-      // if we are here. CommittedPartitionState is the only one with `isInflight`
-      // equals to false.
-      partitionState.asInstanceOf[CommittedPartitionState]
+      currentState
     )
     partitionState = updatedState
     updatedState
@@ -1621,19 +1621,18 @@ class Partition(val topicPartition: TopicPartition,
   ): Boolean = {
     alterPartitionListener.markFailed()
     error match {
-      case Errors.OPERATION_NOT_ATTEMPTED =>
-        // Since the operation was not attempted, it is safe to reset back to the committed state.
+      case Errors.OPERATION_NOT_ATTEMPTED | Errors.INELIGIBLE_REPLICA =>
+        // Care must be taken when resetting to the last committed state since we may not
+        // know in general whether the request was applied or not taking into account retries
+        // and controller changes which might have occurred before we received the response.
+        // However, when the controller returns INELIGIBLE_REPLICA (or OPERATION_NOT_COMMITTED),
+        // the controller is explicitly telling us 1) that the current partition epoch is correct,
+        // and 2) that the request was not applied. Even if the controller that sent the response
+        // is stale, we are guaranteed from the monotonicity of the controller epoch that the
+        // request could not have been applied by any past or future controller.
         partitionState = proposedIsrState.lastCommittedState
-        info(s"Failed to alter partition to $proposedIsrState since there is a pending AlterPartition still inflight. " +
-          s"Partition state has been reset to the latest committed state $partitionState")
-        false
-      case Errors.INELIGIBLE_REPLICA =>
-        // Since the operation was rejected, it is safe to reset back to the committed state. This
-        // assumes that the current state was still the correct expected state.
-        // This is only raised in KRaft mode.
-        partitionState = proposedIsrState.lastCommittedState
-        info(s"Failed to alter partition to $proposedIsrState since the controller rejected at least one replica " +
-          s"because it is ineligible to join the ISR. Partition state has been reset to the latest committed state $partitionState.")
+        info(s"Failed to alter partition to $proposedIsrState since the controller rejected the request with $error. " +
+          s"Partition state has been reset to the latest committed state $partitionState.")
         false
       case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
         debug(s"Failed to alter partition to $proposedIsrState since the controller doesn't know about " +

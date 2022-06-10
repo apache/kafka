@@ -902,28 +902,26 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       future.complete
     ))
 
-    val expectedAlterPartitionResponse =
-      if (!metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1) {
-        // If the controller is not on IBP 2.8 or above, it does not know about
-        // topic id. Therefore using alter partition version 2 or above results
-        // in a UNSUPPORTED_VERSION error.
-        new AlterPartitionResponseData()
-          .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-      } else {
-        new AlterPartitionResponseData()
-          .setTopics(Seq(new AlterPartitionResponseData.TopicData()
-            .setTopicName(if (alterPartitionVersion <= 1) tp.topic else "")
-            .setTopicId(if (alterPartitionVersion > 1) topicId else Uuid.ZERO_UUID)
-            .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
-              .setPartitionIndex(tp.partition)
-              .setLeaderId(brokerId)
-              .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
-              .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
-              .setIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
-              .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
-            ).asJava)
-          ).asJava)
-      }
+    if (!metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1) {
+      // If the controller is not on IBP 2.8 or above, topics do not have
+      // topic ids so sending AlterPartition version 2 should never happen.
+      // The AlterPartitionManager prevents it.
+      return
+    }
+
+    val expectedAlterPartitionResponse = new AlterPartitionResponseData()
+      .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+        .setTopicName(if (alterPartitionVersion <= 1) tp.topic else "")
+        .setTopicId(if (alterPartitionVersion > 1) topicId else Uuid.ZERO_UUID)
+        .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderId(brokerId)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
 
     assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
   }
