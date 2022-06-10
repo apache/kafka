@@ -167,7 +167,7 @@ public class GlobalStateManagerImplTest {
         // set readonly to the CHECKPOINT_FILE_NAME.tmp file because we will write data to the .tmp file first
         // and then swap to CHECKPOINT_FILE_NAME by replacing it
         final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
-        file.createNewFile();
+        Files.createFile(file.toPath());
         file.setWritable(false);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
