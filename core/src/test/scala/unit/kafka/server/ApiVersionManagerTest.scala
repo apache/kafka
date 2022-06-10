@@ -19,9 +19,7 @@ package kafka.server
 import kafka.server.metadata.ZkMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.api.Assertions._
@@ -133,28 +131,4 @@ class ApiVersionManagerTest {
     assertNull(apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id))
   }
 
-  @ParameterizedTest
-  @EnumSource(classOf[MetadataVersion])
-  def testAlterPartitionAdvertisedVersion(metadataVersion: MetadataVersion): Unit = {
-    val metadataCache = new ZkMetadataCache(1, metadataVersion, brokerFeatures)
-
-    val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.ZK_BROKER,
-      forwardingManager = None,
-      features = brokerFeatures,
-      metadataCache = metadataCache
-    )
-
-    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
-
-    val expectedVersion = if (metadataVersion.isTopicIdsSupported) {
-      ApiVersionsResponse.toApiVersion(ApiKeys.ALTER_PARTITION)
-    } else {
-      new ApiVersion()
-        .setApiKey(ApiKeys.ALTER_PARTITION.id)
-        .setMinVersion(ApiKeys.ALTER_PARTITION.oldestVersion)
-        .setMaxVersion(1.toShort)
-    }
-    assertEquals(expectedVersion, apiVersionsResponse.apiVersion(ApiKeys.ALTER_PARTITION.id))
-  }
 }
