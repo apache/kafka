@@ -865,27 +865,36 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   @ParameterizedTest
   @MethodSource(Array("testAlterPartitionSource"))
   def testAlterPartition(metadataVersion: MetadataVersion, alterPartitionVersion: Short): Unit = {
-    servers = makeServers(2, interBrokerProtocolVersion = Some(metadataVersion))
+    if (!metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1) {
+      // This combination is not valid. We cannot use alter partition version > 1
+      // if the broker is on an IBP < 2.8 because topics don't have id in this case.
+      return
+    }
+
+    servers = makeServers(1, interBrokerProtocolVersion = Some(metadataVersion))
 
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
-    val otherBroker = servers.find(_.config.brokerId != controllerId).get
     val tp = new TopicPartition("t", 0)
-    val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
+    val assignment = Map(tp.partition -> Seq(controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
 
     val controller = getController().kafkaController
     val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
     val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
     val topicId = controller.controllerContext.topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID)
-    val brokerId = otherBroker.config.brokerId
-    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(otherBroker.config.brokerId)
+    val brokerId = controllerId
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
+
+    // The caller of the AlterPartition API can only use topics ids iif 1) the controller is
+    // on IBP >= 2.8 and 2) the AlterPartition version 2 and above is used.
+    val canCallerUseTopicIds = metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1
 
     val alterPartitionRequest = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(brokerEpoch)
       .setTopics(Seq(new AlterPartitionRequestData.TopicData()
-        .setTopicName(if (alterPartitionVersion <= 1) tp.topic else "")
-        .setTopicId(if (alterPartitionVersion > 1) topicId else Uuid.ZERO_UUID)
+        .setTopicName(if (!canCallerUseTopicIds) tp.topic else "")
+        .setTopicId(if (canCallerUseTopicIds) topicId else Uuid.ZERO_UUID)
         .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(tp.partition)
           .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
@@ -902,17 +911,73 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       future.complete
     ))
 
-    if (!metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1) {
-      // If the controller is not on IBP 2.8 or above, topics do not have
-      // topic ids so sending AlterPartition version 2 should never happen.
-      // The AlterPartitionManager prevents it.
-      return
-    }
+    val expectedAlterPartitionResponse = new AlterPartitionResponseData()
+      .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+        .setTopicName(if (!canCallerUseTopicIds) tp.topic else "")
+        .setTopicId(if (canCallerUseTopicIds) topicId else Uuid.ZERO_UUID)
+        .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderId(brokerId)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
+  }
+
+  @Test
+  def testAlterPartitionVersion2KeepWorkingWhenControllerDowngradeToPre28IBP(): Unit = {
+    // When the controller downgrades from IBP >= 2.8 to IBP < 2.8, it does not assign
+    // topic ids anymore. However, the already assigned topic ids are kept. This means
+    // that using AlterPartition version 2 should still work assuming that it only
+    // contains topic with topics ids.
+    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.latest))
+
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    // Downgrade controller to IBP 2.7
+    servers(0).shutdown()
+    servers(0).awaitShutdown()
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
+    TestUtils.waitUntilControllerElected(zkClient)
+
+    val controller = getController().kafkaController
+    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val topicId = controller.controllerContext.topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID)
+    val brokerId = controllerId
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
+
+    val alterPartitionRequest = new AlterPartitionRequestData()
+      .setBrokerId(brokerId)
+      .setBrokerEpoch(brokerEpoch)
+      .setTopics(Seq(new AlterPartitionRequestData.TopicData()
+        .setTopicId(topicId)
+        .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setNewIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    val future = new CompletableFuture[AlterPartitionResponseData]()
+    controller.eventManager.put(AlterPartitionReceived(
+      alterPartitionRequest,
+      ApiKeys.ALTER_PARTITION.latestVersion,
+      future.complete
+    ))
 
     val expectedAlterPartitionResponse = new AlterPartitionResponseData()
       .setTopics(Seq(new AlterPartitionResponseData.TopicData()
-        .setTopicName(if (alterPartitionVersion <= 1) tp.topic else "")
-        .setTopicId(if (alterPartitionVersion > 1) topicId else Uuid.ZERO_UUID)
+        .setTopicId(topicId)
         .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
           .setPartitionIndex(tp.partition)
           .setLeaderId(brokerId)

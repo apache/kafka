@@ -26,6 +26,7 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
@@ -878,9 +879,15 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
-    // In KRaft mode, only replicas which are not fenced nor in controlled shutdown are
-    // allowed to join the ISR. This does not apply to ZK mode.
-    !metadataCache.isBrokerFenced(followerReplicaId) && !metadataCache.isBrokerShuttingDown(followerReplicaId)
+    metadataCache match {
+      // In KRaft mode, only replicas which are not fenced nor in controlled shutdown are
+      // allowed to join the ISR. This does not apply to ZK mode.
+      case kRaftMetadataCache: KRaftMetadataCache =>
+        !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
+          !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId)
+
+      case _ => true
+    }
   }
 
   /*

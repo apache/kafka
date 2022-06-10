@@ -46,6 +46,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
@@ -1343,6 +1344,20 @@ class PartitionTest extends AbstractPartitionTest {
     val replicas = List(brokerId, remoteBrokerId)
     val isr = Set(brokerId)
 
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
     assertTrue(partition.makeLeader(
       new LeaderAndIsrPartitionState()
@@ -1426,6 +1441,20 @@ class PartitionTest extends AbstractPartitionTest {
     val remoteBrokerId = brokerId + 1
     val replicas = List(brokerId, remoteBrokerId)
     val isr = Set(brokerId)
+
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
     assertTrue(partition.makeLeader(

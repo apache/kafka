@@ -202,11 +202,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     Option(_currentImage.cluster.broker(brokerId)).count(!_.fenced()) == 1
   }
 
-  override def isBrokerFenced(brokerId: Int): Boolean = {
+  def isBrokerFenced(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(_.fenced) == 1
   }
 
-  override def isBrokerShuttingDown(brokerId: Int): Boolean = {
+  def isBrokerShuttingDown(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
