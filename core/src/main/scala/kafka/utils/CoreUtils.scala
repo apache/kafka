@@ -119,7 +119,7 @@ object CoreUtils {
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
-      val mbs = ManagementFactory.getPlatformMBeanServer()
+      val mbs = ManagementFactory.getPlatformMBeanServer
       mbs synchronized {
         val objName = new ObjectName(name)
         if (mbs.isRegistered(objName))
@@ -139,7 +139,7 @@ object CoreUtils {
    * @param name The mbean name to unregister
    */
   def unregisterMBean(name: String): Unit = {
-    val mbs = ManagementFactory.getPlatformMBeanServer()
+    val mbs = ManagementFactory.getPlatformMBeanServer
     mbs synchronized {
       val objName = new ObjectName(name)
       if (mbs.isRegistered(objName))
