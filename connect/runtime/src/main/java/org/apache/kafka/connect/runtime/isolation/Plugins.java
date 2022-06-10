@@ -145,6 +145,16 @@ public class Plugins {
         return compareAndSwapLoaders(connectorLoader);
     }
 
+    public LoaderSwap withClassLoader(ClassLoader loader) {
+        ClassLoader savedLoader = compareAndSwapLoaders(loader);
+        try {
+            return new LoaderSwap(savedLoader);
+        } catch (Throwable t) {
+            compareAndSwapLoaders(savedLoader);
+            throw t;
+        }
+    }
+
     public DelegatingClassLoader delegatingLoader() {
         return delegatingLoader;
     }

@@ -18,7 +18,11 @@
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import javax.security.auth.login.Configuration;
 import javax.ws.rs.HttpMethod;
@@ -45,7 +49,10 @@ import javax.ws.rs.core.Response;
 public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JaasBasicAuthFilter.class);
-    private static final Pattern TASK_REQUEST_PATTERN = Pattern.compile("/?connectors/([^/]+)/tasks/?");
+    private static final Set<RequestMatcher> INTERNAL_REQUEST_MATCHERS = new HashSet<>(Arrays.asList(
+            new RequestMatcher(HttpMethod.POST, "/?connectors/([^/]+)/tasks/?"),
+            new RequestMatcher(HttpMethod.PUT, "/?connectors/[^/]+/fence/?")
+    ));
     private static final String CONNECT_LOGIN_MODULE = "KafkaConnect";
 
     static final String AUTHORIZATION = "Authorization";
@@ -53,13 +60,29 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
     // Package-private for testing
     final Configuration configuration;
 
+    private static class RequestMatcher implements Predicate<ContainerRequestContext> {
+        private final String method;
+        private final Pattern path;
+
+        public RequestMatcher(String method, String path) {
+            this.method = method;
+            this.path = Pattern.compile(path);
+        }
+
+        @Override
+        public boolean test(ContainerRequestContext requestContext) {
+            return requestContext.getMethod().equals(method)
+                    && path.matcher(requestContext.getUriInfo().getPath()).matches();
+        }
+    }
+
     public JaasBasicAuthFilter(Configuration configuration) {
         this.configuration = configuration;
     }
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
-        if (isInternalTaskConfigRequest(requestContext)) {
+        if (isInternalRequest(requestContext)) {
             log.trace("Skipping authentication for internal request");
             return;
         }
@@ -82,11 +105,9 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
         }
     }
 
-    private static boolean isInternalTaskConfigRequest(ContainerRequestContext requestContext) {
-        return requestContext.getMethod().equals(HttpMethod.POST)
-            && TASK_REQUEST_PATTERN.matcher(requestContext.getUriInfo().getPath()).matches();
+    private boolean isInternalRequest(ContainerRequestContext requestContext) {
+        return INTERNAL_REQUEST_MATCHERS.stream().anyMatch(m -> m.test(requestContext));
     }
-
 
     public static class BasicAuthCallBackHandler implements CallbackHandler {
 

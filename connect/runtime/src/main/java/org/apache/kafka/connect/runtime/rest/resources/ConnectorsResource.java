@@ -338,6 +338,17 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", headers, taskConfigs, forward);
     }
 
+    @PUT
+    @Path("/{connector}/fence")
+    public void fenceZombies(final @PathParam("connector") String connector,
+                             final @Context HttpHeaders headers,
+                             final @QueryParam("forward") Boolean forward,
+                             final byte[] requestBody) throws Throwable {
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.fenceZombieSourceTasks(connector, cb, InternalRequestSignature.fromHeaders(requestBody, headers));
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/fence", "PUT", headers, requestBody, forward);
+    }
+
     @GET
     @Path("/{connector}/tasks/{task}/status")
     @Operation(summary = "Get the state of the specified task for the specified connector")

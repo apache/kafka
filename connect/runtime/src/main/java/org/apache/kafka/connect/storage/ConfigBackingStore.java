@@ -102,6 +102,13 @@ public interface ConfigBackingStore {
     void putRestartRequest(RestartRequest restartRequest);
 
     /**
+     * Record the number of tasks for the connector after a successful round of zombie fencing.
+     * @param connector name of the connector
+     * @param taskCount number of tasks used by the connector
+     */
+    void putTaskCountRecord(String connector, int taskCount);
+
+    /**
      * Prepare to write to the backing config store. May be required by some implementations (such as those that only permit a single
      * writer at a time across a cluster of workers) before performing mutating operations like writing configurations, target states, etc.
      * The default implementation is a no-op; it is the responsibility of the implementing class to override this and document any expectations for

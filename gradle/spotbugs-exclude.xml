@@ -312,6 +312,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!--
+            Temporarily suppress warnings about unused private methods (will be used in a subsequent pull request)
+            TODO: Remove this before merging to trunk
+        -->
+        <Class name="org.apache.kafka.connect.runtime.distributed.DistributedHerder"/>
+        <Method name="verifyTaskGenerationAndOwnership"/>
+        <Bug pattern="UPM_UNCALLED_PRIVATE_METHOD"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a warning about intentional switch statement fallthrough. -->
         <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
         <Method name="authenticate"/>

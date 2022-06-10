@@ -191,4 +191,14 @@ public final class ConnectUtils {
                 .collect(collector);
     }
 
+    public static ConnectException maybeWrap(Throwable t, String message) {
+        if (t == null) {
+            return null;
+        }
+        if (t instanceof ConnectException) {
+            return (ConnectException) t;
+        }
+        return new ConnectException(message, t);
+    }
+
 }
