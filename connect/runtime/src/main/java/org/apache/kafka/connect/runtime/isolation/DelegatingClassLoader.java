@@ -222,14 +222,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
             String pluginClassName = plugin.className();
-            SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(pluginClassName);
-            if (inner == null) {
-                inner = new TreeMap<>();
-                pluginLoaders.put(pluginClassName, inner);
-                // TODO: once versioning is enabled this line should be moved outside this if branch
-                log.info("Added plugin '{}'", pluginClassName);
-            }
-            inner.put(plugin, loader);
+            pluginLoaders.computeIfAbsent(pluginClassName, k -> new TreeMap<>()).put(plugin, loader);
         }
     }
 

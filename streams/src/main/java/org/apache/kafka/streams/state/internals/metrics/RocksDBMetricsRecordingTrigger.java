@@ -32,12 +32,12 @@ public class RocksDBMetricsRecordingTrigger implements Runnable {
 
     public void addMetricsRecorder(final RocksDBMetricsRecorder metricsRecorder) {
         final String metricsRecorderName = metricsRecorderName(metricsRecorder);
-        if (metricsRecordersToTrigger.containsKey(metricsRecorderName)) {
+        final RocksDBMetricsRecorder existingRocksDBMetricsRecorder = metricsRecordersToTrigger.putIfAbsent(metricsRecorderName, metricsRecorder);
+        if (existingRocksDBMetricsRecorder != null) {
             throw new IllegalStateException("RocksDB metrics recorder for store \"" + metricsRecorder.storeName() +
                 "\" of task " + metricsRecorder.taskId().toString() + " has already been added. "
                 + "This is a bug in Kafka Streams.");
         }
-        metricsRecordersToTrigger.put(metricsRecorderName, metricsRecorder);
     }
 
     public void removeMetricsRecorder(final RocksDBMetricsRecorder metricsRecorder) {
