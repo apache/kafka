@@ -28,19 +28,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Disable warnings about mutable objects and the use of public fields.
             EI_EXPOSE_REP: May expose internal representation by returning reference to mutable object
             EI_EXPOSE_REP2: May expose internal representation by incorporating reference to mutable object
-            MS_EXPOSE_REP: Public static method may expose internal representation by returning array
             MS_PKGPROTECT: Field should be package protected -->
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>
             <Bug pattern="EI_EXPOSE_REP2"/>
-            <Bug pattern="MS_EXPOSE_REP"/>
             <Bug pattern="MS_PKGPROTECT"/>
         </Or>
-    </Match>
-    <Match>
-        <!-- Disable warnings about Random object.
-            DMI_RANDOM_USED_ONLY_ONCE: Random object created and used only once -->
-        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
 
     <Match>
@@ -53,17 +46,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Disable warnings about the lack of equals() when compareTo() is implemented.
             EQ_COMPARETO_USE_OBJECT_EQUALS: This class defines a compareTo method but no equals() method -->
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
-    </Match>
-    <Match>
-        <!-- Disable bug types introduced by the ThrowingExceptions detector with 4.7.0.
-            THROWS_METHOD_THROWS_RUNTIMEEXCEPTION: Method intentionally throws RuntimeException.
-            THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION: Method lists Exception in its throws clause.
-            THROWS_METHOD_THROWS_CLAUSE_THROWABLE: Method lists Throwable in its throws clause. -->
-        <Or>
-            <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
-            <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
-            <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
-        </Or>
     </Match>
 
     <Match>
@@ -78,6 +60,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             SE_BAD_FIELD: Non-transient non-serializable instance field in serializable class.
             DM_STRING_CTOR: Method invokes inefficient new String(String) constructor.
             DM_NEW_FOR_GETCLASS: Method allocates an object, only to get the class object.
+            DMI_RANDOM_USED_ONLY_ONCE: Random object created and used only once
             ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD: Write to static field from instance method.
             DM_NUMBER_CTOR: Method invokes inefficient Number constructor; use static valueOf instead.
             RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE: Nullcheck of value previously dereferenced.
@@ -99,6 +82,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="SE_BAD_FIELD"/>
             <Bug pattern="DM_STRING_CTOR"/>
             <Bug pattern="DM_NEW_FOR_GETCLASS"/>
+            <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
             <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
             <Bug pattern="DM_NUMBER_CTOR"/>
             <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
@@ -112,6 +96,19 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
             <Bug pattern="IC_INIT_CIRCULARITY"/>
             <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <!-- Disable bug types introduced by the ThrowingExceptions detector with 4.7.0.
+            THROWS_METHOD_THROWS_RUNTIMEEXCEPTION: Method intentionally throws RuntimeException.
+            THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION: Method lists Exception in its throws clause.
+            THROWS_METHOD_THROWS_CLAUSE_THROWABLE: Method lists Throwable in its throws clause. -->
+        <!-- TODO Update spotbugs as soon as the relevant issue is released: https://github.com/spotbugs/spotbugs/issues/2040 -->
+        <Or>
+            <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
+            <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+            <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_THROWABLE"/>
         </Or>
     </Match>
 
@@ -131,8 +128,22 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
        https://github.com/spotbugs/spotbugs/issues/600
        https://github.com/spotbugs/spotbugs/issues/1791
        -->
+    <!-- TODO Update spotbugs as soon as the relevant issue is released: https://github.com/spotbugs/spotbugs/issues/1931 -->
     <Match>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+    </Match>
+
+    <Match>
+        <!-- MS_EXPOSE_REP: Public static method may expose internal representation by returning array -->
+        <Or>
+            <Class name="org.apache.kafka.common.security.auth.SecurityProtocol" />
+            <Class name="org.apache.kafka.connect.converters.NumberConverterConfig" />
+            <Class name="org.apache.kafka.connect.json.JsonConverterConfig" />
+            <Class name="org.apache.kafka.connect.runtime.SinkConnectorConfig" />
+            <Class name="org.apache.kafka.connect.storage.StringConverterConfig" />
+            <Class name="org.apache.kafka.server.metrics.KafkaYammerMetrics" />
+        </Or>
+        <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
 
     <Match>
