@@ -1451,7 +1451,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Fetch request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Fetch request (from client or follower) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+        <td>Fetch request (from clients or followers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Failed produce request rate</td>
@@ -1461,7 +1461,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Failed fetch request rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec,topic=([-.\w]+)</td>
-        <td>Failed Fetch request (from client or follower) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+        <td>Failed Fetch request (from clients or followers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Request size in bytes</td>
@@ -1481,7 +1481,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Message conversion rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\w]+)</td>
-        <td>Message format conversion rate, by Produce or Fetch request, per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+        <td>Message format conversion rate, for Produce or Fetch requests, per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Request Queue Size</td>
@@ -1501,7 +1501,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Rejected byte rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesRejectedPerSec,topic=([-.\w]+)</td>
-        <td>Rejected byte rate per topic, due to the record batch size is greater than max.message.bytes configuration. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+        <td>Rejected byte rate per topic, due to the record batch size being greater than max.message.bytes configuration. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to no key specified for compacted topic</td>
@@ -1765,12 +1765,12 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Outgoing byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
-        <td>0; non-zero when the partition reassignment is in progress.</td>
+        <td>0; non-zero when a partition reassignment is in progress.</td>
       </tr>
       <tr>
         <td>Incoming byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
-        <td>0; non-zero when the partition reassignment is in progress.</td>
+        <td>0; non-zero when a partition reassignment is in progress.</td>
       </tr>
       <tr>
         <td>Size of a partition on disk (in bytes)</td>
