@@ -564,6 +564,7 @@
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
+        <allow pkg="io.swagger.v3.oas.annotations"/>
         <subpackage name="resources">
           <allow pkg="org.apache.log4j" />
         </subpackage>

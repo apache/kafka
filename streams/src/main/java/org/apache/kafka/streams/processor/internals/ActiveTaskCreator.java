@@ -260,7 +260,8 @@ class ActiveTaskCreator {
             taskId,
             streamsProducer,
             applicationConfig.defaultProductionExceptionHandler(),
-            streamsMetrics
+            streamsMetrics,
+            topology
         );
 
         final StreamTask task = new StreamTask(

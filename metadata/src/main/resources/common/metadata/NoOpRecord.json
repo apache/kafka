@@ -14,13 +14,10 @@
 // limitations under the License.
 
 {
-  "apiKey": 16,
+  "apiKey": 20,
   "type": "metadata",
-  "name": "RemoveFeatureLevelRecord",
+  "name": "NoOpRecord",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  "fields": [
-    { "name": "Name", "type": "string", "versions": "0+",
-      "about": "The feature name." }
-  ]
+  "fields": []
 }

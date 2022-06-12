@@ -16,19 +16,19 @@
   */
 package kafka.server.epoch.util
 
-import java.net.SocketTimeoutException
-import java.util
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
-import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochResponseData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
+import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 
+import java.net.SocketTimeoutException
+import java.util
 import scala.collection.Map
 
 /**
@@ -39,9 +39,9 @@ import scala.collection.Map
   * OFFSET_FOR_LEADER_EPOCH with different offsets in response, it should update offsets using
   * setOffsetsForNextResponse
   */
-class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset],
-                                     sourceBroker: BrokerEndPoint,
-                                     time: Time)
+class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
+                         sourceBroker: BrokerEndPoint,
+                         time: Time)
   extends BlockingSend {
 
   private val client = new MockClient(new SystemTime)
@@ -69,6 +69,8 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   def setIdsForNextResponse(topicIds: Map[String, Uuid]): Unit = {
     this.topicIds = topicIds
   }
+
+  override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
     if (!NetworkClientUtils.awaitReady(client, sourceNode, time, 500))

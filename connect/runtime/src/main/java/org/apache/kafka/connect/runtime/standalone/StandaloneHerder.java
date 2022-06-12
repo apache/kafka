@@ -31,7 +31,7 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -263,6 +263,11 @@ public class StandaloneHerder extends AbstractHerder {
     @Override
     public void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature) {
         throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support externally setting task configurations.");
+    }
+
+    @Override
+    public void fenceZombieSourceTasks(String connName, Callback<Void> callback, InternalRequestSignature requestSignature) {
+        throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support exactly-once source connectors.");
     }
 
     @Override

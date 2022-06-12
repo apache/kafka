@@ -67,8 +67,8 @@ class UnifiedLogTest {
 
   def createEmptyLogs(dir: File, offsets: Int*): Unit = {
     for(offset <- offsets) {
-      UnifiedLog.logFile(dir, offset).createNewFile()
-      UnifiedLog.offsetIndexFile(dir, offset).createNewFile()
+      Files.createFile(UnifiedLog.logFile(dir, offset).toPath)
+      Files.createFile(UnifiedLog.offsetIndexFile(dir, offset).toPath)
     }
   }
 
@@ -2413,8 +2413,8 @@ class UnifiedLogTest {
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTestUtils.rawSegment(logDir, segmentBaseOffset)
     // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-    UnifiedLog.offsetIndexFile(logDir, segmentBaseOffset).createNewFile()
-    UnifiedLog.timeIndexFile(logDir, segmentBaseOffset).createNewFile()
+    Files.createFile(UnifiedLog.offsetIndexFile(logDir, segmentBaseOffset).toPath)
+    Files.createFile(UnifiedLog.timeIndexFile(logDir, segmentBaseOffset).toPath)
     records.foreach(segment.append _)
     segment.close()
 
@@ -3418,7 +3418,7 @@ class UnifiedLogTest {
     // Delete the underlying directory to trigger a KafkaStorageException
     val dir = log.dir
     Utils.delete(dir)
-    dir.createNewFile()
+    Files.createFile(dir.toPath)
 
     assertThrows(classOf[KafkaStorageException], () => {
       log.delete()

@@ -189,7 +189,7 @@ public class BatchAccumulator<T> implements Closeable {
             if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSize) {
                 throw new RecordBatchTooLargeException(
                     String.format(
-                        "The total record(s) size of %s exceeds the maximum allowed batch size of %s",
+                        "The total record(s) size of %d exceeds the maximum allowed batch size of %d",
                         bytesNeeded.getAsInt(),
                         maxBatchSize
                     )

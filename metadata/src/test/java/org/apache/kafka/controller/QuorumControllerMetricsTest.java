@@ -17,10 +17,12 @@
 
 package org.apache.kafka.controller;
 
+import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 import java.util.Set;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,7 +39,12 @@ public class QuorumControllerMetricsTest {
             "GlobalTopicCount",
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
-            "PreferredReplicaImbalanceCount");
+            "PreferredReplicaImbalanceCount",
+            "LastAppliedRecordLagMs",
+            "LastAppliedRecordOffset",
+            "LastAppliedRecordTimestamp",
+            "LastCommittedRecordOffset"
+        );
         assertMetricsCreatedAndRemovedUponClose(expectedType, expectedMetricNames);
     }
 
@@ -53,8 +60,9 @@ public class QuorumControllerMetricsTest {
     @Test
     public void testUpdateEventQueueTime() {
         MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
         try {
-            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry)) {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
                 quorumControllerMetrics.updateEventQueueTime(1000);
                 assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueTimeMs"), 1, 1000);
             }
@@ -66,8 +74,9 @@ public class QuorumControllerMetricsTest {
     @Test
     public void testUpdateEventQueueProcessingTime() {
         MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
         try {
-            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry)) {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
                 quorumControllerMetrics.updateEventQueueProcessingTime(1000);
                 assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueProcessingTimeMs"), 1, 1000);
             }
@@ -76,10 +85,51 @@ public class QuorumControllerMetricsTest {
         }
     }
 
+    @Test
+    public void testLastAppliedRecordMetrics() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        time.sleep(1000);
+        try {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
+                quorumControllerMetrics.setLastAppliedRecordOffset(100);
+                quorumControllerMetrics.setLastAppliedRecordTimestamp(500);
+                quorumControllerMetrics.setLastCommittedRecordOffset(50);
+
+                @SuppressWarnings("unchecked")
+                Gauge<Long> lastAppliedRecordOffset = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "LastAppliedRecordOffset"));
+                assertEquals(100, lastAppliedRecordOffset.value());
+
+                @SuppressWarnings("unchecked")
+                Gauge<Long> lastAppliedRecordTimestamp = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "LastAppliedRecordTimestamp"));
+                assertEquals(500, lastAppliedRecordTimestamp.value());
+
+                @SuppressWarnings("unchecked")
+                Gauge<Long> lastAppliedRecordLagMs = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "LastAppliedRecordLagMs"));
+                assertEquals(time.milliseconds() - 500, lastAppliedRecordLagMs.value());
+
+                @SuppressWarnings("unchecked")
+                Gauge<Long> lastCommittedRecordOffset = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "LastCommittedRecordOffset"));
+                assertEquals(50, lastCommittedRecordOffset.value());
+            }
+        } finally {
+            registry.shutdown();
+        }
+    }
+
     private static void assertMetricsCreatedAndRemovedUponClose(String expectedType, Set<String> expectedMetricNames) {
         MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
         try {
-            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry)) {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
                 assertMetricsCreated(registry, expectedMetricNames, expectedType);
             }
             assertMetricsRemoved(registry, expectedMetricNames, expectedType);

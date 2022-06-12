@@ -1438,12 +1438,11 @@ public abstract class AbstractCoordinator implements Closeable {
                                 // clear the future so that after the backoff, if the hb still sees coordinator unknown in
                                 // the next iteration it will try to re-discover the coordinator in case the main thread cannot
                                 clearFindCoordinatorFuture();
-
-                                // backoff properly
-                                AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                             } else {
                                 lookupCoordinator();
                             }
+                            // backoff properly
+                            AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.

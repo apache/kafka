@@ -292,8 +292,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             partition,
             null,
             KEY_SERIALIZER,
-            VALUE_SERIALIZER
-        );
+            VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     private void logTombstone(final Bytes key) {
@@ -305,8 +306,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             partition,
             null,
             KEY_SERIALIZER,
-            VALUE_SERIALIZER
-        );
+            VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     private void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> batch) {

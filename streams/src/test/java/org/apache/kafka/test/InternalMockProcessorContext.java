@@ -460,7 +460,9 @@ public class InternalMockProcessorContext<KOut, VOut>
             taskId().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER);
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     @Override
