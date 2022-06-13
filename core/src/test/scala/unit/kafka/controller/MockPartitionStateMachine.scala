@@ -42,7 +42,7 @@ class MockPartitionStateMachine(
   override def handleStateChanges(
     partitions: Seq[TopicPartition],
     targetState: PartitionState,
-    leaderElectionStrategy: Option[PartitionLeaderElectionStrategy]
+    leaderElectionStrategy: Option[LeaderAndIsrUpdateStrategy]
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
     stateChangesByTargetState(targetState) = stateChangesByTargetState(targetState) + 1
 
@@ -81,7 +81,7 @@ class MockPartitionStateMachine(
 
   private def doLeaderElections(
     partitions: Seq[TopicPartition],
-    leaderElectionStrategy: PartitionLeaderElectionStrategy
+    leaderElectionStrategy: LeaderAndIsrUpdateStrategy
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
     val failedElections = mutable.Map.empty[TopicPartition, Either[Throwable, LeaderAndIsr]]
     val validLeaderAndIsrs = mutable.Buffer.empty[(TopicPartition, LeaderAndIsr)]
@@ -99,7 +99,7 @@ class MockPartitionStateMachine(
     }
 
     val electionResults = leaderElectionStrategy match {
-      case OfflinePartitionLeaderElectionStrategy(isUnclean) =>
+      case OfflineLeaderElectionStrategy(isUnclean) =>
         val partitionsWithUncleanLeaderElectionState = validLeaderAndIsrs.map { case (partition, leaderAndIsr) =>
           (partition, Some(leaderAndIsr), isUnclean || uncleanLeaderElectionEnabled)
         }
@@ -108,27 +108,25 @@ class MockPartitionStateMachine(
           isLeaderRecoverySupported,
           partitionsWithUncleanLeaderElectionState
         )
-      case ReassignPartitionLeaderElectionStrategy =>
-        leaderForReassign(controllerContext, validLeaderAndIsrs)
-      case PreferredReplicaPartitionLeaderElectionStrategy =>
+      case PreferredLeaderElectionStrategy =>
         leaderForPreferredReplica(controllerContext, validLeaderAndIsrs)
-      case ControlledShutdownPartitionLeaderElectionStrategy =>
-        leaderForControlledShutdown(controllerContext, validLeaderAndIsrs)
+      case ControlledShutdownStrategy =>
+        processControlledShutdown(controllerContext, validLeaderAndIsrs)
+      case CancelReassignmentStrategy =>
+        processReassignmentCancellation(controllerContext, validLeaderAndIsrs)
+      case CompleteReassignmentStrategy =>
+        processReassignmentCompletion(controllerContext, validLeaderAndIsrs)
     }
 
-    val results: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = electionResults.map { electionResult =>
-      val partition = electionResult.topicPartition
-      val value = electionResult.leaderAndIsr match {
-        case None =>
-          val failMsg = s"Failed to elect leader for partition $partition under strategy $leaderElectionStrategy"
-          Left(new StateChangeFailedException(failMsg))
-        case Some(leaderAndIsr) =>
-          val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-          controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
-          Right(leaderAndIsr)
-      }
-
-      partition -> value
+    val results: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = electionResults.map {
+      case LeaderAndIsrUpdateResult.Failed(partition, exception) =>
+        partition -> Left(exception)
+      case LeaderAndIsrUpdateResult.NotNeeded(partition, currentLeaderAndIsr) =>
+        partition -> Right(currentLeaderAndIsr)
+      case LeaderAndIsrUpdateResult.Successful(partition, newLeaderAndIsr, _, _, _)  =>
+        val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerContext.epoch)
+        controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
+        partition -> Right(newLeaderAndIsr)
     }.toMap
 
     results ++ failedElections

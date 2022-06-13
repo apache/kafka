@@ -71,7 +71,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(false))
+      Option(OfflineLeaderElectionStrategy(false))
     )
     assertEquals(NonExistentPartition, partitionState(partition))
   }
@@ -93,7 +93,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(false))
+      Option(OfflineLeaderElectionStrategy(false))
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId),
@@ -114,7 +114,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(false))
+      Option(OfflineLeaderElectionStrategy(false))
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
@@ -133,7 +133,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(false))
+      Option(OfflineLeaderElectionStrategy(false))
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
@@ -174,7 +174,7 @@ class PartitionStateMachineTest {
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(PreferredReplicaPartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(PreferredLeaderElectionStrategy))
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId),
       partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), replicaAssignment(Seq(brokerId)), isNew = false)
@@ -209,7 +209,7 @@ class PartitionStateMachineTest {
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(ControlledShutdownPartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(ControlledShutdownStrategy))
     verify(mockControllerBrokerRequestBatch).newBatch()
     // The leaderAndIsr request should be sent to both brokers, including the shutting down one
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId, otherBrokerId),
@@ -266,7 +266,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(false))
+      Option(OfflineLeaderElectionStrategy(false))
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId),
@@ -343,7 +343,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(true))
+      Option(OfflineLeaderElectionStrategy(true))
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(
@@ -373,7 +373,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(false))
+      Option(OfflineLeaderElectionStrategy(false))
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
@@ -398,7 +398,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(
       partitions,
       OnlinePartition,
-      Option(OfflinePartitionLeaderElectionStrategy(false))
+      Option(OfflineLeaderElectionStrategy(false))
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
@@ -469,7 +469,7 @@ class PartitionStateMachineTest {
     assertEquals(partitions.size, controllerContext.offlinePartitionCount,
       s"There should be ${partitions.size} offline partition(s)")
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy(false)))
+    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Some(OfflineLeaderElectionStrategy(false)))
     assertEquals(0, controllerContext.offlinePartitionCount,
       s"There should be no offline partition(s)")
   }

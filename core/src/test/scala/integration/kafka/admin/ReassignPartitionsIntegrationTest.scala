@@ -24,6 +24,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1
@@ -33,7 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.Closeable
-import java.util.{Collections, HashMap, List}
+import java.util.{Collections, HashMap, List, Optional}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -377,6 +378,62 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     verifyReplicaDeleted(topicPartition = foo0, replicaId = 4)
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCancellationNotAllowedIfOnlyAddingReplicasInIsr(quorum: String): Unit = {
+    val boo0 = new TopicPartition("boo", 0)
+
+    cluster = new ReassignPartitionsTestCluster()
+    cluster.setup()
+    cluster.produceMessages(boo0.topic, boo0.partition, 200)
+
+    // The reassignment will add replicas 1 and 2
+    val assignment = """{"version":1,"partitions":""" +
+      """[{"topic":"boo","partition":0,"replicas":[0,1,2],"log_dirs":["any","any","any"]}""" +
+      """]}"""
+
+    // We will throttle replica 2 so that only replica 1 joins the ISR
+    TestUtils.setReplicationThrottleForPartitions(
+      cluster.adminClient,
+      brokerIds = Seq(2),
+      partitions = Set(boo0),
+      throttleBytes = 1
+    )
+
+    // Execute the assignment and wait for replica 1 (only) to join the ISR
+    runExecuteAssignment(
+      cluster.adminClient,
+      additional = false,
+      reassignmentJson = assignment
+    )
+    TestUtils.waitUntilTrue(
+      () => TestUtils.currentIsr(cluster.adminClient, boo0) == Set(0, 1),
+      msg = "Timed out while waiting for replica 3 to join the ISR"
+    )
+
+    // Now we shutdown broker 0 and wait for 1 to become the leader
+    cluster.servers(0).shutdown()
+    cluster.servers(0).awaitShutdown()
+
+    TestUtils.awaitLeaderChange(
+      cluster.servers,
+      boo0,
+      oldLeader = 0
+    )
+
+    TestUtils.waitUntilTrue(
+      () => TestUtils.currentIsr(cluster.adminClient, boo0) == Set(1),
+      msg = "Timed out while waiting for replica 3 to join the ISR"
+    )
+
+    // Reassignment cancellation should not be allowed since it would leave no remaining
+    // replicas in the ISR.
+    val future = cluster.adminClient.alterPartitionReassignments(
+      Map(boo0 -> Optional.empty[NewPartitionReassignment]()).asJava
+    ).all()
+    TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidReplicaAssignmentException])
+  }
+
   private def verifyReplicaDeleted(
     topicPartition: TopicPartition,
     replicaId: Int
@@ -650,7 +707,8 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     val topics = Map(
       "foo" -> Seq(Seq(0, 1, 2), Seq(1, 2, 3)),
       "bar" -> Seq(Seq(3, 2, 1)),
-      "baz" -> Seq(Seq(1, 0, 2), Seq(2, 0, 1), Seq(0, 2, 1))
+      "baz" -> Seq(Seq(1, 0, 2), Seq(2, 0, 1), Seq(0, 2, 1)),
+      "boo" -> Seq(Seq(0))
     )
 
     val brokerConfigs = brokers.map {

@@ -1562,8 +1562,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   private def preferredReplicaLeaderElection(controllerId: Int, otherBroker: KafkaServer, tp: TopicPartition,
                                              replicas: Set[Int], leaderEpoch: Int): Unit = {
+    println(s"Shutting down ${otherBroker.config.brokerId}")
     otherBroker.shutdown()
     otherBroker.awaitShutdown()
+
     waitForPartitionState(tp, firstControllerEpoch, controllerId, leaderEpoch + 1,
       "failed to get expected partition state upon broker shutdown")
     otherBroker.startup()

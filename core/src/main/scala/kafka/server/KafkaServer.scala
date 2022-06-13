@@ -584,7 +584,6 @@ class KafkaServer(
       var shutdownSucceeded: Boolean = false
 
       try {
-
         var remainingRetries = retries
         var prevController: Node = null
         var ioException = false
