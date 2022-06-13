@@ -203,7 +203,7 @@ public class ClientUtilsTest {
     }
 
     @Test
-    public void shouldComputeSizeInBytesForConsumerRecordWithNullValue() {
+    public void shouldComputeSizeInBytesForConsumerRecordWithNullKey() {
         final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
             TOPIC,
             1,
@@ -214,6 +214,37 @@ public class ClientUtilsTest {
             0,
             KEY,
             null,
+            HEADERS,
+            Optional.empty()
+        );
+        assertThat(consumerRecordSizeInBytes(record), equalTo(TOMBSTONE_SIZE_IN_BYTES));
+    }
+
+    @Test
+    public void shouldComputeSizeInBytesForProducerRecordWithNullKey() {
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+            TOPIC,
+            1,
+            0L,
+            null,
+            VALUE,
+            HEADERS
+        );
+        assertThat(producerRecordSizeInBytes(record), equalTo(TOMBSTONE_SIZE_IN_BYTES));
+    }
+
+    @Test
+    public void shouldComputeSizeInBytesForConsumerRecordWithNullValue() {
+        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+            TOPIC,
+            1,
+            0,
+            0L,
+            TimestampType.CREATE_TIME,
+            0,
+            0,
+            null,
+            VALUE,
             HEADERS,
             Optional.empty()
         );
