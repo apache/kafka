@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
@@ -377,10 +378,8 @@ abstract class WorkerTask implements Runnable {
 
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
             MetricName metricName = metricGroup.metricName(template);
-            if (metricGroup.metrics().metric(metricName) == null) {
-                metricGroup.metrics().addMetric(metricName, (config, now) ->
+            metricGroup.metrics().addMetricIfAbsent(metricName, null, (Gauge<Double>) (config, now) ->
                     taskStateTimer.durationRatio(matchingState, now));
-            }
         }
 
         void close() {
