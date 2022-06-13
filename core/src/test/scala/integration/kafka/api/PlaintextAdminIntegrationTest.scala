@@ -1535,7 +1535,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           s"Unexpected message: ${exception.getMessage}")
       } else {
         assertTrue(exception.getMessage.contains(
-          s"Failed to elect leader for partition $topicPartition under strategy PreferredReplicaPartitionLeaderElectionStrategy"),
+          s"Failed to elect preferred leader"),
           s"Unexpected message: ${exception.getMessage}")
       }
     }

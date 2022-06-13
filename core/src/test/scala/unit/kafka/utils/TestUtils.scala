@@ -1094,9 +1094,7 @@ object TestUtils extends Logging {
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = brokers.map(_.config.brokerId).toSet
     waitUntilTrue(() => brokers.forall { server =>
-      val aliveBrokers = server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().map(_.id).toSet
-      println(s"Expected: $expectedBrokerIds, Actual: $aliveBrokers")
-      expectedBrokerIds == aliveBrokers
+      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().map(_.id).toSet
     }, "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 

@@ -799,7 +799,7 @@ class ElectionTest {
       .thenReturn(assignment)
 
     Mockito.when(controllerContext.shuttingDownBrokerIds)
-      .thenReturn(mutable.Set.from(shuttingDownBrokerIds))
+      .thenReturn(mutable.Set(shuttingDownBrokerIds: _*))
 
     assignment.replicas.foreach { replicaId =>
       Mockito.when(controllerContext.isReplicaOnline(replicaId, topicPartition, includeShuttingDownBrokers = false))

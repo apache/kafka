@@ -159,12 +159,12 @@ object Election {
       leaderOpt match {
         case Some(newLeader) =>
           val newLeaderAndIsr = leaderAndIsr.newLeader(newLeader)
-          LeaderAndIsrUpdateResult.Successful(partition, newLeaderAndIsr, assignment, Seq.empty)
+          LeaderAndIsrUpdateResult.Successful(partition, newLeaderAndIsr, liveReplicas = liveReplicas)
         case None =>
-          // TODO: Perhaps we want to distinguish the cases
+          val reason = if (!leaderAndIsr.isr.contains(assignment.head)) "offline" else "not in the ISR"
           LeaderAndIsrUpdateResult.Failed(partition, new StateChangeFailedException(
-            s"Failed to elect preferred replica for partition $partition since the preferred replica " +
-              s"${assignment.head} is not live or not in the ISR"
+            s"Failed to elect preferred leader ${assignment.head} for partition $partition since " +
+              s"it is $reason"
           ))
       }
     }

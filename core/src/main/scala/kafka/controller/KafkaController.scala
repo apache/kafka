@@ -725,7 +725,11 @@ class KafkaController(val config: KafkaConfig,
     maybeUpdateCurrentAssignment(topicPartition, assignment)
 
     if (!assignment.isBeingReassigned) {
+      // If a reassignment is cancelled or if a new reassignment is just changing the
+      // preferred leader, then it can be completed without additional replica movements.
+      // We do still need to send `UpdateMetadata` though for the replica changes.
       removePartitionFromReassigningPartitions(topicPartition, assignment)
+      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
       return
     }
 
