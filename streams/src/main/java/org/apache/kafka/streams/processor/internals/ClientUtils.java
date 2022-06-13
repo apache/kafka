@@ -191,9 +191,9 @@ public class ClientUtils {
     }
 
     private static long recordSizeInBytes(final long keyBytes,
-                                         final long valueBytes,
-                                         final String topic,
-                                         final Headers headers) {
+                                          final long valueBytes,
+                                          final String topic,
+                                          final Headers headers) {
         long headerSizeInBytes = 0L;
 
         if (headers != null) {
