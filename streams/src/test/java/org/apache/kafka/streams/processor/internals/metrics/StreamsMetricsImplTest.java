@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -84,6 +85,8 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.powermock.api.easymock.PowerMock.createMock;
 
 @RunWith(PowerMockRunner.class)
@@ -498,6 +501,17 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
+    public void shouldCreateNewStoreLevelMutableMetric() {
+        final MetricName metricName =
+                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+        final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
+        final Metrics metrics = new Metrics(metricConfig);
+        assertNull(metrics.metric(metricName));
+        metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER);
+        assertNotNull(metrics.metric(metricName));
+    }
+
+    @Test
     public void shouldNotAddStoreLevelMutableMetricIfAlreadyExists() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
@@ -519,6 +533,38 @@ public class StreamsMetricsImplTest {
         );
 
         verify(metrics);
+    }
+
+    @Test
+    public void shouldReturnSameMetricIfAlreadyCreated() {
+        final MetricName metricName =
+                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+        final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
+        final Metrics metrics = new Metrics(metricConfig);
+        assertNull(metrics.metric(metricName));
+        final KafkaMetric kafkaMetric = metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER);
+        assertEquals(kafkaMetric, metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER));
+    }
+
+    @Test
+    public void shouldCreateMetricOnceDuringConcurrentMetricCreationRequest() throws InterruptedException {
+        final MetricName metricName =
+                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+        final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
+        final Metrics metrics = new Metrics(metricConfig);
+        assertNull(metrics.metric(metricName));
+        final AtomicReference<KafkaMetric> metricCreatedViaThread1 = new AtomicReference<>();
+        final AtomicReference<KafkaMetric> metricCreatedViaThread2 = new AtomicReference<>();
+
+        final Thread thread1 = new Thread(() -> metricCreatedViaThread1.set(metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER)));
+        final Thread thread2 = new Thread(() -> metricCreatedViaThread2.set(metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER)));
+
+        thread1.start();
+        thread2.start();
+
+        thread1.join();
+        thread2.join();
+        assertEquals(metricCreatedViaThread1.get(), metricCreatedViaThread2.get());
     }
 
     @Test
