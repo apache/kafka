@@ -369,7 +369,7 @@ public class StandaloneHerderTest {
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
+        worker.startSourceTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
         PowerMock.replayAll();
@@ -410,7 +410,7 @@ public class StandaloneHerderTest {
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
+        worker.startSourceTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(false);
 
         PowerMock.replayAll();
@@ -583,7 +583,7 @@ public class StandaloneHerderTest {
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
+        worker.startSinkTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
         PowerMock.replayAll();
 
@@ -649,7 +649,7 @@ public class StandaloneHerderTest {
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
+        worker.startSinkTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
         PowerMock.replayAll();
 
@@ -918,7 +918,11 @@ public class StandaloneHerderTest {
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
+        if (sourceSink.equals(SourceSink.SOURCE)) {
+            worker.startSourceTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
+        } else {
+            worker.startSinkTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
+        }
         EasyMock.expectLastCall().andReturn(true);
 
         EasyMock.expect(herder.connectorTypeForClass(BogusSourceConnector.class.getName()))

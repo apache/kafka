@@ -55,7 +55,7 @@ abstract class WorkerTask implements Runnable {
     protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
     protected final ClassLoader loader;
-    protected final StatusBackingStore statusBackingStore;
+    private final StatusBackingStore statusBackingStore;
     protected final Time time;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final TaskMetricsGroup taskMetricsGroup;
