@@ -86,12 +86,14 @@ public class ClientUtilsTest {
         HEADERS_BYTES +
         RECORD_METADATA_BYTES;
 
+    // 54 bytes
     private static final long NULL_KEY_SIZE_IN_BYTES =
         VALUE_BYTES +
         TOPIC_BYTES +
         HEADERS_BYTES +
         RECORD_METADATA_BYTES;
 
+    // 52 bytes
     private static final long TOMBSTONE_SIZE_IN_BYTES =
         KEY_BYTES +
         TOPIC_BYTES +
@@ -216,14 +218,14 @@ public class ClientUtilsTest {
             0,
             0L,
             TimestampType.CREATE_TIME,
-            KEY_BYTES,
             0,
-            KEY,
+            5,
             null,
+            VALUE,
             HEADERS,
             Optional.empty()
         );
-        assertThat(consumerRecordSizeInBytes(record), equalTo(TOMBSTONE_SIZE_IN_BYTES));
+        assertThat(consumerRecordSizeInBytes(record), equalTo(NULL_KEY_SIZE_IN_BYTES));
     }
 
     @Test
@@ -247,14 +249,14 @@ public class ClientUtilsTest {
             0,
             0L,
             TimestampType.CREATE_TIME,
+            KEY_BYTES,
             0,
-            0,
+            KEY,
             null,
-            VALUE,
             HEADERS,
             Optional.empty()
         );
-        assertThat(consumerRecordSizeInBytes(record), equalTo(NULL_KEY_SIZE_IN_BYTES));
+        assertThat(consumerRecordSizeInBytes(record), equalTo(TOMBSTONE_SIZE_IN_BYTES));
     }
 
     @Test
