@@ -49,7 +49,7 @@ object StorageTool extends Logging {
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = getMetadataVersion(namespace)
           if (!metadataVersion.isKRaftSupported) {
-            throw new TerseFailure(s"Must specify a metadata version of at least 1.")
+            throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
           val metaProperties = buildMetadataProperties(clusterId, config.get)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
@@ -99,7 +99,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"A release version to use for the initial metadata.version. The default is (${MetadataVersion.latest().version()})")
+      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.latest().version()}")
 
     parser.parseArgsOrFail(args)
   }

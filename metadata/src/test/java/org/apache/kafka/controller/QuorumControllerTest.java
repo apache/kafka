@@ -96,6 +96,7 @@ import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.Mockito;
 
 import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -214,7 +215,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), MetadataVersion.latest());
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), BootstrapMetadata.create(MetadataVersion.latest()));
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -306,7 +307,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), MetadataVersion.latest());
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), BootstrapMetadata.create(MetadataVersion.latest()));
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -537,7 +538,7 @@ public class QuorumControllerTest {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
         features.add(new BrokerRegistrationRequestData.Feature()
             .setName(MetadataVersion.FEATURE_NAME)
-            .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV0.featureLevel())
+            .setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())
             .setMaxSupportedVersion(MetadataVersion.latest().featureLevel()));
         return features;
     }
@@ -1177,6 +1178,23 @@ public class QuorumControllerTest {
         for (int i = 0; i < authorizers.size(); i++) {
             assertFalse(authorizers.get(i).initialLoadFuture().isDone(),
                 "authorizer " + i + " should not have completed loading.");
+        }
+    }
+
+    @Test
+    public void testInvalidBootstrapMetadata() throws Exception {
+        // We can't actually create a BootstrapMetadata with an invalid version, so we have to fake it
+        BootstrapMetadata bootstrapMetadata = Mockito.mock(BootstrapMetadata.class);
+        Mockito.when(bootstrapMetadata.metadataVersion()).thenReturn(MetadataVersion.IBP_2_8_IV0);
+        try (
+                LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                    b.setConfigSchema(SCHEMA);
+                }, OptionalLong.empty(), OptionalLong.empty(), bootstrapMetadata);
+        ) {
+            QuorumController active = controlEnv.activeController();
+            TestUtils.waitForCondition(() -> !active.isActive(),
+                "Timed out waiting for controller to renounce itself after bad bootstrap metadata version.");
         }
     }
 }
