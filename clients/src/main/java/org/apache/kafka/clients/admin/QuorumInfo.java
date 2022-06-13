@@ -65,8 +65,8 @@ public class QuorumInfo {
     public String toString() {
         return "QuorumInfo(" +
             "leaderId=" + leaderId +
-            ", voters=" + voters.toString() +
-            ", observers=" + observers.toString() +
+            ", voters=" + voters +
+            ", observers=" + observers +
             ')';
     }
 
@@ -81,10 +81,10 @@ public class QuorumInfo {
         }
 
         ReplicaState(
-                int replicaId,
-                long logEndOffset,
-                OptionalLong lastFetchTimeMs,
-                OptionalLong lastCaughtUpTimeMs
+            int replicaId,
+            long logEndOffset,
+            OptionalLong lastFetchTimeMs,
+            OptionalLong lastCaughtUpTimeMs
         ) {
             this.replicaId = replicaId;
             this.logEndOffset = logEndOffset;

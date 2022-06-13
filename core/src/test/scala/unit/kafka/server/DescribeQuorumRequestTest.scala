@@ -79,21 +79,15 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
         .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
       assertTrue(leaderState.logEndOffset > 0)
 
-      val voterData = partitionData.currentVoters().asScala
-      val observerData = partitionData.observers().asScala
+      val voterData = partitionData.currentVoters.asScala
+      val observerData = partitionData.observers.asScala
       assertEquals(1, voterData.size)
       assertEquals(0, observerData.size)
       voterData.foreach { state =>
         assertTrue(0 < state.replicaId)
-        assertTrue(0 < state.logEndOffset())
-        assertEquals(-1, state.lastFetchTimestamp())
-        assertEquals(-1, state.lastCaughtUpTimestamp())
-      }
-      observerData.foreach { state =>
-        assertTrue(0 < state.replicaId)
-        assertTrue(0 < state.logEndOffset())
-        assertEquals(-1, state.lastFetchTimestamp())
-        assertEquals(-1, state.lastCaughtUpTimestamp())
+        assertTrue(0 < state.logEndOffset)
+        assertEquals(-1, state.lastFetchTimestamp)
+        assertEquals(-1, state.lastCaughtUpTimestamp)
       }
     }
   }
