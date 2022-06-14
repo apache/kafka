@@ -1188,8 +1188,6 @@ class ReplicaManagerTest {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
-      initializeLogAndTopicId(replicaManager, tp0, topicId)
-
       // Make this replica the follower
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -1246,8 +1244,6 @@ class ReplicaManagerTest {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
-      initializeLogAndTopicId(replicaManager, tp0, topicId)
-
       // Make this replica the leader
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -1294,7 +1290,6 @@ class ReplicaManagerTest {
       val topicId = Uuid.randomUuid()
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-      initializeLogAndTopicId(replicaManager, tp0, topicId)
 
       // Make this replica the follower
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -1343,8 +1338,6 @@ class ReplicaManagerTest {
       val topicId = Uuid.randomUuid()
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-
-      initializeLogAndTopicId(replicaManager, tp0, topicId)
 
       when(replicaManager.metadataCache.getPartitionReplicaEndpoints(
         tp0,
@@ -1419,8 +1412,6 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val tidp0 = new TopicIdPartition(topicId, tp0)
 
-    initializeLogAndTopicId(replicaManager, tp0, topicId)
-
     // Make this replica the follower
     val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(new LeaderAndIsrPartitionState()
@@ -1488,15 +1479,6 @@ class ReplicaManagerTest {
     assertThrows(classOf[ClassNotFoundException], () => prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props))
-  }
-
-  // Due to some limitations to EasyMock, we need to create the log so that the Partition.topicId does not call
-  // LogManager.getLog with a default argument
-  // TODO: convert tests to using Mockito to avoid this issue.
-  private def initializeLogAndTopicId(replicaManager: ReplicaManager, topicPartition: TopicPartition, topicId: Uuid): Unit = {
-    val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
-    val log = replicaManager.logManager.getOrCreateLog(topicPartition, false, false, Some(topicId))
-    partition.log = Some(log)
   }
 
   @Test
@@ -1954,6 +1936,7 @@ class ReplicaManagerTest {
     val mockLogMgr: LogManager = mock(classOf[LogManager])
     when(mockLogMgr.liveLogDirs).thenReturn(config.logDirs.map(new File(_).getAbsoluteFile))
     when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false), any())).thenReturn(mockLog)
+    when(mockLogMgr.getLog(topicPartitionObj, isFuture = false)).thenReturn(Some(mockLog))
     when(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).thenReturn(None)
     val allLogs = new Pool[TopicPartition, UnifiedLog]()
     allLogs.put(topicPartitionObj, mockLog)
