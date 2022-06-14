@@ -69,10 +69,11 @@ public class ClientUtilsTest {
 
     private static final Headers HEADERS = new RecordHeaders(asList(
         new RecordHeader("h1", "headerVal1".getBytes()),   // 2 + 10 --> 12 bytes
-        new RecordHeader("h2", "headerVal2".getBytes())
-    ));    // 2 + 10 --> 12 bytes
+        new RecordHeader("h2", "headerVal2".getBytes())    // 2 + 10 --> 12 bytes
+    ));
     private static final int HEADERS_BYTES = 24;
 
+    // 20 bytes
     private static final int RECORD_METADATA_BYTES =
         8 + // timestamp
         8 + // offset
@@ -86,6 +87,14 @@ public class ClientUtilsTest {
         HEADERS_BYTES +
         RECORD_METADATA_BYTES;
 
+    // 54 bytes
+    private static final long NULL_KEY_SIZE_IN_BYTES =
+        VALUE_BYTES +
+        TOPIC_BYTES +
+        HEADERS_BYTES +
+        RECORD_METADATA_BYTES;
+
+    // 52 bytes
     private static final long TOMBSTONE_SIZE_IN_BYTES =
         KEY_BYTES +
         TOPIC_BYTES +
@@ -200,6 +209,37 @@ public class ClientUtilsTest {
             HEADERS
         );
         assertThat(producerRecordSizeInBytes(record), equalTo(SIZE_IN_BYTES));
+    }
+
+    @Test
+    public void shouldComputeSizeInBytesForConsumerRecordWithNullKey() {
+        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+            TOPIC,
+            1,
+            0,
+            0L,
+            TimestampType.CREATE_TIME,
+            0,
+            5,
+            null,
+            VALUE,
+            HEADERS,
+            Optional.empty()
+        );
+        assertThat(consumerRecordSizeInBytes(record), equalTo(NULL_KEY_SIZE_IN_BYTES));
+    }
+
+    @Test
+    public void shouldComputeSizeInBytesForProducerRecordWithNullKey() {
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+            TOPIC,
+            1,
+            0L,
+            null,
+            VALUE,
+            HEADERS
+        );
+        assertThat(producerRecordSizeInBytes(record), equalTo(NULL_KEY_SIZE_IN_BYTES));
     }
 
     @Test
