@@ -73,6 +73,7 @@ public class ClientUtilsTest {
     ));    // 2 + 10 --> 12 bytes
     private static final int HEADERS_BYTES = 24;
 
+    // 20 bytes
     private static final int RECORD_METADATA_BYTES =
         8 + // timestamp
         8 + // offset
