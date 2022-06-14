@@ -171,15 +171,13 @@ public class TestTopicsTest {
     }
 
     @Test
-    public void testPipeInputWithNullKey() {
+    public void testKeyValuesToMapWithNull() {
         final TestInputTopic<Long, String> inputTopic =
             testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
-        final StreamsException exception = assertThrows(StreamsException.class, () -> inputTopic.pipeInput("value"));
-        assertThat(exception.getCause() instanceof NullPointerException, is(true));
-        assertThat(outputTopic.readKeyValuesToMap().isEmpty(), is(true));
-
+        inputTopic.pipeInput("value");
+        assertThrows(IllegalStateException.class, outputTopic::readKeyValuesToMap);
     }
 
     @Test
