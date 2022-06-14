@@ -295,8 +295,7 @@ class DefaultAlterPartitionManager(
       }
     }
 
-    // If we cannot use topic ids, the builder will ensure that version 1 is used
-    // at most.
+    // If we cannot use topic ids, the builder will ensure that no version higher than 1 is used.
     (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds)
   }
 

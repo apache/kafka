@@ -34,7 +34,7 @@ import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.controller.ControllerRequestContextTest.ANONYMOUS_CONTEXT
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 
 /**
  * A test harness that brings up some number of broker nodes

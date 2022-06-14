@@ -885,7 +885,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val brokerId = controllerId
     val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
 
-    // The caller of the AlterPartition API can only use topics ids iif 1) the controller is
+    // The caller of the AlterPartition API can only use topics ids iff 1) the controller is
     // on IBP >= 2.8 and 2) the AlterPartition version 2 and above is used.
     val canCallerUseTopicIds = metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1
 

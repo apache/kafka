@@ -1632,7 +1632,7 @@ class Partition(val topicPartition: TopicPartition,
         // Care must be taken when resetting to the last committed state since we may not
         // know in general whether the request was applied or not taking into account retries
         // and controller changes which might have occurred before we received the response.
-        // However, when the controller returns INELIGIBLE_REPLICA (or OPERATION_NOT_COMMITTED),
+        // However, when the controller returns INELIGIBLE_REPLICA (or OPERATION_NOT_ATTEMPTED),
         // the controller is explicitly telling us 1) that the current partition epoch is correct,
         // and 2) that the request was not applied. Even if the controller that sent the response
         // is stale, we are guaranteed from the monotonicity of the controller epoch that the
@@ -1643,23 +1643,23 @@ class Partition(val topicPartition: TopicPartition,
         false
       case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
         debug(s"Failed to alter partition to $proposedIsrState since the controller doesn't know about " +
-          "this topic or partition. Partition state may be out of thing, awaiting new the latest metadata.")
+          "this topic or partition. Partition state may be out of sync, awaiting new the latest metadata.")
         false
       case Errors.UNKNOWN_TOPIC_ID =>
         debug(s"Failed to alter partition to $proposedIsrState since the controller doesn't know about " +
-          "this topic. Partition state may be out of thing, awaiting new the latest metadata.")
+          "this topic. Partition state may be out of sync, awaiting new the latest metadata.")
         false
       case Errors.FENCED_LEADER_EPOCH =>
         debug(s"Failed to alter partition to $proposedIsrState since the leader epoch is old. " +
-          "Partition state may be out of thing, awaiting new the latest metadata.")
+          "Partition state may be out of sync, awaiting new the latest metadata.")
         false
       case Errors.INVALID_UPDATE_VERSION =>
         debug(s"Failed to alter partition to $proposedIsrState because the partition epoch is invalid. " +
-          "Partition state may be out of thing, awaiting new the latest metadata.")
+          "Partition state may be out of sync, awaiting new the latest metadata.")
         false
       case Errors.INVALID_REQUEST =>
         debug(s"Failed to alter partition to $proposedIsrState because the request is invalid. " +
-          "Partition state may be out of thing, awaiting new the latest metadata.")
+          "Partition state may be out of sync, awaiting new the latest metadata.")
         false
       case Errors.NEW_LEADER_ELECTED =>
         // The operation completed successfully but this replica got removed from the replica set by the controller

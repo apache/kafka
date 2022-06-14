@@ -2241,7 +2241,7 @@ class KafkaController(val config: KafkaConfig,
     callback: AlterPartitionResponseData => Unit
   ): Unit = {
     val partitionResponses = try {
-      doProcessAlterPartition(
+      tryProcessAlterPartition(
         alterPartitionRequest,
         alterPartitionRequestVersion,
         callback
@@ -2265,7 +2265,7 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def doProcessAlterPartition(
+  private def tryProcessAlterPartition(
     alterPartitionRequest: AlterPartitionRequestData,
     alterPartitionRequestVersion: Short,
     callback: AlterPartitionResponseData => Unit
