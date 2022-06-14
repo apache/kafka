@@ -18,6 +18,7 @@ import os.path
 import re
 import signal
 import time
+import math
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
@@ -872,7 +873,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cluster_has_colocated_controllers = self.quorum_info.has_brokers and self.quorum_info.has_controllers
         force_sigkill_due_to_too_few_colocated_controllers =\
             clean_shutdown and cluster_has_colocated_controllers\
-            and self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
+            and self.colocated_nodes_started < math.ceil(self.num_nodes_controller_role / 2)
         if force_sigkill_due_to_too_few_colocated_controllers:
             self.logger.info("Forcing node to stop via SIGKILL due to too few co-located KRaft controllers: %i/%i" %\
                              (self.colocated_nodes_started, self.num_nodes_controller_role))
