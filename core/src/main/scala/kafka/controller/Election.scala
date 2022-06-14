@@ -164,7 +164,10 @@ object Election {
    * @param leaderAndIsr The current LeaderAndIsr
    * @param shuttingDownBrokerIds The brokers that are shutting down
    * @param controllerContext Current controller context
-   * @return The updated LeaderAndIsr result
+   * @return [[LeaderAndIsrUpdateResult.Failed]] if there is no replica available from the remaining
+   *         replicas in the ISR after removing the shutting down replicas; or
+   *         [[LeaderAndIsrUpdateResult.Successful]] if a new leader could be elected from the
+   *         remaining replicas in the ISR.
    */
   private def updatePartitionForControlledShutdown(
     partition: TopicPartition,
@@ -265,14 +268,34 @@ object Election {
     }
   }
 
+  /**
+   * Build a new LeaderAndIsr state in order to cancel an active reassignment. This is done
+   * by removing the `AddingReplicas` set from the ISR and electing a new leader from the
+   * original replicas (if necessary).
+   *
+   * Note that if the `AddingReplicas` set is empty (i.e. if the reassignment is removing replicas
+   * only), then no changes to the LeaderAndIsr state will be made. On the other hand, if this
+   * set is not empty, then this method guarantees a bump to the leader epoch. This ensures that
+   * a `StopReplica` request can be sent to any replicas that need to be deleted with a larger
+   * epoch than previously seen.
+   *
+   * An error will be returned if a leader cannot be elected from the original replica set.
+   *
+   * @param topicPartition The topic partition to update
+   * @param controllerContext Current controller context
+   * @param assignment The current reassignment which is being cancelled
+   * @param leaderAndIsr The current LeaderAndIsr state
+   * @return [[LeaderAndIsrUpdateResult.NotNeeded]] if `AddingReplicas` is empty;
+   *         [[LeaderAndIsrUpdateResult.Failed]] if no live leader from the original replicas could be elected; or
+   *         [[LeaderAndIsrUpdateResult.Successful]] if all `AddingReplicas` were successfully removed from the
+   *         ISR and a new leader elected
+   */
   private def updateLeaderAndIsrForCancelledReassignment(
     topicPartition: TopicPartition,
     controllerContext: ControllerContext,
     assignment: ReplicaAssignment,
     leaderAndIsr: LeaderAndIsr
   ): LeaderAndIsrUpdateResult = {
-    // The goal of this method is to cancel the reassignment by removing the
-    // `AddingReplica` from the ISR and electing a leader from the original replicas.
     val addingReplicas = assignment.addingReplicas
     if (addingReplicas.isEmpty) {
       // If there are no adding replicas, then there are no partitions to stop and delete
@@ -344,14 +367,36 @@ object Election {
     }
   }
 
+  /**
+   * Build a new LeaderAndIsr state in order to complete an active reassignment. This is done
+   * by removing the `RemovingReplicas` set from the ISR and electing a new leader from the
+   * target replicas (if necessary).
+   *
+   * Note that if the `RemovingReplicas` set is empty (i.e. if the reassignment is adding replicas
+   * only), then no changes to the LeaderAndIsr state will be made. On the other hand, if this
+   * set is not empty, then this method guarantees a bump to the leader epoch. This ensures that
+   * a `StopReplica` request can be sent to any replicas that need to be deleted with a larger
+   * epoch than previously seen.
+   *
+   * An error will be returned if a leader cannot be elected from the original replica set.
+   *
+   * @param topicPartition The topic partition to update
+   * @param controllerContext Current controller context
+   * @param assignment The current reassignment which is being completed
+   * @param leaderAndIsr The current LeaderAndIsr state
+   * @return [[LeaderAndIsrUpdateResult.NotNeeded]] if `RemovingReplicas` is empty;
+   *         [[LeaderAndIsrUpdateResult.Failed]] if there are any target replicas NOT in the ISR or if
+   *         no live leader from the target replicas could be elected; or
+   *         [[LeaderAndIsrUpdateResult.Successful]] if all `RemovingReplicas` were successfully removed from the
+   *         ISR and a new leader elected
+   */
   private def updateLeaderAndIsrForCompletedReassignment(
     topicPartition: TopicPartition,
     controllerContext: ControllerContext,
     assignment: ReplicaAssignment,
     leaderAndIsr: LeaderAndIsr
   ): LeaderAndIsrUpdateResult = {
-    // The goal of this method is to complete the reassignment by removing the
-    // `RemovingReplicas` from the ISR and electing a leader from the target replicas.
+    val removingReplicas = assignment.removingReplicas
     val targetReplicas = assignment.targetReplicas
     val newIsr = leaderAndIsr.isr.filter(targetReplicas.contains)
 
@@ -361,7 +406,7 @@ object Election {
         s"Failed to complete reassignment for partition $topicPartition since the current ISR " +
           s"${leaderAndIsr.isr} does not contain all of the target replicas $targetReplicas"
       ))
-    } else if (assignment.removingReplicas.isEmpty) {
+    } else if (removingReplicas.isEmpty) {
       // There are no replicas to remove, so there is no need to update the Leader and ISR
       LeaderAndIsrUpdateResult.NotNeeded(topicPartition, leaderAndIsr)
     } else {
@@ -385,7 +430,6 @@ object Election {
       newLeaderOpt match {
         case Some(newLeader) =>
           val newLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(newLeader, newIsr)
-          val removingReplicas = assignment.removingReplicas
           LeaderAndIsrUpdateResult.Successful(
             topicPartition,
             newLeaderAndIsr,

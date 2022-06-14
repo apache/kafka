@@ -783,6 +783,10 @@ class KafkaController(val config: KafkaConfig,
     val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
     if (currentAssignment != newAssignment) {
       if (currentAssignment.isBeingReassigned) {
+        // Cancel the current reassignment by removing unneeded replicas from the ISR
+        // and stopping/deleting them. Note that if the controller fails before updating
+        // the assignment state in Zookeeper below, these replicas may get restarted after
+        // controller fail-over. We expect the client would retry the cancellation in this case.
         cancelReassignment(topicPartition, currentAssignment, newAssignment)
       }
 
@@ -820,6 +824,8 @@ class KafkaController(val config: KafkaConfig,
         s"$oldAssignment for partition $topicPartition", exception)
     }
 
+    // We have already stopped and deleted the unneeded replicas, but we also need to
+    // remove their associated states.
     val unneededReplicas = oldAssignment.replicas.diff(newAssignment.replicas)
     if (unneededReplicas.nonEmpty) {
       stopRemovedReplicasOfReassignedPartition(topicPartition, unneededReplicas)
