@@ -55,8 +55,6 @@ import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestTopicsTest {
-    private static final Logger log = LoggerFactory.getLogger(TestTopicsTest.class);
-
     private final static String INPUT_TOPIC = "input";
     private final static String OUTPUT_TOPIC = "output1";
     private final static String INPUT_TOPIC_MAP = OUTPUT_TOPIC;
