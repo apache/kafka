@@ -502,9 +502,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             storeLevelTagMap(taskId, metricsScope, storeName)
         );
         if (metrics.metric(metricName) == null) {
-            final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
+            metrics.addMetricIfAbsent(metricName, new MetricConfig().recordLevel(recordingLevel), valueProvider);
             final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
-            metrics.addMetric(metricName, metricConfig, valueProvider);
             storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
         }
     }
