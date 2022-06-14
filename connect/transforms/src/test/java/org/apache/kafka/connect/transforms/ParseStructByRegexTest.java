@@ -34,7 +34,7 @@ public class ParseStructByRegexTest {
     private ParseStructByRegex<SourceRecord> testForm = new ParseStructByRegex.Value<>();
 
     @Test
-    public void schemalessPlainTextTest() {
+    public void schemalessUrlTextTest() {
 
         Map<String, String> configMap = new HashMap<>();
         configMap.put("mapping", "protocol,domain,path");
@@ -50,20 +50,14 @@ public class ParseStructByRegexTest {
     }
 
     @Test
-    public void schemaPlainTextTest() {
+    public void stringSchemaUrlTextTest() {
 
         Map<String, String> configMap = new HashMap<>();
-        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*)");
         configMap.put("mapping", "protocol,domain,path");
+        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*)");
 
         testForm.configure(configMap);
-
-        final Schema inputSampleSchema = SchemaBuilder.struct().name("name").version(1).doc("doc")
-            .field("message", Schema.STRING_SCHEMA).build();
-
-        final Struct testData = new Struct(inputSampleSchema).put("message", "https://kafka.apache.org/documentation/#connect");
-
-        SourceRecord result = testForm.apply(new SourceRecord(null, null, "", 0, inputSampleSchema, testData));
+        SourceRecord result = testForm.apply(new SourceRecord(null, null, "", 0, Schema.STRING_SCHEMA, "https://kafka.apache.org/documentation/#connect"));
 
         assertThat(((Struct) result.value()).get("protocol"), is("https"));
         assertThat(((Struct) result.value()).get("domain"), is("kafka.apache.org"));
@@ -72,13 +66,13 @@ public class ParseStructByRegexTest {
     }
 
     @Test
-    public void apacheLogSchemalessTest() {
+    public void schemalessApacheLogTest() {
         Map<String, String> configMap = new HashMap<>();
         configMap.put("regex", "^([\\d.]+) (\\S+) (\\S+) \\[([\\w:/]+\\s[+\\-]\\d{4})\\] \"(GET|POST|OPTIONS|HEAD|PUT|DELETE|PATCH) (.+?) (.+?)\" (\\d{3}) ([0-9|-]+) ([0-9|-]+) \"([^\"]+)\" \"([^\"]+)\"");
         configMap.put("mapping", "IP,RemoteUser,AuthedRemoteUser,DateTime,Method,Request,Protocol,Response,BytesSent,Ms,Referrer,UserAgent");
+        configMap.put("struct.field", "apacheLog");
 
-        Map<String, String> testData = new HashMap<>();
-        testData.put("message", "111.61.73.113 - - [08/Aug/2019:18:15:29 +0900] \"OPTIONS /api/v1/service_config HTTP/1.1\" 200 - 101989 \"http://local.test.com/\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36\"");
+        String testData = "111.61.73.113 - - [08/Aug/2019:18:15:29 +0900] \"OPTIONS /api/v1/service_config HTTP/1.1\" 200 - 101989 \"http://local.test.com/\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36\"";
 
         testForm.configure(configMap);
         SourceRecord result = testForm.apply(new SourceRecord(null, null, "", 0, null, testData));
@@ -95,9 +89,51 @@ public class ParseStructByRegexTest {
         assertThat(((Map<?, ?>) result.value()).get("Ms"), is("101989"));
         assertThat(((Map<?, ?>) result.value()).get("Referrer"), is("http://local.test.com/"));
         assertThat(((Map<?, ?>) result.value()).get("UserAgent"), is("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36"));
-
     }
 
+    @Test
+    public void stringSchemaApacheLogTest() {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("regex", "^([\\d.]+) (\\S+) (\\S+) \\[([\\w:/]+\\s[+\\-]\\d{4})\\] \"(GET|POST|OPTIONS|HEAD|PUT|DELETE|PATCH) (.+?) (.+?)\" (\\d{3}) ([0-9|-]+) ([0-9|-]+) \"([^\"]+)\" \"([^\"]+)\"");
+        configMap.put("mapping", "IP,RemoteUser,AuthedRemoteUser,DateTime,Method,Request,Protocol,Response,BytesSent,Ms,Referrer,UserAgent");
+        configMap.put("struct.field", "apacheLog");
+
+        String testData = "111.61.73.113 - - [08/Aug/2019:18:15:29 +0900] \"OPTIONS /api/v1/service_config HTTP/1.1\" 200 - 101989 \"http://local.test.com/\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36\"";
+
+        testForm.configure(configMap);
+        SourceRecord result = testForm.apply(new SourceRecord(null, null, "", 0, Schema.STRING_SCHEMA, testData));
+
+        assertThat(((Struct) result.value()).get("IP"), is("111.61.73.113"));
+        assertThat(((Struct) result.value()).get("RemoteUser"), is("-"));
+        assertThat(((Struct) result.value()).get("AuthedRemoteUser"), is("-"));
+        assertThat(((Struct) result.value()).get("DateTime"), is("08/Aug/2019:18:15:29 +0900"));
+        assertThat(((Struct) result.value()).get("Method"), is("OPTIONS"));
+        assertThat(((Struct) result.value()).get("Request"), is("/api/v1/service_config"));
+        assertThat(((Struct) result.value()).get("Protocol"), is("HTTP/1.1"));
+        assertThat(((Struct) result.value()).get("Response"), is("200"));
+        assertThat(((Struct) result.value()).get("BytesSent"), is("-"));
+        assertThat(((Struct) result.value()).get("Ms"), is("101989"));
+        assertThat(((Struct) result.value()).get("Referrer"), is("http://local.test.com/"));
+        assertThat(((Struct) result.value()).get("UserAgent"), is("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36"));
+    }
+
+
+    @Test(expected = DataException.class)
+    public void schemaStructNotSupportTest() {
+
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("regex", "^(https?):\\/\\/([^/]*)/(.*)");
+        configMap.put("mapping", "protocol,domain,path");
+
+        testForm.configure(configMap);
+
+        final Schema inputSampleSchema = SchemaBuilder.struct().name("name").version(1).doc("doc")
+            .field("message", Schema.STRING_SCHEMA).build();
+
+        final Struct testData = new Struct(inputSampleSchema).put("message", "https://kafka.apache.org/documentation/#connect");
+
+        testForm.apply(new SourceRecord(null, null, "", 0, inputSampleSchema, testData));
+    }
 
     @Test(expected = ConfigException.class)
     public void schemalessPlainTextMalformedRegexTest() {

@@ -24,14 +24,10 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.transforms.util.GroupRegexValidator;
-import org.apache.kafka.connect.transforms.util.Requirements;
-import org.apache.kafka.connect.transforms.util.SchemaUtil;
 
 import java.util.HashMap;
 import java.util.List;
@@ -59,7 +55,6 @@ public abstract class ParseStructByRegex<R extends ConnectRecord<R>> implements 
 
     private String pattern;
     private List<String> fieldKeys;
-    private String structField = "message";
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
@@ -92,13 +87,7 @@ public abstract class ParseStructByRegex<R extends ConnectRecord<R>> implements 
             inputTargetStr = (String) operatingValue(record);
             resultMap = parseRegexGroupToStringMap(inputTargetStr);
         } else {
-            Map<String, Object> inputMap = Requirements.requireMap(operatingValue(record), PURPOSE);
-            resultMap = new HashMap<>(inputMap);
-            inputTargetStr = (String) inputMap.get(structField);
-            resultMap.putAll(parseRegexGroupToStringMap(inputTargetStr));
-
-            //remove orginal field
-            resultMap.remove(structField);
+            throw new DataException("only plain string value support with ParseStructByRegex");
         }
 
         return newRecord(record, null, resultMap);
@@ -115,12 +104,7 @@ public abstract class ParseStructByRegex<R extends ConnectRecord<R>> implements 
             updatedSchema = newSchema(newEntryMap);
             updatedStruct = newStruct(newEntryMap, updatedSchema);
         } else {
-            final Struct inputStruct = Requirements.requireStruct(operatingValue(record), PURPOSE);
-            inputTargetStr = inputStruct.getString(structField);
-            Map<String, Object> newEntryMap = parseRegexGroupToStringMap(inputTargetStr);
-
-            updatedSchema = mergeSchema(inputStruct, newEntryMap);
-            updatedStruct = mergeStruct(inputStruct, newEntryMap, updatedSchema);
+            throw new DataException("only plain string value support with ParseStructByRegex");
         }
 
         return newRecord(record, updatedSchema, updatedStruct);
@@ -156,39 +140,6 @@ public abstract class ParseStructByRegex<R extends ConnectRecord<R>> implements 
         }
 
         return updatedValue;
-    }
-
-    private Struct mergeStruct(Struct orgStruct, Map<String, Object> newEntryMap, Schema updatedSchema) {
-        final Struct updatedValue = new Struct(updatedSchema);
-        for (Field f : orgStruct.schema().fields()) {
-            if (!structField.equals(f.name())) {
-                updatedValue.put(f.name(), orgStruct.get(f.name()));
-            }
-        }
-
-        for (Map.Entry<String, Object> entry : newEntryMap.entrySet()) {
-            updatedValue.put(entry.getKey(), entry.getValue());
-        }
-
-        return updatedValue;
-    }
-
-    private Schema mergeSchema(Struct orgStruct, Map<String, Object> newEntryMap) {
-        Schema updatedSchema = schemaUpdateCache.get(orgStruct.schema());
-        if (updatedSchema == null) {
-            final SchemaBuilder builder = SchemaUtil.copySchemaBasics(orgStruct.schema(), SchemaBuilder.struct());
-            for (Field orgField : orgStruct.schema().fields()) {
-                builder.field(orgField.name(), orgField.schema());
-            }
-
-            for (Map.Entry<String, Object> entry : newEntryMap.entrySet()) {
-                builder.field(entry.getKey(), Schema.STRING_SCHEMA);
-            }
-            updatedSchema = builder.build();
-            schemaUpdateCache.put(orgStruct.schema(), updatedSchema);
-        }
-
-        return updatedSchema;
     }
 
     private Schema newSchema(Map<String, Object> newEntryMap) {
@@ -253,5 +204,21 @@ public abstract class ParseStructByRegex<R extends ConnectRecord<R>> implements 
             return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
         }
 
+    }
+
+    private static class GroupRegexValidator implements ConfigDef.Validator {
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            try {
+                Pattern p = Pattern.compile((String) value);
+                if (p.matcher("dummy").groupCount() < 1) {
+                    throw new ConfigException(name, value, "Regex contain at least one group syntax Required  ex) ^a(.*)c");
+                }
+
+            } catch (Exception e) {
+                throw new ConfigException(name, value, "Invalid Regex");
+            }
+        }
     }
 }
