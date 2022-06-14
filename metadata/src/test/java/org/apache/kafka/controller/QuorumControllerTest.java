@@ -43,6 +43,7 @@ import java.util.stream.StreamSupport;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
@@ -96,6 +97,7 @@ import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.Mockito;
 
 import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -104,7 +106,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
-import static org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT;
+import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -214,7 +216,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), MetadataVersion.latest());
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.empty(), BootstrapMetadata.create(MetadataVersion.latest()));
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -306,7 +308,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
-            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), MetadataVersion.latest());
+            }, OptionalLong.of(sessionTimeoutMillis), OptionalLong.of(leaderImbalanceCheckIntervalNs), BootstrapMetadata.create(MetadataVersion.latest()));
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -399,7 +401,7 @@ public class QuorumControllerTest {
                 .setNewIsr(Arrays.asList(1, 2, 3));
 
             AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
-                .setName("foo");
+                .setTopicName("foo");
             topicData.partitions().add(partitionData);
 
             AlterPartitionRequestData alterPartitionRequest = new AlterPartitionRequestData()
@@ -537,7 +539,7 @@ public class QuorumControllerTest {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
         features.add(new BrokerRegistrationRequestData.Feature()
             .setName(MetadataVersion.FEATURE_NAME)
-            .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV0.featureLevel())
+            .setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())
             .setMaxSupportedVersion(MetadataVersion.latest().featureLevel()));
         return features;
     }
@@ -856,7 +858,7 @@ public class QuorumControllerTest {
                 CountDownLatch countDownLatch = controller.pause();
                 long now = controller.time().nanoseconds();
                 ControllerRequestContext context0 = new ControllerRequestContext(
-                    KafkaPrincipal.ANONYMOUS, OptionalLong.of(now));
+                    new RequestHeaderData(), KafkaPrincipal.ANONYMOUS, OptionalLong.of(now));
                 CompletableFuture<CreateTopicsResponseData> createFuture =
                     controller.createTopics(context0, new CreateTopicsRequestData().setTimeoutMs(0).
                         setTopics(new CreatableTopicCollection(Collections.singleton(
@@ -992,7 +994,7 @@ public class QuorumControllerTest {
                 .collect(Collectors.toList());
 
             AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
-                .setName(topicName);
+                .setTopicName(topicName);
             topicData.partitions().addAll(alterPartitions);
 
             int leaderId = 0;
@@ -1177,6 +1179,23 @@ public class QuorumControllerTest {
         for (int i = 0; i < authorizers.size(); i++) {
             assertFalse(authorizers.get(i).initialLoadFuture().isDone(),
                 "authorizer " + i + " should not have completed loading.");
+        }
+    }
+
+    @Test
+    public void testInvalidBootstrapMetadata() throws Exception {
+        // We can't actually create a BootstrapMetadata with an invalid version, so we have to fake it
+        BootstrapMetadata bootstrapMetadata = Mockito.mock(BootstrapMetadata.class);
+        Mockito.when(bootstrapMetadata.metadataVersion()).thenReturn(MetadataVersion.IBP_2_8_IV0);
+        try (
+                LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                    b.setConfigSchema(SCHEMA);
+                }, OptionalLong.empty(), OptionalLong.empty(), bootstrapMetadata);
+        ) {
+            QuorumController active = controlEnv.activeController();
+            TestUtils.waitForCondition(() -> !active.isActive(),
+                "Timed out waiting for controller to renounce itself after bad bootstrap metadata version.");
         }
     }
 }

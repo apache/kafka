@@ -46,6 +46,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
@@ -1333,6 +1334,202 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testIsrNotExpandedIfReplicaIsFenced(): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId = brokerId + 1
+    val replicas = List(brokerId, remoteBrokerId)
+    val isr = Set(brokerId)
+
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr.toList.map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+
+    // Fetch to let the follower catch up to the log end offset and
+    // to check if an expansion is possible.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+
+    // Follower fetches and catches up to the log end offset.
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = log.logEndOffset
+    )
+
+    // Expansion is triggered.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+    assertEquals(1, alterPartitionManager.isrUpdates.size)
+
+    // Controller rejects the expansion because the broker is fenced.
+    alterPartitionManager.failIsrUpdate(Errors.INELIGIBLE_REPLICA)
+
+    // The leader reverts back to the previous ISR.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+    assertFalse(partition.partitionState.isInflight)
+    assertEquals(0, alterPartitionManager.isrUpdates.size)
+
+    // The leader eventually learns about the fenced broker.
+    when(metadataCache.isBrokerFenced(remoteBrokerId)).thenReturn(true)
+
+    // The follower fetches again.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+
+    // Expansion is not triggered because the follower is fenced.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+    assertFalse(partition.partitionState.isInflight)
+    assertEquals(0, alterPartitionManager.isrUpdates.size)
+
+    // The broker is eventually unfenced.
+    when(metadataCache.isBrokerFenced(remoteBrokerId)).thenReturn(false)
+
+    // The follower fetches again.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+
+    // Expansion is triggered.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+    assertTrue(partition.partitionState.isInflight)
+    assertEquals(1, alterPartitionManager.isrUpdates.size)
+
+    // Expansion succeeds.
+    alterPartitionManager.completeIsrUpdate(newPartitionEpoch = 1)
+
+    // ISR is committed.
+    assertEquals(replicas.toSet, partition.partitionState.isr)
+    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+    assertFalse(partition.partitionState.isInflight)
+    assertEquals(0, alterPartitionManager.isrUpdates.size)
+  }
+
+  @Test
+  def testIsrNotExpandedIfReplicaIsInControlledShutdown(): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId = brokerId + 1
+    val replicas = List(brokerId, remoteBrokerId)
+    val isr = Set(brokerId)
+
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr.toList.map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+
+    // Fetch to let the follower catch up to the log end offset and
+    // to check if an expansion is possible.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+
+    // Follower fetches and catches up to the log end offset.
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = log.logEndOffset
+    )
+
+    // Expansion is triggered.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+    assertEquals(1, alterPartitionManager.isrUpdates.size)
+
+    // Controller rejects the expansion because the broker is in controlled shutdown.
+    alterPartitionManager.failIsrUpdate(Errors.INELIGIBLE_REPLICA)
+
+    // The leader reverts back to the previous ISR.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+    assertFalse(partition.partitionState.isInflight)
+    assertEquals(0, alterPartitionManager.isrUpdates.size)
+
+    // The leader eventually learns about the in controlled shutdown broker.
+    when(metadataCache.isBrokerShuttingDown(remoteBrokerId)).thenReturn(true)
+
+    // The follower fetches again.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+
+    // Expansion is not triggered because the follower is fenced.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+    assertFalse(partition.partitionState.isInflight)
+    assertEquals(0, alterPartitionManager.isrUpdates.size)
+
+    // The broker eventually comes back.
+    when(metadataCache.isBrokerShuttingDown(remoteBrokerId)).thenReturn(false)
+
+    // The follower fetches again.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+
+    // Expansion is triggered.
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+    assertTrue(partition.partitionState.isInflight)
+    assertEquals(1, alterPartitionManager.isrUpdates.size)
+
+    // Expansion succeeds.
+    alterPartitionManager.completeIsrUpdate(newPartitionEpoch= 1)
+
+    // ISR is committed.
+    assertEquals(replicas.toSet, partition.partitionState.isr)
+    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+    assertFalse(partition.partitionState.isInflight)
+    assertEquals(0, alterPartitionManager.isrUpdates.size)
+  }
+
+  @Test
   def testRetryShrinkIsr(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
@@ -1650,6 +1847,16 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(alterPartitionManager.isrUpdates.size, 0)
     assertEquals(0L, partition.localLogOrException.highWatermark)
+  }
+
+  @Test
+  def testAlterIsrNewLeaderElected(): Unit = {
+    handleAlterIsrFailure(Errors.NEW_LEADER_ELECTED,
+      (brokerId: Int, remoteBrokerId: Int, partition: Partition) => {
+        assertEquals(partition.partitionState.isr, Set(brokerId))
+        assertEquals(partition.partitionState.maximalIsr, Set(brokerId, remoteBrokerId))
+        assertEquals(alterPartitionManager.isrUpdates.size, 0)
+      })
   }
 
   @Test

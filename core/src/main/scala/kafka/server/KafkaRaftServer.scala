@@ -35,6 +35,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.nio.file.Paths
 import scala.collection.Seq
+import scala.compat.java8.FunctionConverters.asJavaSupplier
 import scala.jdk.CollectionConverters._
 
 /**
@@ -180,13 +181,16 @@ object KafkaRaftServer {
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }
 
-    // Load the bootstrap metadata file or, in the case of an upgrade from KRaft preview, bootstrap the
-    // metadata.version corresponding to a user-configured IBP.
-    val bootstrapMetadata = if (config.originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
-      BootstrapMetadata.load(Paths.get(config.metadataLogDir), config.interBrokerProtocolVersion)
-    } else {
-      BootstrapMetadata.load(Paths.get(config.metadataLogDir), MetadataVersion.IBP_3_0_IV0)
+    // Load the bootstrap metadata file. In the case of an upgrade from older KRaft where there is no bootstrap metadata,
+    // read the IBP from config in order to bootstrap the equivalent metadata version.
+    def getUserDefinedIBPVersionOrThrow(): MetadataVersion = {
+      if (config.originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
+        MetadataVersion.fromVersionString(config.interBrokerProtocolVersionString)
+      } else {
+        throw new KafkaException(s"Cannot upgrade from KRaft version prior to 3.3 without first setting ${KafkaConfig.InterBrokerProtocolVersionProp} on each broker.")
+      }
     }
+    val bootstrapMetadata = BootstrapMetadata.load(Paths.get(config.metadataLogDir), asJavaSupplier(() => getUserDefinedIBPVersionOrThrow()))
 
     (metaProperties, bootstrapMetadata, offlineDirs.toSeq)
   }

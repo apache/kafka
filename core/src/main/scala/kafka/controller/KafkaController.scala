@@ -16,12 +16,10 @@
  */
 package kafka.controller
 
-import java.util
 import java.util.concurrent.TimeUnit
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
-import kafka.controller.KafkaController.AlterPartitionCallback
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
 import kafka.coordinator.transaction.ZkProducerIdManager
@@ -38,6 +36,7 @@ import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.Metrics
@@ -66,7 +65,6 @@ object KafkaController extends Logging {
   type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
-  type AlterPartitionCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
   type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
 }
 
@@ -2225,197 +2223,226 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  def alterPartitions(alterPartitionRequest: AlterPartitionRequestData, callback: AlterPartitionResponseData => Unit): Unit = {
-    val partitionsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
-
-    alterPartitionRequest.topics.forEach { topicReq =>
-      topicReq.partitions.forEach { partitionReq =>
-        partitionsToAlter.put(
-          new TopicPartition(topicReq.name, partitionReq.partitionIndex),
-          LeaderAndIsr(
-            alterPartitionRequest.brokerId,
-            partitionReq.leaderEpoch,
-            partitionReq.newIsr().asScala.toList.map(_.toInt),
-            LeaderRecoveryState.of(partitionReq.leaderRecoveryState),
-            partitionReq.partitionEpoch
-          )
-        )
-      }
-    }
-
-    def responseCallback(results: Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors]): Unit = {
-      val resp = new AlterPartitionResponseData()
-      results match {
-        case Right(error) =>
-          resp.setErrorCode(error.code)
-        case Left(partitionResults) =>
-          resp.setTopics(new util.ArrayList())
-          partitionResults
-            .groupBy { case (tp, _) => tp.topic }   // Group by topic
-            .foreach { case (topic, partitions) =>
-              // Add each topic part to the response
-              val topicResp = new AlterPartitionResponseData.TopicData()
-                .setName(topic)
-                .setPartitions(new util.ArrayList())
-              resp.topics.add(topicResp)
-              partitions.foreach { case (tp, errorOrIsr) =>
-                // Add each partition part to the response (new ISR or error)
-                errorOrIsr match {
-                  case Left(error) => topicResp.partitions.add(
-                    new AlterPartitionResponseData.PartitionData()
-                      .setPartitionIndex(tp.partition)
-                      .setErrorCode(error.code))
-                  case Right(leaderAndIsr) =>
-                    /* Setting the LeaderRecoveryState field is always safe because it will always be the same
-                     * as the value set in the request. For version 0, that is always the default RECOVERED
-                     * which is ignored when serializing to version 0. For any other version, the
-                     * LeaderRecoveryState field is supported.
-                     */
-                    topicResp.partitions.add(
-                      new AlterPartitionResponseData.PartitionData()
-                        .setPartitionIndex(tp.partition)
-                        .setLeaderId(leaderAndIsr.leader)
-                        .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-                        .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
-                        .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
-                        .setPartitionEpoch(leaderAndIsr.partitionEpoch)
-                    )
-                }
-            }
-          }
-      }
-      callback.apply(resp)
-    }
-
-    eventManager.put(
-      AlterPartitionReceived(alterPartitionRequest.brokerId, alterPartitionRequest.brokerEpoch, partitionsToAlter, responseCallback)
-    )
+  def alterPartitions(
+    alterPartitionRequest: AlterPartitionRequestData,
+    alterPartitionRequestVersion: Short,
+    callback: AlterPartitionResponseData => Unit
+  ): Unit = {
+    eventManager.put(AlterPartitionReceived(
+      alterPartitionRequest,
+      alterPartitionRequestVersion,
+      callback
+    ))
   }
 
   private def processAlterPartition(
-    brokerId: Int,
-    brokerEpoch: Long,
-    partitionsToAlter: Map[TopicPartition, LeaderAndIsr],
-    callback: AlterPartitionCallback
+    alterPartitionRequest: AlterPartitionRequestData,
+    alterPartitionRequestVersion: Short,
+    callback: AlterPartitionResponseData => Unit
   ): Unit = {
+    val partitionResponses = try {
+      tryProcessAlterPartition(
+        alterPartitionRequest,
+        alterPartitionRequestVersion,
+        callback
+      )
+    } catch {
+      case e: Throwable =>
+        error(s"Error when processing AlterPartition: $alterPartitionRequest", e)
+        callback(new AlterPartitionResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code))
+        mutable.Map.empty
+    }
+
+    // After we have returned the result of the `AlterPartition` request, we should check whether
+    // there are any reassignments which can be completed by a successful ISR expansion.
+    partitionResponses.forKeyValue { (topicPartition, partitionResponse) =>
+      if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
+        val isSuccessfulUpdate = partitionResponse.isRight
+        if (isSuccessfulUpdate) {
+          maybeCompleteReassignment(topicPartition)
+        }
+      }
+    }
+  }
+
+  private def tryProcessAlterPartition(
+    alterPartitionRequest: AlterPartitionRequestData,
+    alterPartitionRequestVersion: Short,
+    callback: AlterPartitionResponseData => Unit
+  ): mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] = {
+    val useTopicsIds = alterPartitionRequestVersion > 1
 
     // Handle a few short-circuits
     if (!isActive) {
-      callback.apply(Right(Errors.NOT_CONTROLLER))
-      return
+      callback(new AlterPartitionResponseData().setErrorCode(Errors.NOT_CONTROLLER.code))
+      return mutable.Map.empty
     }
 
+    val brokerId = alterPartitionRequest.brokerId
+    val brokerEpoch = alterPartitionRequest.brokerEpoch
     val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
     if (brokerEpochOpt.isEmpty) {
       info(s"Ignoring AlterPartition due to unknown broker $brokerId")
-      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
-      return
+      callback(new AlterPartitionResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
+      return mutable.Map.empty
     }
 
     if (!brokerEpochOpt.contains(brokerEpoch)) {
       info(s"Ignoring AlterPartition due to stale broker epoch $brokerEpoch and local broker epoch $brokerEpochOpt for broker $brokerId")
-      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
-      return
+      callback(new AlterPartitionResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
+      return mutable.Map.empty
     }
 
-    val response = try {
-      val partitionResponses = mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+    val partitionsToAlter = new mutable.HashMap[TopicPartition, LeaderAndIsr]()
+    val alterPartitionResponse = new AlterPartitionResponseData()
 
-      // Determine which partitions we will accept the new ISR for
-      val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = partitionsToAlter.flatMap {
-        case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
-          controllerContext.partitionLeadershipInfo(tp) match {
-            case Some(leaderIsrAndControllerEpoch) =>
-              val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-              if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
-                partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
-                None
-              } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
-                partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
-                None
-              } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
-                // If a partition is already in the desired state, just return it
-                partitionResponses(tp) = Right(currentLeaderAndIsr)
-                None
-              } else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
-                partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
-                info(
-                  s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
-                  s"$newLeaderAndIsr"
-                )
-                None
-              } else if (currentLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
-                newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
+    alterPartitionRequest.topics.forEach { topicReq =>
+      val topicNameOpt = if (useTopicsIds) {
+        controllerContext.topicName(topicReq.topicId)
+      } else {
+        Some(topicReq.topicName)
+      }
 
-                partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
-                info(
-                  s"Rejecting AlterPartition from node $brokerId for $tp because the leader recovery state cannot change from " +
-                  s"RECOVERED to RECOVERING: $newLeaderAndIsr"
-                )
-                None
-              } else {
-                Some(tp -> newLeaderAndIsr)
-              }
-            case None =>
-              partitionResponses(tp) = Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-              None
+      topicNameOpt match {
+        case None =>
+          val topicResponse = new AlterPartitionResponseData.TopicData()
+            .setTopicId(topicReq.topicId)
+          alterPartitionResponse.topics.add(topicResponse)
+          topicReq.partitions.forEach { partitionReq =>
+            topicResponse.partitions.add(new AlterPartitionResponseData.PartitionData()
+              .setPartitionIndex(partitionReq.partitionIndex)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))
+          }
+
+        case Some(topicName) =>
+          topicReq.partitions.forEach { partitionReq =>
+            partitionsToAlter.put(
+              new TopicPartition(topicName, partitionReq.partitionIndex),
+              LeaderAndIsr(
+                alterPartitionRequest.brokerId,
+                partitionReq.leaderEpoch,
+                partitionReq.newIsr.asScala.toList.map(_.toInt),
+                LeaderRecoveryState.of(partitionReq.leaderRecoveryState),
+                partitionReq.partitionEpoch
+              )
+            )
           }
       }
-
-      // Do the updates in ZK
-      debug(s"Updating ISRs for partitions: ${adjustedIsrs.keySet}.")
-      val UpdateLeaderAndIsrResult(finishedUpdates, badVersionUpdates) = zkClient.updateLeaderAndIsr(
-        adjustedIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
-
-      val successfulUpdates: Map[TopicPartition, LeaderAndIsr] = finishedUpdates.flatMap {
-        case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>
-          isrOrError match {
-            case Right(updatedIsr) =>
-              debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.partitionEpoch}]")
-              partitionResponses(partition) = Right(updatedIsr)
-              Some(partition -> updatedIsr)
-            case Left(e) =>
-              error(s"Failed to update ISR for partition $partition", e)
-              partitionResponses(partition) = Left(Errors.forException(e))
-              None
-          }
-      }
-
-      badVersionUpdates.foreach { partition =>
-        info(s"Failed to update ISR to ${adjustedIsrs(partition)} for partition $partition, bad ZK version.")
-        partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
-      }
-
-      def processUpdateNotifications(partitions: Seq[TopicPartition]): Unit = {
-        val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
-        sendUpdateMetadataRequest(liveBrokers, partitions.toSet)
-      }
-
-      // Update our cache and send out metadata updates
-      updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
-      processUpdateNotifications(partitionsToAlter.keys.toSeq)
-
-      Left(partitionResponses)
-    } catch {
-      case e: Throwable =>
-        error(s"Error when processing AlterPartition for partitions: ${partitionsToAlter.keys.toSeq}", e)
-        Right(Errors.UNKNOWN_SERVER_ERROR)
     }
 
-    callback.apply(response)
+    val partitionResponses = mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+    // Determine which partitions we will accept the new ISR for
+    val adjustedIsrs = partitionsToAlter.flatMap { case (tp, newLeaderAndIsr) =>
+      controllerContext.partitionLeadershipInfo(tp) match {
+        case Some(leaderIsrAndControllerEpoch) =>
+          val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
+          if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
+            partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
+            None
+          } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
+            partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
+            None
+          } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
+            // If a partition is already in the desired state, just return it
+            partitionResponses(tp) = Right(currentLeaderAndIsr)
+            None
+          } else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
+            partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
+            info(
+              s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
+              s"$newLeaderAndIsr"
+            )
+            None
+          } else if (currentLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
+            newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
 
-    // After we have returned the result of the `AlterPartition` request, we should check whether
-    // there are any reassignments which can be completed by a successful ISR expansion.
-    response.left.foreach { alterPartitionResponses =>
-      alterPartitionResponses.forKeyValue { (topicPartition, partitionResponse) =>
-        if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-          val isSuccessfulUpdate = partitionResponse.isRight
-          if (isSuccessfulUpdate) {
-            maybeCompleteReassignment(topicPartition)
+            partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
+            info(
+              s"Rejecting AlterPartition from node $brokerId for $tp because the leader recovery state cannot change from " +
+              s"RECOVERED to RECOVERING: $newLeaderAndIsr"
+            )
+            None
+          } else {
+            Some(tp -> newLeaderAndIsr)
           }
+
+        case None =>
+          partitionResponses(tp) = Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          None
+      }
+    }
+
+    // Do the updates in ZK
+    debug(s"Updating ISRs for partitions: ${adjustedIsrs.keySet}.")
+    val UpdateLeaderAndIsrResult(finishedUpdates, badVersionUpdates) = zkClient.updateLeaderAndIsr(
+      adjustedIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
+
+    val successfulUpdates = finishedUpdates.flatMap { case (partition, isrOrError) =>
+      isrOrError match {
+        case Right(updatedIsr) =>
+          debug(s"ISR for partition $partition updated to $updatedIsr.")
+          partitionResponses(partition) = Right(updatedIsr)
+          Some(partition -> updatedIsr)
+        case Left(e) =>
+          error(s"Failed to update ISR for partition $partition", e)
+          partitionResponses(partition) = Left(Errors.forException(e))
+          None
+      }
+    }
+
+    badVersionUpdates.foreach { partition =>
+      info(s"Failed to update ISR to ${adjustedIsrs(partition)} for partition $partition, bad ZK version.")
+      partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
+    }
+
+    // Update our cache and send out metadata updates
+    updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
+    sendUpdateMetadataRequest(
+      controllerContext.liveOrShuttingDownBrokerIds.toSeq,
+      partitionsToAlter.keySet
+    )
+
+    partitionResponses.groupBy(_._1.topic).forKeyValue { (topicName, partitionResponses) =>
+      // Add each topic part to the response
+      val topicResponse = if (useTopicsIds) {
+        new AlterPartitionResponseData.TopicData()
+          .setTopicId(controllerContext.topicIds.getOrElse(topicName, Uuid.ZERO_UUID))
+      } else {
+        new AlterPartitionResponseData.TopicData()
+          .setTopicName(topicName)
+      }
+      alterPartitionResponse.topics.add(topicResponse)
+
+      partitionResponses.forKeyValue { (tp, errorOrIsr) =>
+        // Add each partition part to the response (new ISR or error)
+        errorOrIsr match {
+          case Left(error) =>
+            topicResponse.partitions.add(
+              new AlterPartitionResponseData.PartitionData()
+                .setPartitionIndex(tp.partition)
+                .setErrorCode(error.code))
+          case Right(leaderAndIsr) =>
+            /* Setting the LeaderRecoveryState field is always safe because it will always be the same
+             * as the value set in the request. For version 0, that is always the default RECOVERED
+             * which is ignored when serializing to version 0. For any other version, the
+             * LeaderRecoveryState field is supported.
+             */
+            topicResponse.partitions.add(
+              new AlterPartitionResponseData.PartitionData()
+                .setPartitionIndex(tp.partition)
+                .setLeaderId(leaderAndIsr.leader)
+                .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+                .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
+                .setPartitionEpoch(leaderAndIsr.partitionEpoch)
+            )
         }
       }
     }
+
+    callback(alterPartitionResponse)
+
+    partitionResponses
   }
 
   def allocateProducerIds(allocateProducerIdsRequest: AllocateProducerIdsRequestData,
@@ -2542,8 +2569,8 @@ class KafkaController(val config: KafkaConfig,
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
           processIsrChangeNotification()
-        case AlterPartitionReceived(brokerId, brokerEpoch, partitionsToAlter, callback) =>
-          processAlterPartition(brokerId, brokerEpoch, partitionsToAlter, callback)
+        case AlterPartitionReceived(alterPartitionRequest, alterPartitionRequestVersion, callback) =>
+          processAlterPartition(alterPartitionRequest, alterPartitionRequestVersion, callback)
         case AllocateProducerIds(brokerId, brokerEpoch, callback) =>
           processAllocateProducerIds(brokerId, brokerEpoch, callback)
         case Startup =>
@@ -2806,7 +2833,9 @@ case object IsrChangeNotification extends ControllerEvent {
 }
 
 case class AlterPartitionReceived(
-  brokerId: Int, brokerEpoch: Long, partitionsToAlter: Map[TopicPartition, LeaderAndIsr], callback: AlterPartitionCallback
+  alterPartitionRequest: AlterPartitionRequestData,
+  alterPartitionRequestVersion: Short,
+  callback: AlterPartitionResponseData => Unit
 ) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
   override def preempt(): Unit = {}
