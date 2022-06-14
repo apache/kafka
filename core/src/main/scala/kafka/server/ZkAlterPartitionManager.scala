@@ -19,10 +19,11 @@ package kafka.server
 import kafka.utils.{Logging, ReplicationUtils, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
+
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-
 import kafka.api.LeaderAndIsr
+import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors.InvalidUpdateVersionException
 import org.apache.kafka.common.utils.Time
 
@@ -58,21 +59,21 @@ class ZkAlterPartitionManager(scheduler: Scheduler, time: Time, zkClient: KafkaZ
   }
 
   override def submit(
-    topicPartition: TopicPartition,
+    topicIdPartition: TopicIdPartition,
     leaderAndIsr: LeaderAndIsr,
     controllerEpoch: Int
   ): CompletableFuture[LeaderAndIsr]= {
     debug(s"Writing new ISR ${leaderAndIsr.isr} to ZooKeeper with version " +
-      s"${leaderAndIsr.partitionEpoch} for partition $topicPartition")
+      s"${leaderAndIsr.partitionEpoch} for partition $topicIdPartition")
 
-    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition,
+    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicIdPartition.topicPartition,
       leaderAndIsr, controllerEpoch)
 
     val future = new CompletableFuture[LeaderAndIsr]()
     if (updateSucceeded) {
       // Track which partitions need to be propagated to the controller
       isrChangeSet synchronized {
-        isrChangeSet += topicPartition
+        isrChangeSet += topicIdPartition.topicPartition
         lastIsrChangeMs.set(time.milliseconds())
       }
 
@@ -81,7 +82,7 @@ class ZkAlterPartitionManager(scheduler: Scheduler, time: Time, zkClient: KafkaZ
       future.complete(leaderAndIsr.withPartitionEpoch(newVersion))
     } else {
       future.completeExceptionally(new InvalidUpdateVersionException(
-        s"ISR update $leaderAndIsr for partition $topicPartition with controller epoch $controllerEpoch " +
+        s"ISR update $leaderAndIsr for partition $topicIdPartition with controller epoch $controllerEpoch " +
           "failed with an invalid version error"))
     }
     future
