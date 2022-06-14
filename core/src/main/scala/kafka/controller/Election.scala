@@ -111,41 +111,6 @@ object Election {
     }
   }
 
-  private def leaderForReassign(partition: TopicPartition,
-                                leaderAndIsr: LeaderAndIsr,
-                                controllerContext: ControllerContext): LeaderAndIsrUpdateResult = {
-    val targetReplicas = controllerContext.partitionFullReplicaAssignment(partition).targetReplicas
-    val liveReplicas = targetReplicas.filter(replica => controllerContext.isReplicaOnline(replica, partition))
-    val isr = leaderAndIsr.isr
-    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(targetReplicas, isr, liveReplicas.toSet)
-    leaderOpt match {
-      case Some(newLeader) =>
-        val newLeaderAndIsr = leaderAndIsr.newLeader(newLeader)
-        LeaderAndIsrUpdateResult.Successful(partition, newLeaderAndIsr, targetReplicas, Seq.empty)
-      case None =>
-        LeaderAndIsrUpdateResult.Failed(partition, new StateChangeFailedException(
-          s"Failed to elect leader for reassigning partition $partition since there is no live leader in " +
-            s"the ISR among the target replicas $targetReplicas."
-        ))
-    }
-  }
-
-  /**
-   * Elect leaders for partitions that are undergoing reassignment.
-   *
-   * @param controllerContext Context with the current state of the cluster
-   * @param leaderAndIsrs A sequence of tuples representing the partitions that need election
-   *                                     and their respective leader/ISR states
-   *
-   * @return The election results
-   */
-  def leaderForReassign(controllerContext: ControllerContext,
-                        leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)]): Seq[LeaderAndIsrUpdateResult] = {
-    leaderAndIsrs.map { case (partition, leaderAndIsr) =>
-      leaderForReassign(partition, leaderAndIsr, controllerContext)
-    }
-  }
-
   private def leaderForPreferredReplica(partition: TopicPartition,
                                         leaderAndIsr: LeaderAndIsr,
                                         controllerContext: ControllerContext): LeaderAndIsrUpdateResult = {
