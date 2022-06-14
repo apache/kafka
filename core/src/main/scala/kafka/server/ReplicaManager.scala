@@ -62,6 +62,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 
+import java.nio.file.{Files, Paths}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
@@ -790,11 +791,15 @@ class ReplicaManager(val config: KafkaConfig,
     val logsByDir = logManager.allLogs.groupBy(log => log.parentDir)
 
     config.logDirs.toSet.map { logDir: String =>
-      val absolutePath = new File(logDir).getAbsolutePath
+      val file = Paths.get(logDir)
+      val absolutePath = file.toAbsolutePath.toString
       try {
         if (!logManager.isLogDirOnline(absolutePath))
           throw new KafkaStorageException(s"Log directory $absolutePath is offline")
 
+        val fileStore = Files.getFileStore(file)
+        val totalBytes = adjustForLargeFileSystems(fileStore.getTotalSpace)
+        val usableBytes = adjustForLargeFileSystems(fileStore.getUsableSpace)
         logsByDir.get(absolutePath) match {
           case Some(logs) =>
             val topicInfos = logs.groupBy(_.topicPartition.topic).map{case (topic, logs) =>
@@ -812,9 +817,11 @@ class ReplicaManager(val config: KafkaConfig,
 
             new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
               .setErrorCode(Errors.NONE.code).setTopics(topicInfos)
+              .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
           case None =>
             new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
               .setErrorCode(Errors.NONE.code)
+              .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
         }
 
       } catch {
@@ -830,6 +837,13 @@ class ReplicaManager(val config: KafkaConfig,
             .setErrorCode(Errors.forException(t).code)
       }
     }.toList
+  }
+
+  // See: https://bugs.openjdk.java.net/browse/JDK-8162520
+  def adjustForLargeFileSystems(space: Long): Long = {
+    if (space < 0)
+      return Long.MaxValue
+    space
   }
 
   def getLogEndOffsetLag(topicPartition: TopicPartition, logEndOffset: Long, isFuture: Boolean): Long = {
