@@ -345,6 +345,38 @@ public class PauseResumeIntegrationTest {
         awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
     }
 
+    @Test
+    public void pausedTopologyShouldNotRestoreStateStores() throws Exception {
+        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
+
+        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
+        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_1);
+        kafkaStreams.start();
+        kafkaStreams2.start();
+
+        waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams2), State.RUNNING, STARTUP_TIMEOUT);
+
+        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
+
+        // Shutdown
+        kafkaStreams.close();
+        kafkaStreams2.close();
+
+        // Wipe out state
+        kafkaStreams.cleanUp();
+        kafkaStreams2.cleanUp();
+
+        // Start paused
+        kafkaStreams.pause();
+        kafkaStreams2.pause();
+        kafkaStreams.start();
+        kafkaStreams2.start();
+
+        // Verify lag is constant and does not decrease
+        assertNoLag(kafkaStreams);
+        assertNoLag(kafkaStreams2);
+    }
+
     private KafkaStreams buildKafkaStreams(final String outputTopic) {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(outputTopic);
