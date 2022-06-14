@@ -115,7 +115,6 @@ object AclEntry {
       case ResourceType.CLUSTER => Errors.CLUSTER_AUTHORIZATION_FAILED
       case ResourceType.TRANSACTIONAL_ID => Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
       case ResourceType.DELEGATION_TOKEN => Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED
-      case ResourceType.USER => Errors.USER_AUTHORIATION_FAILED
       case _ => throw new IllegalArgumentException("Authorization error type not known")
     }
   }
