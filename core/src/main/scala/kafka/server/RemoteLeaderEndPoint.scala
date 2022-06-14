@@ -31,6 +31,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetFo
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2
 
 import scala.jdk.CollectionConverters._
@@ -46,13 +47,16 @@ import scala.compat.java8.OptionConverters.RichOptionForJava8
  * @param brokerConfig Broker configuration
  * @param replicaManager A ReplicaManager
  * @param quota The quota, used when building a fetch request
+ * @param metadataVersionSupplier A supplier that returns the current MetadataVersion. This can change during
+ *                                runtime in KRaft mode.
  */
 class RemoteLeaderEndPoint(logPrefix: String,
                            blockingSender: BlockingSend,
                            private[server] val fetchSessionHandler: FetchSessionHandler, // visible for testing
                            brokerConfig: KafkaConfig,
                            replicaManager: ReplicaManager,
-                           quota: ReplicaQuota) extends LeaderEndPoint with Logging {
+                           quota: ReplicaQuota,
+                           metadataVersionSupplier: () => MetadataVersion) extends LeaderEndPoint with Logging {
 
   this.logIdent = logPrefix
 
@@ -61,7 +65,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  override val isTruncationOnFetchSupported = brokerConfig.interBrokerProtocolVersion.isTruncationOnFetchSupported
+  override def isTruncationOnFetchSupported = metadataVersionSupplier().isTruncationOnFetchSupported
 
   override def initiateClose(): Unit = blockingSender.initiateClose()
 
@@ -106,7 +110,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
           .setTimestamp(earliestOrLatest)))
-    val requestBuilder = ListOffsetsRequest.Builder.forReplica(brokerConfig.listOffsetRequestVersion, brokerConfig.brokerId)
+    val metadataVersion = metadataVersionSupplier()
+    val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = blockingSender.sendRequest(requestBuilder)
@@ -116,7 +121,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE =>
-        if (brokerConfig.interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV2))
+        if (metadataVersion.isAtLeast(IBP_0_10_1_IV2))
           responsePartition.offset
         else
           responsePartition.oldStyleOffsets.get(0)
@@ -141,7 +146,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
     }
 
     val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(
-      brokerConfig.offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
+      metadataVersionSupplier().offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
     debug(s"Sending offset for leader epoch request $epochRequest")
 
     try {
@@ -201,7 +206,12 @@ class RemoteLeaderEndPoint(logPrefix: String,
     val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
       None
     } else {
-      val version: Short = if (brokerConfig.fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) 12 else brokerConfig.fetchRequestVersion
+      val metadataVersion = metadataVersionSupplier()
+      val version: Short = if (metadataVersion.fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) {
+        12
+      } else {
+        metadataVersion.fetchRequestVersion
+      }
       val requestBuilder = FetchRequest.Builder
         .forReplica(version, brokerConfig.brokerId, maxWait, minBytes, fetchData.toSend)
         .setMaxBytes(maxBytes)

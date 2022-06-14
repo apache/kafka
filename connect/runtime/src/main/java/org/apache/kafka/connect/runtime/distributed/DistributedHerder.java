@@ -1699,14 +1699,56 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private boolean startTask(ConnectorTaskId taskId) {
         log.info("Starting task {}", taskId);
-        return worker.startTask(
-                taskId,
-                configState,
-                configState.connectorConfig(taskId.connector()),
-                configState.taskConfig(taskId),
-                this,
-                configState.targetState(taskId.connector())
-        );
+        Map<String, String> connProps = configState.connectorConfig(taskId.connector());
+        switch (connectorTypeForConfig(connProps)) {
+            case SINK:
+                return worker.startSinkTask(
+                        taskId,
+                        configState,
+                        connProps,
+                        configState.taskConfig(taskId),
+                        this,
+                        configState.targetState(taskId.connector())
+                );
+            case SOURCE:
+                if (config.exactlyOnceSourceEnabled()) {
+                    int taskGeneration = configState.taskConfigGeneration(taskId.connector());
+                    return worker.startExactlyOnceSourceTask(
+                            taskId,
+                            configState,
+                            connProps,
+                            configState.taskConfig(taskId),
+                            this,
+                            configState.targetState(taskId.connector()),
+                            () -> {
+                                FutureCallback<Void> preflightFencing = new FutureCallback<>();
+                                fenceZombieSourceTasks(taskId, preflightFencing);
+                                try {
+                                    preflightFencing.get();
+                                } catch (InterruptedException e) {
+                                    throw new ConnectException("Interrupted while attempting to perform round of zombie fencing", e);
+                                } catch (ExecutionException e) {
+                                    Throwable cause = e.getCause();
+                                    throw ConnectUtils.maybeWrap(cause, "Failed to perform round of zombie fencing");
+                                }
+                            },
+                            () -> {
+                                verifyTaskGenerationAndOwnership(taskId, taskGeneration);
+                            }
+                    );
+                } else {
+                    return worker.startSourceTask(
+                            taskId,
+                            configState,
+                            connProps,
+                            configState.taskConfig(taskId),
+                            this,
+                            configState.targetState(taskId.connector())
+                    );
+                }
+            default:
+                throw new ConnectException("Failed to start task " + taskId + " since it is not a recognizable type (source or sink)");
+        }
     }
 
     private Callable<Void> getTaskStartingCallable(final ConnectorTaskId taskId) {

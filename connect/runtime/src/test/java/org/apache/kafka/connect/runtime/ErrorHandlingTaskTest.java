@@ -48,6 +48,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
@@ -160,6 +161,8 @@ public class ErrorHandlingTaskTest {
     OffsetStorageReaderImpl offsetReader;
     @Mock
     OffsetStorageWriter offsetWriter;
+    @Mock
+    private ConnectorOffsetBackingStore offsetStore;
 
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     @SuppressWarnings("unused")
@@ -530,6 +533,12 @@ public class ErrorHandlingTaskTest {
 
         admin.close(EasyMock.anyObject(Duration.class));
         EasyMock.expectLastCall();
+
+        offsetReader.close();
+        EasyMock.expectLastCall();
+
+        offsetStore.stop();
+        EasyMock.expectLastCall();
     }
 
     private void expectTopicCreation(String topic) {
@@ -590,7 +599,7 @@ public class ErrorHandlingTaskTest {
             WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
             taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
             producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
-            offsetReader, offsetWriter, workerConfig,
+            offsetReader, offsetWriter, offsetStore, workerConfig,
             ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
             statusBackingStore, (Executor) Runnable::run);
     }

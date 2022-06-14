@@ -199,7 +199,15 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   override def getTopicName(topicId: Uuid): Option[String] = _currentImage.topics().topicsById.asScala.get(topicId).map(_.name())
 
   override def hasAliveBroker(brokerId: Int): Boolean = {
-    Option(_currentImage.cluster().broker(brokerId)).count(!_.fenced()) == 1
+    Option(_currentImage.cluster.broker(brokerId)).count(!_.fenced()) == 1
+  }
+
+  def isBrokerFenced(brokerId: Int): Boolean = {
+    Option(_currentImage.cluster.broker(brokerId)).count(_.fenced) == 1
+  }
+
+  def isBrokerShuttingDown(brokerId: Int): Boolean = {
+    Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
   override def getAliveBrokers(): Iterable[BrokerMetadata] = getAliveBrokers(_currentImage)

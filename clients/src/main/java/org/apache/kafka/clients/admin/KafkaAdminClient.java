@@ -2716,7 +2716,11 @@ public class KafkaAdminClient extends AdminClient {
                             new ReplicaInfo(p.partitionSize(), p.offsetLag(), p.isFutureKey()));
                 }
             }
-            result.put(logDirResult.logDir(), new LogDirDescription(Errors.forCode(logDirResult.errorCode()).exception(), replicaInfoMap));
+            result.put(logDirResult.logDir(), new LogDirDescription(
+                    Errors.forCode(logDirResult.errorCode()).exception(),
+                    replicaInfoMap,
+                    logDirResult.totalBytes(),
+                    logDirResult.usableBytes()));
         }
         return result;
     }

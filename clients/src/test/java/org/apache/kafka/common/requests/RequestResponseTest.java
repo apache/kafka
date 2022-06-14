@@ -1321,9 +1321,10 @@ public class RequestResponseTest {
             .setBrokerEpoch(123L)
             .setBrokerId(1)
             .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
-                .setName("topic1")
+                .setTopicName("topic1")
+                .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
-        return new AlterPartitionRequest.Builder(data).build(version);
+        return new AlterPartitionRequest.Builder(data, version >= 1).build(version);
     }
 
     private AlterPartitionResponse createAlterPartitionResponse(int version) {
@@ -1343,8 +1344,9 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.NONE.code())
                 .setThrottleTimeMs(123)
                 .setTopics(singletonList(new AlterPartitionResponseData.TopicData()
-                        .setName("topic1")
-                        .setPartitions(singletonList(partitionData))));
+                    .setTopicName("topic1")
+                    .setTopicId(Uuid.randomUuid())
+                    .setPartitions(singletonList(partitionData))));
         return new AlterPartitionResponse(data);
     }
 

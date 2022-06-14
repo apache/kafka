@@ -287,7 +287,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->
-        <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
+        <Class name="org.apache.kafka.connect.runtime.AbstractWorkerSourceTask"/>
         <Method name="execute"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
     </Match>
@@ -309,16 +309,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Method name="pause"/>
         </Or>
         <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
-    </Match>
-
-    <Match>
-        <!--
-            Temporarily suppress warnings about unused private methods (will be used in a subsequent pull request)
-            TODO: Remove this before merging to trunk
-        -->
-        <Class name="org.apache.kafka.connect.runtime.distributed.DistributedHerder"/>
-        <Method name="verifyTaskGenerationAndOwnership"/>
-        <Bug pattern="UPM_UNCALLED_PRIVATE_METHOD"/>
     </Match>
 
     <Match>

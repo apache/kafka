@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class ClusterControlManagerTest {
     @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_0_IV0", "IBP_3_3_IV2"})
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_0_IV1", "IBP_3_3_IV2"})
     public void testReplay(MetadataVersion metadataVersion) {
         MockTime time = new MockTime(0, 0, 0);
 

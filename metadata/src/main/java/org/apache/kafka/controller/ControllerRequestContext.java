@@ -17,8 +17,11 @@
 
 package org.apache.kafka.controller;
 
+
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import java.util.OptionalLong;
 
@@ -27,9 +30,6 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
 public class ControllerRequestContext {
-    public static final ControllerRequestContext ANONYMOUS_CONTEXT =
-        new ControllerRequestContext(KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty());
 
     public static OptionalLong requestTimeoutMsToDeadlineNs(
         Time time,
@@ -39,15 +39,36 @@ public class ControllerRequestContext {
     }
 
     private final KafkaPrincipal principal;
-
     private final OptionalLong deadlineNs;
+    private final RequestHeaderData requestHeader;
 
     public ControllerRequestContext(
+        RequestHeaderData requestHeader,
         KafkaPrincipal principal,
         OptionalLong deadlineNs
     ) {
+        this.requestHeader = requestHeader;
         this.principal = principal;
         this.deadlineNs = deadlineNs;
+    }
+
+    public ControllerRequestContext(
+        AuthorizableRequestContext requestContext,
+        OptionalLong deadlineNs
+    ) {
+        this(
+            new RequestHeaderData()
+                .setRequestApiKey((short) requestContext.requestType())
+                .setRequestApiVersion((short) requestContext.requestVersion())
+                .setCorrelationId(requestContext.correlationId())
+                .setClientId(requestContext.clientId()),
+            requestContext.principal(),
+            deadlineNs
+        );
+    }
+
+    public RequestHeaderData requestHeader() {
+        return requestHeader;
     }
 
     public KafkaPrincipal principal() {
