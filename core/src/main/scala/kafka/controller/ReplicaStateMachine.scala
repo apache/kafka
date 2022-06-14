@@ -325,12 +325,12 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     partitions: Seq[TopicPartition]
   ): Map[TopicPartition, LeaderIsrAndControllerEpoch] = {
     var results = Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
-    var remainingPartitions = partitions
-    while (remainingPartitions.nonEmpty) {
-      val (finishedPartitions, partitionsToRetry) = tryRemoveReplicasFromIsr(replicaId, remainingPartitions)
-      remainingPartitions = partitionsToRetry
+    var remaining = partitions
+    while (remaining.nonEmpty) {
+      val (finishedRemoval, removalsToRetry) = tryRemoveReplicasFromIsr(replicaId, remaining)
+      remaining = removalsToRetry
 
-      finishedPartitions.foreach {
+      finishedRemoval.foreach {
         case (partition, Left(e)) =>
           val replica = PartitionAndReplica(partition, replicaId)
           val currentState = controllerContext.replicaState(replica)

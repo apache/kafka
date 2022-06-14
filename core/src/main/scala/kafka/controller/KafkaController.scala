@@ -783,7 +783,7 @@ class KafkaController(val config: KafkaConfig,
     val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
     if (currentAssignment != newAssignment) {
       if (currentAssignment.isBeingReassigned) {
-        cancelCurrentReassignment(topicPartition, currentAssignment, newAssignment)
+        cancelReassignment(topicPartition, currentAssignment, newAssignment)
       }
 
       info(s"Updating assignment of partition $topicPartition from $currentAssignment to $newAssignment")
@@ -794,7 +794,7 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def cancelCurrentReassignment(
+  private def cancelReassignment(
     topicPartition: TopicPartition,
     oldAssignment: ReplicaAssignment,
     newAssignment: ReplicaAssignment,
@@ -1121,16 +1121,14 @@ class KafkaController(val config: KafkaConfig,
 
   private def removePartitionFromReassigningPartitions(topicPartition: TopicPartition,
                                                        assignment: ReplicaAssignment): Unit = {
-    if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      if (!isAlterPartitionEnabled) {
-        val path = TopicPartitionStateZNode.path(topicPartition)
-        zkClient.unregisterZNodeChangeHandler(path)
-      }
-      maybeRemoveFromZkReassignment((tp, replicas) => tp == topicPartition && replicas == assignment.replicas)
-      controllerContext.partitionsBeingReassigned.remove(topicPartition)
-      // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
-      topicDeletionManager.resumeDeletionForTopics(Set(topicPartition.topic))
+    if (!isAlterPartitionEnabled) {
+      val path = TopicPartitionStateZNode.path(topicPartition)
+      zkClient.unregisterZNodeChangeHandler(path)
     }
+    maybeRemoveFromZkReassignment((tp, replicas) => tp == topicPartition && replicas == assignment.replicas)
+    controllerContext.partitionsBeingReassigned.remove(topicPartition)
+    // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
+    topicDeletionManager.resumeDeletionForTopics(Set(topicPartition.topic))
   }
 
   /**
