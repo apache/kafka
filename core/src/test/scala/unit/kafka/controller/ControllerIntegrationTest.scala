@@ -325,7 +325,8 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 3,
+    // One leader epoch bump needed to add the new replica, one leader epoch bump to remove the old one
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 2,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
@@ -364,7 +365,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 3,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 2,
       "with an offline log directory on the target broker, the partition reassignment stalls")
     TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
@@ -410,7 +411,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
     servers(otherBrokerId).startup()
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 4,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 3,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() => zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
@@ -618,13 +619,12 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testControllerMoveOnPartitionReassignment(): Unit = {
-    servers = makeServers(1)
+    servers = makeServers(numConfigs = 2)
     TestUtils.waitUntilControllerElected(zkClient)
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(0))
     TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
-
-    val reassignment = Map(tp -> Seq(0))
+    val reassignment = Map(tp -> Seq(1))
     testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
   }
 
@@ -1447,9 +1447,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testTopicIdUpgradeAfterReassigningPartitions(): Unit = {
+    // FIXME: This test doesn't work because the reassignment is a no-op
     val tp = new TopicPartition("t", 0)
-    val reassignment = Map(tp -> Some(Seq(0)))
     val adminZkClient = new AdminZkClient(zkClient)
+    val reassignment = Map(tp -> Some(Seq(0)))
 
     // start server with old IBP
     servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
@@ -1562,7 +1563,6 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   private def preferredReplicaLeaderElection(controllerId: Int, otherBroker: KafkaServer, tp: TopicPartition,
                                              replicas: Set[Int], leaderEpoch: Int): Unit = {
-    println(s"Shutting down ${otherBroker.config.brokerId}")
     otherBroker.shutdown()
     otherBroker.awaitShutdown()
 

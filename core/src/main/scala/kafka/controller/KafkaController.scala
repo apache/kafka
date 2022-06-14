@@ -842,9 +842,7 @@ class KafkaController(val config: KafkaConfig,
    */
   private def maybeTriggerPartitionReassignment(reassignments: Map[TopicPartition, ReplicaAssignment]): Map[TopicPartition, ApiError] = {
     reassignments.map { case (tp, reassignment) =>
-      val topic = tp.topic
-
-      val apiError = if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
+      val apiError = if (topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)) {
         info(s"Skipping reassignment of $tp since the topic is currently being deleted")
         new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist.")
       } else {
@@ -855,8 +853,7 @@ class KafkaController(val config: KafkaConfig,
             ApiError.NONE
           } catch {
             case e: ControllerMovedException =>
-              info(s"Failed completing reassignment of partition $tp because controller has moved to another broker")
-              new ApiError(Errors.NOT_CONTROLLER)
+              throw e
             case e: Throwable =>
               error(s"Error completing reassignment of partition $tp", e)
               new ApiError(Errors.UNKNOWN_SERVER_ERROR)
@@ -1780,10 +1777,7 @@ class KafkaController(val config: KafkaConfig,
 
       zkClient.getPartitionReassignment.forKeyValue { (tp, targetReplicas) =>
         val currentAssignment = controllerContext.partitionFullReplicaAssignment(tp)
-        validateReassignmentTargetReplicas(tp, currentAssignment, targetReplicas) match {
-          case Left(error) => reassignmentResults.put(tp, error)
-          case Right(newAssignment) => partitionsToReassign.put(tp, newAssignment)
-        }
+        partitionsToReassign.put(tp, currentAssignment.reassignTo(targetReplicas))
       }
 
       reassignmentResults ++= maybeTriggerPartitionReassignment(partitionsToReassign)
@@ -1838,12 +1832,20 @@ class KafkaController(val config: KafkaConfig,
         }
       }
 
-      // The latest reassignment (whether by API or through zk) always takes precedence,
-      // so remove from active zk reassignment (if one exists)
-      maybeRemoveFromZkReassignment((tp, _) => partitionsToReassign.contains(tp))
+      try {
+        // The latest reassignment (whether by API or through zk) always takes precedence,
+        // so remove from active zk reassignment (if one exists)
+        maybeRemoveFromZkReassignment((tp, _) => partitionsToReassign.contains(tp))
 
-      reassignmentResults ++= maybeTriggerPartitionReassignment(partitionsToReassign)
-      callback(Left(reassignmentResults))
+        reassignmentResults ++= maybeTriggerPartitionReassignment(partitionsToReassign)
+        callback(Left(reassignmentResults))
+      } catch {
+        case e: ControllerMovedException =>
+          info(s"Failed to complete reassignment of ${partitionsToReassign.size} partitions because " +
+            s"the controller has moved to another broker")
+          callback(Right(new ApiError(Errors.NOT_CONTROLLER)))
+          throw e
+      }
     }
   }
 

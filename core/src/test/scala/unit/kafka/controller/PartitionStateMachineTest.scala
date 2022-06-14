@@ -17,6 +17,7 @@
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
+import kafka.common.StateChangeFailedException
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -156,11 +157,14 @@ class PartitionStateMachineTest {
   }
 
   @Test
-  def testOnlinePartitionToOnlineTransition(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
-    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
+  def testOnlinePartitionToOnlineTransitionWithPreferredLeaderElectionNeeded(): Unit = {
+    val otherBrokerId = brokerId + 1
+    controllerContext.setLiveBrokers(Map(
+      TestUtils.createBrokerAndEpoch(brokerId, "host", 0),
+      TestUtils.createBrokerAndEpoch(otherBrokerId, "host", 0)))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId, otherBrokerId)))
     controllerContext.putPartitionState(partition, OnlinePartition)
-    val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+    val leaderAndIsr = LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
@@ -176,8 +180,9 @@ class PartitionStateMachineTest {
 
     partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(PreferredLeaderElectionStrategy))
     verify(mockControllerBrokerRequestBatch).newBatch()
-    verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId),
-      partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), replicaAssignment(Seq(brokerId)), isNew = false)
+    verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId, otherBrokerId),
+      partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch),
+      replicaAssignment(Seq(brokerId, otherBrokerId)), isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
     verify(mockZkClient).getTopicPartitionStatesRaw(any())
     verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
@@ -185,16 +190,12 @@ class PartitionStateMachineTest {
   }
 
   @Test
-  def testOnlinePartitionToOnlineTransitionForControlledShutdown(): Unit = {
+  def testOnlinePartitionToOnlineTransitionWithPreferredLeaderElectionNotNeeded(): Unit = {
     val otherBrokerId = brokerId + 1
     controllerContext.setLiveBrokers(Map(
       TestUtils.createBrokerAndEpoch(brokerId, "host", 0),
       TestUtils.createBrokerAndEpoch(otherBrokerId, "host", 0)))
-    controllerContext.shuttingDownBrokerIds.add(brokerId)
-    controllerContext.updatePartitionFullReplicaAssignment(
-      partition,
-      ReplicaAssignment(Seq(brokerId, otherBrokerId))
-    )
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId, otherBrokerId)))
     controllerContext.putPartitionState(partition, OnlinePartition)
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId, otherBrokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
@@ -204,17 +205,88 @@ class PartitionStateMachineTest {
     when(mockZkClient.getTopicPartitionStatesRaw(partitions))
       .thenReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
-    val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(otherBrokerId, List(otherBrokerId))
-    val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
-    when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
+
+    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(PreferredLeaderElectionStrategy))
+    verify(mockControllerBrokerRequestBatch).newBatch()
+    verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
+    assertEquals(OnlinePartition, partitionState(partition))
+  }
+
+  @Test
+  def testOnlinePartitionToOnlineTransitionWithControlledShutdownBrokerInIsr(): Unit = {
+    val otherBrokerId = brokerId + 1
+    val assignment = ReplicaAssignment(Seq(brokerId, otherBrokerId))
+    val initialLeaderAndIsr = LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId))
+    val expectedLeaderAndIsr = initialLeaderAndIsr.newLeaderAndIsr(otherBrokerId, List(otherBrokerId))
+    testOnlineToOnlineTransitionControlledShutdown(assignment, initialLeaderAndIsr, expectedLeaderAndIsr)
+  }
+
+  @Test
+  def testOnlinePartitionToOnlineTransitionWithControlledShutdownBrokerNotInIsr(): Unit = {
+    val otherBrokerId = brokerId + 1
+    val assignment = ReplicaAssignment(Seq(brokerId, otherBrokerId))
+    val initialLeaderAndIsr = LeaderAndIsr(otherBrokerId, List(otherBrokerId))
+    val expectedLeaderAndIsr = initialLeaderAndIsr.newEpoch
+    testOnlineToOnlineTransitionControlledShutdown(assignment, initialLeaderAndIsr, expectedLeaderAndIsr)
+  }
+
+  @Test
+  def testOnlinePartitionToOnlineTransitionWithControlledShutdownBrokerLeaderWithEligibleFailoverLeader(): Unit = {
+    val otherBrokerId = brokerId + 1
+    val assignment = ReplicaAssignment(Seq(brokerId, otherBrokerId))
+    val initialLeaderAndIsr = LeaderAndIsr(brokerId, List(brokerId, otherBrokerId))
+    val expectedLeaderAndIsr = initialLeaderAndIsr.newLeaderAndIsr(otherBrokerId, List(otherBrokerId))
+    testOnlineToOnlineTransitionControlledShutdown(assignment, initialLeaderAndIsr, expectedLeaderAndIsr)
+  }
+
+  @Test
+  def testOnlinePartitionToOnlineTransitionWithControlledShutdownBrokerLeaderWithNoEligibleFailoverLeader(): Unit = {
+    val otherBrokerId = brokerId + 1
+    val assignment = ReplicaAssignment(Seq(brokerId, otherBrokerId))
+    val initialLeaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+    assertThrows(classOf[StateChangeFailedException], () => {
+      testOnlineToOnlineTransitionControlledShutdown(assignment, initialLeaderAndIsr, initialLeaderAndIsr)
+    })
+  }
+
+  private def testOnlineToOnlineTransitionControlledShutdown(
+    assignment: ReplicaAssignment,
+    initialLeaderAndIsr: LeaderAndIsr,
+    expectedLeaderAndIsr: LeaderAndIsr
+  ): Unit = {
+    val otherBrokerId = brokerId + 1
+    controllerContext.setLiveBrokers(assignment.replicas.map { replicaId =>
+      TestUtils.createBrokerAndEpoch(replicaId, "host", 9092 + replicaId)
+    }.toMap)
+    controllerContext.shuttingDownBrokerIds.add(brokerId)
+    controllerContext.updatePartitionFullReplicaAssignment(partition, assignment)
+    controllerContext.putPartitionState(partition, OnlinePartition)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(initialLeaderAndIsr, controllerEpoch)
+    controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
+
+    val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    when(mockZkClient.getTopicPartitionStatesRaw(partitions))
+      .thenReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
+        TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
+    val updatedLeaderAndIsr = expectedLeaderAndIsr.withPartitionEpoch(initialLeaderAndIsr.partitionEpoch + 1)
+    when(mockZkClient.updateLeaderAndIsr(Map(partition -> expectedLeaderAndIsr), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(ControlledShutdownStrategy))
+    val results = partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(ControlledShutdownStrategy))
+    val result = results.get(partition).getOrElse(fail("Missing partition result in result set"))
+    result match {
+      case Left(exception) => throw exception
+      case Right(resultLeaderAndIsr) => assertEquals(updatedLeaderAndIsr, resultLeaderAndIsr)
+    }
+
     verify(mockControllerBrokerRequestBatch).newBatch()
-    // The leaderAndIsr request should be sent to both brokers, including the shutting down one
-    verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId, otherBrokerId),
-      partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), replicaAssignment(Seq(brokerId, otherBrokerId)),
-      isNew = false)
+    // The LeaderAndIsr request should be sent only to the other broker
+    verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(otherBrokerId),
+      partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), assignment, isNew = false)
+    // The shutting down broker should see a StopReplica request
+    verify(mockControllerBrokerRequestBatch).addStopReplicaRequestForBrokers(Seq(brokerId),
+      partition, deletePartition = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
     verify(mockZkClient).getTopicPartitionStatesRaw(any())
     verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())

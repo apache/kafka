@@ -30,9 +30,8 @@ import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
+import org.mockito.ArgumentMatchers
 
 class ReplicaStateMachineTest {
   private var controllerContext: ControllerContext = null
@@ -226,8 +225,7 @@ class ReplicaStateMachineTest {
     val otherBrokerId2 = brokerId + 2
     val replicaIds = List(brokerId, otherBrokerId1, otherBrokerId2)
     val initialLeaderAndIsr = LeaderAndIsr(otherBrokerId1, List(otherBrokerId1))
-    val expectedLeaderAndIsr = initialLeaderAndIsr.newEpoch
-    testOnlineReplicaToOfflineReplicaTransition(replicaIds, initialLeaderAndIsr, expectedLeaderAndIsr)
+    testOnlineReplicaToOfflineReplicaTransition(replicaIds, initialLeaderAndIsr, initialLeaderAndIsr)
   }
 
   private def testOnlineReplicaToOfflineReplicaTransition(
@@ -247,22 +245,34 @@ class ReplicaStateMachineTest {
     when(mockZkClient.getTopicPartitionStatesRaw(partitions)).thenReturn(
       Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
-    when(mockZkClient.updateLeaderAndIsr(Map(partition -> expectedLeaderAndIsr), controllerEpoch, controllerContext.epochZkVersion))
-      .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
+
+    if (initialLeaderAndIsr != expectedLeaderAndIsr) {
+      when(mockZkClient.updateLeaderAndIsr(Map(partition -> expectedLeaderAndIsr), controllerEpoch, controllerContext.epochZkVersion))
+        .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
+    } else {
+      when(mockZkClient.updateLeaderAndIsr(Map.empty, controllerEpoch, controllerContext.epochZkVersion))
+        .thenReturn(UpdateLeaderAndIsrResult(Map.empty, Seq.empty))
+    }
 
     replicaStateMachine.handleStateChanges(replicas, OfflineReplica)
-    verify(mockControllerBrokerRequestBatch).newBatch()
-    verify(mockControllerBrokerRequestBatch).addStopReplicaRequestForBrokers(
-      ArgumentMatchers.eq(Seq(brokerId)), ArgumentMatchers.eq(partition), ArgumentMatchers.eq(false))
+    assertEquals(OfflineReplica, replicaState(replica))
 
     val otherReplicaIds = replicaIds.filterNot(_ == brokerId)
-    verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(otherReplicaIds,
-      partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment(replicaIds), isNew = false)
-    verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
-    verify(mockZkClient).getTopicPartitionStatesRaw(any())
-    verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
-    assertEquals(updatedLeaderIsrAndControllerEpoch, controllerContext.partitionLeadershipInfo(partition).get)
-    assertEquals(OfflineReplica, replicaState(replica))
+    verify(mockControllerBrokerRequestBatch).newBatch()
+
+    if (initialLeaderAndIsr != expectedLeaderAndIsr) {
+      verify(mockControllerBrokerRequestBatch).addStopReplicaRequestForBrokers(
+        ArgumentMatchers.eq(Seq(brokerId)), ArgumentMatchers.eq(partition), ArgumentMatchers.eq(false))
+      verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(otherReplicaIds,
+        partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment(replicaIds), isNew = false)
+      verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+      assertEquals(updatedLeaderIsrAndControllerEpoch, controllerContext.partitionLeadershipInfo(partition).get)
+    } else {
+      verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(otherReplicaIds,
+        partition, leaderIsrAndControllerEpoch, replicaAssignment(replicaIds), isNew = false)
+      verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+      assertEquals(leaderIsrAndControllerEpoch, controllerContext.partitionLeadershipInfo(partition).get)
+    }
   }
 
   @Test
