@@ -69,8 +69,8 @@ public class ClientUtilsTest {
 
     private static final Headers HEADERS = new RecordHeaders(asList(
         new RecordHeader("h1", "headerVal1".getBytes()),   // 2 + 10 --> 12 bytes
-        new RecordHeader("h2", "headerVal2".getBytes())
-    ));    // 2 + 10 --> 12 bytes
+        new RecordHeader("h2", "headerVal2".getBytes())    // 2 + 10 --> 12 bytes
+    ));
     private static final int HEADERS_BYTES = 24;
 
     // 20 bytes
