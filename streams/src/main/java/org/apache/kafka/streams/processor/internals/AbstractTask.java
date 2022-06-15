@@ -20,6 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -55,9 +57,11 @@ public abstract class AbstractTask implements Task {
     protected Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = null;
 
     protected final TaskId id;
+    protected final TaskConfig config;
     protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
+
     private final long taskTimeoutMs;
 
     AbstractTask(final TaskId id,
@@ -65,15 +69,16 @@ public abstract class AbstractTask implements Task {
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
                  final Set<TopicPartition> inputPartitions,
-                 final long taskTimeoutMs,
+                 final TaskConfig config,
                  final String taskType,
                  final Class<? extends AbstractTask> clazz) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
+        this.config = config;
         this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
-        this.taskTimeoutMs = taskTimeoutMs;
+        this.taskTimeoutMs = config.taskTimeoutMs;
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + String.format("%s [%s] ", taskType, id);

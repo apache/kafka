@@ -182,35 +182,9 @@ class ActiveTaskCreator {
         return createdTasks;
     }
 
-
-    StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
-                                           final Set<TopicPartition> inputPartitions,
-                                           final Consumer<byte[], byte[]> consumer) {
-        final InternalProcessorContext context = standbyTask.processorContext();
-        final ProcessorStateManager stateManager = standbyTask.stateMgr;
-        final LogContext logContext = getLogContext(standbyTask.id);
-
-        standbyTask.closeCleanAndRecycleState();
-        stateManager.transitionTaskType(TaskType.ACTIVE, logContext);
-
-        return createActiveTask(
-            standbyTask.id,
-            inputPartitions,
-            consumer,
-            logContext,
-            topologyMetadata.buildSubtopology(standbyTask.id),
-            stateManager,
-            context
-        );
-    }
-
-    private StreamTask createActiveTask(final TaskId taskId,
-                                        final Set<TopicPartition> inputPartitions,
-                                        final Consumer<byte[], byte[]> consumer,
-                                        final LogContext logContext,
-                                        final ProcessorTopology topology,
-                                        final ProcessorStateManager stateManager,
-                                        final InternalProcessorContext context) {
+    private RecordCollector createRecordCollector(final TaskId taskId,
+                                                  final LogContext logContext,
+                                                  final ProcessorTopology topology) {
         final StreamsProducer streamsProducer;
         if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA) {
             log.info("Creating producer client for task {}", taskId);
@@ -221,13 +195,14 @@ class ActiveTaskCreator {
                 taskId,
                 null,
                 logContext,
-                time);
+                time
+            );
             taskProducers.put(taskId, streamsProducer);
         } else {
             streamsProducer = threadProducer;
         }
 
-        final RecordCollector recordCollector = new RecordCollectorImpl(
+        return new RecordCollectorImpl(
             logContext,
             taskId,
             streamsProducer,
@@ -235,6 +210,27 @@ class ActiveTaskCreator {
             streamsMetrics,
             topology
         );
+    }
+
+    StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
+                                           final Set<TopicPartition> inputPartitions,
+                                           final Consumer<byte[], byte[]> consumer) {
+        final RecordCollector recordCollector = createRecordCollector(standbyTask.id, getLogContext(standbyTask.id), standbyTask.topology);
+        final StreamTask task = standbyTask.recycle(time, cache, recordCollector, inputPartitions, consumer);
+
+        log.trace("Created active task {} with assigned partitions {}", task.id, inputPartitions);
+        createTaskSensor.record();
+        return task;
+    }
+
+    private StreamTask createActiveTask(final TaskId taskId,
+                                        final Set<TopicPartition> inputPartitions,
+                                        final Consumer<byte[], byte[]> consumer,
+                                        final LogContext logContext,
+                                        final ProcessorTopology topology,
+                                        final ProcessorStateManager stateManager,
+                                        final InternalProcessorContext context) {
+        final RecordCollector recordCollector = createRecordCollector(taskId, logContext, topology);
 
         final StreamTask task = new StreamTask(
             taskId,
@@ -252,7 +248,7 @@ class ActiveTaskCreator {
             logContext
         );
 
-        log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
+        log.trace("Created active task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();
         return task;
     }
