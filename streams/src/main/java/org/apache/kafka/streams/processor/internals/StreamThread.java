@@ -818,10 +818,10 @@ public class StreamThread extends Thread {
 
                 final long beforeCommitMs = now;
                 final int committed = maybeCommit();
-                totalCommittedSinceLastSummary += committed;
                 final long commitLatency = Math.max(now - beforeCommitMs, 0);
                 totalCommitLatency += commitLatency;
                 if (committed > 0) {
+                    totalCommittedSinceLastSummary += committed;
                     commitSensor.record(commitLatency / (double) committed, now);
 
                     if (log.isDebugEnabled()) {
