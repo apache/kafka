@@ -135,6 +135,7 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
@@ -208,6 +209,9 @@ import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
+import org.apache.kafka.common.requests.DescribeQuorumRequest;
+import org.apache.kafka.common.requests.DescribeQuorumRequest.Builder;
+import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
@@ -257,6 +261,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -268,6 +273,8 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_NAME;
+import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -4323,6 +4330,84 @@ public class KafkaAdminClient extends AdminClient {
 
         runnable.call(call, now);
         return new UpdateFeaturesResult(new HashMap<>(updateFutures));
+    }
+
+    @Override
+    public DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options) {
+        NodeProvider provider = new LeastLoadedNodeProvider();
+
+        final KafkaFutureImpl<QuorumInfo> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call(
+                "describeMetadataQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            private QuorumInfo.ReplicaState translateReplicaState(DescribeQuorumResponseData.ReplicaState replica) {
+                return new QuorumInfo.ReplicaState(
+                        replica.replicaId(),
+                        replica.logEndOffset(),
+                        replica.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastFetchTimestamp()),
+                        replica.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastCaughtUpTimestamp()));
+            }
+
+            private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
+                return new QuorumInfo(
+                        partition.leaderId(),
+                        partition.currentVoters().stream().map(v -> translateReplicaState(v)).collect(Collectors.toList()),
+                        partition.observers().stream().map(o -> translateReplicaState(o)).collect(Collectors.toList()));
+            }
+
+            @Override
+            DescribeQuorumRequest.Builder createRequest(int timeoutMs) {
+                return new Builder(DescribeQuorumRequest.singletonRequest(
+                        new TopicPartition(METADATA_TOPIC_NAME, METADATA_TOPIC_PARTITION.partition())));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
+                if (quorumResponse.data().errorCode() != Errors.NONE.code()) {
+                    throw Errors.forCode(quorumResponse.data().errorCode()).exception();
+                }
+                if (quorumResponse.data().topics().size() != 1) {
+                    String msg = String.format("DescribeMetadataQuorum received %d topics when 1 was expected",
+                            quorumResponse.data().topics().size());
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                DescribeQuorumResponseData.TopicData topic = quorumResponse.data().topics().get(0);
+                if (!topic.topicName().equals(METADATA_TOPIC_NAME)) {
+                    String msg = String.format("DescribeMetadataQuorum received a topic with name %s when %s was expected",
+                            topic.topicName(), METADATA_TOPIC_NAME);
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                if (topic.partitions().size() != 1) {
+                    String msg = String.format("DescribeMetadataQuorum received a topic %s with %d partitions when 1 was expected",
+                            topic.topicName(), topic.partitions().size());
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                DescribeQuorumResponseData.PartitionData partition = topic.partitions().get(0);
+                if (partition.partitionIndex() != METADATA_TOPIC_PARTITION.partition()) {
+                    String msg = String.format("DescribeMetadataQuorum received a single partition with index %d when %d was expected",
+                            partition.partitionIndex(), METADATA_TOPIC_PARTITION.partition());
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                if (partition.errorCode() != Errors.NONE.code()) {
+                    throw Errors.forCode(partition.errorCode()).exception();
+                }
+                future.complete(createQuorumResult(partition));
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+
+        runnable.call(call, now);
+        return new DescribeMetadataQuorumResult(future);
     }
 
     @Override
