@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
@@ -28,6 +30,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
@@ -56,9 +59,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -275,7 +275,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
 
         final StoreChangelogReader changelogReader =
-                new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
 
         changelogReader.register(tp, stateManager);
 
@@ -646,25 +646,27 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         EasyMock.replay(mockTask, stateManager, storeMetadata, store);
 
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
                 if (functionCalled.get()) {
-                    return partitions
-                        .stream()
-                        .collect(Collectors.toMap(Function.identity(), partition -> new OffsetAndMetadata(10L)));
+                    return super.listConsumerGroupOffsets(groupId, options);
                 } else {
                     functionCalled.set(true);
-                    throw new TimeoutException("KABOOM!");
+
+                    final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
+                    future.completeExceptionally(new TimeoutException("KABOOM!"));
+
+                    return new ListConsumerGroupOffsetsResult(future);
                 }
             }
         };
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 20L));
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
             new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
-        changelogReader.setMainConsumer(consumer);
 
         changelogReader.register(tp, stateManager);
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
@@ -708,18 +710,19 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
         EasyMock.replay(stateManager, storeMetadata, store);
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
-                throw kaboom;
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+                final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(kaboom);
+
+                return new ListConsumerGroupOffsetsResult(future);
             }
         };
-
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
             new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
-        changelogReader.setMainConsumer(consumer);
 
         changelogReader.register(tp, stateManager);
 
@@ -792,9 +795,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         EasyMock.expect(standbyStateManager.changelogAsSource(tp)).andReturn(false).anyTimes();
         EasyMock.replay(mockTasks, standbyStateManager, storeMetadata, store);
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
                 throw new AssertionError("Should not try to fetch committed offsets");
             }
         };
@@ -803,7 +806,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
         final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
-        changelogReader.setMainConsumer(consumer);
         changelogReader.transitToUpdateStandby();
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
@@ -846,25 +848,15 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         EasyMock.expect(standbyStateManager.changelogAsSource(tp)).andReturn(true).anyTimes();
         EasyMock.replay(mockTasks, standbyStateManager, storeMetadata, store);
 
-        final AtomicLong offset = new AtomicLong(7L);
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
-                return partitions
-                    .stream()
-                    .collect(Collectors.toMap(Function.identity(), partition -> new OffsetAndMetadata(offset.get())));
-            }
-        };
-
         final long now = time.milliseconds();
         final Properties properties = new Properties();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
         final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
-        changelogReader.setMainConsumer(consumer);
         changelogReader.transitToUpdateStandby();
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 7L));
         changelogReader.register(tp, standbyStateManager);
         assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -895,9 +887,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertNull(callback.storeNameCalledStates.get(RESTORE_END));
         assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
 
-        offset.set(10L);
-        time.setCurrentTimeMs(now + 100L);
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
         // should not try to read committed offsets if interval has not reached
+        time.setCurrentTimeMs(now + 100L);
         changelogReader.restore(mockTasks);
         assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(2L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -918,8 +910,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
 
-        offset.set(15L);
-
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 15L));
         // after we've updated once, the timer should be reset and we should not try again until next interval elapsed
         time.setCurrentTimeMs(now + 201L);
         changelogReader.restore(mockTasks);

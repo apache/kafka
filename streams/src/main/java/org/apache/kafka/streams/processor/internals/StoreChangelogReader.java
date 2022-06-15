@@ -204,18 +204,13 @@ public class StoreChangelogReader implements ChangelogReader {
     // is being removed from the thread; otherwise it would stay in this map even after completed
     private final Map<TopicPartition, ChangelogMetadata> changelogs;
 
-    // the changelog reader only need the main consumer to get committed offsets for source changelog partitions
-    // to update offset limit for standby tasks;
-    private Consumer<byte[], byte[]> mainConsumer;
+    // groupId is needed for the admin client to retrieve committed offsets
+    private final String groupId;
 
-    // the changelog reader needs the admin client to list end offsets
+    // the changelog reader needs the admin client to list end offsets and committed offsets
     private final Admin adminClient;
 
     private long lastUpdateOffsetTime;
-
-    void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
-        this.mainConsumer = consumer;
-    }
 
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
@@ -230,6 +225,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
+        this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.updateOffsetIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) == Long.MAX_VALUE ?
             DEFAULT_OFFSET_UPDATE_MS : config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -646,7 +642,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                                                    final Set<TopicPartition> partitions) {
         final Map<TopicPartition, Long> committedOffsets;
         try {
-            committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
+            committedOffsets = fetchCommittedOffsets(partitions, groupId, adminClient);
             clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
         } catch (final TimeoutException timeoutException) {
             log.debug("Could not fetch all committed offsets for {}, will retry in the next run loop", partitions);
