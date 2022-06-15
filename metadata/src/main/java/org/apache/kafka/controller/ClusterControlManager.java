@@ -590,11 +590,7 @@ public class ClusterControlManager {
 
         ClusterControlIterator(long epoch) {
             this.iterator = brokerRegistrations.entrySet(epoch).iterator();
-            if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
-                this.metadataVersion = MetadataVersion.IBP_3_0_IV1;
-            } else {
-                this.metadataVersion = featureControl.metadataVersion();
-            }
+            this.metadataVersion = featureControl.metadataVersion();
         }
 
         @Override

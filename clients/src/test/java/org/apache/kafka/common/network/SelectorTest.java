@@ -776,14 +776,13 @@ public class SelectorTest {
         when(kafkaChannel.selectionKey()).thenReturn(selectionKey);
         when(selectionKey.channel()).thenReturn(SocketChannel.open());
         when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_CONNECT);
+        when(selectionKey.attachment()).thenReturn(kafkaChannel);
 
-        selectionKey.attach(kafkaChannel);
         Set<SelectionKey> selectionKeys = Utils.mkSet(selectionKey);
         selector.pollSelectionKeys(selectionKeys, false, System.nanoTime());
 
         assertFalse(selector.connected().contains(kafkaChannel.id()));
         assertTrue(selector.disconnected().containsKey(kafkaChannel.id()));
-        assertNull(selectionKey.attachment());
 
         verify(kafkaChannel, atLeastOnce()).ready();
         verify(kafkaChannel).disconnect();
@@ -971,8 +970,11 @@ public class SelectorTest {
             SelectionKey selectionKey = mock(SelectionKey.class);
             when(channel.selectionKey()).thenReturn(selectionKey);
             when(selectionKey.isValid()).thenReturn(true);
+            when(selectionKey.isReadable()).thenReturn(true);
             when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_READ);
-            selectionKey.attach(channel);
+            when(selectionKey.attachment())
+                    .thenReturn(channel)
+                    .thenReturn(null);
             selectionKeys.add(selectionKey);
 
             NetworkReceive receive = mock(NetworkReceive.class);

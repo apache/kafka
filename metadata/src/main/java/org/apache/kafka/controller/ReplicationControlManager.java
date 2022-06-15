@@ -120,10 +120,13 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECO
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
+import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.INVALID_UPDATE_VERSION;
+import static org.apache.kafka.common.protocol.Errors.NEW_LEADER_ELECTED;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
@@ -915,22 +918,31 @@ public class ReplicationControlManager {
         return new HashSet<>(imbalancedPartitions);
     }
 
-    ControllerResult<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request) {
+    ControllerResult<AlterPartitionResponseData> alterPartition(
+        ControllerRequestContext context,
+        AlterPartitionRequestData request
+    ) {
+        short requestVersion = context.requestHeader().requestApiVersion();
         clusterControl.checkBrokerEpoch(request.brokerId(), request.brokerEpoch());
         AlterPartitionResponseData response = new AlterPartitionResponseData();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (AlterPartitionRequestData.TopicData topicData : request.topics()) {
             AlterPartitionResponseData.TopicData responseTopicData =
-                new AlterPartitionResponseData.TopicData().setName(topicData.name());
+                new AlterPartitionResponseData.TopicData().
+                    setTopicName(topicData.topicName()).
+                    setTopicId(topicData.topicId());
             response.topics().add(responseTopicData);
-            Uuid topicId = topicsByName.get(topicData.name());
-            if (topicId == null || !topics.containsKey(topicId)) {
+
+            Uuid topicId = requestVersion > 1 ? topicData.topicId() : topicsByName.get(topicData.topicName());
+            if (topicId == null || topicId.equals(Uuid.ZERO_UUID) || !topics.containsKey(topicId)) {
+                Errors error = requestVersion > 1 ? UNKNOWN_TOPIC_ID : UNKNOWN_TOPIC_OR_PARTITION;
                 for (AlterPartitionRequestData.PartitionData partitionData : topicData.partitions()) {
                     responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()));
+                        setErrorCode(error.code()));
                 }
-                log.info("Rejecting AlterPartition request for unknown topic ID {}.", topicId);
+                log.info("Rejecting AlterPartition request for unknown topic ID {} or name {}.",
+                    topicData.topicId(), topicData.topicName());
                 continue;
             }
 
@@ -939,7 +951,15 @@ public class ReplicationControlManager {
                 int partitionId = partitionData.partitionIndex();
                 PartitionRegistration partition = topic.parts.get(partitionId);
 
-                Errors validationError = validateAlterPartitionData(request.brokerId(), topic, partitionId, partition, partitionData);
+                Errors validationError = validateAlterPartitionData(
+                    request.brokerId(),
+                    topic,
+                    partitionId,
+                    partition,
+                    clusterControl::active,
+                    context.requestHeader().requestApiVersion(),
+                    partitionData);
+
                 if (validationError != Errors.NONE) {
                     responseTopicData.partitions().add(
                         new AlterPartitionResponseData.PartitionData()
@@ -956,7 +976,7 @@ public class ReplicationControlManager {
                     partitionId,
                     clusterControl::active,
                     featureControl.metadataVersion().isLeaderRecoverySupported());
-                if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicData.name())) {
+                if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
                 builder.setTargetIsr(partitionData.newIsr());
@@ -979,18 +999,20 @@ public class ReplicationControlManager {
                         // ISR change completes it, then the leader may change as part of
                         // the changes made during reassignment cleanup.
                         //
-                        // In this case, we report back FENCED_LEADER_EPOCH to the leader
+                        // In this case, we report back NEW_LEADER_ELECTED to the leader
                         // which made the AlterPartition request. This lets it know that it must
                         // fetch new metadata before trying again. This return code is
                         // unusual because we both return an error and generate a new
                         // metadata record. We usually only do one or the other.
+                        // FENCED_LEADER_EPOCH is used for request version below or equal to 1.
+                        Errors error = requestVersion > 1 ? NEW_LEADER_ELECTED : FENCED_LEADER_EPOCH;
                         log.info("AlterPartition request from node {} for {}-{} completed " +
                             "the ongoing partition reassignment and triggered a " +
-                            "leadership change. Returning FENCED_LEADER_EPOCH.",
-                            request.brokerId(), topic.name, partitionId);
+                            "leadership change. Returning {}.",
+                            request.brokerId(), topic.name, partitionId, error);
                         responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                             setPartitionIndex(partitionId).
-                            setErrorCode(FENCED_LEADER_EPOCH.code()));
+                            setErrorCode(error.code()));
                         continue;
                     } else if (change.removingReplicas() != null ||
                             change.addingReplicas() != null) {
@@ -1026,6 +1048,7 @@ public class ReplicationControlManager {
      * @param topic current topic information store by the replication manager
      * @param partitionId partition id being altered
      * @param partition current partition registration for the partition being altered
+     * @param isEligibleReplica function telling if the replica is acceptable to join the ISR
      * @param partitionData partition data from the alter partition request
      *
      * @return Errors.NONE for valid alter partition data; otherwise the validation error
@@ -1035,6 +1058,8 @@ public class ReplicationControlManager {
         TopicControlInfo topic,
         int partitionId,
         PartitionRegistration partition,
+        Function<Integer, Boolean> isEligibleReplica,
+        short requestApiVersion,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
         if (partition == null) {
@@ -1085,7 +1110,7 @@ public class ReplicationControlManager {
         if (leaderRecoveryState == LeaderRecoveryState.RECOVERING && newIsr.length > 1) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the ISR {} had more than one replica while the leader was still " +
-                    "recovering from an unlcean leader election {}.",
+                    "recovering from an unclean leader election {}.",
                     brokerId, topic.name, partitionId, partitionData.newIsr(),
                     leaderRecoveryState);
 
@@ -1093,12 +1118,26 @@ public class ReplicationControlManager {
         }
         if (partition.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
                 leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
-
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the leader recovery state cannot change from RECOVERED to RECOVERING.",
                     brokerId, topic.name, partitionId);
 
             return INVALID_REQUEST;
+        }
+
+        List<Integer> ineligibleReplicas = partitionData.newIsr().stream()
+            .filter(replica -> !isEligibleReplica.apply(replica))
+            .collect(Collectors.toList());
+        if (!ineligibleReplicas.isEmpty()) {
+            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
+                    "it specified ineligible replicas {} in the new ISR {}.",
+                    brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsr());
+
+            if (requestApiVersion > 1) {
+                return INELIGIBLE_REPLICA;
+            } else {
+                return OPERATION_NOT_ATTEMPTED;
+            }
         }
 
         return Errors.NONE;
@@ -1113,7 +1152,6 @@ public class ReplicationControlManager {
      * @param brokerId      The broker id.
      * @param records       The record list to append to.
      */
-
     void handleBrokerFenced(int brokerId, List<ApiMessageAndVersion> records) {
         BrokerRegistration brokerRegistration = clusterControl.brokerRegistrations().get(brokerId);
         if (brokerRegistration == null) {

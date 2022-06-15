@@ -32,7 +32,7 @@ import scala.jdk.CollectionConverters._
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class MetadataVersionIntegrationTest {
   @ClusterTests(value = Array(
-      new ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_0_IV0),
+      new ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_0_IV1),
       new ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_1_IV0),
       new ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_2_IV0)
   ))
@@ -40,8 +40,8 @@ class MetadataVersionIntegrationTest {
     val admin = clusterInstance.createAdminClient()
     val describeResult = admin.describeFeatures()
     val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
-    assertEquals(ff.minVersionLevel(), clusterInstance.config().metadataVersion().get().featureLevel())
-    assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().get().featureLevel())
+    assertEquals(ff.minVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
+    assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
 
     // Update to new version
     val updateVersion = MetadataVersion.IBP_3_3_IV0.featureLevel.shortValue
@@ -71,7 +71,8 @@ class MetadataVersionIntegrationTest {
     val admin = clusterInstance.createAdminClient()
     val describeResult = admin.describeFeatures()
     val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
-    assertEquals(ff.minVersionLevel(), MetadataVersion.latest().featureLevel())
+    assertEquals(ff.minVersionLevel(), MetadataVersion.latest().featureLevel(),
+      "If this test fails, check the default MetadataVersion in the @ClusterTest annotation")
     assertEquals(ff.maxVersionLevel(), MetadataVersion.latest().featureLevel())
   }
 }

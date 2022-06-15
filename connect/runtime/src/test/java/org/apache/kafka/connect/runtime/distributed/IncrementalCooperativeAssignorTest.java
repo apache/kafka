@@ -1111,6 +1111,9 @@ public class IncrementalCooperativeAssignorTest {
                 connectorConfigs,
                 targetStates,
                 taskConfigs,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet());
     }
 

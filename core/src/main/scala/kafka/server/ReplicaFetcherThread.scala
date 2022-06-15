@@ -21,6 +21,7 @@ import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.MetadataVersion
 
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
@@ -28,7 +29,8 @@ class ReplicaFetcherThread(name: String,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
                            quota: ReplicaQuota,
-                           logPrefix: String)
+                           logPrefix: String,
+                           metadataVersionSupplier: () => MetadataVersion)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 leader = leader,
@@ -39,7 +41,7 @@ class ReplicaFetcherThread(name: String,
 
   this.logIdent = logPrefix
 
-  override protected val isOffsetForLeaderEpochSupported: Boolean = brokerConfig.interBrokerProtocolVersion.isOffsetForLeaderEpochSupported
+  override protected val isOffsetForLeaderEpochSupported: Boolean = metadataVersionSupplier().isOffsetForLeaderEpochSupported
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.localLogOrException(topicPartition).latestEpoch
@@ -135,7 +137,7 @@ class ReplicaFetcherThread(name: String,
 
   def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {
     // oversized messages don't cause replication to fail from fetch request version 3 (KIP-74)
-    if (brokerConfig.fetchRequestVersion <= 2 && records.sizeInBytes > 0 && records.validBytes <= 0)
+    if (metadataVersionSupplier().fetchRequestVersion <= 2 && records.sizeInBytes > 0 && records.validBytes <= 0)
       error(s"Replication is failing due to a message that is greater than replica.fetch.max.bytes for partition $topicPartition. " +
         "This generally occurs when the max.message.bytes has been overridden to exceed this value and a suitably large " +
         "message has also been sent. To fix this problem increase replica.fetch.max.bytes in your broker config to be " +

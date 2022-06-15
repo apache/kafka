@@ -31,8 +31,6 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -55,8 +53,6 @@ import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestTopicsTest {
-    private static final Logger log = LoggerFactory.getLogger(TestTopicsTest.class);
-
     private final static String INPUT_TOPIC = "input";
     private final static String OUTPUT_TOPIC = "output1";
     private final static String INPUT_TOPIC_MAP = OUTPUT_TOPIC;
@@ -171,15 +167,13 @@ public class TestTopicsTest {
     }
 
     @Test
-    public void testPipeInputWithNullKey() {
+    public void testKeyValuesToMapWithNull() {
         final TestInputTopic<Long, String> inputTopic =
             testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
-        final StreamsException exception = assertThrows(StreamsException.class, () -> inputTopic.pipeInput("value"));
-        assertThat(exception.getCause() instanceof NullPointerException, is(true));
-        assertThat(outputTopic.readKeyValuesToMap().isEmpty(), is(true));
-
+        inputTopic.pipeInput("value");
+        assertThrows(IllegalStateException.class, outputTopic::readKeyValuesToMap);
     }
 
     @Test

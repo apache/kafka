@@ -191,6 +191,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return COMMIT_TASKS_PREFIX + connectorName;
     }
 
+    public static final String TASK_COUNT_RECORD_PREFIX = "tasks-fencing-";
+
+    public static String TASK_COUNT_RECORD_KEY(String connectorName) {
+        return TASK_COUNT_RECORD_PREFIX + connectorName;
+    }
+
     public static final String SESSION_KEY_KEY = "session-key";
 
     // Note that while using real serialization for values as we have here, but ad hoc string serialization for keys,
@@ -206,6 +212,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             .build();
     public static final Schema TARGET_STATE_V0 = SchemaBuilder.struct()
             .field("state", Schema.STRING_SCHEMA)
+            .build();
+    public static final Schema TASK_COUNT_RECORD_V0 = SchemaBuilder.struct()
+            .field("task-count", Schema.INT32_SCHEMA)
             .build();
     // The key is logically a byte array, but we can't use the JSON converter to (de-)serialize that without a schema.
     // So instead, we base 64-encode it before serializing and decode it after deserializing.
@@ -237,7 +246,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private volatile boolean started;
     // Although updateListener is not final, it's guaranteed to be visible to any thread after its
     // initialization as long as we always read the volatile variable "started" before we access the listener.
-    private UpdateListener updateListener;
+    private ConfigBackingStore.UpdateListener updateListener;
 
     private final Map<String, Object> baseProducerProps;
 
@@ -266,6 +275,10 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
 
     final Map<String, TargetState> connectorTargetStates = new HashMap<>();
+
+    final Map<String, Integer> connectorTaskCountRecords = new HashMap<>();
+    final Map<String, Integer> connectorTaskConfigGenerations = new HashMap<>();
+    final Set<String> connectorsPendingFencing = new HashSet<>();
 
     private final WorkerConfigTransformer configTransformer;
 
@@ -305,7 +318,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public void setUpdateListener(UpdateListener listener) {
+    public void setUpdateListener(ConfigBackingStore.UpdateListener listener) {
         this.updateListener = listener;
     }
 
@@ -319,8 +332,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         } catch (UnsupportedVersionException e) {
             throw new ConnectException(
                     "Enabling exactly-once support for source connectors requires a Kafka broker version that allows "
-                            + "admin clients to read consumer offsets. Please either disable the worker's exactly-once " +
-                            "support for source connectors, or use a newer Kafka broker version.",
+                            + "admin clients to read consumer offsets. Please either disable the worker's exactly-once "
+                            + "support for source connectors, or use a newer Kafka broker version.",
                     e
             );
         }
@@ -417,6 +430,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     new HashMap<>(connectorConfigs),
                     new HashMap<>(connectorTargetStates),
                     new HashMap<>(taskConfigs),
+                    new HashMap<>(connectorTaskCountRecords),
+                    new HashMap<>(connectorTaskConfigGenerations),
+                    new HashSet<>(connectorsPendingFencing),
                     new HashSet<>(inconsistent),
                     configTransformer
             );
@@ -449,7 +465,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         connectConfig.put("properties", properties);
         byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         try {
-            maybeSendFencably(CONNECTOR_KEY(connector), serializedConfig);
+            sendPrivileged(CONNECTOR_KEY(connector), serializedConfig);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write connector configuration to Kafka: ", e);
@@ -470,8 +486,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public void removeConnectorConfig(String connector) {
         log.debug("Removing connector configuration for connector '{}'", connector);
         try {
-            maybeSendFencably(CONNECTOR_KEY(connector), null);
-            maybeSendFencably(TARGET_STATE_KEY(connector), null);
+            sendPrivileged(CONNECTOR_KEY(connector), null);
+            sendPrivileged(TARGET_STATE_KEY(connector), null);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to remove connector configuration from Kafka: ", e);
@@ -520,7 +536,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
             log.debug("Writing configuration for connector '{}' task {}", connector, index);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
-            maybeSendFencably(TASK_KEY(connectorTaskId), serializedConfig);
+            sendPrivileged(TASK_KEY(connectorTaskId), serializedConfig);
             index++;
         }
 
@@ -536,7 +552,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             connectConfig.put("tasks", taskCount);
             byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
             log.debug("Writing commit for connector '{}' with {} tasks.", connector, taskCount);
-            maybeSendFencably(COMMIT_TASKS_KEY(connector), serializedConfig);
+            sendPrivileged(COMMIT_TASKS_KEY(connector), serializedConfig);
 
             // Read to end to ensure all the commit messages have been written
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -571,6 +587,32 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     /**
+     * Write a task count record for a connector to persistent storage and wait until it has been acknowledged and read back by
+     * tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling this method
+     * if the worker is configured to use a fencable producer for writes to the config topic.
+     * @param connector name of the connector
+     * @param taskCount number of tasks used by the connector
+     * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
+     * this method was called
+     * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
+     * and the write fails
+     */
+    @Override
+    public void putTaskCountRecord(String connector, int taskCount) {
+        Struct taskCountRecord = new Struct(TASK_COUNT_RECORD_V0);
+        taskCountRecord.put("task-count", taskCount);
+        byte[] serializedTaskCountRecord = converter.fromConnectData(topic, TASK_COUNT_RECORD_V0, taskCountRecord);
+        log.debug("Writing task count record {} for connector {}", taskCount, connector);
+        try {
+            sendPrivileged(TASK_COUNT_RECORD_KEY(connector), serializedTaskCountRecord);
+            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write task count record with {} tasks for connector {} to Kafka: ", taskCount, connector, e);
+            throw new ConnectException("Error writing task count record to Kafka", e);
+        }
+    }
+
+    /**
      * Write a session key to persistent storage and wait until it has been acknowledged and read back by tailing the Kafka log
      * with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling this method if the worker
      * is configured to use a fencable producer for writes to the config topic.
@@ -589,7 +631,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         sessionKeyStruct.put("creation-timestamp", sessionKey.creationTimestamp());
         byte[] serializedSessionKey = converter.fromConnectData(topic, SESSION_KEY_V0, sessionKeyStruct);
         try {
-            maybeSendFencably(SESSION_KEY_KEY, serializedSessionKey);
+            sendPrivileged(SESSION_KEY_KEY, serializedSessionKey);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write session key to Kafka: ", e);
@@ -612,7 +654,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         value.put(ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed());
         byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
         try {
-            maybeSendFencably(key, serializedValue);
+            sendPrivileged(key, serializedValue);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write {} to Kafka: ", restartRequest, e);
@@ -662,7 +704,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
     }
 
-    private void maybeSendFencably(String key, byte[] value) {
+    private void sendPrivileged(String key, byte[] value) {
         if (!usesFencableWriter) {
             configLog.send(key, value);
             return;
@@ -708,7 +750,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
     }
 
-    @SuppressWarnings("unchecked")
     private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {
         @Override
         public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
@@ -730,214 +771,31 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
             if (record.key().startsWith(TARGET_STATE_PREFIX)) {
                 String connectorName = record.key().substring(TARGET_STATE_PREFIX.length());
-                boolean removed = false;
-                synchronized (lock) {
-                    if (value.value() == null) {
-                        // When connector configs are removed, we also write tombstones for the target state.
-                        log.debug("Removed target state for connector {} due to null value in topic.", connectorName);
-                        connectorTargetStates.remove(connectorName);
-                        removed = true;
-
-                        // If for some reason we still have configs for the connector, add back the default
-                        // STARTED state to ensure each connector always has a valid target state.
-                        if (connectorConfigs.containsKey(connectorName))
-                            connectorTargetStates.put(connectorName, TargetState.STARTED);
-                    } else {
-                        if (!(value.value() instanceof Map)) {
-                            log.error("Found target state ({}) in wrong format: {}",  record.key(), value.value().getClass());
-                            return;
-                        }
-                        Object targetState = ((Map<String, Object>) value.value()).get("state");
-                        if (!(targetState instanceof String)) {
-                            log.error("Invalid data for target state for connector '{}': 'state' field should be a String but is {}",
-                                    connectorName, targetState == null ? null : targetState.getClass());
-                            return;
-                        }
-
-                        try {
-                            TargetState state = TargetState.valueOf((String) targetState);
-                            log.debug("Setting target state for connector '{}' to {}", connectorName, targetState);
-                            connectorTargetStates.put(connectorName, state);
-                        } catch (IllegalArgumentException e) {
-                            log.error("Invalid target state for connector '{}': {}", connectorName, targetState);
-                            return;
-                        }
-                    }
-                }
-
-                // Note that we do not notify the update listener if the target state has been removed.
-                // Instead we depend on the removal callback of the connector config itself to notify the worker.
-                if (started && !removed)
-                    updateListener.onConnectorTargetStateChange(connectorName);
-
+                processTargetStateRecord(connectorName, value);
             } else if (record.key().startsWith(CONNECTOR_PREFIX)) {
                 String connectorName = record.key().substring(CONNECTOR_PREFIX.length());
-                boolean removed = false;
-                synchronized (lock) {
-                    if (value.value() == null) {
-                        // Connector deletion will be written as a null value
-                        log.info("Successfully processed removal of connector '{}'", connectorName);
-                        connectorConfigs.remove(connectorName);
-                        connectorTaskCounts.remove(connectorName);
-                        taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
-                        removed = true;
-                    } else {
-                        // Connector configs can be applied and callbacks invoked immediately
-                        if (!(value.value() instanceof Map)) {
-                            log.error("Found configuration for connector '{}' in wrong format: {}", record.key(), value.value().getClass());
-                            return;
-                        }
-                        Object newConnectorConfig = ((Map<String, Object>) value.value()).get("properties");
-                        if (!(newConnectorConfig instanceof Map)) {
-                            log.error("Invalid data for config for connector '{}': 'properties' field should be a Map but is {}",
-                                      connectorName, newConnectorConfig == null ? null : newConnectorConfig.getClass());
-                            return;
-                        }
-                        log.debug("Updating configuration for connector '{}'", connectorName);
-                        connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
-
-                        // Set the initial state of the connector to STARTED, which ensures that any connectors
-                        // which were created with 0.9 Connect will be initialized in the STARTED state.
-                        if (!connectorTargetStates.containsKey(connectorName))
-                            connectorTargetStates.put(connectorName, TargetState.STARTED);
-                    }
-                }
-                if (started) {
-                    if (removed)
-                        updateListener.onConnectorConfigRemove(connectorName);
-                    else
-                        updateListener.onConnectorConfigUpdate(connectorName);
-                }
+                processConnectorConfigRecord(connectorName, value);
             } else if (record.key().startsWith(TASK_PREFIX)) {
-                synchronized (lock) {
-                    ConnectorTaskId taskId = parseTaskId(record.key());
-                    if (taskId == null) {
-                        log.error("Ignoring task configuration because {} couldn't be parsed as a task config key", record.key());
-                        return;
-                    }
-                    if (value.value() == null) {
-                        log.error("Ignoring task configuration for task {} because it is unexpectedly null", taskId);
-                        return;
-                    }
-                    if (!(value.value() instanceof Map)) {
-                        log.error("Ignoring task configuration for task {} because the value is not a Map but is {}", taskId, value.value().getClass());
-                        return;
-                    }
-
-                    Object newTaskConfig = ((Map<String, Object>) value.value()).get("properties");
-                    if (!(newTaskConfig instanceof Map)) {
-                        log.error("Invalid data for config of task {} 'properties' field should be a Map but is {}", taskId, newTaskConfig.getClass());
-                        return;
-                    }
-
-                    Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.computeIfAbsent(taskId.connector(), k -> new HashMap<>());
-                    log.debug("Storing new config for task {}; this will wait for a commit message before the new config will take effect.", taskId);
-                    deferred.put(taskId, (Map<String, String>) newTaskConfig);
+                ConnectorTaskId taskId = parseTaskId(record.key());
+                if (taskId == null) {
+                    log.error("Ignoring task configuration because {} couldn't be parsed as a task config key", record.key());
+                    return;
                 }
+                processTaskConfigRecord(taskId, value);
             } else if (record.key().startsWith(COMMIT_TASKS_PREFIX)) {
                 String connectorName = record.key().substring(COMMIT_TASKS_PREFIX.length());
-                List<ConnectorTaskId> updatedTasks = new ArrayList<>();
-                synchronized (lock) {
-                    // Apply any outstanding deferred task updates for the given connector. Note that just because we
-                    // encounter a commit message does not mean it will result in consistent output. In particular due to
-                    // compaction, there may be cases where . For example if we have the following sequence of writes:
-                    //
-                    // 1. Write connector "foo"'s config
-                    // 2. Write connector "foo", task 1's config <-- compacted
-                    // 3. Write connector "foo", task 2's config
-                    // 4. Write connector "foo" task commit message
-                    // 5. Write connector "foo", task 1's config
-                    // 6. Write connector "foo", task 2's config
-                    // 7. Write connector "foo" task commit message
-                    //
-                    // then when a new worker starts up, if message 2 had been compacted, then when message 4 is applied
-                    // "foo" will not have a complete set of configs. Only when message 7 is applied will the complete
-                    // configuration be available. Worse, if the leader died while writing messages 5, 6, and 7 such that
-                    // only 5 was written, then there may be nothing that will finish writing the configs and get the
-                    // log back into a consistent state.
-                    //
-                    // It is expected that the user of this class (i.e., the Herder) will take the necessary action to
-                    // resolve this (i.e., get the connector to recommit its configuration). This inconsistent state is
-                    // exposed in the snapshots provided via ClusterConfigState so they are easy to handle.
-                    if (!(value.value() instanceof Map)) { // Schema-less, so we get maps instead of structs
-                        log.error("Ignoring connector tasks configuration commit for connector '{}' because it is in the wrong format: {}", connectorName, value.value());
-                        return;
-                    }
-                    Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(connectorName);
-
-                    int newTaskCount = intValue(((Map<String, Object>) value.value()).get("tasks"));
-
-                    // Validate the configs we're supposed to update to ensure we're getting a complete configuration
-                    // update of all tasks that are expected based on the number of tasks in the commit message.
-                    Set<Integer> taskIdSet = taskIds(connectorName, deferred);
-                    if (!completeTaskIdSet(taskIdSet, newTaskCount)) {
-                        // Given the logic for writing commit messages, we should only hit this condition due to compacted
-                        // historical data, in which case we would not have applied any updates yet and there will be no
-                        // task config data already committed for the connector, so we shouldn't have to clear any data
-                        // out. All we need to do is add the flag marking it inconsistent.
-                        log.debug("We have an incomplete set of task configs for connector '{}' probably due to compaction. So we are not doing anything with the new configuration.", connectorName);
-                        inconsistent.add(connectorName);
-                    } else {
-                        if (deferred != null) {
-                            taskConfigs.putAll(deferred);
-                            updatedTasks.addAll(deferred.keySet());
-                        }
-                        inconsistent.remove(connectorName);
-                    }
-                    // Always clear the deferred entries, even if we didn't apply them. If they represented an inconsistent
-                    // update, then we need to see a completely fresh set of configs after this commit message, so we don't
-                    // want any of these outdated configs
-                    if (deferred != null)
-                        deferred.clear();
-
-                    connectorTaskCounts.put(connectorName, newTaskCount);
-                }
-
-                if (started)
-                    updateListener.onTaskConfigUpdate(updatedTasks);
+                processTasksCommitRecord(connectorName, value);
             } else if (record.key().startsWith(RESTART_PREFIX)) {
                 RestartRequest request = recordToRestartRequest(record, value);
                 // Only notify the listener if this backing store is already successfully started (having caught up the first time)
                 if (request != null && started) {
                     updateListener.onRestartRequest(request);
                 }
+            } else if (record.key().startsWith(TASK_COUNT_RECORD_PREFIX)) {
+                String connectorName = record.key().substring(TASK_COUNT_RECORD_PREFIX.length());
+                processTaskCountRecord(connectorName, value);
             } else if (record.key().equals(SESSION_KEY_KEY)) {
-                if (value.value() == null) {
-                    log.error("Ignoring session key because it is unexpectedly null");
-                    return;
-                }
-                if (!(value.value() instanceof Map)) {
-                    log.error("Ignoring session key because the value is not a Map but is {}", value.value().getClass());
-                    return;
-                }
-
-                Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
-
-                Object sessionKey = valueAsMap.get("key");
-                if (!(sessionKey instanceof String)) {
-                    log.error("Invalid data for session key 'key' field should be a String but is {}", sessionKey.getClass());
-                    return;
-                }
-                byte[] key = Base64.getDecoder().decode((String) sessionKey);
-
-                Object keyAlgorithm = valueAsMap.get("algorithm");
-                if (!(keyAlgorithm instanceof String)) {
-                    log.error("Invalid data for session key 'algorithm' field should be a String but it is {}", keyAlgorithm.getClass());
-                    return;
-                }
-
-                Object creationTimestamp = valueAsMap.get("creation-timestamp");
-                if (!(creationTimestamp instanceof Long)) {
-                    log.error("Invalid data for session key 'creation-timestamp' field should be a long but it is {}", creationTimestamp.getClass());
-                    return;
-                }
-                KafkaConfigBackingStore.this.sessionKey = new SessionKey(
-                        new SecretKeySpec(key, (String) keyAlgorithm),
-                        (long) creationTimestamp
-                );
-
-                if (started)
-                    updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
+                processSessionKeyRecord(value);
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }
@@ -945,11 +803,189 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     }
 
+    private void processTargetStateRecord(String connectorName, SchemaAndValue value) {
+        boolean removed = false;
+        synchronized (lock) {
+            if (value.value() == null) {
+                // When connector configs are removed, we also write tombstones for the target state.
+                log.debug("Removed target state for connector {} due to null value in topic.", connectorName);
+                connectorTargetStates.remove(connectorName);
+                removed = true;
+
+                // If for some reason we still have configs for the connector, add back the default
+                // STARTED state to ensure each connector always has a valid target state.
+                if (connectorConfigs.containsKey(connectorName))
+                    connectorTargetStates.put(connectorName, TargetState.STARTED);
+            } else {
+                if (!(value.value() instanceof Map)) {
+                    log.error("Ignoring target state for connector '{}' because it is in the wrong format: {}", connectorName, className(value.value()));
+                    return;
+                }
+                @SuppressWarnings("unchecked")
+                Object targetState = ((Map<String, Object>) value.value()).get("state");
+                if (!(targetState instanceof String)) {
+                    log.error("Invalid data for target state for connector '{}': 'state' field should be a String but is {}",
+                            connectorName, className(targetState));
+                    return;
+                }
+
+                try {
+                    TargetState state = TargetState.valueOf((String) targetState);
+                    log.debug("Setting target state for connector '{}' to {}", connectorName, targetState);
+                    connectorTargetStates.put(connectorName, state);
+                } catch (IllegalArgumentException e) {
+                    log.error("Invalid target state for connector '{}': {}", connectorName, targetState);
+                    return;
+                }
+            }
+        }
+
+        // Note that we do not notify the update listener if the target state has been removed.
+        // Instead we depend on the removal callback of the connector config itself to notify the worker.
+        if (started && !removed)
+            updateListener.onConnectorTargetStateChange(connectorName);
+    }
+
+    private void processConnectorConfigRecord(String connectorName, SchemaAndValue value) {
+        boolean removed = false;
+        synchronized (lock) {
+            if (value.value() == null) {
+                // Connector deletion will be written as a null value
+                log.info("Successfully processed removal of connector '{}'", connectorName);
+                connectorConfigs.remove(connectorName);
+                connectorTaskCounts.remove(connectorName);
+                taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
+                removed = true;
+            } else {
+                // Connector configs can be applied and callbacks invoked immediately
+                if (!(value.value() instanceof Map)) {
+                    log.error("Ignoring configuration for connector '{}' because it is in the wrong format: {}", connectorName, className(value.value()));
+                    return;
+                }
+                @SuppressWarnings("unchecked")
+                Object newConnectorConfig = ((Map<String, Object>) value.value()).get("properties");
+                if (!(newConnectorConfig instanceof Map)) {
+                    log.error("Invalid data for config for connector '{}': 'properties' field should be a Map but is {}",
+                            connectorName, className(newConnectorConfig));
+                    return;
+                }
+                log.debug("Updating configuration for connector '{}'", connectorName);
+                @SuppressWarnings("unchecked")
+                Map<String, String> stringsConnectorConfig = (Map<String, String>) newConnectorConfig;
+                connectorConfigs.put(connectorName, stringsConnectorConfig);
+
+                // Set the initial state of the connector to STARTED, which ensures that any connectors
+                // which were created with 0.9 Connect will be initialized in the STARTED state.
+                if (!connectorTargetStates.containsKey(connectorName))
+                    connectorTargetStates.put(connectorName, TargetState.STARTED);
+            }
+        }
+        if (started) {
+            if (removed)
+                updateListener.onConnectorConfigRemove(connectorName);
+            else
+                updateListener.onConnectorConfigUpdate(connectorName);
+        }
+    }
+
+    private void processTaskConfigRecord(ConnectorTaskId taskId, SchemaAndValue value) {
+        synchronized (lock) {
+            if (value.value() == null) {
+                log.error("Ignoring task configuration for task {} because it is unexpectedly null", taskId);
+                return;
+            }
+            if (!(value.value() instanceof Map)) {
+                log.error("Ignoring task configuration for task {} because the value is not a Map but is {}", taskId, className(value.value()));
+                return;
+            }
+
+            @SuppressWarnings("unchecked")
+            Object newTaskConfig = ((Map<String, Object>) value.value()).get("properties");
+            if (!(newTaskConfig instanceof Map)) {
+                log.error("Invalid data for config of task {} 'properties' field should be a Map but is {}", taskId, className(newTaskConfig));
+                return;
+            }
+
+            Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.computeIfAbsent(taskId.connector(), k -> new HashMap<>());
+            log.debug("Storing new config for task {}; this will wait for a commit message before the new config will take effect.", taskId);
+            @SuppressWarnings("unchecked")
+            Map<String, String> stringsTaskConfig = (Map<String, String>) newTaskConfig;
+            deferred.put(taskId, stringsTaskConfig);
+        }
+    }
+
+    private void processTasksCommitRecord(String connectorName, SchemaAndValue value) {
+        List<ConnectorTaskId> updatedTasks = new ArrayList<>();
+        synchronized (lock) {
+            // Apply any outstanding deferred task updates for the given connector. Note that just because we
+            // encounter a commit message does not mean it will result in consistent output. In particular due to
+            // compaction, there may be cases where . For example if we have the following sequence of writes:
+            //
+            // 1. Write connector "foo"'s config
+            // 2. Write connector "foo", task 1's config <-- compacted
+            // 3. Write connector "foo", task 2's config
+            // 4. Write connector "foo" task commit message
+            // 5. Write connector "foo", task 1's config
+            // 6. Write connector "foo", task 2's config
+            // 7. Write connector "foo" task commit message
+            //
+            // then when a new worker starts up, if message 2 had been compacted, then when message 4 is applied
+            // "foo" will not have a complete set of configs. Only when message 7 is applied will the complete
+            // configuration be available. Worse, if the leader died while writing messages 5, 6, and 7 such that
+            // only 5 was written, then there may be nothing that will finish writing the configs and get the
+            // log back into a consistent state.
+            //
+            // It is expected that the user of this class (i.e., the Herder) will take the necessary action to
+            // resolve this (i.e., get the connector to recommit its configuration). This inconsistent state is
+            // exposed in the snapshots provided via ClusterConfigState so they are easy to handle.
+            if (!(value.value() instanceof Map)) { // Schema-less, so we get maps instead of structs
+                log.error("Ignoring connector tasks configuration commit for connector '{}' because it is in the wrong format: {}", connectorName, className(value.value()));
+                return;
+            }
+            Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(connectorName);
+
+            @SuppressWarnings("unchecked")
+            int newTaskCount = intValue(((Map<String, Object>) value.value()).get("tasks"));
+
+            // Validate the configs we're supposed to update to ensure we're getting a complete configuration
+            // update of all tasks that are expected based on the number of tasks in the commit message.
+            Set<Integer> taskIdSet = taskIds(connectorName, deferred);
+            if (!completeTaskIdSet(taskIdSet, newTaskCount)) {
+                // Given the logic for writing commit messages, we should only hit this condition due to compacted
+                // historical data, in which case we would not have applied any updates yet and there will be no
+                // task config data already committed for the connector, so we shouldn't have to clear any data
+                // out. All we need to do is add the flag marking it inconsistent.
+                log.debug("We have an incomplete set of task configs for connector '{}' probably due to compaction. So we are not doing anything with the new configuration.", connectorName);
+                inconsistent.add(connectorName);
+            } else {
+                if (deferred != null) {
+                    taskConfigs.putAll(deferred);
+                    updatedTasks.addAll(deferred.keySet());
+                    connectorTaskConfigGenerations.compute(connectorName, (ignored, generation) -> generation != null ? generation + 1 : 0);
+                }
+                inconsistent.remove(connectorName);
+            }
+            // Always clear the deferred entries, even if we didn't apply them. If they represented an inconsistent
+            // update, then we need to see a completely fresh set of configs after this commit message, so we don't
+            // want any of these outdated configs
+            if (deferred != null)
+                deferred.clear();
+
+            connectorTaskCounts.put(connectorName, newTaskCount);
+        }
+
+        // If task configs appear after the latest task count record, the connector needs a new round of zombie fencing
+        // before it can start tasks with these configs
+        connectorsPendingFencing.add(connectorName);
+        if (started)
+            updateListener.onTaskConfigUpdate(updatedTasks);
+    }
+
     @SuppressWarnings("unchecked")
     RestartRequest recordToRestartRequest(ConsumerRecord<String, byte[]> record, SchemaAndValue value) {
         String connectorName = record.key().substring(RESTART_PREFIX.length());
         if (!(value.value() instanceof Map)) {
-            log.error("Ignoring restart request because the value is not a Map but is {}", value.value() == null ? "null" : value.value().getClass());
+            log.error("Ignoring restart request because the value is not a Map but is {}", className(value.value()));
             return null;
         }
 
@@ -958,7 +994,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         Object failed = valueAsMap.get(ONLY_FAILED_FIELD_NAME);
         boolean onlyFailed;
         if (!(failed instanceof Boolean)) {
-            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", ONLY_FAILED_FIELD_NAME, failed == null ? "null" : failed.getClass(), ONLY_FAILED_DEFAULT);
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", ONLY_FAILED_FIELD_NAME, className(failed), ONLY_FAILED_DEFAULT);
             onlyFailed = ONLY_FAILED_DEFAULT;
         } else {
             onlyFailed = (Boolean) failed;
@@ -967,12 +1003,67 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         Object withTasks = valueAsMap.get(INCLUDE_TASKS_FIELD_NAME);
         boolean includeTasks;
         if (!(withTasks instanceof Boolean)) {
-            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, withTasks == null ? "null" : withTasks.getClass(), INCLUDE_TASKS_DEFAULT);
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, className(withTasks), INCLUDE_TASKS_DEFAULT);
             includeTasks = INCLUDE_TASKS_DEFAULT;
         } else {
             includeTasks = (Boolean) withTasks;
         }
         return new RestartRequest(connectorName, onlyFailed, includeTasks);
+    }
+
+    private void processTaskCountRecord(String connectorName, SchemaAndValue value) {
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring task count record for connector '{}' because it is in the wrong format: {}",  connectorName, className(value.value()));
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        int taskCount = intValue(((Map<String, Object>) value.value()).get("task-count"));
+
+        log.debug("Setting task count record for connector '{}' to {}", connectorName, taskCount);
+        connectorTaskCountRecords.put(connectorName, taskCount);
+        // If a task count record appears after the latest task configs, the connectors doesn't need a round of zombie
+        // fencing before it can start tasks with the latest configs
+        connectorsPendingFencing.remove(connectorName);
+    }
+
+    private void processSessionKeyRecord(SchemaAndValue value) {
+        if (value.value() == null) {
+            log.error("Ignoring session key because it is unexpectedly null");
+            return;
+        }
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring session key because the value is not a Map but is {}", className(value.value()));
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object sessionKey = valueAsMap.get("key");
+        if (!(sessionKey instanceof String)) {
+            log.error("Invalid data for session key 'key' field should be a String but is {}", className(sessionKey));
+            return;
+        }
+        byte[] key = Base64.getDecoder().decode((String) sessionKey);
+
+        Object keyAlgorithm = valueAsMap.get("algorithm");
+        if (!(keyAlgorithm instanceof String)) {
+            log.error("Invalid data for session key 'algorithm' field should be a String but it is {}", className(keyAlgorithm));
+            return;
+        }
+
+        Object creationTimestamp = valueAsMap.get("creation-timestamp");
+        if (!(creationTimestamp instanceof Long)) {
+            log.error("Invalid data for session key 'creation-timestamp' field should be a long but it is {}", className(creationTimestamp));
+            return;
+        }
+        KafkaConfigBackingStore.this.sessionKey = new SessionKey(
+                new SecretKeySpec(key, (String) keyAlgorithm),
+                (long) creationTimestamp
+        );
+
+        if (started)
+            updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
     }
 
     private ConnectorTaskId parseTaskId(String key) {
@@ -1044,6 +1135,10 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             return (int) (long) value;
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
+    }
+
+    private String className(Object o) {
+        return o != null ? o.getClass().getName() : "null";
     }
 }
 
