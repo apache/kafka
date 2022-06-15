@@ -369,11 +369,11 @@ public class PauseResumeIntegrationTest {
 
         waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams2), State.REBALANCING, STARTUP_TIMEOUT);
 
-        assertStreamsLagStaysConstant(kafkaStreams);
-        assertStreamsLagStaysConstant(kafkaStreams2);
+        assertStreamsLocalStoreLagStaysConstant(kafkaStreams);
+        assertStreamsLocalStoreLagStaysConstant(kafkaStreams2);
     }
 
-    private void assertStreamsLagStaysConstant(final KafkaStreams streams) throws InterruptedException {
+    private void assertStreamsLocalStoreLagStaysConstant(final KafkaStreams streams) throws InterruptedException {
         waitForCondition(
             () -> !streams.allLocalStorePartitionLags().isEmpty(),
             "Lags for local store partitions were not found within the timeout!");
