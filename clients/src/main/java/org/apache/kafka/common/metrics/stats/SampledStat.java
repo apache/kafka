@@ -41,7 +41,9 @@ public abstract class SampledStat implements MeasurableStat {
      */
     private int current = 0;
     /**
-     * Stores the recorded samples in a ring buffer.
+     * Stores the recorded samples.
+     * Note that the previously recorded samples may be overwritten/reset if they are considered obsolete by the
+     * {@link Sample#purgeObsoleteSamples} function.
      */
     protected List<Sample> samples;
 
