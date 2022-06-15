@@ -69,10 +69,12 @@ class DefaultStateUpdaterTest {
     private final static long CALL_TIMEOUT = 1000;
     private final static long VERIFICATION_TIMEOUT = 15000;
     private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
+    private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
     private final static TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
     private final static TopicPartition TOPIC_PARTITION_C_0 = new TopicPartition("topicC", 0);
     private final static TopicPartition TOPIC_PARTITION_D_0 = new TopicPartition("topicD", 0);
     private final static TaskId TASK_0_0 = new TaskId(0, 0);
+    private final static TaskId TASK_0_1 = new TaskId(0, 1);
     private final static TaskId TASK_0_2 = new TaskId(0, 2);
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
     private final static TaskId TASK_1_1 = new TaskId(1, 1);
@@ -349,6 +351,56 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks(task1, task3);
         verify(task3).completeRestoration(offsetResetter);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
+        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldUpdateStandbyTaskAfterAllActiveStatefulTasksFailed() throws Exception {
+        final StreamTask activeTask1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        final StreamTask activeTask2 = createActiveStatefulTaskInStateRestoring(TASK_0_1, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StandbyTask standbyTask = createStandbyTaskInStateRunning(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_C_0));
+        final TaskCorruptedException taskCorruptedException =
+            new TaskCorruptedException(mkSet(activeTask1.id(), activeTask2.id()));
+        final Map<TaskId, Task> updatingTasks1 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(activeTask2.id(), activeTask2),
+            mkEntry(standbyTask.id(), standbyTask)
+        );
+        doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks1);
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+
+        stateUpdater.add(activeTask1);
+        stateUpdater.add(activeTask2);
+        stateUpdater.add(standbyTask);
+
+        final ExceptionAndTasks expectedExceptionAndTasks =
+            new ExceptionAndTasks(mkSet(activeTask1, activeTask2), taskCorruptedException);
+        verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
+        final InOrder orderVerifier = inOrder(changelogReader);
+        orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
+        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldUpdateStandbyTaskAfterAllActiveStatefulTasksRemoved() throws Exception {
+        final StreamTask activeTask1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        final StreamTask activeTask2 = createActiveStatefulTaskInStateRestoring(TASK_0_1, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StandbyTask standbyTask = createStandbyTaskInStateRunning(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_C_0));
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.add(activeTask1);
+        stateUpdater.add(activeTask2);
+        stateUpdater.add(standbyTask);
+        verifyUpdatingTasks(activeTask1, activeTask2, standbyTask);
+
+        stateUpdater.remove(activeTask1.id());
+        stateUpdater.remove(activeTask2.id());
+
+        verifyRemovedTasks(activeTask1, activeTask2);
+        final InOrder orderVerifier = inOrder(changelogReader);
+        orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
         orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
     }
 
@@ -690,6 +742,178 @@ class DefaultStateUpdaterTest {
         }
     }
 
+    @Test
+    public void shouldGetTasksFromInputQueue() {
+        stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        stateUpdater = new DefaultStateUpdater(
+            changelogReader,
+            offsetResetter,
+            Time.SYSTEM,
+            true
+        );
+        final StreamTask activeTask1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        final StreamTask activeTask2 = createActiveStatefulTaskInStateRestoring(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StandbyTask standbyTask1 = createStandbyTaskInStateRunning(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_C_0));
+        final StandbyTask standbyTask2 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
+        final StandbyTask standbyTask3 = createStandbyTaskInStateRunning(TASK_0_1, Collections.singletonList(TOPIC_PARTITION_A_1));
+        stateUpdater.add(activeTask1);
+        stateUpdater.add(standbyTask1);
+        stateUpdater.add(standbyTask2);
+        stateUpdater.remove(TASK_0_0);
+        stateUpdater.add(activeTask2);
+        stateUpdater.add(standbyTask3);
+
+        final Set<Task> tasks = stateUpdater.getTasks();
+
+        assertEquals(5, tasks.size());
+        assertTrue(tasks.containsAll(mkSet(activeTask1, activeTask2, standbyTask1, standbyTask2, standbyTask3)));
+
+        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
+
+        assertEquals(2, activeTasks.size());
+        assertTrue(activeTasks.containsAll(mkSet(activeTask1, activeTask2)));
+
+        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
+
+        assertEquals(3, standbyTasks.size());
+        assertTrue(standbyTasks.containsAll(mkSet(standbyTask1, standbyTask2, standbyTask3)));
+    }
+
+    @Test
+    public void shouldGetTasksFromUpdatingTasks() throws Exception {
+        final StreamTask activeTask1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        final StreamTask activeTask2 = createActiveStatefulTaskInStateRestoring(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StandbyTask standbyTask1 = createStandbyTaskInStateRunning(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_C_0));
+        final StandbyTask standbyTask2 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
+        final StandbyTask standbyTask3 = createStandbyTaskInStateRunning(TASK_0_1, Collections.singletonList(TOPIC_PARTITION_A_1));
+        when(changelogReader.completedChangelogs())
+            .thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.add(activeTask1);
+        stateUpdater.add(standbyTask1);
+        stateUpdater.add(standbyTask2);
+        stateUpdater.add(activeTask2);
+        stateUpdater.add(standbyTask3);
+        verifyUpdatingTasks(activeTask1, activeTask2, standbyTask1, standbyTask2, standbyTask3);
+
+        final Set<Task> tasks = stateUpdater.getTasks();
+
+        assertEquals(5, tasks.size());
+        assertTrue(tasks.containsAll(mkSet(activeTask1, activeTask2, standbyTask1, standbyTask2, standbyTask3)));
+
+        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
+
+        assertEquals(2, activeTasks.size());
+        assertTrue(activeTasks.containsAll(mkSet(activeTask1, activeTask2)));
+
+        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
+
+        assertEquals(3, standbyTasks.size());
+        assertTrue(standbyTasks.containsAll(mkSet(standbyTask1, standbyTask2, standbyTask3)));
+    }
+
+    @Test
+    public void shouldGetTasksFromRestoredActiveTasks() throws Exception {
+        final StreamTask activeTask1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        final StreamTask activeTask2 = createActiveStatefulTaskInStateRestoring(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_B_0));
+        when(changelogReader.completedChangelogs())
+            .thenReturn(mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0));
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.add(activeTask1);
+        stateUpdater.add(activeTask2);
+        verifyRestoredActiveTasks(activeTask1, activeTask2);
+
+        final Set<Task> tasks = stateUpdater.getTasks();
+
+        assertEquals(2, tasks.size());
+        assertTrue(tasks.containsAll(mkSet(activeTask1, activeTask2)));
+
+        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
+
+        assertEquals(2, activeTasks.size());
+        assertTrue(activeTasks.containsAll(mkSet(activeTask1, activeTask2)));
+
+        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
+
+        assertTrue(standbyTasks.isEmpty());
+    }
+
+    @Test
+    public void shouldGetTasksFromExceptionsAndFailedTasks() throws Exception {
+        final StreamTask activeTask1 = createActiveStatefulTaskInStateRestoring(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StandbyTask standbyTask2 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
+        final StandbyTask standbyTask1 = createStandbyTaskInStateRunning(TASK_0_1, Collections.singletonList(TOPIC_PARTITION_A_1));
+        final TaskCorruptedException taskCorruptedException =
+            new TaskCorruptedException(mkSet(standbyTask1.id(), standbyTask2.id()));
+        final StreamsException streamsException = new StreamsException("The Streams were crossed!", activeTask1.id());
+        final Map<TaskId, Task> updatingTasks1 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(standbyTask1.id(), standbyTask1),
+            mkEntry(standbyTask2.id(), standbyTask2)
+        );
+        doNothing().doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks1);
+        final Map<TaskId, Task> updatingTasks2 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1)
+        );
+        doNothing().doThrow(streamsException).doNothing().when(changelogReader).restore(updatingTasks2);
+        stateUpdater.add(standbyTask1);
+        stateUpdater.add(activeTask1);
+        stateUpdater.add(standbyTask2);
+        final ExceptionAndTasks expectedExceptionAndTasks1 =
+            new ExceptionAndTasks(mkSet(standbyTask1, standbyTask2), taskCorruptedException);
+        final ExceptionAndTasks expectedExceptionAndTasks2 = new ExceptionAndTasks(mkSet(activeTask1), streamsException);
+        verifyExceptionsAndFailedTasks(expectedExceptionAndTasks1, expectedExceptionAndTasks2);
+
+        final Set<Task> tasks = stateUpdater.getTasks();
+
+        assertEquals(3, tasks.size());
+        assertTrue(tasks.containsAll(mkSet(activeTask1, standbyTask1, standbyTask2)));
+
+        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
+
+        assertEquals(1, activeTasks.size());
+        assertTrue(activeTasks.containsAll(mkSet(activeTask1)));
+
+        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
+
+        assertEquals(2, standbyTasks.size());
+        assertTrue(standbyTasks.containsAll(mkSet(standbyTask1, standbyTask2)));
+    }
+
+    @Test
+    public void shouldGetTasksFromExceptionsAndRemovedTasks() throws Exception {
+        final StreamTask activeTask = createActiveStatefulTaskInStateRestoring(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StandbyTask standbyTask2 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
+        final StandbyTask standbyTask1 = createStandbyTaskInStateRunning(TASK_0_1, Collections.singletonList(TOPIC_PARTITION_A_1));
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.add(standbyTask1);
+        stateUpdater.add(activeTask);
+        stateUpdater.add(standbyTask2);
+        stateUpdater.remove(standbyTask1.id());
+        stateUpdater.remove(standbyTask2.id());
+        stateUpdater.remove(activeTask.id());
+        verifyRemovedTasks(activeTask, standbyTask1, standbyTask2);
+
+        final Set<Task> tasks = stateUpdater.getTasks();
+
+        assertEquals(3, tasks.size());
+        assertTrue(tasks.containsAll(mkSet(activeTask, standbyTask1, standbyTask2)));
+
+        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
+
+        assertEquals(1, activeTasks.size());
+        assertTrue(activeTasks.containsAll(mkSet(activeTask)));
+
+        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
+
+        assertEquals(2, standbyTasks.size());
+        assertTrue(standbyTasks.containsAll(mkSet(standbyTask1, standbyTask2)));
+    }
+
     private void verifyRestoredActiveTasks(final StreamTask... tasks) throws Exception {
         if (tasks.length == 0) {
             assertTrue(stateUpdater.getRestoredActiveTasks().isEmpty());
@@ -739,7 +963,10 @@ class DefaultStateUpdaterTest {
                 "Did not get all updating task within the given timeout!"
             );
             assertEquals(expectedUpdatingTasks.size(), updatingTasks.size());
-            assertTrue(updatingTasks.stream().allMatch(task -> task.state() == State.RESTORING));
+            assertTrue(updatingTasks.stream()
+                .allMatch(task -> task.isActive() && task.state() == State.RESTORING
+                    ||
+                    !task.isActive() && task.state() == State.RUNNING));
         }
     }
 
@@ -775,7 +1002,7 @@ class DefaultStateUpdaterTest {
             assertEquals(expectedRemovedTasks.size(), removedTasks.size());
             assertTrue(removedTasks.stream()
                 .allMatch(task -> task.isActive() && task.state() == State.RESTORING
-                        || !task.isActive() && task.state() == State.RUNNING));
+                    || !task.isActive() && task.state() == State.RUNNING));
         }
     }
 
@@ -796,7 +1023,7 @@ class DefaultStateUpdaterTest {
 
     private void verifyExceptionsAndFailedTasks(final ExceptionAndTasks... exceptionsAndTasks) throws Exception {
         final List<ExceptionAndTasks> expectedExceptionAndTasks = Arrays.asList(exceptionsAndTasks);
-        final List<ExceptionAndTasks> failedTasks = new ArrayList<>();
+        final Set<ExceptionAndTasks> failedTasks = new HashSet<>();
         waitForCondition(
             () -> {
                 failedTasks.addAll(stateUpdater.getExceptionsAndFailedTasks());

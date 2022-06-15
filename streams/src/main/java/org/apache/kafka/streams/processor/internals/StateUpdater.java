@@ -35,7 +35,7 @@ public interface StateUpdater {
             this.exception = Objects.requireNonNull(exception);
         }
 
-        public Set<Task> tasks() {
+        public Set<Task> getTasks() {
             return Collections.unmodifiableSet(tasks);
         }
 
@@ -111,6 +111,50 @@ public interface StateUpdater {
      * @return list of failed tasks and the corresponding exceptions
      */
     List<ExceptionAndTasks> drainExceptionsAndFailedTasks();
+
+    /**
+     * Gets all tasks that are managed by the state updater.
+     *
+     * The state updater manages all tasks that were added with the {@link StateUpdater#add(Task)} and that have
+     * not been removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
+     *
+     * @return set of all tasks managed by the state updater
+     */
+    Set<Task> getTasks();
+
+    /**
+     * Gets active tasks that are managed by the state updater.
+     *
+     * The state updater manages all active tasks that were added with the {@link StateUpdater#add(Task)} and that have
+     * not been removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
+     *
+     * @return set of all tasks managed by the state updater
+     */
+    Set<StreamTask> getActiveTasks();
+
+    /**
+     * Gets standby tasks that are managed by the state updater.
+     *
+     * The state updater manages all standby tasks that were added with the {@link StateUpdater#add(Task)} and that have
+     * not been removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
+     *
+     * @return set of all tasks managed by the state updater
+     */
+    Set<StandbyTask> getStandbyTasks();
 
     /**
      * Shuts down the state updater.
