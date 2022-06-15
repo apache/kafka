@@ -156,7 +156,7 @@ public class MetricsTest {
         assertEquals(0.0, metricValueFunc.apply(metrics.metric(metrics.metricName("test.min", "grp1"))), EPS,
             "Min(0...9) = 0");
         // rate is calculated over the first ever window. Hence, we assume presence of prior windows with 0 recorded events.
-        assertEquals((double) sum / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.rate", "grp1"))), EPS,
+        assertEquals(sum / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.rate", "grp1"))), EPS,
             "Rate(0...9) = 1.40625");
         assertEquals(count / elapsedSecs, metricValueFunc.apply(metrics.metric(metrics.metricName("test.occurences", "grp1"))), EPS,
             String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs));
@@ -609,7 +609,7 @@ public class MetricsTest {
         time.sleep(cfg.timeWindowMs() / 2);
 
         // prior to any time passing
-        double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + (((double) cfg.timeWindowMs()) / 2.0d)) / 1000.0d;
+        double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + (cfg.timeWindowMs() / 2.0d)) / 1000.0d;
 
         KafkaMetric rateMetric = metrics.metrics().get(rateMetricName);
         KafkaMetric countRateMetric = metrics.metrics().get(countRateMetricName);

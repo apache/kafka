@@ -74,7 +74,7 @@ public class Rate implements MeasurableStat {
 
         /*
          * Here we check the total amount of time elapsed since the oldest non-obsolete window.
-         * This gives the duration of computation time window which used to calculate Rate.
+         * This gives the duration of computation time window which is used to calculate Rate.
          *
          * For scenarios when rate computation is performed after at least `config.samples` have completed,
          * the duration of computation time window is determined by:

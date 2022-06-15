@@ -66,8 +66,8 @@ public abstract class SampledStat implements MeasurableStat {
         Sample sample = current(recordingTimeMs);
         if (sample.isComplete(recordingTimeMs, config)) {
             final long previousWindowStartTime = sample.lastWindowMs;
-            final long previousWindowEndtime = previousWindowStartTime + config.timeWindowMs();
-            final long startTimeOfNewWindow = recordingTimeMs - ((recordingTimeMs - previousWindowEndtime) % config.timeWindowMs());
+            final long previousWindowEndTime = previousWindowStartTime + config.timeWindowMs();
+            final long startTimeOfNewWindow = recordingTimeMs - ((recordingTimeMs - previousWindowEndTime) % config.timeWindowMs());
             sample = advance(config, startTimeOfNewWindow);
         }
         update(sample, config, value, recordingTimeMs);
