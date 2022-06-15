@@ -62,6 +62,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cl
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getTopicSize;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilStreamsHasPolled;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -358,23 +359,23 @@ public class PauseResumeIntegrationTest {
 
         awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
 
-        // Shutdown
         kafkaStreams.close();
         kafkaStreams2.close();
 
-        // Wipe out state
+        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
+        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_1);
         kafkaStreams.cleanUp();
         kafkaStreams2.cleanUp();
 
-        // Start paused
         kafkaStreams.pause();
         kafkaStreams2.pause();
         kafkaStreams.start();
         kafkaStreams2.start();
 
-        // Verify lag is constant and does not decrease
-        assertNoLag(kafkaStreams);
-        assertNoLag(kafkaStreams2);
+        waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams2), State.REBALANCING, STARTUP_TIMEOUT);
+
+        assertTrue(kafkaStreams.allLocalStorePartitionLags().isEmpty());
+        assertTrue(kafkaStreams2.allLocalStorePartitionLags().isEmpty());
     }
 
     private KafkaStreams buildKafkaStreams(final String outputTopic) {
