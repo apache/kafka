@@ -63,11 +63,11 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         // Call setup to start the cluster.
         super.setUp(new EmptyTestInfo());
 
-        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread);
+        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread, METADATA_TOPIC_PARTITIONS_COUNT);
     }
 
     public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
-                                                   boolean startConsumerThread) {
+                                                   boolean startConsumerThread, int remoteLogMetadataTopicPartitionCount) {
         String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
         topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(startConsumerThread) {
             @Override
@@ -94,7 +94,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         configs.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(listenerName()));
         configs.put(BROKER_ID, 0);
         configs.put(LOG_DIR, logDir);
-        configs.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, METADATA_TOPIC_PARTITIONS_COUNT);
+        configs.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionCount);
         configs.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, METADATA_TOPIC_REPLICATION_FACTOR);
         configs.put(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, METADATA_TOPIC_RETENTION_MS);
 

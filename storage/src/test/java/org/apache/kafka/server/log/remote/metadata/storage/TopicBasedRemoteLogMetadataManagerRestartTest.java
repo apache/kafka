@@ -88,7 +88,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         assertFalse(topicBasedRlmm().isInitialized());
 
         stopTopicBasedRemoteLogMetadataManagerHarness();
-        startTopicBasedRemoteLogMetadataManagerHarness(false, 3);
+        startTopicBasedRemoteLogMetadataManagerHarness(false, TopicBasedRemoteLogMetadataManagerHarness.METADATA_TOPIC_PARTITIONS_COUNT);
         assertTrue(topicBasedRlmm().isInitialized());
     }
 
