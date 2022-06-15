@@ -63,6 +63,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilStreamsHasPolled;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -338,10 +339,14 @@ public class PauseResumeIntegrationTest {
 
     @Test
     public void pausedTopologyShouldNotRestoreStateStores() throws Exception {
+        final Properties properties1 = props();
+        properties1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        final Properties properties2 = props();
+        properties2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
-        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
-        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_1);
+        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, properties1);
+        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_1, properties2);
         kafkaStreams.start();
         kafkaStreams2.start();
 
@@ -352,8 +357,8 @@ public class PauseResumeIntegrationTest {
         kafkaStreams.close();
         kafkaStreams2.close();
 
-        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
-        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_1);
+        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, properties1);
+        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_1, properties2);
         kafkaStreams.cleanUp();
         kafkaStreams2.cleanUp();
 
@@ -364,14 +369,30 @@ public class PauseResumeIntegrationTest {
 
         waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams2), State.REBALANCING, STARTUP_TIMEOUT);
 
-        assertTrue(kafkaStreams.allLocalStorePartitionLags().isEmpty());
-        assertTrue(kafkaStreams2.allLocalStorePartitionLags().isEmpty());
+        assertStreamsLagStaysConstant(kafkaStreams);
+        assertStreamsLagStaysConstant(kafkaStreams2);
+    }
+
+    private void assertStreamsLagStaysConstant(final KafkaStreams streams) throws InterruptedException {
+        waitForCondition(
+            () -> !streams.allLocalStorePartitionLags().isEmpty(),
+            "Lags for local store partitions were not found within the timeout!");
+        waitUntilStreamsHasPolled(streams, 2);
+        final long stateStoreLag1 = streams.allLocalStorePartitionLags().get("test-store").get(0).offsetLag();
+        waitUntilStreamsHasPolled(streams, 2);
+        final long stateStoreLag2 = streams.allLocalStorePartitionLags().get("test-store").get(0).offsetLag();
+        assertTrue(stateStoreLag1 > 0);
+        assertEquals(stateStoreLag1, stateStoreLag2);
     }
 
     private KafkaStreams buildKafkaStreams(final String outputTopic) {
+        return buildKafkaStreams(outputTopic, props());
+    }
+
+    private KafkaStreams buildKafkaStreams(final String outputTopic, final Properties properties) {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(outputTopic);
-        return new KafkaStreams(builder.build(props()), props());
+        builder.stream(INPUT_STREAM_1).groupByKey().count(Materialized.as("test-store")).toStream().to(outputTopic);
+        return new KafkaStreams(builder.build(properties), properties);
     }
 
     private void assertTopicSize(final String topicName, final int size) {

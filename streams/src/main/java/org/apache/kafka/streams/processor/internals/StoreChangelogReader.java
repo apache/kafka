@@ -430,7 +430,7 @@ public class StoreChangelogReader implements ChangelogReader {
             final ConsumerRecords<byte[], byte[]> polledRecords;
 
             try {
-                updateStandbyPartitions(tasks, restoringChangelogs);
+                pauseResumePartitions(tasks, restoringChangelogs);
 
                 // for restoring active and updating standby we may prefer different poll time
                 // in order to make sure we call the main consumer#poll in time.
@@ -485,7 +485,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void updateStandbyPartitions(final Map<TaskId, Task> tasks,
+    private void pauseResumePartitions(final Map<TaskId, Task> tasks,
         final Set<TopicPartition> restoringChangelogs) {
         if (state == ChangelogReaderState.ACTIVE_RESTORING) {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
