@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -62,7 +61,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cl
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getTopicSize;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilStreamsHasPolled;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -166,7 +164,6 @@ public class PauseResumeIntegrationTest {
         assertTrue(kafkaStreams.isPaused());
 
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        assertNoLag(kafkaStreams);
 
         waitUntilStreamsHasPolled(kafkaStreams, 2);
         assertTopicSize(OUTPUT_STREAM_1, 5);
@@ -187,7 +184,6 @@ public class PauseResumeIntegrationTest {
         assertTrue(kafkaStreams.isPaused());
 
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        assertNoLag(kafkaStreams);
 
         waitUntilStreamsHasPolled(kafkaStreams, 2);
         assertTopicSize(OUTPUT_STREAM_1, 0);
@@ -223,8 +219,6 @@ public class PauseResumeIntegrationTest {
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
 
-        assertNoLag(streamsNamedTopologyWrapper);
-
         awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA2);
         assertTopicSize(OUTPUT_STREAM_1, 5);
         assertTopicSize(OUTPUT_STREAM_2, 10);
@@ -255,8 +249,6 @@ public class PauseResumeIntegrationTest {
 
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-
-        assertNoLag(streamsNamedTopologyWrapper);
 
         waitUntilStreamsHasPolled(streamsNamedTopologyWrapper, 2);
         assertTopicSize(OUTPUT_STREAM_1, 5);
@@ -298,8 +290,6 @@ public class PauseResumeIntegrationTest {
 
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-
-        assertNoLag(streamsNamedTopologyWrapper);
 
         waitUntilStreamsHasPolled(streamsNamedTopologyWrapper, 2);
         assertTopicSize(OUTPUT_STREAM_1, 0);
@@ -382,15 +372,6 @@ public class PauseResumeIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(outputTopic);
         return new KafkaStreams(builder.build(props()), props());
-    }
-
-    private void assertNoLag(final KafkaStreams streams) {
-        final Long maxLag = streams.allLocalStorePartitionLags().values()
-            .stream()
-            .flatMap(m -> m.values().stream())
-            .map(LagInfo::offsetLag)
-            .max(Long::compare).get();
-        assertEquals(0, (long) maxLag);
     }
 
     private void assertTopicSize(final String topicName, final int size) {
