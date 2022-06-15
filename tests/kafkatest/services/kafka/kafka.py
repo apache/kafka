@@ -870,8 +870,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         :return: the number of controller nodes that must be started for there to be a quorum
         """
-        # Note that we use math.ceil() to avoid floating point rounding issues
-        # associated with round() (e.g. round(5/2) yields 2 instead of 3)
         return math.ceil((1 + self.num_nodes_controller_role) / 2)
 
     def stop_node(self, node, clean_shutdown=True, timeout_sec=60):
