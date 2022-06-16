@@ -151,7 +151,7 @@ class ActiveTaskCreator {
     }
 
     // TODO: change return type to `StreamTask`
-    Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
+    public Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
                                  final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         // TODO: change type to `StreamTask`
         final List<Task> createdTasks = new ArrayList<>();
