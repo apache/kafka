@@ -284,6 +284,8 @@ public class DistributedHerderTest extends ThreadedTest {
         });
         member.wakeup();
         PowerMock.expectLastCall();
+        EasyMock.expect(member.eagerProtocolDowngradeRequested()).andReturn(false);
+        PowerMock.expectLastCall();
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
         PowerMock.expectLastCall();
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);

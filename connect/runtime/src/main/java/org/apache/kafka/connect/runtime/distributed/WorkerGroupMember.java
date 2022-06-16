@@ -213,6 +213,12 @@ public class WorkerGroupMember {
         return coordinator.ownerUrl(task);
     }
 
+    public boolean eagerProtocolDowngradeRequested() { return coordinator.eagerProtocolDowngradeRequested(); }
+
+    public void toggleEagerProtocolDowngradeRequest(boolean newStatus) {
+        coordinator.toggleEagerProtocolDowngradeRequest(newStatus);
+    }
+
     /**
      * Get the version of the connect protocol that is currently active in the group of workers.
      *

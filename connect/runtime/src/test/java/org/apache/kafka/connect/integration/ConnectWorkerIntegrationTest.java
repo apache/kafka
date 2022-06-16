@@ -37,6 +37,9 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.connect.runtime.AbstractStatus;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import java.util.Optional;
 
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
@@ -53,6 +56,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERV
 import static org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Test simple operations on the workers of a Connect cluster.
@@ -101,6 +105,54 @@ public class ConnectWorkerIntegrationTest {
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
+    }
+
+    @Test
+    public void testRebalancingProtocolDowngrade() throws Exception {
+        MonitorableSourceConnector.clearActiveInstances();
+
+        connect = connectBuilder
+                .numWorkers(1)
+                .build();
+        connect.start();
+
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // set up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+        props.put("fail.on.duplicate.instances", "true");
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(1,
+                "Initial group of workers did not start in time.");
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        workerProps.put(DistributedConfig.CONNECT_PROTOCOL_CONFIG, "eager");
+        connect.addWorker();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(2,
+                "Initial group of workers did not start in time.");
+
+        ConnectorHandle connector = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+        connector.expectedRecords(NUM_TASKS * MESSAGES_PER_POLL * 100);
+        connector.awaitRecords(TimeUnit.MINUTES.toMillis(1));
+
+        Optional<String> failureMessage = connect.connectorStatus(CONNECTOR_NAME).tasks().stream()
+                .filter(taskState -> AbstractStatus.State.FAILED.toString().equals(taskState.state()))
+                .map(ConnectorStateInfo.TaskState::trace)
+                .filter(s -> s.contains("Multiple instances of task"))
+                .filter(s -> s.contains("appear to be running at the same time"))
+                .findAny();
+        assertEquals(
+                "At least one task failed because duplicate instances were created",
+                Optional.empty(),
+                failureMessage
+        );
     }
 
     /**

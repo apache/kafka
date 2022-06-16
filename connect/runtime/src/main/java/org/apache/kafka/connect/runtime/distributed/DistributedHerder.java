@@ -178,7 +178,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
     private boolean rebalanceResolved;
-    private boolean protocolSwitchSuccess;
     private ExtendedAssignment runningAssignment = ExtendedAssignment.empty();
     private final Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
     // visible for testing
@@ -376,12 +375,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } else {
                     return; // Safe to return and tick immediately because readConfigToEnd will do the backoff for us
                 }
-            }
-
-            // There was a protocol switch requested which didn't end up correctly. We will try to do it again
-            // instead of going ahead with anything else before.
-            if (!protocolSwitchSuccess) {
-                member.requestRejoin();
             }
 
             log.debug("Ensuring group membership is still active");
@@ -1504,12 +1497,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         //      progress. We can backoff and try rejoining later.
         //  1b. We are not the leader. We might need to catch up. If we're already caught up we can rejoin immediately,
         //      otherwise, we just want to wait reasonable amount of time to catch up and rejoin if we are ready.
+        //  For the cases where a protocol switch to eager was requested, we don't need to do anything extra as a re-join
+        //  is anyway requested here which would invoke onJoinPrepare where it should revoke all assigned connectors/tasks
         // 2. Assignment succeeded.
         //  2a. We are caught up on configs. Awesome! We can proceed to run our assigned work.
         //  2b. We need to try to catch up - try reading configs for reasonable amount of time.
+        //  Also, if there was a protocol downgrade to eager requested, that flag would be unset here successfully
+        //  marking the downgrade to eager.
 
-        // Can I have all workers give up their tasks/connectors when there's a protocol switch detected.
-        // We will need to do it only when the assignment in the happy path failed.
         boolean needsReadToEnd = false;
         boolean needsRejoin = false;
         if (assignment.failed()) {
@@ -1527,6 +1522,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (configState.offset() < assignment.offset()) {
                 log.warn("Catching up to assignment's config offset.");
                 needsReadToEnd = true;
+            }
+
+            // We had a successful rebalance which should mark the toggle
+            // happening successfully. Unsetting the flag now.
+            if (member.eagerProtocolDowngradeRequested()) {
+                member.toggleEagerProtocolDowngradeRequest(false);
             }
         }
 

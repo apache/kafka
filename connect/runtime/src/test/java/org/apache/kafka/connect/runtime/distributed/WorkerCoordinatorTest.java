@@ -407,30 +407,80 @@ public class WorkerCoordinatorTest {
 
         // Mark everyone as in sync with configState1
         List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+
+        if (compatibility.protocol().equals(EAGER.protocol())) {
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("leader")
+                    .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+            );
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("member")
+                    .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+            );
+
+        } else {
+            ExtendedAssignment leaderAssignment = new ExtendedAssignment(
+                    compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
+                    configState1.connectors(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+                    0
+            );
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("leader")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
-        );
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, leaderAssignment), false).array())
+            );
+            ExtendedAssignment memberAssignment = new ExtendedAssignment(
+                    compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "member", MEMBER_URL, 1L,
+                    Collections.emptySet(), configState1.tasks(connectorId1), Collections.emptySet(), Collections.emptySet(),
+                    0
+            );
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("member")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
-        );
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, memberAssignment), false).array()));
+        }
+
         Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // configState1 has 1 connector, 1 task
-        ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
-        assertFalse(leaderAssignment.failed());
-        assertEquals("leader", leaderAssignment.leader());
-        assertEquals(1, leaderAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
-        assertEquals(Collections.emptyList(), leaderAssignment.tasks());
+        if (compatibility.protocol().equals(EAGER.protocol())) {
+            ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
+            assertFalse(leaderAssignment.failed());
+            assertEquals("leader", leaderAssignment.leader());
+            assertEquals(1, leaderAssignment.offset());
+            assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
+            assertEquals(Collections.emptyList(), leaderAssignment.tasks());
 
-        ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
-        assertFalse(memberAssignment.failed());
-        assertEquals("leader", memberAssignment.leader());
-        assertEquals(1, memberAssignment.offset());
-        assertEquals(Collections.emptyList(), memberAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId1x0), memberAssignment.tasks());
+            ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
+            assertFalse(memberAssignment.failed());
+            assertEquals("leader", memberAssignment.leader());
+            assertEquals(1, memberAssignment.offset());
+            assertEquals(Collections.emptyList(), memberAssignment.connectors());
+            assertEquals(Collections.singletonList(taskId1x0), memberAssignment.tasks());
+        } else {
+            // Downgrade of protocol would invoke RevokingAssignor which lets go off all assignments.
+            ExtendedAssignment leaderAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
+            assertFalse(leaderAssignment.failed());
+            assertEquals("leader", leaderAssignment.leader());
+            assertEquals(1, leaderAssignment.offset());
+            assertEquals(Collections.emptyList(), leaderAssignment.connectors());
+            assertEquals(Collections.emptyList(), leaderAssignment.tasks());
+            assertEquals(Collections.singletonList(connectorId1), leaderAssignment.revokedConnectors());
+            assertEquals(Collections.emptyList(), leaderAssignment.revokedTasks());
+
+            ExtendedAssignment memberAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("member"));
+            assertFalse(memberAssignment.failed());
+            assertEquals("leader", memberAssignment.leader());
+            assertEquals(1, memberAssignment.offset());
+            assertEquals(Collections.emptyList(), memberAssignment.connectors());
+            assertEquals(Collections.emptyList(), memberAssignment.tasks());
+            assertEquals(Collections.emptyList(), memberAssignment.revokedConnectors());
+            assertEquals(Collections.singletonList(taskId1x0), memberAssignment.revokedTasks());
+
+            assertTrue(coordinator.eagerProtocolDowngradeRequested());
+        }
 
         PowerMock.verifyAll();
     }
@@ -449,31 +499,81 @@ public class WorkerCoordinatorTest {
 
         // Mark everyone as in sync with configState1
         List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
-                .setMemberId("leader")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
-        );
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
-                .setMemberId("member")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
-        );
+
+        if (compatibility.protocol().equals(EAGER.protocol())) {
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("leader")
+                    .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+            );
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("member")
+                    .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+            );
+        } else {
+            ExtendedAssignment leaderAssignment = new ExtendedAssignment(
+                    compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
+                    Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0), Collections.emptySet(), Collections.emptySet(),
+                    0
+            );
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("leader")
+                    .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, leaderAssignment), false).array())
+            );
+
+            ExtendedAssignment memberAssignment = new ExtendedAssignment(
+                    compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
+                    Collections.singletonList(connectorId2), Collections.singletonList(taskId1x1), Collections.emptySet(), Collections.emptySet(),
+                    0
+            );
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("member")
+                    .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, memberAssignment), false).array())
+            );
+
+        }
 
         Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
-        ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
-        assertFalse(leaderAssignment.failed());
-        assertEquals("leader", leaderAssignment.leader());
-        assertEquals(1, leaderAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
-        assertEquals(Arrays.asList(taskId1x0, taskId2x0), leaderAssignment.tasks());
+        if (compatibility.protocol().equals(EAGER.protocol())) {
+            ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
+            assertFalse(leaderAssignment.failed());
+            assertEquals("leader", leaderAssignment.leader());
+            assertEquals(1, leaderAssignment.offset());
+            assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
+            assertEquals(Arrays.asList(taskId1x0, taskId2x0), leaderAssignment.tasks());
 
-        ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
-        assertFalse(memberAssignment.failed());
-        assertEquals("leader", memberAssignment.leader());
-        assertEquals(1, memberAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId1x1), memberAssignment.tasks());
+            ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
+            assertFalse(memberAssignment.failed());
+            assertEquals("leader", memberAssignment.leader());
+            assertEquals(1, memberAssignment.offset());
+            assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
+            assertEquals(Collections.singletonList(taskId1x1), memberAssignment.tasks());
+        } else {
+            // Downgrade of protocol would invoke RevokingAssignor which lets go off all assignments.
+            ExtendedAssignment leaderAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
+            assertFalse(leaderAssignment.failed());
+            assertEquals("leader", leaderAssignment.leader());
+            assertEquals(1, leaderAssignment.offset());
+            assertEquals(Collections.emptyList(), leaderAssignment.connectors());
+            assertEquals(Collections.emptyList(), leaderAssignment.tasks());
+            assertEquals(Collections.singletonList(connectorId1), leaderAssignment.revokedConnectors());
+            assertEquals(Arrays.asList(taskId1x0, taskId2x0), leaderAssignment.revokedTasks());
+
+            ExtendedAssignment memberAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("member"));
+            assertFalse(memberAssignment.failed());
+            assertEquals("leader", memberAssignment.leader());
+            assertEquals(1, memberAssignment.offset());
+            assertEquals(Collections.emptyList(), memberAssignment.connectors());
+            assertEquals(Collections.emptyList(), memberAssignment.tasks());
+            assertEquals(Collections.singletonList(connectorId2), memberAssignment.revokedConnectors());
+            assertEquals(Collections.singletonList(taskId1x1), memberAssignment.revokedTasks());
+
+            assertTrue(coordinator.eagerProtocolDowngradeRequested());
+        }
 
         PowerMock.verifyAll();
     }
@@ -490,34 +590,81 @@ public class WorkerCoordinatorTest {
         // Prime the current configuration state
         coordinator.metadata();
 
-        // Mark everyone as in sync with configState1
         List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
-                .setMemberId("leader")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
-        );
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
-                .setMemberId("member")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
-        );
+        // Mark everyone as in sync with configState1
+        if (compatibility.protocol().equals(EAGER.protocol())) {
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("leader")
+                    .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+            );
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("member")
+                    .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+            );
+        } else {
+            ExtendedAssignment leaderAssignment = new ExtendedAssignment(
+                    compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
+                    Arrays.asList(connectorId1, connectorId3), Collections.singletonList(taskId2x0), Collections.emptySet(), Collections.emptySet(),
+                    0
+            );
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("leader")
+                    .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, leaderAssignment), false).array())
+            );
+
+            ExtendedAssignment memberAssignment = new ExtendedAssignment(
+                    compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
+                    Collections.singletonList(connectorId2), Arrays.asList(taskId1x0, taskId3x0), Collections.emptySet(), Collections.emptySet(),
+                    0
+            );
+
+            responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId("member")
+                    .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, memberAssignment), false).array())
+            );
+        }
 
         Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
-        ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
-        assertFalse(leaderAssignment.failed());
-        assertEquals("leader", leaderAssignment.leader());
-        assertEquals(1, leaderAssignment.offset());
-        assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
-        assertEquals(Arrays.asList(taskId2x0), leaderAssignment.tasks());
+        if (compatibility.protocol().equals(EAGER.protocol())) {
+            ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
+            assertFalse(leaderAssignment.failed());
+            assertEquals("leader", leaderAssignment.leader());
+            assertEquals(1, leaderAssignment.offset());
+            assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
+            assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.tasks());
 
-        ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
-        assertFalse(memberAssignment.failed());
-        assertEquals("leader", memberAssignment.leader());
-        assertEquals(1, memberAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
-        assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
+            ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
+            assertFalse(memberAssignment.failed());
+            assertEquals("leader", memberAssignment.leader());
+            assertEquals(1, memberAssignment.offset());
+            assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
+            assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
+        } else {
+            // Downgrade of protocol would invoke RevokingAssignor which lets go off all assignments.
+            ExtendedAssignment leaderAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
+            assertFalse(leaderAssignment.failed());
+            assertEquals("leader", leaderAssignment.leader());
+            assertEquals(1, leaderAssignment.offset());
+            assertEquals(Collections.emptyList(), leaderAssignment.connectors());
+            assertEquals(Collections.emptyList(), leaderAssignment.tasks());
+            assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.revokedConnectors());
+            assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.revokedTasks());
+
+            ExtendedAssignment memberAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("member"));
+            assertFalse(memberAssignment.failed());
+            assertEquals("leader", memberAssignment.leader());
+            assertEquals(1, memberAssignment.offset());
+            assertEquals(Collections.emptyList(), memberAssignment.connectors());
+            assertEquals(Collections.emptyList(), memberAssignment.tasks());
+            assertEquals(Collections.singletonList(connectorId2), memberAssignment.revokedConnectors());
+            assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.revokedTasks());
+
+            assertTrue(coordinator.eagerProtocolDowngradeRequested());
+        }
 
         PowerMock.verifyAll();
     }

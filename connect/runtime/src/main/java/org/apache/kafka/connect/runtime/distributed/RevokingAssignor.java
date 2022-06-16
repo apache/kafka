@@ -149,11 +149,12 @@ public class RevokingAssignor implements ConnectAssignor {
      * @return the serialized map of assignments to workers
      */
     protected Map<String, ByteBuffer> serializeAssignments(Map<String, ExtendedAssignment> assignments) {
+        // sessioned could just be set to false as the new protocol is EAGER which doesn't support sessioning.
         return assignments.entrySet()
                 .stream()
                 .collect(Collectors.toMap(
                         Entry::getKey,
-                        e -> IncrementalCooperativeConnectProtocol.serializeAssignment(e.getValue())));
+                        e -> IncrementalCooperativeConnectProtocol.serializeAssignment(e.getValue(), false)));
     }
 
 }
