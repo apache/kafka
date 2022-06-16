@@ -65,15 +65,14 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -105,10 +104,9 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
+@Timeout(600)
 @Category(IntegrationTest.class)
 public class NamedTopologyIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
     
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
@@ -149,7 +147,7 @@ public class NamedTopologyIntegrationTest {
     private static Properties producerConfig;
     private static Properties consumerConfig;
 
-    @BeforeClass
+    @BeforeAll
     public static void initializeClusterAndStandardTopics() throws Exception {
         CLUSTER.start();
 
@@ -165,13 +163,11 @@ public class NamedTopologyIntegrationTest {
         produceToInputTopics(INPUT_STREAM_3, STANDARD_INPUT_DATA);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public final TestName testName = new TestName();
     private String appId;
     private String changelog1;
     private String changelog2;
@@ -219,9 +215,9 @@ public class NamedTopologyIntegrationTest {
         return streamsConfiguration;
     }
 
-    @Before
-    public void setup() throws Exception {
-        appId = safeUniqueTestName(NamedTopologyIntegrationTest.class, testName);
+    @BeforeEach
+    public void setup(final TestInfo testInfo) throws Exception {
+        appId = safeUniqueTestName(NamedTopologyIntegrationTest.class, testInfo);
         changelog1 = TOPIC_PREFIX + "-" + TOPOLOGY_1 + "-store-changelog";
         changelog2 = TOPIC_PREFIX + "-" + TOPOLOGY_2 + "-store-changelog";
         changelog3 = TOPIC_PREFIX + "-" + TOPOLOGY_3 + "-store-changelog";
@@ -246,7 +242,7 @@ public class NamedTopologyIntegrationTest {
         topology2Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_2);
     }
 
-    @After
+    @AfterEach
     public void shutdown() throws Exception {
         if (streams != null) {
             streams.close(Duration.ofSeconds(30));
