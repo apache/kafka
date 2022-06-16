@@ -36,6 +36,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -429,6 +430,8 @@ public class StoreChangelogReader implements ChangelogReader {
             final ConsumerRecords<byte[], byte[]> polledRecords;
 
             try {
+                pauseResumePartitions(tasks, restoringChangelogs);
+
                 // for restoring active and updating standby we may prefer different poll time
                 // in order to make sure we call the main consumer#poll in time.
                 // TODO: once we move ChangelogReader to a separate thread this may no longer be a concern
@@ -463,7 +466,10 @@ public class StoreChangelogReader implements ChangelogReader {
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                 try {
                     if (restoreChangelog(changelogs.get(partition))) {
-                        tasks.get(taskId).clearTaskTimeout();
+                        final Task task = tasks.get(taskId);
+                        if (task != null) {
+                            task.clearTaskTimeout();
+                        }
                     }
                 } catch (final TimeoutException timeoutException) {
                     tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
@@ -477,6 +483,47 @@ public class StoreChangelogReader implements ChangelogReader {
 
             maybeLogRestorationProgress();
         }
+    }
+
+    private void pauseResumePartitions(final Map<TaskId, Task> tasks,
+        final Set<TopicPartition> restoringChangelogs) {
+        if (state == ChangelogReaderState.ACTIVE_RESTORING) {
+            updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
+        }
+        if (state == ChangelogReaderState.STANDBY_UPDATING) {
+            updatePartitionsByType(tasks, restoringChangelogs, TaskType.STANDBY);
+        }
+    }
+
+    private void updatePartitionsByType(final Map<TaskId, Task> tasks,
+                                        final Set<TopicPartition> restoringChangelogs,
+                                        final TaskType taskType) {
+        final Collection<TopicPartition> toResume =
+            restoringChangelogs.stream().filter(t -> shouldResume(tasks, t, taskType)).collect(Collectors.toList());
+        final Collection<TopicPartition> toPause =
+            restoringChangelogs.stream().filter(t -> shouldPause(tasks, t, taskType)).collect(Collectors.toList());
+        restoreConsumer.resume(toResume);
+        restoreConsumer.pause(toPause);
+    }
+
+    private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
+        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final TaskId taskId = manager.taskId();
+        final Task task = tasks.get(taskId);
+        if (manager.taskType() == taskType) {
+            return task != null;
+        }
+        return false;
+    }
+
+    private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
+        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final TaskId taskId = manager.taskId();
+        final Task task = tasks.get(taskId);
+        if (manager.taskType() == taskType) {
+            return task == null;
+        }
+        return false;
     }
 
     private void maybeLogRestorationProgress() {
@@ -633,7 +680,11 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void clearTaskTimeout(final Set<Task> tasks) {
-        tasks.forEach(Task::clearTaskTimeout);
+        tasks.forEach(t -> {
+            if (t != null) {
+                t.clearTaskTimeout();
+            }
+        });
     }
 
     private void maybeInitTaskTimeoutOrThrow(final Set<Task> tasks,

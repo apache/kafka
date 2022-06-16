@@ -83,8 +83,6 @@ import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
-import java.util.function.BiConsumer;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
@@ -92,6 +90,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -109,6 +108,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
@@ -121,8 +121,8 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
-import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyInt;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -149,6 +149,8 @@ public class StreamThreadTest {
     private final static String APPLICATION_ID = "stream-thread-test";
     private final static UUID PROCESS_ID = UUID.fromString("87bf53a8-54f2-485f-a4b6-acdbec0a8b3d");
     private final static String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
+    public static final String STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG = "stream-thread-test-count-one-changelog";
+    public static final String STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG = "stream-thread-test-table-two-changelog";
 
     private final int threadIdx = 1;
     private final Metrics metrics = new Metrics();
@@ -1642,9 +1644,9 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(
-            "stream-thread-test-count-one-changelog",
+            STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
             Collections.singletonList(
-                new PartitionInfo("stream-thread-test-count-one-changelog",
+                new PartitionInfo(STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
                                   0,
                                   null,
                                   new Node[0],
@@ -1653,7 +1655,7 @@ public class StreamThreadTest {
         );
 
         final HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 1), 0L);
+        offsets.put(new TopicPartition(STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG, 1), 0L);
         restoreConsumer.updateEndOffsets(offsets);
         restoreConsumer.updateBeginningOffsets(offsets);
 
@@ -1686,8 +1688,74 @@ public class StreamThreadTest {
         final String storeName2 = "table-two";
         final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
         final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+
+        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer, false);
+
+        thread.runOnce();
+
+        final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
+        final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
+        assertEquals(task1, standbyTask1.id());
+        assertEquals(task3, standbyTask2.id());
+
+        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
+        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        addStandbyRecordsToRestoreConsumer(restoreConsumer);
+
+        thread.runOnce();
+
+        assertEquals(10L, store1.approximateNumEntries());
+        assertEquals(4L, store2.approximateNumEntries());
+
+        thread.taskManager().shutdown(true);
+    }
+
+    private void addActiveRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
+        for (long i = 0L; i < 10L; i++) {
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
+                2,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+        }
+    }
+
+    private void addStandbyRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
+        // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
+        for (long i = 0L; i < 10L; i++) {
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
+                1,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG,
+                1,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+        }
+    }
+
+    private void setupThread(final String storeName1,
+                             final String storeName2,
+                             final String changelogName1,
+                             final String changelogName2,
+                             final StreamThread thread,
+                             final MockConsumer<byte[], byte[]> restoreConsumer,
+                             final boolean addActiveTask) throws IOException {
+        final TopicPartition activePartition = new TopicPartition(changelogName1, 2);
         final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
+
         internalStreamsBuilder
             .stream(Collections.singleton(topic1), consumed)
             .groupByKey()
@@ -1697,11 +1765,14 @@ public class StreamThreadTest {
         internalStreamsBuilder.table(topic2, new ConsumedInternal<>(), materialized);
 
         internalStreamsBuilder.buildAndOptimizeTopology();
-        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(changelogName1,
             Collections.singletonList(new PartitionInfo(changelogName1, 1, null, new Node[0], new Node[0]))
         );
+
+        restoreConsumer.updateEndOffsets(Collections.singletonMap(activePartition, 10L));
+        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
+        ((MockAdminClient) (thread.adminClient())).updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
+        ((MockAdminClient) (thread.adminClient())).updateEndOffsets(Collections.singletonMap(activePartition, 10L));
 
         restoreConsumer.updateEndOffsets(Collections.singletonMap(partition1, 10L));
         restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition1, 0L));
@@ -1714,47 +1785,75 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+
+        if (addActiveTask) {
+            activeTasks.put(task2, Collections.singleton(t1p2));
+        }
 
         // assign single partition
         standbyTasks.put(task1, Collections.singleton(t1p1));
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
-        thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
+        thread.taskManager().handleAssignment(activeTasks, standbyTasks);
         thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds(), null);
 
         thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotUpdateStandbyTaskWhenPaused() throws Exception {
+        final String storeName1 = "count-one";
+        final String storeName2 = "table-two";
+        final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
+        final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+
+        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer, true);
 
         thread.runOnce();
 
+        final StreamTask activeTask1 = activeTask(thread.taskManager(), t1p2);
         final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
         final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
+        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.getStore(storeName1);
+
         final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
         final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+
+        assertEquals(0L, activeStore.approximateNumEntries());
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
 
+        // Add some records that the active task would handle
+        addActiveRecordsToRestoreConsumer(restoreConsumer);
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
-        for (long i = 0L; i < 10L; i++) {
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                changelogName1,
-                1,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                changelogName2,
-                1,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-        }
+        addStandbyRecordsToRestoreConsumer(restoreConsumer);
 
+        // Simulate pause
+        thread.taskManager().topologyMetadata().pauseTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
         thread.runOnce();
 
+        assertEquals(0L, activeStore.approximateNumEntries());
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        // Simulate resume
+        thread.taskManager().topologyMetadata().resumeTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
+        thread.runOnce();
+
+        assertEquals(10L, activeStore.approximateNumEntries());
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        thread.runOnce();
+        assertEquals(10L, activeStore.approximateNumEntries());
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(4L, store2.approximateNumEntries());
 
@@ -3108,6 +3207,15 @@ public class StreamThreadTest {
             Optional.empty()));
     }
 
+    StreamTask activeTask(final TaskManager taskManager, final TopicPartition partition) {
+        final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> t.isActive());
+        for (final Task task : (Iterable<Task>) standbys::iterator) {
+            if (task.inputPartitions().contains(partition)) {
+                return (StreamTask) task;
+            }
+        }
+        return null;
+    }
     StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {
         final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> !t.isActive());
         for (final Task task : (Iterable<Task>) standbys::iterator) {
