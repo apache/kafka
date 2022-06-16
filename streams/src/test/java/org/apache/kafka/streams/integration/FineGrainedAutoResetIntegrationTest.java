@@ -38,16 +38,14 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,12 +60,11 @@ import java.util.regex.Pattern;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 public class FineGrainedAutoResetIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
     private static final String OUTPUT_TOPIC_0 = "outputTopic_0";
@@ -76,7 +73,7 @@ public class FineGrainedAutoResetIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopics(
@@ -105,7 +102,7 @@ public class FineGrainedAutoResetIntegrationTest {
                 OUTPUT_TOPIC_2);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -143,7 +140,7 @@ public class FineGrainedAutoResetIntegrationTest {
     private final String topicYTestMessage = "topic-Y test";
     private final String topicZTestMessage = "topic-Z test";
 
-    @Before
+    @BeforeEach
     public void setUp() throws IOException {
 
         final Properties props = new Properties();

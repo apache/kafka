@@ -58,6 +58,7 @@ import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,7 @@ import scala.Option;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -228,6 +230,16 @@ public class IntegrationTestUtils {
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
         return (testClass.getSimpleName() + testName.getMethodName())
+                .replace(':', '_')
+                .replace('.', '_')
+                .replace('[', '_')
+                .replace(']', '_')
+                .replace(' ', '_')
+                .replace('=', '_');
+    }
+
+    public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
+        return (testClass.getSimpleName() + testInfo.getTestMethod().map(Method::getName))
                 .replace(':', '_')
                 .replace('.', '_')
                 .replace('[', '_')

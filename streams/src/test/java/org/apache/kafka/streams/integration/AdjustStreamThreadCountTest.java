@@ -32,19 +32,17 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -69,32 +67,26 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@Category(IntegrationTest.class)
+@Timeout(600)
+@Tag("integration")
 public class AdjustStreamThreadCountTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-
-    @Rule
-    public TestName testName = new TestName();
 
     private final List<KafkaStreams.State> stateTransitionHistory = new ArrayList<>();
     private static String inputTopic;
@@ -103,9 +95,9 @@ public class AdjustStreamThreadCountTest {
     private static String appId = "";
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
-    @Before
-    public void setup() {
-        final String testId = safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void setup(TestInfo testInfo) {
+        final String testId = safeUniqueTestName(getClass(), testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
@@ -131,7 +123,7 @@ public class AdjustStreamThreadCountTest {
         waitForRunning();
     }
 
-    @After
+    @AfterEach
     public void teardown() throws IOException {
         purgeLocalStreamsState(properties);
     }
