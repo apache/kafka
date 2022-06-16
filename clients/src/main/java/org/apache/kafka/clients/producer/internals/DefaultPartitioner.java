@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 
