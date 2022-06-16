@@ -42,14 +42,13 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -70,28 +69,25 @@ public class StoreUpgradeIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void createTopics() throws Exception {
-        inputStream = "input-stream-" + safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws Exception {
+        inputStream = "input-stream-" + safeUniqueTestName(getClass(), testInfo);
         CLUSTER.createTopic(inputStream);
     }
 
-    private Properties props() {
+    private Properties props(final TestInfo testInfo) {
         final Properties streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -103,7 +99,7 @@ public class StoreUpgradeIntegrationTest {
         return streamsConfiguration;
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30L));
@@ -112,16 +108,17 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @Test
-    public void shouldMigrateInMemoryKeyValueStoreToTimestampedKeyValueStoreUsingPapi() throws Exception {
-        shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(false);
+    public void shouldMigrateInMemoryKeyValueStoreToTimestampedKeyValueStoreUsingPapi(final TestInfo testInfo) throws Exception {
+        shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(false, testInfo);
     }
 
     @Test
-    public void shouldMigratePersistentKeyValueStoreToTimestampedKeyValueStoreUsingPapi() throws Exception {
-        shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(true);
+    public void shouldMigratePersistentKeyValueStoreToTimestampedKeyValueStoreUsingPapi(final TestInfo testInfo) throws Exception {
+        shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(true, testInfo);
     }
 
-    private void shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(final boolean persistentStore) throws Exception {
+    private void shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(final boolean persistentStore,
+                                                                               final TestInfo testInfo) throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
         streamsBuilderForOldStore.addStateStore(
@@ -132,7 +129,7 @@ public class StoreUpgradeIntegrationTest {
             .<Integer, Integer>stream(inputStream)
             .process(KeyValueProcessor::new, STORE_NAME);
 
-        final Properties props = props();
+        final Properties props = props(testInfo);
         kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
@@ -231,7 +228,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @Test
-    public void shouldProxyKeyValueStoreToTimestampedKeyValueStoreUsingPapi() throws Exception {
+    public void shouldProxyKeyValueStoreToTimestampedKeyValueStoreUsingPapi(final TestInfo testInfo) throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
         streamsBuilderForOldStore.addStateStore(
@@ -242,7 +239,7 @@ public class StoreUpgradeIntegrationTest {
             .<Integer, Integer>stream(inputStream)
             .process(KeyValueProcessor::new, STORE_NAME);
 
-        final Properties props = props();
+        final Properties props = props(testInfo);
         kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
@@ -499,7 +496,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @Test
-    public void shouldMigrateInMemoryWindowStoreToTimestampedWindowStoreUsingPapi() throws Exception {
+    public void shouldMigrateInMemoryWindowStoreToTimestampedWindowStoreUsingPapi(final TestInfo testInfo) throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
         streamsBuilderForOldStore
             .addStateStore(
@@ -532,11 +529,12 @@ public class StoreUpgradeIntegrationTest {
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
             streamsBuilderForOldStore,
             streamsBuilderForNewStore,
-            false);
+            false,
+            testInfo);
     }
 
     @Test
-    public void shouldMigratePersistentWindowStoreToTimestampedWindowStoreUsingPapi() throws Exception {
+    public void shouldMigratePersistentWindowStoreToTimestampedWindowStoreUsingPapi(final TestInfo testInfo) throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
         streamsBuilderForOldStore
@@ -569,13 +567,15 @@ public class StoreUpgradeIntegrationTest {
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
             streamsBuilderForOldStore,
             streamsBuilderForNewStore,
-            true);
+            true,
+            testInfo);
     }
 
     private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final StreamsBuilder streamsBuilderForOldStore,
                                                                            final StreamsBuilder streamsBuilderForNewStore,
-                                                                           final boolean persistentStore) throws Exception {
-        final Properties props = props();
+                                                                           final boolean persistentStore,
+                                                                           final TestInfo testInfo) throws Exception {
+        final Properties props = props(testInfo);
         kafkaStreams =  new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
@@ -711,7 +711,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @Test
-    public void shouldProxyWindowStoreToTimestampedWindowStoreUsingPapi() throws Exception {
+    public void shouldProxyWindowStoreToTimestampedWindowStoreUsingPapi(final TestInfo testInfo) throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
         streamsBuilderForOldStore.addStateStore(
@@ -726,7 +726,7 @@ public class StoreUpgradeIntegrationTest {
             .<Integer, Integer>stream(inputStream)
             .process(WindowedProcessor::new, STORE_NAME);
 
-        final Properties props = props();
+        final Properties props = props(testInfo);
         kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 

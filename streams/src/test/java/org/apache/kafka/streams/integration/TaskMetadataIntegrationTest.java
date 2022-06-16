@@ -32,15 +32,14 @@ import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -59,26 +58,21 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@Timeout(600)
 @Category(IntegrationTest.class)
 public class TaskMetadataIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
-
-    @Rule
-    public TestName testName = new TestName();
 
     private String inputTopic;
     private static StreamsBuilder builder;
@@ -88,9 +82,9 @@ public class TaskMetadataIntegrationTest {
     private AtomicBoolean process;
     private AtomicBoolean commit;
 
-    @Before
-    public void setup() {
-        final String testId = safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void setup(final TestInfo testInfo) {
+        final String testId = safeUniqueTestName(getClass(), testInfo);
         appId = appIdPrefix + testId;
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
@@ -172,7 +166,7 @@ public class TaskMetadataIntegrationTest {
         return taskMetadataList.get().get(0);
     }
 
-    @After
+    @AfterEach
     public void teardown() throws IOException {
         purgeLocalStreamsState(properties);
     }

@@ -41,44 +41,37 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 
-
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(600)
 @Category(IntegrationTest.class)
 public class StateDirectoryIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
     @Test
-    public void testCleanUpStateDirIfEmpty() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+    public void testCleanUpStateDirIfEmpty(final TestInfo testInfo) throws InterruptedException {
+        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
 
         // Create Topic
         final String input = uniqueTestName + "-input";
@@ -183,8 +176,8 @@ public class StateDirectoryIntegrationTest {
     }
 
     @Test
-    public void testNotCleanUpStateDirIfNotEmpty() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+    public void testNotCleanUpStateDirIfNotEmpty(final TestInfo testInfo) throws InterruptedException {
+        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
 
         // Create Topic
         final String input = uniqueTestName + "-input";

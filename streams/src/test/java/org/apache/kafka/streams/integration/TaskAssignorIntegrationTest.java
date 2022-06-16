@@ -31,13 +31,12 @@ import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityT
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -55,32 +54,27 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
 
+@Timeout(600)
 @Category(IntegrationTest.class)
 public class TaskAssignorIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-    @Rule
-    public TestName testName = new TestName();
 
     // Just a dummy implementation so we can check the config
     public static final class MyTaskAssignor extends HighAvailabilityTaskAssignor implements TaskAssignor { }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldProperlyConfigureTheAssignor() throws NoSuchFieldException, IllegalAccessException {
+    public void shouldProperlyConfigureTheAssignor(final TestInfo testInfo) throws NoSuchFieldException, IllegalAccessException {
         // This test uses reflection to check and make sure that all the expected configurations really
         // make it all the way to configure the task assignor. There's no other use case for being able
         // to extract all these fields, so reflection is a good choice until we find that the maintenance
@@ -90,7 +84,7 @@ public class TaskAssignorIntegrationTest {
         // ensure these configurations wind up where they belong, and any number of future code changes
         // could break this change.
 
-        final String testId = safeUniqueTestName(getClass(), testName);
+        final String testId = safeUniqueTestName(getClass(), testInfo);
         final String appId = "appId_" + testId;
         final String inputTopic = "input" + testId;
 
