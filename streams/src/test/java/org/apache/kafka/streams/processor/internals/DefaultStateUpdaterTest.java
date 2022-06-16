@@ -687,25 +687,17 @@ class DefaultStateUpdaterTest {
     }
 
     private void verifyCommitTasks(final boolean enforceCheckpoint, final Task... tasks) throws Exception {
-        waitForCondition(
-                () -> {
-                    for (final Task task : tasks) {
-                        verify(task, atLeast(1)).prepareCommit();
-                        verify(task, atLeast(1)).postCommit(enforceCheckpoint);
-                    }
-
-                    return true;
-                },
-                VERIFICATION_TIMEOUT,
-                "Did not auto commit all tasks within the given timeout!"
-        );
+        for (final Task task : tasks) {
+            verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).prepareCommit();
+            verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).postCommit(enforceCheckpoint);
+        }
     }
 
     private void verifyNotCommitTasks(final Task... tasks) throws Exception {
         for (final Task task : tasks) {
-            verify(task, times(0)).prepareCommit();
-            verify(task, times(0)).postCommit(true);
-            verify(task, times(0)).postCommit(false);
+            verify(task, never()).prepareCommit();
+            verify(task, never()).postCommit(true);
+            verify(task, never()).postCommit(false);
         }
     }
 

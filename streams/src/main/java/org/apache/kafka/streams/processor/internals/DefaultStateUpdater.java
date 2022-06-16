@@ -320,7 +320,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 throw new IllegalStateException("Task " + task.id() + " should not have any source offset " +
                         "committable during restoration, but have " + offsetAndMetadata + " instead. " + BUG_ERROR_MESSAGE);
             }
-
             task.postCommit(enforceCheckpoint);
         }
     }
