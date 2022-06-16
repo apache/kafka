@@ -71,8 +71,7 @@ public class DefaultPartitioner implements Partitioner {
         if (keyBytes == null) {
             return stickyPartitionCache.partition(topic, cluster);
         }
-        // hash the keyBytes to choose a partition
-        return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
+        return BuiltInPartitioner.partitionForKey(keyBytes, numPartitions);
     }
 
     public void close() {}
