@@ -150,7 +150,7 @@ public class IQv2IntegrationTest {
     }
 
     @BeforeEach
-    public void beforeTest(TestInfo testInfo) {
+    public void beforeTest(final TestInfo testInfo) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.table(
@@ -289,7 +289,7 @@ public class IQv2IntegrationTest {
     }
 
     @Test
-    public void shouldNotRequireQueryHandler(TestInfo testInfo) {
+    public void shouldNotRequireQueryHandler(final TestInfo testInfo) {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);

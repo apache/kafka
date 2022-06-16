@@ -96,7 +96,7 @@ public class AdjustStreamThreadCountTest {
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @BeforeEach
-    public void setup(TestInfo testInfo) {
+    public void setup(final TestInfo testInfo) {
         final String testId = safeUniqueTestName(getClass(), testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;

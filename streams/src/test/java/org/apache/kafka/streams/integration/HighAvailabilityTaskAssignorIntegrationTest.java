@@ -87,14 +87,14 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     @Test
-    public void shouldScaleOutWithWarmupTasksAndInMemoryStores(TestInfo testInfo) throws InterruptedException {
+    public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
         shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.inMemoryKeyValueStore(storeName)), testInfo);
     }
 
     @Test
-    public void shouldScaleOutWithWarmupTasksAndPersistentStores(TestInfo testInfo) throws InterruptedException {
+    public void shouldScaleOutWithWarmupTasksAndPersistentStores(final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
         shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.persistentKeyValueStore(storeName)), testInfo);

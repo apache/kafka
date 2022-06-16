@@ -98,7 +98,7 @@ public class GlobalKTableIntegrationTest {
     private MockApiProcessorSupplier<String, String, Void, Void> supplier;
 
     @BeforeEach
-    public void before(TestInfo testInfo) throws Exception {
+    public void before(final TestInfo testInfo) throws Exception {
         builder = new StreamsBuilder();
         createTopics(testInfo);
         streamsConfiguration = new Properties();

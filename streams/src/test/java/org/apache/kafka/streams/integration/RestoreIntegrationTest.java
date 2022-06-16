@@ -111,7 +111,7 @@ public class RestoreIntegrationTest {
     private KafkaStreams kafkaStreams;
 
     @BeforeEach
-    public void createTopics(TestInfo testInfo) throws InterruptedException {
+    public void createTopics(final TestInfo testInfo) throws InterruptedException {
         appId = safeUniqueTestName(RestoreIntegrationTest.class, testInfo);
         inputStream = appId + "-input-stream";
         CLUSTER.createTopic(inputStream, 2, 1);

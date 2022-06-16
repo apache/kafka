@@ -130,7 +130,7 @@ public class KStreamAggregationIntegrationTest {
     private KStream<Integer, String> stream;
 
     @BeforeEach
-    public void before(TestInfo testInfo) throws InterruptedException {
+    public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
         createTopics(testInfo);
         streamsConfiguration = new Properties();
@@ -162,7 +162,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldReduce(TestInfo testInfo) throws Exception {
+    public void shouldReduce(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream
             .reduce(reducer, Materialized.as("reduce-by-key"))
@@ -209,7 +209,7 @@ public class KStreamAggregationIntegrationTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldReduceWindowed(TestInfo testInfo) throws Exception {
+    public void shouldReduceWindowed(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstBatchTimestamp);
@@ -285,7 +285,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldAggregate(TestInfo testInfo) throws Exception {
+    public void shouldAggregate(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream.aggregate(
             initializer,
@@ -322,7 +322,7 @@ public class KStreamAggregationIntegrationTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldAggregateWindowed(TestInfo testInfo) throws Exception {
+    public void shouldAggregateWindowed(final TestInfo testInfo) throws Exception {
         final long firstTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstTimestamp);
@@ -400,7 +400,7 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
-    private void shouldCountHelper(TestInfo testInfo) throws Exception {
+    private void shouldCountHelper(final TestInfo testInfo) throws Exception {
         startStreams();
 
         produceMessages(mockTime.milliseconds());
@@ -427,7 +427,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldCount(TestInfo testInfo) throws Exception {
+    public void shouldCount(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count(Materialized.as("count-by-key"))
@@ -438,7 +438,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldCountWithInternalStore(TestInfo testInfo) throws Exception {
+    public void shouldCountWithInternalStore(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count()
@@ -450,7 +450,7 @@ public class KStreamAggregationIntegrationTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldGroupByKey(TestInfo testInfo) throws Exception {
+    public void shouldGroupByKey(final TestInfo testInfo) throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
@@ -487,7 +487,7 @@ public class KStreamAggregationIntegrationTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldReduceSlidingWindows(TestInfo testInfo) throws Exception {
+    public void shouldReduceSlidingWindows(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         final long timeDifference = 500L;
         produceMessages(firstBatchTimestamp);
@@ -594,7 +594,7 @@ public class KStreamAggregationIntegrationTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldAggregateSlidingWindows(TestInfo testInfo) throws Exception {
+    public void shouldAggregateSlidingWindows(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         final long timeDifference = 500L;
         produceMessages(firstBatchTimestamp);

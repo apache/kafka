@@ -98,7 +98,7 @@ public class KTableSourceTopicRestartIntegrationTest {
     private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
 
     @BeforeEach
-    public void before(TestInfo testInfo) throws Exception {
+    public void before(final TestInfo testInfo) throws Exception {
         sourceTopic = SOURCE_TOPIC + "-" + testInfo.getTestMethod().map(Method::getName);
         CLUSTER.createTopic(sourceTopic);
 

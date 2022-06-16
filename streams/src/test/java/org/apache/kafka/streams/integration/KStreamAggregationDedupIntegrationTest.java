@@ -94,7 +94,7 @@ public class KStreamAggregationDedupIntegrationTest {
     private KStream<Integer, String> stream;
 
     @BeforeEach
-    public void before(TestInfo testInfo) throws InterruptedException {
+    public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
         createTopics(testInfo);
         streamsConfiguration = new Properties();
@@ -123,7 +123,7 @@ public class KStreamAggregationDedupIntegrationTest {
 
 
     @Test
-    public void shouldReduce(TestInfo testInfo) throws Exception {
+    public void shouldReduce(final TestInfo testInfo) throws Exception {
         produceMessages(System.currentTimeMillis());
         groupedStream
                 .reduce(reducer, Materialized.as("reduce-by-key"))
@@ -148,7 +148,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
     @Test
-    public void shouldReduceWindowed(TestInfo testInfo) throws Exception {
+    public void shouldReduceWindowed(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = System.currentTimeMillis() - 1000;
         produceMessages(firstBatchTimestamp);
         final long secondBatchTimestamp = System.currentTimeMillis();
@@ -186,7 +186,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
     @Test
-    public void shouldGroupByKey(TestInfo testInfo) throws Exception {
+    public void shouldGroupByKey(final TestInfo testInfo) throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);

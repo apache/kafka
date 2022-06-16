@@ -106,7 +106,7 @@ public class GlobalThreadShutDownOrderTest {
     private boolean firstRecordProcessed;
 
     @BeforeEach
-    public void before(TestInfo testInfo) throws Exception {
+    public void before(final TestInfo testInfo) throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();

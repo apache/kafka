@@ -72,7 +72,7 @@ public class EmitOnChangeIntegrationTest {
     private static String appId = "";
 
     @BeforeEach
-    public void setup(TestInfo testInfo) {
+    public void setup(final TestInfo testInfo) {
         final String testId = safeUniqueTestName(getClass(), testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;

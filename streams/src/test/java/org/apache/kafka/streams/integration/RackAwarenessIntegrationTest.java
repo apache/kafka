@@ -91,7 +91,7 @@ public class RackAwarenessIntegrationTest {
     }
 
     @BeforeEach
-    public void setup(TestInfo testInfo) {
+    public void setup(final TestInfo testInfo) {
         kafkaStreamsInstances = new ArrayList<>();
         baseConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(getClass(), testInfo);
