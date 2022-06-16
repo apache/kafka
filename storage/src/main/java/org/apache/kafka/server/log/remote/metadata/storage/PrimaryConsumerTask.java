@@ -283,9 +283,13 @@ class PrimaryConsumerTask implements Runnable, Closeable {
                 .collect(Collectors.toSet());
         log.info("Reassigning partitions to consumer task [{}]", assignedMetaTopicPartitions);
         consumer.assign(assignedMetaTopicPartitions);
-        offsetsByPartition.forEach((partition, offset) ->
-                consumer.seek(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, partition), offset + 1));
+        offsetsByPartition.forEach((partition, offset) -> {
+            if (metadataPartitions.contains(partition)) {
+                consumer.seek(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, partition), offset + 1);
+            }
+        });
         readOffsetsByPartition.putAll(offsetsByPartition);
+        syncCommittedDataAndOffsets(false);
     }
 
     public void addAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
