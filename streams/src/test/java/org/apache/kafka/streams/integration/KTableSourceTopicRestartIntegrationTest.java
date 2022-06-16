@@ -33,12 +33,13 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
@@ -54,7 +55,7 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Timeout(600)
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class KTableSourceTopicRestartIntegrationTest {
     private static final int NUM_BROKERS = 3;
     private static final String SOURCE_TOPIC = "source-topic";

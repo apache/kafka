@@ -227,19 +227,23 @@ public class IntegrationTestUtils {
     /**
      * Gives a test name that is safe to be used in application ids, topic names, etc.
      * The name is safe even for parameterized methods.
+     * Used by tests not yet migrated from JUnit 4.
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
-        return (testClass.getSimpleName() + testName.getMethodName())
-                .replace(':', '_')
-                .replace('.', '_')
-                .replace('[', '_')
-                .replace(']', '_')
-                .replace(' ', '_')
-                .replace('=', '_');
+        return safeUniqueTestName(testClass, testName.getMethodName());
     }
 
+    /**
+     * Same as @see IntegrationTestUtils#safeUniqueTestName except it accepts a TestInfo passed in by
+     * JUnit 5 instead of a TestName from JUnit 4.
+     * Used by tests migrated to JUnit 5.
+     */
     public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
-        return (testClass.getSimpleName() + testInfo.getTestMethod().map(Method::getName))
+        return safeUniqueTestName(testClass, testInfo.getTestMethod().map(Method::getName).orElse(""));
+    }
+
+    private static String safeUniqueTestName(final Class<?> testClass, final String methodName) {
+        return (testClass.getSimpleName() + methodName)
                 .replace(':', '_')
                 .replace('.', '_')
                 .replace('[', '_')
