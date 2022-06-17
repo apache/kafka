@@ -199,6 +199,7 @@ public class TaskManagerTest {
         taskManager.setMainConsumer(consumer);
         reset(topologyBuilder);
         expect(topologyBuilder.hasNamedTopology()).andStubReturn(false);
+        expect(topologyBuilder.nodeToSourceTopics()).andStubReturn(emptyMap());
     }
 
     @Test
@@ -1189,7 +1190,9 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andReturn(singletonList(task01));
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p0)), anyString());
+        expectLastCall().anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, topologyBuilder);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));

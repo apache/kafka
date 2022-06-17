@@ -45,7 +45,6 @@ import static org.apache.kafka.common.utils.Utils.union;
  */
 class Tasks {
     private final Logger log;
-    private final TopologyMetadata topologyMetadata;
 
     // TODO: change type to `StreamTask`
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
@@ -76,12 +75,10 @@ class Tasks {
     private Consumer<byte[], byte[]> mainConsumer;
 
     Tasks(final LogContext logContext,
-          final TopologyMetadata topologyMetadata,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
 
         this.log = logContext.logger(getClass());
-        this.topologyMetadata = topologyMetadata;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
     }
@@ -116,10 +113,6 @@ class Tasks {
 
     private Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
         return filterMap(pendingStandbyTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
-    }
-
-    double totalProducerBlockedTime() {
-        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
@@ -173,6 +166,28 @@ class Tasks {
         }
     }
 
+    void removeTask(final Task taskToRemove) {
+        final TaskId taskId = taskToRemove.id();
+
+        if (taskToRemove.state() != Task.State.CLOSED) {
+            throw new IllegalStateException("Attempted to remove an task that is not closed: " + taskId);
+        }
+
+        if (taskToRemove.isActive()) {
+            if (activeTasksPerId.remove(taskId) == null) {
+                throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
+            }
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
+            removePartitionsForActiveTask(taskId);
+            pendingActiveTasks.remove(taskId);
+        } else {
+            if (standbyTasksPerId.remove(taskId) == null) {
+                throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
+            }
+            pendingStandbyTasks.remove(taskId);
+        }
+    }
+
     void convertActiveToStandby(final StreamTask activeTask,
                                 final Set<TopicPartition> partitions,
                                 final Map<TaskId, RuntimeException> taskCloseExceptions) {
@@ -182,9 +197,10 @@ class Tasks {
         }
         removePartitionsForActiveTask(taskId);
 
-        final RuntimeException exception = cleanUpTaskProducerAfterClose(activeTask.id());
-        if (exception != null) {
-            taskCloseExceptions.putIfAbsent(taskId, exception);
+        try {
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
+        } catch (final RuntimeException e) {
+            taskCloseExceptions.putIfAbsent(taskId, e);
         }
 
         final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
@@ -205,7 +221,7 @@ class Tasks {
         }
     }
 
-    void updateInputPartitionsAndResume(final Task task, final Set<TopicPartition> topicPartitions) {
+    void updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions) {
         final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
         if (requiresUpdate) {
             log.debug("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
@@ -217,9 +233,7 @@ class Tasks {
                     activeTasksPerPartition.put(topicPartition, task);
                 }
             }
-            task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
         }
-        task.resume();
     }
 
     RuntimeException cleanUpTaskProducerAfterClose(final TaskId taskId) {
@@ -312,20 +326,6 @@ class Tasks {
         return union(HashSet::new, activeTasksPerId.values(), standbyTasksPerId.values());
     }
 
-    Collection<Task> notPausedActiveTasks() {
-        return activeTasks()
-            .stream()
-            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
-            .collect(Collectors.toList());
-    }
-
-    Collection<Task> notPausedTasks() {
-        return allTasks()
-            .stream()
-            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
-            .collect(Collectors.toList());
-    }
-
     Collection<TaskId> allTaskIds() {
         return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }
@@ -375,6 +375,10 @@ class Tasks {
 
     void clearSuccessfullyProcessed() {
         successfullyProcessed.clear();
+    }
+
+    double totalProducerBlockedTime() {
+        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     // for testing only

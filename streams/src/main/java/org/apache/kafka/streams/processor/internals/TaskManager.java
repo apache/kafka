@@ -116,7 +116,7 @@ public class TaskManager {
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
-        this.tasks = new Tasks(logContext, topologyMetadata, activeTaskCreator, standbyTaskCreator);
+        this.tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator);
         this.taskExecutor = new TaskExecutor(
             tasks,
             topologyMetadata.taskExecutionMetadata(),
@@ -294,21 +294,26 @@ public class TaskManager {
         tasks.purgePendingTasks(activeTasks.keySet(), standbyTasks.keySet());
 
         // first rectify all existing tasks:
-        // 1. for tasks that are already owned, just resume and skip re-creating them
+        // 1. for tasks that are already owned, just update input partitions / resume and skip re-creating them
         // 2. for tasks that have changed active/standby status, just recycle and skip re-creating them
-        // 3. otherwise, close them since they are no longer owned.
+        // 3. otherwise, close them since they are no longer owned
         for (final Task task : tasks.allTasks()) {
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
-                    tasks.updateInputPartitionsAndResume(task, activeTasksToCreate.get(taskId));
+                    final Set<TopicPartition> topicPartitions = activeTasksToCreate.get(taskId);
+                    tasks.updateActiveTaskInputPartitions(task, topicPartitions);
+                    task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    task.resume();
                 } else {
                     tasksToRecycle.put(task, activeTasksToCreate.get(taskId));
                 }
                 activeTasksToCreate.remove(taskId);
             } else if (standbyTasksToCreate.containsKey(taskId)) {
                 if (!task.isActive()) {
-                    tasks.updateInputPartitionsAndResume(task, standbyTasksToCreate.get(taskId));
+                    final Set<TopicPartition> topicPartitions = standbyTasksToCreate.get(taskId);
+                    task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    task.resume();
                 } else {
                     tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
                 }
@@ -442,6 +447,7 @@ public class TaskManager {
         for (final Map.Entry<Task, Set<TopicPartition>> entry : tasksToRecycle.entrySet()) {
             final Task oldTask = entry.getKey();
             try {
+                oldTask.closeCleanAndRecycleState();
                 if (oldTask.isActive()) {
                     tasks.convertActiveToStandby((StreamTask) oldTask, entry.getValue(), taskCloseExceptions);
                 } else {
@@ -819,7 +825,6 @@ public class TaskManager {
         } catch (final RuntimeException swallow) {
             log.error("Error suspending dirty task {} ", task.id(), swallow);
         }
-        tasks.removeTaskBeforeClosing(task.id());
         task.closeDirty();
 
         // since we are closing dirty, we can swallow the exception from closing producer ids
@@ -1048,7 +1053,9 @@ public class TaskManager {
     }
 
     Map<TaskId, Task> notPausedTasks() {
-        return Collections.unmodifiableMap(tasks.notPausedTasks().stream()
+        return Collections.unmodifiableMap(tasks.allTasks()
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
             .collect(Collectors.toMap(Task::id, v -> v)));
     }
 
@@ -1190,11 +1197,10 @@ public class TaskManager {
                 }
             }
 
-            final Set<TaskId> allRemovedTasks =
-                union(HashSet::new, activeTasksToRemove, standbyTasksToRemove).stream().map(Task::id).collect(Collectors.toSet());
+            final Set<Task> allTasksToRemove = union(HashSet::new, activeTasksToRemove, standbyTasksToRemove);
             closeAndCleanUpTasks(activeTasksToRemove, standbyTasksToRemove, true);
-            allRemovedTasks.forEach(tasks::removeTaskBeforeClosing);
-            releaseLockedDirectoriesForTasks(allRemovedTasks);
+            allTasksToRemove.forEach(tasks::removeTask);
+            releaseLockedDirectoriesForTasks(allTasksToRemove.stream().map(Task::id).collect(Collectors.toSet()));
         } catch (final Exception e) {
             // TODO KAFKA-12648: for now just swallow the exception to avoid interfering with the other topologies
             //  that are running alongside, but eventually we should be able to rethrow up to the handler to inform

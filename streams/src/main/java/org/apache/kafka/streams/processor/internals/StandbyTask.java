@@ -253,7 +253,6 @@ public class StandbyTask extends AbstractTask implements Task {
             log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", id);
         }
 
-        closeCleanAndRecycleState();
         stateMgr.transitionTaskType(TaskType.ACTIVE);
 
         log.debug("Recycling standby task {} to active", id);

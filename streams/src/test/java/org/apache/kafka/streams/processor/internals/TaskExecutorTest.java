@@ -35,7 +35,6 @@ public class TaskExecutorTest {
             new TaskExecutor(tasks, metadata, ProcessingMode.AT_LEAST_ONCE, false, new LogContext());
 
         taskExecutor.punctuate();
-        verify(tasks).notPausedActiveTasks();
-        verify(tasks, never()).notPausedTasks();
+        verify(tasks).activeTasks();
     }
 }

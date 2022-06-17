@@ -581,11 +581,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *       the task's input partitions when we have fixed partitions -> tasks mapping
      */
     public StandbyTask recycle(final Set<TopicPartition> inputPartitions) {
+        if (state() != Task.State.CLOSED) {
+            throw new IllegalStateException("Attempted to convert an active task that's not closed: " + id);
+        }
+
         if (!inputPartitions.equals(this.inputPartitions)) {
             log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", id);
         }
 
-        closeCleanAndRecycleState();
         stateMgr.transitionTaskType(TaskType.STANDBY);
 
         final ThreadCache dummyCache = new ThreadCache(

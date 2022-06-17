@@ -59,6 +59,16 @@ public class TaskExecutionMetadata {
         }
     }
 
+    public boolean canPunctuateTask(final Task task) {
+        final String topologyName = task.id().topologyName();
+
+        if (topologyName == null) {
+            return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
+        } else {
+            return !pausedTopologies.contains(topologyName);
+        }
+    }
+
     public void registerTaskError(final Task task, final Throwable t, final long now) {
         if (hasNamedTopologies) {
             final String topologyName = task.id().topologyName();
