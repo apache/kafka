@@ -825,13 +825,13 @@ public class TaskManager {
         } catch (final RuntimeException swallow) {
             log.error("Error suspending dirty task {} ", task.id(), swallow);
         }
+
         task.closeDirty();
 
-        // since we are closing dirty, we can swallow the exception from closing producer ids
-        final RuntimeException swallow = tasks.cleanUpTaskProducerAfterClose(task.id());
-        if (swallow != null) {
-            final String uncleanMessage = String.format("Failed to close task producer %s cleanly. ", task.id());
-            log.error(uncleanMessage, swallow);
+        try {
+            tasks.removeTask(task);
+        } catch (final RuntimeException swallow) {
+            log.error("Error removing dirty task {} ", task.id(), swallow);
         }
     }
 
