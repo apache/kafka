@@ -17,7 +17,11 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -31,9 +35,21 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BootstrapMetadataTest {
+    private Path tmpDir;
+
+    @BeforeEach
+    public void createTestDir() {
+        tmpDir = TestUtils.tempDirectory("BootstrapMetadataTest").toPath();
+    }
+
+    @AfterEach
+    public void deleteTestDir() throws IOException {
+        if (tmpDir != null)
+            Utils.delete(tmpDir.toFile());
+    }
+
     @Test
     public void testWriteAndReadBootstrapFile() throws Exception {
-        Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         BootstrapMetadata metadata = BootstrapMetadata.create(MetadataVersion.MINIMUM_KRAFT_VERSION);
         BootstrapMetadata.write(metadata, tmpDir);
 
@@ -45,7 +61,6 @@ public class BootstrapMetadataTest {
 
     @Test
     public void testNoBootstrapFile() throws Exception {
-        Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         BootstrapMetadata metadata = BootstrapMetadata.load(tmpDir, () -> MetadataVersion.MINIMUM_KRAFT_VERSION);
         assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, metadata.metadataVersion());
         metadata = BootstrapMetadata.load(tmpDir, () -> MetadataVersion.IBP_3_2_IV0);
@@ -54,7 +69,6 @@ public class BootstrapMetadataTest {
 
     @Test
     public void testExistingBootstrapFile() throws Exception {
-        Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         BootstrapMetadata.write(BootstrapMetadata.create(MetadataVersion.MINIMUM_KRAFT_VERSION), tmpDir);
         assertThrows(IOException.class, () -> {
             BootstrapMetadata.write(BootstrapMetadata.create(MetadataVersion.IBP_3_1_IV0), tmpDir);
@@ -63,7 +77,6 @@ public class BootstrapMetadataTest {
 
     @Test
     public void testEmptyBootstrapFile() throws Exception {
-        Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         Files.createFile(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE));
         assertThrows(Exception.class, () -> BootstrapMetadata.load(tmpDir, () -> MetadataVersion.MINIMUM_KRAFT_VERSION),
             "Should fail to load if no metadata.version is set");
@@ -71,7 +84,6 @@ public class BootstrapMetadataTest {
 
     @Test
     public void testGarbageBootstrapFile() throws Exception {
-        Path tmpDir = Files.createTempDirectory("BootstrapMetadataTest");
         Files.createFile(tmpDir.resolve(BootstrapMetadata.BOOTSTRAP_FILE));
         Random random = new Random(1);
         byte[] data = new byte[100];
