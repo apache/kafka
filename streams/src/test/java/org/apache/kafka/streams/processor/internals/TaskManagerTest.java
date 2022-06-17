@@ -198,10 +198,6 @@ public class TaskManagerTest {
         taskManager.setMainConsumer(consumer);
         reset(topologyBuilder);
         expect(topologyBuilder.hasNamedTopology()).andStubReturn(false);
-        activeTaskCreator.removeRevokedUnknownTasks(anyObject());
-        expectLastCall().asStub();
-        standbyTaskCreator.removeRevokedUnknownTasks(anyObject());
-        expectLastCall().asStub();
     }
 
     @Test
@@ -1857,7 +1853,7 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CLOSED));
 
         // All the tasks involving in the commit should already be removed.
-        assertThat(taskManager.tasks(), is(Collections.singletonMap(taskId00, task00)));
+        assertThat(taskManager.allTasks(), is(Collections.singletonMap(taskId00, task00)));
     }
 
     @Test

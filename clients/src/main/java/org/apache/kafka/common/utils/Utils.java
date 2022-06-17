@@ -1307,9 +1307,9 @@ public final class Utils {
     }
 
     @SafeVarargs
-    public static <E> Set<E> union(final Supplier<Set<E>> constructor, final Set<E>... set) {
+    public static <E> Set<E> union(final Supplier<Set<E>> constructor, final Collection<E>... set) {
         final Set<E> result = constructor.get();
-        for (final Set<E> s : set) {
+        for (final Collection<E> s : set) {
             result.addAll(s);
         }
         return result;
@@ -1333,6 +1333,10 @@ public final class Utils {
     }
 
     public static <K, V> Map<K, V> filterMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
+        return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+    }
+
+    public static <K, V> Map<K, V> unionMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
         return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
     }
 

@@ -74,14 +74,15 @@ public class TaskManager {
     // by QueryableState
     private final Logger log;
     private final Time time;
-    private final ChangelogReader changelogReader;
+    private final Tasks tasks;
     private final UUID processId;
     private final String logPrefix;
-    private final TopologyMetadata topologyMetadata;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
     private final ProcessingMode processingMode;
-    private final Tasks tasks;
+    private final ChangelogReader changelogReader;
+    private final TopologyMetadata topologyMetadata;
+
     private final TaskExecutor taskExecutor;
 
     private Consumer<byte[], byte[]> mainConsumer;
@@ -115,7 +116,7 @@ public class TaskManager {
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
-        this.tasks = new Tasks(logContext, topologyMetadata,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
+        this.tasks = new Tasks(logContext, topologyMetadata,  activeTaskCreator, standbyTaskCreator);
         this.taskExecutor = new TaskExecutor(
             tasks,
             topologyMetadata.taskExecutionMetadata(),
@@ -186,7 +187,7 @@ public class TaskManager {
 
         // We need to commit before closing the corrupted active tasks since this will force the ongoing txn to abort
         try {
-            final Collection<Task> tasksToCommit = tasks()
+            final Collection<Task> tasksToCommit = allTasks()
                 .values()
                 .stream()
                 .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
@@ -673,7 +674,7 @@ public class TaskManager {
         // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
         // just have an empty changelogOffsets map.
-        for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.tasksPerId().keySet())) {
+        for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.allTaskIds())) {
             final Task task = tasks.owned(id) ? tasks.task(id) : null;
             // Closed and uninitialized tasks don't have any offsets so we should read directly from the checkpoint
             if (task != null && task.state() != State.CREATED && task.state() != State.CLOSED) {
@@ -1012,10 +1013,10 @@ public class TaskManager {
             .collect(Collectors.toSet());
     }
 
-    Map<TaskId, Task> tasks() {
+    Map<TaskId, Task> allTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
-        return tasks.tasksPerId();
+        return tasks.allTasksPerId();
     }
 
     Map<TaskId, Task> activeTaskMap() {
@@ -1141,7 +1142,7 @@ public class TaskManager {
      */
     void handleTopologyUpdates() {
         topologyMetadata.executeTopologyUpdatesAndBumpThreadVersion(
-            tasks::maybeCreateTasksFromNewTopologies,
+            tasks::createPendingTasks,
             this::maybeCloseTasksFromRemovedTopologies
         );
 
@@ -1314,7 +1315,7 @@ public class TaskManager {
     }
 
     boolean needsInitializationOrRestoration() {
-        return tasks().values().stream().anyMatch(Task::needsInitializationOrRestoration);
+        return activeTaskIterable().stream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
     // for testing only

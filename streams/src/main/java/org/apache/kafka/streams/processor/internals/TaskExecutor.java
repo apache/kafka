@@ -82,7 +82,7 @@ public class TaskExecutor {
                 }
             } catch (final Throwable t) {
                 taskExecutionMetadata.registerTaskError(task, t, now);
-                tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
+                tasks.removeTaskFromSuccessfullyProcessedBeforeClosing(lastProcessed);
                 commitSuccessfullyProcessedTasks();
                 throw t;
             }

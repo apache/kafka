@@ -22,7 +22,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.HashSet;
 import org.slf4j.Logger;
@@ -30,35 +29,47 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.filterMap;
+import static org.apache.kafka.common.utils.Utils.union;
+
+/**
+ * All tasks contained by the Streams instance.
+ *
+ * Note that these tasks are shared between the TaskManager (stream thread) and the StateUpdater (restore thread),
+ * i.e. all running active tasks are processed by the former and all restoring active tasks and standby tasks are
+ * processed by the latter.
+ */
 class Tasks {
     private final Logger log;
     private final TopologyMetadata topologyMetadata;
-    private final StreamsMetricsImpl streamsMetrics;
-
-    private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
-    private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
-    private final Collection<Task> readOnlyTasks = Collections.unmodifiableCollection(allTasksPerId.values());
 
     // TODO: change type to `StreamTask`
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
-    // TODO: change type to `StreamTask`
-    private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
-    // TODO: change type to `StreamTask`
-    private final Map<TaskId, Task> readOnlyActiveTasksPerId = Collections.unmodifiableMap(activeTasksPerId);
-    private final Set<TaskId> readOnlyActiveTaskIds = Collections.unmodifiableSet(activeTasksPerId.keySet());
-    // TODO: change type to `StreamTask`
-    private final Collection<Task> readOnlyActiveTasks = Collections.unmodifiableCollection(activeTasksPerId.values());
-
     // TODO: change type to `StandbyTask`
     private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
-    // TODO: change type to `StandbyTask`
-    private final Map<TaskId, Task> readOnlyStandbyTasksPerId = Collections.unmodifiableMap(standbyTasksPerId);
-    private final Set<TaskId> readOnlyStandbyTaskIds = Collections.unmodifiableSet(standbyTasksPerId.keySet());
+
+    // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
+    // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
+    // we receive a new assignment and they are revoked from the thread.
+
+    // Tasks may have been assigned but not yet created because:
+    // 1. They are for a NamedTopology that is yet known by this host.
+    // 2. They are to be recycled from an existing restoring task yet to be returned from the task updater.
+    //
+    // When that occurs we stash these pending tasks until either they are finally clear to be created,
+    // or they are revoked from a new assignment.
+    private final Map<TaskId, Set<TopicPartition>> pendingActiveTasks = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasks = new HashMap<>();
+
+    // TODO: change type to `StreamTask`
+    private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
+
     private final Collection<Task> successfullyProcessed = new HashSet<>();
 
     private final ActiveTaskCreator activeTaskCreator;
@@ -68,14 +79,12 @@ class Tasks {
 
     Tasks(final LogContext logContext,
           final TopologyMetadata topologyMetadata,
-          final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
 
         log = logContext.logger(getClass());
 
         this.topologyMetadata = topologyMetadata;
-        this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
     }
@@ -88,16 +97,118 @@ class Tasks {
                                            final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                            final Set<TaskId> assignedActiveTasks,
                                            final Set<TaskId> assignedStandbyTasks) {
-        activeTaskCreator.removeRevokedUnknownTasks(assignedActiveTasks);
-        standbyTaskCreator.removeRevokedUnknownTasks(assignedStandbyTasks);
+        pendingActiveTasks.keySet().retainAll(assignedActiveTasks);
+        pendingStandbyTasks.keySet().retainAll(assignedStandbyTasks);
         createTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
-    void maybeCreateTasksFromNewTopologies(final Set<String> currentNamedTopologies) {
+    Set<TaskId> createActiveTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate) {
+        // check if the task is
+        // 1) in existing standby tasks, then add to pending and wait for recycle
+        // 2) in existing active tasks, should never happen
+        // 3) in pending standby tasks, should never happen
+        // 4) in none of the above, proceed and create
+        final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> iter = activeTasksToCreate.entrySet().iterator();
+        final Set<TaskId> pendingTasksToRecycle = new HashSet<>();
+        while (iter.hasNext()) {
+            final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated = iter.next();
+            final TaskId taskId = taskToBeCreated.getKey();
+
+            if (activeTasksPerId.containsKey(taskId)) {
+                throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
+            }
+
+            if (pendingStandbyTasks.containsKey(taskId)) {
+                throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
+            }
+
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
+                pendingActiveTasks.put(taskId, taskToBeCreated.getValue());
+                iter.remove();
+            }
+
+            if (standbyTasksPerId.containsKey(taskId)) {
+                pendingActiveTasks.put(taskId, taskToBeCreated.getValue());
+                pendingTasksToRecycle.add(taskId);
+                iter.remove();
+            }
+        }
+
+        if (!activeTasksToCreate.isEmpty()) {
+            for (final Task activeTask : activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate)) {
+                activeTasksPerId.put(activeTask.id(), activeTask);
+                pendingActiveTasks.remove(activeTask.id());
+                for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
+                    activeTasksPerPartition.put(topicPartition, activeTask);
+                }
+            }
+        }
+
+        return pendingTasksToRecycle;
+    }
+
+    Set<TaskId> createStandbyTasks(final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
+        // check if the task is
+        // 1) in existing active tasks, then add to pending and wait for recycle
+        // 2) in existing standby tasks, should never happen
+        // 3) in pending active tasks, should never happen
+        // 4) in none of the above, proceed and create
+        final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> iter = standbyTasksToCreate.entrySet().iterator();
+        final Set<TaskId> pendingTasksToRecycle = new HashSet<>();
+        while (iter.hasNext()) {
+            final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated = iter.next();
+            final TaskId taskId = taskToBeCreated.getKey();
+
+            if (standbyTasksPerId.containsKey(taskId)) {
+                throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
+            }
+
+            if (pendingActiveTasks.containsKey(taskId)) {
+                throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
+            }
+
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
+                pendingStandbyTasks.put(taskId, taskToBeCreated.getValue());
+                iter.remove();
+            }
+
+            if (standbyTasksPerId.containsKey(taskId)) {
+                pendingStandbyTasks.put(taskId, taskToBeCreated.getValue());
+                pendingTasksToRecycle.add(taskId);
+                iter.remove();
+            }
+        }
+
+        if (!standbyTasksToCreate.isEmpty()) {
+            for (final Task standbyTask : standbyTaskCreator.createTasks(standbyTasksToCreate)) {
+                standbyTasksPerId.put(standbyTask.id(), standbyTask);
+                pendingActiveTasks.remove(standbyTask.id());
+            }
+        }
+
+        return pendingTasksToRecycle;
+    }
+
+    void removePendingTasks(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
+        pendingActiveTasks.keySet().retainAll(assignedActiveTasks);
+        pendingStandbyTasks.keySet().retainAll(assignedStandbyTasks);
+    }
+
+    void createPendingTasks(final Set<String> currentNamedTopologies) {
         createTasks(
-            activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
-            standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
+            pendingActiveTasksForTopologies(currentNamedTopologies),
+            pendingStandbyTasksForTopologies(currentNamedTopologies)
         );
+    }
+
+    private Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies(final Set<String> currentTopologies) {
+        return filterMap(pendingActiveTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
+    }
+
+    private Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
+        return filterMap(pendingStandbyTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
     }
 
     double totalProducerBlockedTime() {
@@ -106,50 +217,21 @@ class Tasks {
 
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                      final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : activeTasksToCreate.entrySet()) {
-            final TaskId taskId = taskToBeCreated.getKey();
-
-            if (activeTasksPerId.containsKey(taskId)) {
-                throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
-            }
-        }
-
-        for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : standbyTasksToCreate.entrySet()) {
-            final TaskId taskId = taskToBeCreated.getKey();
-
-            if (standbyTasksPerId.containsKey(taskId)) {
-                throw new IllegalStateException("Attempted to create a standby task that we already own: " + taskId);
-            }
-        }
-
-        // keep this check to simplify testing (ie, no need to mock `activeTaskCreator`)
-        if (!activeTasksToCreate.isEmpty()) {
-            // TODO: change type to `StreamTask`
-            for (final Task activeTask : activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate)) {
-                activeTasksPerId.put(activeTask.id(), activeTask);
-                allTasksPerId.put(activeTask.id(), activeTask);
-                for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
-                    activeTasksPerPartition.put(topicPartition, activeTask);
-                }
-            }
-        }
-
-        // keep this check to simplify testing (ie, no need to mock `standbyTaskCreator`)
-        if (!standbyTasksToCreate.isEmpty()) {
-            // TODO: change type to `StandbyTask`
-            for (final Task standbyTask : standbyTaskCreator.createTasks(standbyTasksToCreate)) {
-                standbyTasksPerId.put(standbyTask.id(), standbyTask);
-                allTasksPerId.put(standbyTask.id(), standbyTask);
-            }
-        }
+        createActiveTasks(activeTasksToCreate);
+        createStandbyTasks(standbyTasksToCreate);
     }
 
-    void convertActiveToStandby(final StreamTask activeTask,
-                                final Set<TopicPartition> partitions,
-                                final Map<TaskId, RuntimeException> taskCloseExceptions) {
-        if (activeTasksPerId.remove(activeTask.id()) == null) {
-            throw new IllegalStateException("Attempted to convert unknown active task to standby task: " + activeTask.id());
+    void convertActiveToStandby(final StreamTask activeTask, final Map<TaskId, RuntimeException> taskCloseExceptions) {
+        final TaskId taskId = activeTask.id();
+        if (activeTasksPerId.remove(taskId) == null) {
+            throw new IllegalStateException("Attempted to convert unknown active task to standby task: " + taskId);
         }
+
+        final Set<TopicPartition> partitions = pendingStandbyTasks.remove(taskId);
+        if (partitions == null) {
+            throw new IllegalStateException("Attempted to convert and create standby task which is not pending: " + taskId);
+        }
+
         final Set<TopicPartition> toBeRemoved = activeTasksPerPartition.entrySet().stream()
             .filter(e -> e.getValue().id().equals(activeTask.id()))
             .map(Map.Entry::getKey)
@@ -160,12 +242,17 @@ class Tasks {
 
         final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
         standbyTasksPerId.put(standbyTask.id(), standbyTask);
-        allTasksPerId.put(standbyTask.id(), standbyTask);
     }
 
-    void convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
-        if (standbyTasksPerId.remove(standbyTask.id()) == null) {
-            throw new IllegalStateException("Attempted to convert unknown standby task to stream task: " + standbyTask.id());
+    void convertStandbyToActive(final StandbyTask standbyTask) {
+        final TaskId taskId = standbyTask.id();
+        if (standbyTasksPerId.remove(taskId) == null) {
+            throw new IllegalStateException("Attempted to convert unknown standby task to stream task: " + taskId);
+        }
+
+        final Set<TopicPartition> partitions = pendingActiveTasks.remove(taskId);
+        if (partitions == null) {
+            throw new IllegalStateException("Attempted to convert and create active task which is not pending: " + taskId);
         }
 
         final StreamTask activeTask = activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
@@ -173,7 +260,6 @@ class Tasks {
         for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
             activeTasksPerPartition.put(topicPartition, activeTask);
         }
-        allTasksPerId.put(activeTask.id(), activeTask);
     }
 
     void updateInputPartitionsAndResume(final Task task, final Set<TopicPartition> topicPartitions) {
@@ -226,14 +312,12 @@ class Tasks {
             .collect(Collectors.toSet());
         toBeRemoved.forEach(activeTasksPerPartition::remove);
         standbyTasksPerId.remove(taskId);
-        allTasksPerId.remove(taskId);
     }
 
     void clear() {
         activeTasksPerId.clear();
-        activeTasksPerPartition.clear();
         standbyTasksPerId.clear();
-        allTasksPerId.clear();
+        activeTasksPerPartition.clear();
     }
 
     // TODO: change return type to `StreamTask`
@@ -241,19 +325,23 @@ class Tasks {
         return activeTasksPerPartition.get(partition);
     }
 
-    // TODO: change return type to `StandbyTask`
-    Task standbyTask(final TaskId taskId) {
-        if (!standbyTasksPerId.containsKey(taskId)) {
-            throw new IllegalStateException("Standby task unknown: " + taskId);
+    private Task getTask(final TaskId taskId) {
+        if (activeTasksPerId.containsKey(taskId)) {
+            return activeTasksPerId.get(taskId);
         }
-        return standbyTasksPerId.get(taskId);
+        if (standbyTasksPerId.containsKey(taskId)) {
+            return standbyTasksPerId.get(taskId);
+        }
+        return null;
     }
 
     Task task(final TaskId taskId) {
-        if (!allTasksPerId.containsKey(taskId)) {
+        final Task task = getTask(taskId);
+
+        if (task != null)
+            return task;
+        else
             throw new IllegalStateException("Task unknown: " + taskId);
-        }
-        return allTasksPerId.get(taskId);
     }
 
     Collection<Task> tasks(final Collection<TaskId> taskIds) {
@@ -266,37 +354,30 @@ class Tasks {
 
     // TODO: change return type to `StreamTask`
     Collection<Task> activeTasks() {
-        return readOnlyActiveTasks;
+        return Collections.unmodifiableCollection(activeTasksPerId.values());
     }
 
+    /**
+     * All tasks returned by any of the getters are read-only and should NOT be modified;
+     * and the returned task could be modified by other threads concurrently
+     */
     Collection<Task> allTasks() {
-        return readOnlyTasks;
+        return union(HashSet::new, activeTasksPerId.values(), standbyTasksPerId.values());
     }
 
-    Set<TaskId> activeTaskIds() {
-        return readOnlyActiveTaskIds;
+    Collection<TaskId> allTaskIds() {
+        return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }
 
-    Set<TaskId> standbyTaskIds() {
-        return readOnlyStandbyTaskIds;
-    }
-
-    // TODO: change return type to `StreamTask`
-    Map<TaskId, Task> activeTaskMap() {
-        return readOnlyActiveTasksPerId;
-    }
-
-    // TODO: change return type to `StandbyTask`
-    Map<TaskId, Task> standbyTaskMap() {
-        return readOnlyStandbyTasksPerId;
-    }
-
-    Map<TaskId, Task> tasksPerId() {
-        return readOnlyTasksPerId;
+    Map<TaskId, Task> allTasksPerId() {
+        Map<TaskId, Task> ret = new HashMap<>();
+        ret.putAll(activeTasksPerId);
+        ret.putAll(standbyTasksPerId);
+        return ret;
     }
 
     boolean owned(final TaskId taskId) {
-        return allTasksPerId.containsKey(taskId);
+        return getTask(taskId) != null;
     }
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
@@ -327,7 +408,7 @@ class Tasks {
         successfullyProcessed.add(task);
     }
 
-    void removeTaskFromCuccessfullyProcessedBeforeClosing(final Task task) {
+    void removeTaskFromSuccessfullyProcessedBeforeClosing(final Task task) {
         successfullyProcessed.remove(task);
     }
 
@@ -342,6 +423,5 @@ class Tasks {
         } else {
             standbyTasksPerId.put(task.id(), task);
         }
-        allTasksPerId.put(task.id(), task);
     }
 }

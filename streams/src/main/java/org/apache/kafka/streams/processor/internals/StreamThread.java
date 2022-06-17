@@ -882,7 +882,7 @@ public class StreamThread extends Thread {
             if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
-                    taskManager.tasks().keySet());
+                    taskManager.allTasks().keySet());
                 setState(State.RUNNING);
             }
 
@@ -896,7 +896,7 @@ public class StreamThread extends Thread {
         }
         // we can always let changelog reader try restoring in order to initialize the changelogs;
         // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore(taskManager.tasks());
+        changelogReader.restore(taskManager.allTasks());
         log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
@@ -1093,7 +1093,7 @@ public class StreamThread extends Thread {
             }
 
             committed = taskManager.commit(
-                taskManager.tasks()
+                taskManager.allTasks()
                     .values()
                     .stream()
                     .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
@@ -1261,7 +1261,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<TaskId, Task> allTasks() {
-        return taskManager.tasks();
+        return taskManager.allTasks();
     }
 
     /**

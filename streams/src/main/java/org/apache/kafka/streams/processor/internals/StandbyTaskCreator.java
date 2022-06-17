@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 
 class StandbyTaskCreator {
@@ -46,9 +45,6 @@ class StandbyTaskCreator {
     private final ThreadCache dummyCache;
     private final Logger log;
     private final Sensor createTaskSensor;
-
-    // tasks may be assigned for a NamedTopology that is not yet known by this host, and saved for later creation
-    private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
 
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
                        final StreamsConfig applicationConfig,
@@ -73,30 +69,14 @@ class StandbyTaskCreator {
         );
     }
 
-    void removeRevokedUnknownTasks(final Set<TaskId> assignedTasks) {
-        unknownTasksToBeCreated.keySet().retainAll(assignedTasks);
-    }
-
-    Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().topologyName()));
-    }
-
     // TODO: change return type to `StandbyTask`
     Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         // TODO: change type to `StandbyTask`
         final List<Task> createdTasks = new ArrayList<>();
-        final Map<TaskId, Set<TopicPartition>>  newUnknownTasks = new HashMap<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
-
-            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
-            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
-                newUnknownTasks.put(taskId, partitions);
-                continue;
-            }
-
             final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             if (topology.hasStateWithChangelogs()) {
@@ -111,7 +91,7 @@ class StandbyTaskCreator {
                     partitions
                 );
 
-                final InternalProcessorContext context = new ProcessorContextImpl(
+                final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                     taskId,
                     applicationConfig,
                     stateManager,
@@ -127,11 +107,6 @@ class StandbyTaskCreator {
                     taskId, partitions
                 );
             }
-            unknownTasksToBeCreated.remove(taskId);
-        }
-        if (!newUnknownTasks.isEmpty()) {
-            log.info("Delaying creation of tasks not yet known by this instance: {}", newUnknownTasks.keySet());
-            unknownTasksToBeCreated.putAll(newUnknownTasks);
         }
         return createdTasks;
     }

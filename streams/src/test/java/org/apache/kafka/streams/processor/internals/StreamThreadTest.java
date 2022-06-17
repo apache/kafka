@@ -840,12 +840,8 @@ public class StreamThreadTest {
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
         expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));
-        expect(activeTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
-        activeTaskCreator.removeRevokedUnknownTasks(singleton(task1));
 
         final StandbyTaskCreator standbyTaskCreator = mock(StandbyTaskCreator.class);
-        expect(standbyTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
-        standbyTaskCreator.removeRevokedUnknownTasks(emptySet());
 
         EasyMock.replay(consumer, consumerGroupMetadata, task, activeTaskCreator, standbyTaskCreator);
 
@@ -2568,7 +2564,7 @@ public class StreamThreadTest {
         expect(task3.state()).andReturn(Task.State.CREATED).anyTimes();
         expect(task3.id()).andReturn(taskId3).anyTimes();
 
-        expect(taskManager.tasks()).andReturn(mkMap(
+        expect(taskManager.allTasks()).andReturn(mkMap(
             mkEntry(taskId1, task1),
             mkEntry(taskId2, task2),
             mkEntry(taskId3, task3)
@@ -2835,7 +2831,7 @@ public class StreamThreadTest {
                 mkEntry(taskId1, task1),
                 mkEntry(taskId2, task2)
                 ));
-        expect(taskManager.tasks()).andStubReturn(mkMap(
+        expect(taskManager.allTasks()).andStubReturn(mkMap(
                 mkEntry(taskId1, task1),
                 mkEntry(taskId2, task2)
         ));
@@ -3034,7 +3030,7 @@ public class StreamThreadTest {
 
         expect(runningTask.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(runningTask.id()).andReturn(taskId).anyTimes();
-        expect(taskManager.tasks())
+        expect(taskManager.allTasks())
                 .andReturn(Collections.singletonMap(taskId, runningTask)).anyTimes();
         expect(taskManager.commit(Collections.singleton(runningTask))).andReturn(1).anyTimes();
         taskManager.maybePurgeCommittedRecords();
@@ -3052,7 +3048,7 @@ public class StreamThreadTest {
 
         expect(runningTask.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(runningTask.id()).andReturn(taskId).anyTimes();
-        expect(taskManager.tasks())
+        expect(taskManager.allTasks())
             .andReturn(Collections.singletonMap(taskId, runningTask)).times(numberOfCommits);
         expect(taskManager.commit(Collections.singleton(runningTask))).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, runningTask);
@@ -3109,7 +3105,7 @@ public class StreamThreadTest {
     }
 
     StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {
-        final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> !t.isActive());
+        final Stream<Task> standbys = taskManager.allTasks().values().stream().filter(t -> !t.isActive());
         for (final Task task : (Iterable<Task>) standbys::iterator) {
             if (task.inputPartitions().contains(partition)) {
                 return (StandbyTask) task;
