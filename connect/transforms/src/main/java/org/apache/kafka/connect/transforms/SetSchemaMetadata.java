@@ -49,7 +49,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.SCHEMA_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema name to set.")
-            .define(ConfigName.SCHEMA_NAMESPACE, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Namespace to append to the schema name.")
+            .define(ConfigName.SCHEMA_NAMESPACE, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Namespace to prepend to the schema name.")
             .define(ConfigName.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.");
 
     private String schemaName;
