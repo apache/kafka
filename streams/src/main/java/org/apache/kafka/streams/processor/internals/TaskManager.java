@@ -286,34 +286,46 @@ public class TaskManager {
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
+        final Map<Task, Set<TopicPartition>> tasksToRecycle = new HashMap<>();
         final Comparator<Task> byId = Comparator.comparing(Task::id);
-        final Set<Task> tasksToRecycle = new TreeSet<>(byId);
         final Set<Task> tasksToCloseClean = new TreeSet<>(byId);
         final Set<Task> tasksToCloseDirty = new TreeSet<>(byId);
 
-        // first rectify all existing tasks
+        tasks.purgePendingTasks(activeTasks.keySet(), standbyTasks.keySet());
+
+        // first rectify all existing tasks:
+        // 1. for tasks that are already owned, just resume and skip re-creating them
+        // 2. for tasks that have changed active/standby status, just recycle and skip re-creating them
+        // 3. otherwise, close them since they are no longer owned.
         for (final Task task : tasks.allTasks()) {
-            if (activeTasks.containsKey(task.id()) && task.isActive()) {
-                tasks.updateInputPartitionsAndResume(task, activeTasks.get(task.id()));
-                activeTasksToCreate.remove(task.id());
-            } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
-                tasks.updateInputPartitionsAndResume(task, standbyTasks.get(task.id()));
-                standbyTasksToCreate.remove(task.id());
-            } else if (activeTasks.containsKey(task.id()) || standbyTasks.containsKey(task.id())) {
-                // check for tasks that were owned previously but have changed active/standby status
-                tasksToRecycle.add(task);
+            final TaskId taskId = task.id();
+            if (activeTasksToCreate.containsKey(taskId)) {
+                if (task.isActive()) {
+                    tasks.updateInputPartitionsAndResume(task, activeTasksToCreate.get(taskId));
+                } else {
+                    tasksToRecycle.put(task, activeTasksToCreate.get(taskId));
+                }
+                activeTasksToCreate.remove(taskId);
+            } else if (standbyTasksToCreate.containsKey(taskId)) {
+                if (!task.isActive()) {
+                    tasks.updateInputPartitionsAndResume(task, standbyTasksToCreate.get(taskId));
+                } else {
+                    tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
+                }
+                standbyTasksToCreate.remove(taskId);
             } else {
                 tasksToCloseClean.add(task);
             }
         }
 
+        tasks.addActivePendingTasks(pendingTasksToCreate(activeTasksToCreate));
+        tasks.addStandbyPendingTasks(pendingTasksToCreate(standbyTasksToCreate));
+
         // close and recycle those tasks
-        handleCloseAndRecycle(
+        closeAndRecycleTasks(
             tasksToRecycle,
             tasksToCloseClean,
             tasksToCloseDirty,
-            activeTasksToCreate,
-            standbyTasksToCreate,
             taskCloseExceptions
         );
 
@@ -347,22 +359,31 @@ public class TaskManager {
             throw first.getValue();
         }
 
-        tasks.handleNewAssignmentAndCreateTasks(activeTasksToCreate, standbyTasksToCreate, activeTasks.keySet(), standbyTasks.keySet());
+        tasks.createTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
-    private void handleCloseAndRecycle(final Set<Task> tasksToRecycle,
-                                       final Set<Task> tasksToCloseClean,
-                                       final Set<Task> tasksToCloseDirty,
-                                       final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                       final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                       final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions) {
+    private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(Map<TaskId, Set<TopicPartition>> tasksToCreate) {
+        final Map<TaskId, Set<TopicPartition>> pendingTasks = new HashMap<>();
+        for (final TaskId taskId: tasksToCreate.keySet()) {
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
+                pendingTasks.put(taskId, tasksToCreate.get(taskId));
+                tasksToCreate.remove(taskId);
+            }
+        }
+        return pendingTasks;
+    }
+
+    private void closeAndRecycleTasks(final Map<Task, Set<TopicPartition>> tasksToRecycle,
+                                      final Set<Task> tasksToCloseClean,
+                                      final Set<Task> tasksToCloseDirty,
+                                      final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions) {
         if (!tasksToCloseDirty.isEmpty()) {
             throw new IllegalArgumentException("Tasks to close-dirty should be empty");
         }
 
         // for all tasks to close or recycle, we should first write a checkpoint as in post-commit
         final List<Task> tasksToCheckpoint = new ArrayList<>(tasksToCloseClean);
-        tasksToCheckpoint.addAll(tasksToRecycle);
+        tasksToCheckpoint.addAll(tasksToRecycle.keySet());
         for (final Task task : tasksToCheckpoint) {
             try {
                 // Note that we are not actually committing here but just check if we need to write checkpoint file:
@@ -414,15 +435,14 @@ public class TaskManager {
             }
         }
 
-        tasksToRecycle.removeAll(tasksToCloseDirty);
-        for (final Task oldTask : tasksToRecycle) {
+        tasksToRecycle.keySet().removeAll(tasksToCloseDirty);
+        for (final Map.Entry<Task, Set<TopicPartition>> entry : tasksToRecycle.entrySet()) {
+            final Task oldTask = entry.getKey();
             try {
                 if (oldTask.isActive()) {
-                    final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
-                    tasks.convertActiveToStandby((StreamTask) oldTask, partitions, taskCloseExceptions);
+                    tasks.convertActiveToStandby((StreamTask) oldTask, entry.getValue(), taskCloseExceptions);
                 } else {
-                    final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
-                    tasks.convertStandbyToActive((StandbyTask) oldTask, partitions);
+                    tasks.convertStandbyToActive((StandbyTask) oldTask, entry.getValue());
                 }
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", oldTask.id());
