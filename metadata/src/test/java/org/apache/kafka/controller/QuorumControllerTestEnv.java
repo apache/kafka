@@ -53,11 +53,21 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     }
 
     public QuorumControllerTestEnv(
+            LocalLogManagerTestEnv logEnv,
+            Consumer<Builder> builderConsumer,
+            OptionalLong sessionTimeoutMillis,
+            OptionalLong leaderImbalanceCheckIntervalNs,
+            MetadataVersion metadataVersion
+    ) throws Exception {
+        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs, BootstrapMetadata.create(metadataVersion));
+    }
+
+    public QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
         Consumer<Builder> builderConsumer,
         OptionalLong sessionTimeoutMillis,
         OptionalLong leaderImbalanceCheckIntervalNs,
-        MetadataVersion metadataVersion
+        BootstrapMetadata bootstrapMetadata
     ) throws Exception {
         this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
@@ -68,7 +78,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(i));
-                builder.setBootstrapMetadata(BootstrapMetadata.create(metadataVersion));
+                builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
                 builder.setQuorumFeatures(new QuorumFeatures(i, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
                 sessionTimeoutMillis.ifPresent(timeout -> {

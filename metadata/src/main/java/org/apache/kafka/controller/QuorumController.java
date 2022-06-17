@@ -948,6 +948,10 @@ public final class QuorumController implements Controller {
                                     "at least 1. Got " + bootstrapMetadata.metadataVersion().featureLevel()));
                         } else {
                             metadataVersion = bootstrapMetadata.metadataVersion();
+
+                            // This call is here instead of inside the appendWriteEvent for testing purposes.
+                            final List<ApiMessageAndVersion> bootstrapRecords = bootstrapMetadata.records();
+
                             // We prepend the bootstrap event in order to ensure the bootstrap metadata is written before
                             // any external controller write events are processed.
                             future = prependWriteEvent("bootstrapMetadata", () -> {
@@ -957,7 +961,7 @@ public final class QuorumController implements Controller {
                                     log.info("Upgrading from KRaft preview. Initializing metadata.version to {}",
                                         metadataVersion.featureLevel());
                                 }
-                                return ControllerResult.atomicOf(bootstrapMetadata.records(), null);
+                                return ControllerResult.atomicOf(bootstrapRecords, null);
                             });
                         }
                         future.whenComplete((result, exception) -> {
