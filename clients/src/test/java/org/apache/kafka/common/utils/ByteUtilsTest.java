@@ -24,6 +24,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.IntFunction;
+import java.util.function.LongFunction;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -237,6 +239,49 @@ public class ByteUtilsTest {
         assertDoubleSerde(Double.NaN, 0x7FF8000000000000L);
         assertDoubleSerde(Double.POSITIVE_INFINITY, 0x7FF0000000000000L);
         assertDoubleSerde(Double.NEGATIVE_INFINITY, 0xFFF0000000000000L);
+    }
+
+    @Test
+    public void testSizeOfUnsignedVarint() {
+        // The old well-known implementation for sizeOfUnsignedVarint
+        IntFunction<Integer> simpleImplementation = (int value) -> {
+            int bytes = 1;
+            while ((value & 0xffffff80) != 0L) {
+                bytes += 1;
+                value >>>= 7;
+            }
+            return bytes;
+        };
+
+        // compare the full range of values
+        for (int i = 0; i < Integer.MAX_VALUE && i >= 0; i += 13) {
+            final int actual = ByteUtils.sizeOfUnsignedVarint(i);
+            final int expected = simpleImplementation.apply(i);
+            assertEquals(expected, actual);
+        }
+    }
+
+    @Test
+    public void testSizeOfVarlong() {
+        // The old well-known implementation for sizeOfVarlong
+        LongFunction<Integer> simpleImplementation = (long value) -> {
+            long v = (value << 1) ^ (value >> 63);
+            int bytes = 1;
+            while ((v & 0xffffffffffffff80L) != 0L) {
+                bytes += 1;
+                v >>>= 7;
+            }
+            return bytes;
+        };
+
+        for (long l = 1; l < Long.MAX_VALUE && l >= 0; l = l << 1) {
+            final int expected = simpleImplementation.apply(l);
+            final int actual = ByteUtils.sizeOfVarlong(l);
+            assertEquals(expected, actual);
+        }
+
+        // check zero as well
+        assertEquals(simpleImplementation.apply(0), ByteUtils.sizeOfVarlong(0));
     }
 
     private void assertUnsignedVarintSerde(int value, byte[] expectedEncoding) throws IOException {

@@ -41,16 +41,18 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
+import java.nio.file.Files;
 import java.util.ArrayList;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -177,10 +179,10 @@ public class TaskManagerTest {
 
     @Before
     public void setUp() {
-        setUpTaskManager(StreamThread.ProcessingMode.AT_LEAST_ONCE);
+        setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE);
     }
 
-    private void setUpTaskManager(final StreamThread.ProcessingMode processingMode) {
+    private void setUpTaskManager(final StreamsConfigUtils.ProcessingMode processingMode) {
         taskManager = new TaskManager(
             time,
             changeLogReader,
@@ -189,10 +191,9 @@ public class TaskManagerTest {
             new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, time),
             activeTaskCreator,
             standbyTaskCreator,
-            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig()),
+            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode)),
             adminClient,
-            stateDirectory,
-            processingMode
+            stateDirectory
         );
         taskManager.setMainConsumer(consumer);
         reset(topologyBuilder);
@@ -1830,7 +1831,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldOnlyCommitRevokedStandbyTaskAndPropagatePrepareCommitException() {
-        setUpTaskManager(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA);
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
@@ -2228,7 +2229,7 @@ public class TaskManagerTest {
         producer.commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA, producer, offsetsT01, offsetsT02);
+        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_ALPHA, producer, offsetsT01, offsetsT02);
     }
 
     @Test
@@ -2245,10 +2246,10 @@ public class TaskManagerTest {
         producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
+        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
     }
 
-    private void shouldCommitViaProducerIfEosEnabled(final StreamThread.ProcessingMode processingMode,
+    private void shouldCommitViaProducerIfEosEnabled(final ProcessingMode processingMode,
                                                      final StreamsProducer producer,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
@@ -3275,7 +3276,7 @@ public class TaskManagerTest {
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
-        assertThat(checkpointFile.createNewFile(), is(true));
+        Files.createFile(checkpointFile.toPath());
         new OffsetCheckpoint(checkpointFile).write(offsets);
         expect(stateDirectory.checkpointFileFor(task)).andReturn(checkpointFile);
     }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -27,6 +28,8 @@ public class Topic {
 
     public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
     public static final String TRANSACTION_STATE_TOPIC_NAME = "__transaction_state";
+    public static final String METADATA_TOPIC_NAME = "__cluster_metadata";
+    public static final TopicPartition METADATA_TOPIC_PARTITION = new TopicPartition(METADATA_TOPIC_NAME, 0);
     public static final String LEGAL_CHARS = "[a-zA-Z0-9._-]";
 
     private static final Set<String> INTERNAL_TOPICS = Collections.unmodifiableSet(
@@ -68,6 +71,17 @@ public class Topic {
     }
 
     /**
+     * Unify topic name with a period ('.') or underscore ('_'), this is only used to check collision and will not
+     * be used to really change topic name.
+     *
+     * @param topic A topic to unify
+     * @return A unified topic name
+     */
+    public static String unifyCollisionChars(String topic) {
+        return topic.replace('.', '_');
+    }
+
+    /**
      * Returns true if the topicNames collide due to a period ('.') or underscore ('_') in the same position.
      *
      * @param topicA A topic to check for collision
@@ -75,7 +89,7 @@ public class Topic {
      * @return true if the topics collide
      */
     public static boolean hasCollision(String topicA, String topicB) {
-        return topicA.replace('.', '_').equals(topicB.replace('.', '_'));
+        return unifyCollisionChars(topicA).equals(unifyCollisionChars(topicB));
     }
 
     /**

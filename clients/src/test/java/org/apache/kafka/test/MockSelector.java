@@ -29,9 +29,11 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -48,6 +50,7 @@ public class MockSelector implements Selectable {
     private final List<String> connected = new ArrayList<>();
     private final List<DelayedReceive> delayedReceives = new ArrayList<>();
     private final Predicate<InetSocketAddress> canConnect;
+    private final Set<String> ready = new HashSet<>();
 
     public MockSelector(Time time) {
         this(time, null);
@@ -62,6 +65,7 @@ public class MockSelector implements Selectable {
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
         if (canConnect == null || canConnect.test(address)) {
             this.connected.add(id);
+            this.ready.add(id);
         }
     }
 
@@ -79,6 +83,7 @@ public class MockSelector implements Selectable {
 
         removeSendsForNode(id, completedSends);
         removeSendsForNode(id, initiatedSends);
+        ready.remove(id);
 
         for (int i = 0; i < this.connected.size(); i++) {
             if (this.connected.get(i).equals(id)) {
@@ -91,8 +96,8 @@ public class MockSelector implements Selectable {
     /**
      * Since MockSelector.connect will always succeed and add the
      * connection id to the Set connected, we can only simulate
-     * that the connection is still pending by remove the connection
-     * id from the Set connected
+     * that the connection is still pending by removing the connection
+     * id from the Set connected.
      *
      * @param id connection id
      */
@@ -221,9 +226,13 @@ public class MockSelector implements Selectable {
     public void unmuteAll() {
     }
 
+    public void channelNotReady(String id) {
+        ready.remove(id);
+    }
+
     @Override
     public boolean isChannelReady(String id) {
-        return true;
+        return ready.contains(id);
     }
 
     public void reset() {

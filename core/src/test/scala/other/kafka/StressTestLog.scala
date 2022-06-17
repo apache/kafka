@@ -48,6 +48,7 @@ object StressTestLog {
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       brokerTopicStats = new BrokerTopicStats,

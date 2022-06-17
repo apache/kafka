@@ -18,22 +18,27 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public class KStreamTransformValues<K, V, R> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
+public class KStreamTransformValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn, KIn, VOut> {
 
-    private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
+    private final ValueTransformerWithKeySupplier<KIn, VIn, VOut> valueTransformerSupplier;
 
-    KStreamTransformValues(final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier) {
+    KStreamTransformValues(final ValueTransformerWithKeySupplier<KIn, VIn, VOut> valueTransformerSupplier) {
         this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
     @Override
-    public org.apache.kafka.streams.processor.Processor<K, V> get() {
+    public Processor<KIn, VIn, KIn, VOut> get() {
         return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
     }
 
@@ -42,23 +47,23 @@ public class KStreamTransformValues<K, V, R> implements org.apache.kafka.streams
         return valueTransformerSupplier.stores();
     }
 
-    public static class KStreamTransformValuesProcessor<K, V, R> extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
+    public static class KStreamTransformValuesProcessor<KIn, VIn, VOut> extends ContextualProcessor<KIn, VIn, KIn, VOut> {
 
-        private final ValueTransformerWithKey<K, V, R> valueTransformer;
+        private final ValueTransformerWithKey<KIn, VIn, VOut> valueTransformer;
 
-        KStreamTransformValuesProcessor(final ValueTransformerWithKey<K, V, R> valueTransformer) {
+        KStreamTransformValuesProcessor(final ValueTransformerWithKey<KIn, VIn, VOut> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<KIn, VOut> context) {
             super.init(context);
-            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext((InternalProcessorContext<KIn, VOut>) context));
         }
 
         @Override
-        public void process(final K key, final V value) {
-            context.forward(key, valueTransformer.transform(key, value));
+        public void process(final Record<KIn, VIn> record) {
+            context().forward(record.withValue(valueTransformer.transform(record.key(), record.value())));
         }
 
         @Override

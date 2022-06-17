@@ -34,12 +34,12 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.DeserializationResult;
@@ -201,12 +201,14 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         init(root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         init(root);
     }
 
@@ -227,8 +229,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             streamsMetrics
         );
 
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, context.taskId().topologyName());
+        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition();
@@ -237,6 +238,11 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public Position getPosition() {
+        throw new UnsupportedOperationException("This store does not keep track of the position.");
     }
 
     @Override
@@ -286,8 +292,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             partition,
             null,
             KEY_SERIALIZER,
-            VALUE_SERIALIZER
-        );
+            VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     private void logTombstone(final Bytes key) {
@@ -299,8 +306,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             partition,
             null,
             KEY_SERIALIZER,
-            VALUE_SERIALIZER
-        );
+            VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     private void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> batch) {
@@ -415,7 +423,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 delegate.remove();
                 index.remove(next.getKey().key());
 
-                dirtyKeys.add(next.getKey().key());
+                if (loggingEnabled) {
+                    dirtyKeys.add(next.getKey().key());
+                }
 
                 memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
 
@@ -489,7 +499,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             serializedKey,
             new BufferValue(serializedPriorValue, serialChange.oldValue, serialChange.newValue, recordContext)
         );
-        dirtyKeys.add(serializedKey);
+        if (loggingEnabled) {
+            dirtyKeys.add(serializedKey);
+        }
         updateBufferMetrics();
     }
 

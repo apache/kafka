@@ -1732,7 +1732,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
                             You may follow a procedure such as outlined below.
                             It is recommended to repartition the topic with fewer partitions to match the larger partition number of avoid bottlenecks.
                             Technically it would also be possible to repartition the topic with more partitions to the smaller partition number.
-                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result is a second state store.
+                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result in a second state store.
                             For table-table joins, you might also consider to size of the KTables and repartition the smaller KTable.</p>
                         <ol class="arabic">
                             <li><p class="first">Identify the input KStream/KTable in the join whose underlying Kafka topic has the smaller number of partitions.

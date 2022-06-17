@@ -131,7 +131,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                                     + "topic=[{}] partition=[{}] offset=[{}].",
                                 store.name(),
                                 oldValueAndTimestamp.timestamp(), record.timestamp(),
-                                recordMetadata.topic(), recordMetadata.offset(), recordMetadata.partition()
+                                recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset() 
                             );
                         } else {
                             LOG.warn(
@@ -147,7 +147,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                     oldValue = null;
                 }
                 store.put(record.key(), ValueAndTimestamp.make(record.value(), record.timestamp()));
-                tupleForwarder.maybeForward(record.key(), record.value(), oldValue);
+                tupleForwarder.maybeForward(record.withValue(new Change<>(record.value(), oldValue)));
             } else {
                 context.forward(record.withValue(new Change<>(record.value(), null)));
             }

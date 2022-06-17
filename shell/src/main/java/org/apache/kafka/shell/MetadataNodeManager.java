@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -57,6 +58,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+
+import static org.apache.kafka.metadata.LeaderRecoveryState.NO_CHANGE;
 
 /**
  * Maintains the in-memory metadata for the metadata tool.
@@ -279,6 +282,9 @@ public final class MetadataNodeManager implements AutoCloseable {
                     partition.setLeader(record.leader());
                     partition.setLeaderEpoch(partition.leaderEpoch() + 1);
                 }
+                if (record.leaderRecoveryState() != NO_CHANGE) {
+                    partition.setLeaderRecoveryState(record.leaderRecoveryState());
+                }
                 partition.setPartitionEpoch(partition.partitionEpoch() + 1);
                 file.setContents(PartitionRecordJsonConverter.write(partition,
                     PartitionRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
@@ -316,6 +322,15 @@ public final class MetadataNodeManager implements AutoCloseable {
                     node.rmrf(record.key());
                 else
                     node.create(record.key()).setContents(record.value() + "");
+                break;
+            }
+            case PRODUCER_IDS_RECORD: {
+                ProducerIdsRecord record = (ProducerIdsRecord) message;
+                DirectoryNode producerIds = data.root.mkdirs("producerIds");
+                producerIds.create("lastBlockBrokerId").setContents(record.brokerId() + "");
+                producerIds.create("lastBlockBrokerEpoch").setContents(record.brokerEpoch() + "");
+
+                producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
                 break;
             }
             default:

@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTr
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
+import java.nio.file.Files
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
 
@@ -77,24 +78,28 @@ object LogTestUtils {
                 time: Time,
                 logStartOffset: Long = 0L,
                 recoveryPoint: Long = 0L,
+                maxTransactionTimeoutMs: Int = 5 * 60 * 1000,
                 maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
                 keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
-    UnifiedLog(dir = dir,
+    UnifiedLog(
+      dir = dir,
       config = config,
       logStartOffset = logStartOffset,
       recoveryPoint = recoveryPoint,
       scheduler = scheduler,
       brokerTopicStats = brokerTopicStats,
       time = time,
+      maxTransactionTimeoutMs = maxTransactionTimeoutMs,
       maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile
+    )
   }
 
   /**
@@ -138,8 +143,8 @@ object LogTestUtils {
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-      UnifiedLog.offsetIndexFile(logDir, baseOffset).createNewFile()
-      UnifiedLog.timeIndexFile(logDir, baseOffset).createNewFile()
+      Files.createFile(UnifiedLog.offsetIndexFile(logDir, baseOffset).toPath)
+      Files.createFile(UnifiedLog.timeIndexFile(logDir, baseOffset).toPath)
       baseOffset + Int.MaxValue
     }
 

@@ -187,7 +187,9 @@ public class MockAdminClient extends AdminClient {
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
         for (int i = 0; i < brokers.size(); i++) {
-            this.brokerConfigs.add(new HashMap<>());
+            final Map<String, String> config = new HashMap<>();
+            config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
+            this.brokerConfigs.add(config);
         }
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
@@ -961,6 +963,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
@@ -998,6 +1005,11 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

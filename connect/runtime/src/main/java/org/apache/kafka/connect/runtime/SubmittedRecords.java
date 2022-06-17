@@ -26,13 +26,16 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Used to track source records that have been (or are about to be) dispatched to a producer and their accompanying
  * source offsets. Records are tracked in the order in which they are submitted, which should match the order they were
  * returned from {@link SourceTask#poll()}. The latest-eligible offsets for each source partition can be retrieved via
  * {@link #committableOffsets()}, where every record up to and including the record for each returned offset has been
- * either {@link SubmittedRecord#ack() acknowledged} or {@link #removeLastOccurrence(SubmittedRecord) removed}.
+ * either {@link SubmittedRecord#ack() acknowledged} or {@link SubmittedRecord#drop dropped}.
  * Note that this class is not thread-safe, though a {@link SubmittedRecord} can be
  * {@link SubmittedRecord#ack() acknowledged} from a different thread.
  */
@@ -41,22 +44,23 @@ class SubmittedRecords {
     private static final Logger log = LoggerFactory.getLogger(SubmittedRecords.class);
 
     // Visible for testing
-    final Map<Map<String, Object>, Deque<SubmittedRecord>> records;
+    final Map<Map<String, Object>, Deque<SubmittedRecord>> records = new HashMap<>();
+    private int numUnackedMessages = 0;
+    private CountDownLatch messageDrainLatch;
 
     public SubmittedRecords() {
-        this.records = new HashMap<>();
     }
 
     /**
      * Enqueue a new source record before dispatching it to a producer.
      * The returned {@link SubmittedRecord} should either be {@link SubmittedRecord#ack() acknowledged} in the
-     * producer callback, or {@link #removeLastOccurrence(SubmittedRecord) removed} if the record could not be successfully
+     * producer callback, or {@link SubmittedRecord#drop() dropped} if the record could not be successfully
      * sent to the producer.
-     * 
+     *
      * @param record the record about to be dispatched; may not be null but may have a null
      *               {@link SourceRecord#sourcePartition()} and/or {@link SourceRecord#sourceOffset()}
      * @return a {@link SubmittedRecord} that can be either {@link SubmittedRecord#ack() acknowledged} once ack'd by
-     *         the producer, or {@link #removeLastOccurrence removed} if synchronously rejected by the producer
+     *         the producer, or {@link SubmittedRecord#drop() dropped} if synchronously rejected by the producer
      */
     @SuppressWarnings("unchecked")
     public SubmittedRecord submit(SourceRecord record) {
@@ -68,29 +72,8 @@ class SubmittedRecords {
         SubmittedRecord result = new SubmittedRecord(partition, offset);
         records.computeIfAbsent(result.partition(), p -> new LinkedList<>())
                 .add(result);
-        return result;
-    }
-
-    /**
-     * Remove a source record and do not take it into account any longer when tracking offsets.
-     * Useful if the record has been synchronously rejected by the producer.
-     * If multiple instances of the same {@link SubmittedRecord} have been submitted already, only the first one found
-     * (traversing from the end of the deque backward) will be removed.
-     * @param record the {@link #submit previously-submitted} record to stop tracking; may not be null
-     * @return whether an instance of the record was removed
-     */
-    public boolean removeLastOccurrence(SubmittedRecord record) {
-        Deque<SubmittedRecord> deque = records.get(record.partition());
-        if (deque == null) {
-            log.warn("Attempted to remove record from submitted queue for partition {}, but no records with that partition appear to have been submitted", record.partition());
-            return false;
-        }
-        boolean result = deque.removeLastOccurrence(record);
-        if (deque.isEmpty()) {
-            records.remove(record.partition());
-        }
-        if (!result) {
-            log.warn("Attempted to remove record from submitted queue for partition {}, but the record has not been submitted or has already been removed", record.partition());
+        synchronized (this) {
+            numUnackedMessages++;
         }
         return result;
     }
@@ -132,6 +115,28 @@ class SubmittedRecords {
         return new CommittableOffsets(offsets, totalCommittableMessages, totalUncommittableMessages, records.size(), largestDequeSize, largestDequePartition);
     }
 
+    /**
+     * Wait for all currently in-flight messages to be acknowledged, up to the requested timeout.
+     * This method is expected to be called from the same thread that calls {@link #committableOffsets()}.
+     * @param timeout the maximum time to wait
+     * @param timeUnit the time unit of the timeout argument
+     * @return whether all in-flight messages were acknowledged before the timeout elapsed
+     */
+    public boolean awaitAllMessages(long timeout, TimeUnit timeUnit) {
+        // Create a new message drain latch as a local variable to avoid SpotBugs warnings about inconsistent synchronization
+        // on an instance variable when invoking CountDownLatch::await outside a synchronized block
+        CountDownLatch messageDrainLatch;
+        synchronized (this) {
+            messageDrainLatch = new CountDownLatch(numUnackedMessages);
+            this.messageDrainLatch = messageDrainLatch;
+        }
+        try {
+            return messageDrainLatch.await(timeout, timeUnit);
+        } catch (InterruptedException e) {
+            return false;
+        }
+    }
+
     // Note that this will return null if either there are no committable offsets for the given deque, or the latest
     // committable offset is itself null. The caller is responsible for distinguishing between the two cases.
     private Map<String, Object> committableOffset(Deque<SubmittedRecord> queuedRecords) {
@@ -146,15 +151,25 @@ class SubmittedRecords {
         return queuedRecords.peek() != null && queuedRecords.peek().acked();
     }
 
-    static class SubmittedRecord {
+    // Synchronize in order to ensure that the number of unacknowledged messages isn't modified in the middle of a call
+    // to awaitAllMessages (which might cause us to decrement first, then create a new message drain latch, then count down
+    // that latch here, effectively double-acking the message)
+    private synchronized void messageAcked() {
+        numUnackedMessages--;
+        if (messageDrainLatch != null) {
+            messageDrainLatch.countDown();
+        }
+    }
+
+    public class SubmittedRecord {
         private final Map<String, Object> partition;
         private final Map<String, Object> offset;
-        private volatile boolean acked;
+        private final AtomicBoolean acked;
 
         public SubmittedRecord(Map<String, Object> partition, Map<String, Object> offset) {
             this.partition = partition;
             this.offset = offset;
-            this.acked = false;
+            this.acked = new AtomicBoolean(false);
         }
 
         /**
@@ -162,11 +177,41 @@ class SubmittedRecords {
          * This is safe to be called from a different thread than what called {@link SubmittedRecords#submit(SourceRecord)}.
          */
         public void ack() {
-            this.acked = true;
+            if (this.acked.compareAndSet(false, true)) {
+                messageAcked();
+            }
+        }
+
+        /**
+         * Remove this record and do not take it into account any longer when tracking offsets.
+         * Useful if the record has been synchronously rejected by the producer.
+         * If multiple instances of this record have been submitted already, only the first one found
+         * (traversing from the end of the deque backward) will be removed.
+         * <p>
+         * This is <strong>not safe</strong> to be called from a different thread
+         * than what called {@link SubmittedRecords#submit(SourceRecord)}.
+         * @return whether this instance was dropped
+         */
+        public boolean drop() {
+            Deque<SubmittedRecord> deque = records.get(partition);
+            if (deque == null) {
+                log.warn("Attempted to remove record from submitted queue for partition {}, but no records with that partition appear to have been submitted", partition);
+                return false;
+            }
+            boolean result = deque.removeLastOccurrence(this);
+            if (deque.isEmpty()) {
+                records.remove(partition);
+            }
+            if (result) {
+                messageAcked();
+            } else {
+                log.warn("Attempted to remove record from submitted queue for partition {}, but the record has not been submitted or has already been removed", partition);
+            }
+            return result;
         }
 
         private boolean acked() {
-            return acked;
+            return acked.get();
         }
 
         private Map<String, Object> partition() {

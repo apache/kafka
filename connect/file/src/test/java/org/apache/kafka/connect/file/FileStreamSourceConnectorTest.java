@@ -19,20 +19,19 @@ package org.apache.kafka.connect.file;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class FileStreamSourceConnectorTest extends EasyMockSupport {
+public class FileStreamSourceConnectorTest {
 
     private static final String SINGLE_TOPIC = "test";
     private static final String MULTIPLE_TOPICS = "test1,test2";
@@ -45,7 +44,7 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
     @BeforeEach
     public void setup() {
         connector = new FileStreamSourceConnector();
-        ctx = createMock(ConnectorContext.class);
+        ctx = mock(ConnectorContext.class);
         connector.initialize(ctx);
 
         sourceProperties = new HashMap<>();
@@ -55,18 +54,14 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
 
     @Test
     public void testConnectorConfigValidation() {
-        replayAll();
         List<ConfigValue> configValues = connector.config().validate(sourceProperties);
         for (ConfigValue val : configValues) {
             assertEquals(0, val.errorMessages().size(), "Config property errors: " + val.errorMessages());
         }
-        verifyAll();
     }
 
     @Test
     public void testSourceTasks() {
-        replayAll();
-
         connector.start(sourceProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
@@ -82,21 +77,15 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
                 taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
         assertEquals(SINGLE_TOPIC,
                 taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
-
-        verifyAll();
     }
 
     @Test
     public void testSourceTasksStdin() {
-        EasyMock.replay(ctx);
-
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
         connector.start(sourceProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertNull(taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
-
-        EasyMock.verify(ctx);
     }
 
     @Test
@@ -107,12 +96,8 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
 
     @Test
     public void testTaskClass() {
-        EasyMock.replay(ctx);
-
         connector.start(sourceProperties);
         assertEquals(FileStreamSourceTask.class, connector.taskClass());
-
-        EasyMock.verify(ctx);
     }
 
     @Test

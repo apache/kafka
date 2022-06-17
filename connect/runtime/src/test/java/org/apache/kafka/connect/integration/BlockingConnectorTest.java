@@ -37,6 +37,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
@@ -54,6 +55,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -77,8 +79,8 @@ public class BlockingConnectorTest {
     private static final String NORMAL_CONNECTOR_NAME = "normal-connector";
     private static final String TEST_TOPIC = "normal-topic";
     private static final int NUM_RECORDS_PRODUCED = 100;
-    private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(60);
-    private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long CONNECTOR_BLOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long RECORD_TRANSFER_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
@@ -132,7 +134,7 @@ public class BlockingConnectorTest {
         // if the worker is still getting on its feet.
         waitForCondition(
             () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
-            CONNECT_WORKER_STARTUP_TIMEOUT,
+            EmbeddedConnectClusterAssertions.WORKER_SETUP_DURATION_MS,
             "Worker did not complete startup in time"
         );
     }
@@ -328,8 +330,8 @@ public class BlockingConnectorTest {
 
     private void verifyNormalConnector() throws InterruptedException {
         waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-        normalConnectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
-        normalConnectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
+        normalConnectorHandle.awaitRecords(RECORD_TRANSFER_TIMEOUT_MS);
+        normalConnectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
     }
 
     private static class Block {
@@ -351,7 +353,7 @@ public class BlockingConnectorTest {
                 );
         }
 
-        public static void waitForBlock() throws InterruptedException {
+        public static void waitForBlock() throws InterruptedException, TimeoutException {
             synchronized (Block.class) {
                 if (blockLatch == null) {
                     throw new IllegalArgumentException("No connector has been created yet");
@@ -359,7 +361,9 @@ public class BlockingConnectorTest {
             }
 
             log.debug("Waiting for connector to block");
-            blockLatch.await();
+            if (!blockLatch.await(CONNECTOR_BLOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                throw new TimeoutException("Timed out waiting for connector to block.");
+            }
             log.debug("Connector should now be blocked");
         }
 
@@ -388,10 +392,6 @@ public class BlockingConnectorTest {
                 }
                 blockLatch = new CountDownLatch(1);
             }
-        }
-
-        public Map<String, String> taskConfig() {
-            return Collections.singletonMap(BLOCK_CONFIG, block);
         }
 
         public void maybeBlockOn(String block) {

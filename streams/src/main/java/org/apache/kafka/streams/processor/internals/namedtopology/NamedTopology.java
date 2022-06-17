@@ -17,36 +17,36 @@
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 public class NamedTopology extends Topology {
 
-    private final Logger log = LoggerFactory.getLogger(NamedTopology.class);
-    private String name;
-    
-    void setTopologyName(final String newTopologyName) {
-        if (name != null) {
-            log.error("Unable to set topologyName = {} because the name is already set to {}", newTopologyName, name);
-            throw new IllegalStateException("Tried to set topologyName but the name was already set");
-        }
-        name = newTopologyName;
-        internalTopologyBuilder.setNamedTopology(this);
+    NamedTopology(final InternalTopologyBuilder internalTopologyBuilder) {
+        super(internalTopologyBuilder);
     }
 
+    /**
+     * @return the name of this topology
+     */
     public String name() {
-        return name;
+        return internalTopologyBuilder.topologyName();
     }
 
+    /**
+     * @return the list of all source topics this topology is subscribed to
+     */
     public List<String> sourceTopics() {
         return super.internalTopologyBuilder.fullSourceTopicNames();
     }
 
     InternalTopologyBuilder internalTopologyBuilder() {
         return internalTopologyBuilder;
+    }
+
+    TopologyConfig topologyConfigs() {
+        return internalTopologyBuilder.topologyConfigs();
     }
 }

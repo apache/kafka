@@ -17,7 +17,9 @@
 
 package kafka.server
 
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import kafka.server.metadata.{FeatureCacheUpdateException, ZkMetadataCache}
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -27,7 +29,7 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testEmpty(): Unit = {
-    assertTrue(new FinalizedFeatureCache(BrokerFeatures.createDefault()).get.isEmpty)
+    assertTrue(new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, BrokerFeatures.createDefault()).getFeatureOption.isEmpty)
   }
 
   @Test
@@ -37,22 +39,20 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(1, 4))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 4)
 
-    val cache = new FinalizedFeatureCache(brokerFeatures)
-    cache.updateOrThrow(finalizedFeatures, 10)
-    assertTrue(cache.get.isDefined)
-    assertEquals(finalizedFeatures, cache.get.get.features)
-    assertEquals(10, cache.get.get.epoch)
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    cache.updateFeaturesOrThrow(finalizedFeatures, 10)
+    assertTrue(cache.getFeatureOption.isDefined)
+    assertEquals(finalizedFeatures, cache.getFeatureOption.get.features)
+    assertEquals(10, cache.getFeatureOption.get.epoch)
 
-    assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateOrThrow(finalizedFeatures, 9))
+    assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateFeaturesOrThrow(finalizedFeatures, 9))
 
     // Check that the failed updateOrThrow call did not make any mutations.
-    assertTrue(cache.get.isDefined)
-    assertEquals(finalizedFeatures, cache.get.get.features)
-    assertEquals(10, cache.get.get.epoch)
+    assertTrue(cache.getFeatureOption.isDefined)
+    assertEquals(finalizedFeatures, cache.getFeatureOption.get.features)
+    assertEquals(10, cache.getFeatureOption.get.epoch)
   }
 
   @Test
@@ -62,15 +62,13 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(1, 2))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 2)
 
-    val cache = new FinalizedFeatureCache(brokerFeatures)
-    assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateOrThrow(finalizedFeatures, 12))
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateFeaturesOrThrow(finalizedFeatures, 12))
 
     // Check that the failed updateOrThrow call did not make any mutations.
-    assertTrue(cache.isEmpty)
+    assertTrue(cache.getFeatureOption.isEmpty)
   }
 
   @Test
@@ -80,15 +78,13 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 
-    val cache = new FinalizedFeatureCache(brokerFeatures)
-    cache.updateOrThrow(finalizedFeatures, 12)
-    assertTrue(cache.get.isDefined)
-    assertEquals(finalizedFeatures,  cache.get.get.features)
-    assertEquals(12, cache.get.get.epoch)
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    cache.updateFeaturesOrThrow(finalizedFeatures, 12)
+    assertTrue(cache.getFeatureOption.isDefined)
+    assertEquals(finalizedFeatures,  cache.getFeatureOption.get.features)
+    assertEquals(12, cache.getFeatureOption.get.epoch)
   }
 
   @Test
@@ -98,17 +94,15 @@ class FinalizedFeatureCacheTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 
-    val cache = new FinalizedFeatureCache(brokerFeatures)
-    cache.updateOrThrow(finalizedFeatures, 12)
-    assertTrue(cache.get.isDefined)
-    assertEquals(finalizedFeatures, cache.get.get.features)
-    assertEquals(12, cache.get.get.epoch)
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    cache.updateFeaturesOrThrow(finalizedFeatures, 12)
+    assertTrue(cache.getFeatureOption.isDefined)
+    assertEquals(finalizedFeatures, cache.getFeatureOption.get.features)
+    assertEquals(12, cache.getFeatureOption.get.epoch)
 
-    cache.clear()
-    assertTrue(cache.isEmpty)
+    cache.clearFeatures()
+    assertTrue(cache.getFeatureOption.isEmpty)
   }
 }

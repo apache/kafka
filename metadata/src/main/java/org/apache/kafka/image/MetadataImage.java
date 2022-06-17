@@ -23,6 +23,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import org.apache.kafka.server.common.MetadataVersion;
 
 
 /**
@@ -37,7 +38,9 @@ public final class MetadataImage {
         ClusterImage.EMPTY,
         TopicsImage.EMPTY,
         ConfigurationsImage.EMPTY,
-        ClientQuotasImage.EMPTY);
+        ClientQuotasImage.EMPTY,
+        ProducerIdsImage.EMPTY,
+        AclsImage.EMPTY);
 
     private final OffsetAndEpoch highestOffsetAndEpoch;
 
@@ -51,13 +54,19 @@ public final class MetadataImage {
 
     private final ClientQuotasImage clientQuotas;
 
+    private final ProducerIdsImage producerIds;
+
+    private final AclsImage acls;
+
     public MetadataImage(
         OffsetAndEpoch highestOffsetAndEpoch,
         FeaturesImage features,
         ClusterImage cluster,
         TopicsImage topics,
         ConfigurationsImage configs,
-        ClientQuotasImage clientQuotas
+        ClientQuotasImage clientQuotas,
+        ProducerIdsImage producerIds,
+        AclsImage acls
     ) {
         this.highestOffsetAndEpoch = highestOffsetAndEpoch;
         this.features = features;
@@ -65,6 +74,8 @@ public final class MetadataImage {
         this.topics = topics;
         this.configs = configs;
         this.clientQuotas = clientQuotas;
+        this.producerIds = producerIds;
+        this.acls = acls;
     }
 
     public boolean isEmpty() {
@@ -72,7 +83,9 @@ public final class MetadataImage {
             cluster.isEmpty() &&
             topics.isEmpty() &&
             configs.isEmpty() &&
-            clientQuotas.isEmpty();
+            clientQuotas.isEmpty() &&
+            producerIds.isEmpty() &&
+            acls.isEmpty();
     }
 
     public OffsetAndEpoch highestOffsetAndEpoch() {
@@ -99,12 +112,25 @@ public final class MetadataImage {
         return clientQuotas;
     }
 
+    public ProducerIdsImage producerIds() {
+        return producerIds;
+    }
+
+    public AclsImage acls() {
+        return acls;
+    }
+
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
+        MetadataVersion metadataVersion = features.metadataVersion();
+        // Features should be written out first so we can include the metadata.version at the beginning of the
+        // snapshot
         features.write(out);
-        cluster.write(out);
+        cluster.write(out, metadataVersion);
         topics.write(out);
         configs.write(out);
         clientQuotas.write(out);
+        producerIds.write(out);
+        acls.write(out);
     }
 
     @Override
@@ -116,12 +142,21 @@ public final class MetadataImage {
             cluster.equals(other.cluster) &&
             topics.equals(other.topics) &&
             configs.equals(other.configs) &&
-            clientQuotas.equals(other.clientQuotas);
+            clientQuotas.equals(other.clientQuotas) &&
+            producerIds.equals(other.producerIds) &&
+            acls.equals(other.acls);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(highestOffsetAndEpoch, features, cluster, topics, configs, clientQuotas);
+        return Objects.hash(highestOffsetAndEpoch,
+            features,
+            cluster,
+            topics,
+            configs,
+            clientQuotas,
+            producerIds,
+            acls);
     }
 
     @Override
@@ -132,6 +167,8 @@ public final class MetadataImage {
             ", topics=" + topics +
             ", configs=" + configs +
             ", clientQuotas=" + clientQuotas +
+            ", producerIdsImage=" + producerIds +
+            ", acls=" + acls +
             ")";
     }
 }

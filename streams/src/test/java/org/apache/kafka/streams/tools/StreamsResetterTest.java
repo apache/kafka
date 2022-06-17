@@ -29,7 +29,9 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -44,6 +46,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class StreamsResetterTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final String TOPIC = "topic1";
     private final StreamsResetter streamsResetter = new StreamsResetter();

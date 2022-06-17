@@ -17,6 +17,9 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -26,9 +29,12 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
@@ -37,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
@@ -48,6 +55,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
     private RecordCollector collector;
 
     private final ProcessorStateManager stateManager;
+    private final boolean consistencyEnabled;
 
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
@@ -58,6 +66,10 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                                 final ThreadCache cache) {
         super(id, config, metrics, cache);
         stateManager = stateMgr;
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false);
     }
 
     @Override
@@ -110,22 +122,34 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
     public void logChange(final String storeName,
                           final Bytes key,
                           final byte[] value,
-                          final long timestamp) {
+                          final long timestamp,
+                          final Position position) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
 
         final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
 
-        // Sending null headers to changelog topics (KIP-244)
+        final Headers headers;
+        if (!consistencyEnabled) {
+            headers = null;
+        } else {
+            // Add the vector clock to the header part of every record
+            headers = new RecordHeaders();
+            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+            headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                    PositionSerde.serialize(position).array()));
+        }
+
         collector.send(
             changelogPartition.topic(),
             key,
             value,
-            null,
+            headers,
             changelogPartition.partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER
-        );
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     /**
@@ -184,6 +208,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
             headers()
         );
         forward(toForward, toInternal.child());
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
     }
 
     @Override

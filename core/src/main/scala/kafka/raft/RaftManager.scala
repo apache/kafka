@@ -111,6 +111,7 @@ class KafkaRaftManager[T](
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends RaftManager[T] with Logging {
 
+  val apiVersions = new ApiVersions()
   private val raftConfig = new RaftConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager nodeId=${config.nodeId}] ")
@@ -227,7 +228,7 @@ class KafkaRaftManager[T](
 
   private def buildNetworkClient(): NetworkClient = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.listenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       controllerSecurityProtocol,
       JaasContext.Type.SERVER,
@@ -274,7 +275,7 @@ class KafkaRaftManager[T](
       config.connectionSetupTimeoutMaxMs,
       time,
       discoverBrokerVersions,
-      new ApiVersions,
+      apiVersions,
       logContext
     )
   }

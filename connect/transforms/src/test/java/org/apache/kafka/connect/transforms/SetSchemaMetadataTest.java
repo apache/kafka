@@ -150,6 +150,24 @@ public class SetSchemaMetadataTest {
     }
 
     @Test
+    public void valueSchemaRequired() {
+        final SinkRecord record = new SinkRecord("", 0, null, null, null, 42, 0);
+        assertThrows(DataException.class, () -> xform.apply(record));
+    }
+
+    @Test
+    public void ignoreRecordWithNullValue() {
+        final SinkRecord record = new SinkRecord("", 0, null, null, null, null, 0);
+
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertNull(updatedRecord.key());
+        assertNull(updatedRecord.keySchema());
+        assertNull(updatedRecord.value());
+        assertNull(updatedRecord.valueSchema());
+    }
+
+    @Test
     public void updateSchemaOfStruct() {
         final String fieldName1 = "f1";
         final String fieldName2 = "f2";

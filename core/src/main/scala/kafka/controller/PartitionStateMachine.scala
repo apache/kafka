@@ -27,8 +27,10 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
+
 import scala.collection.{Map, Seq, mutable}
 
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
@@ -130,6 +132,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
                               zkClient: KafkaZkClient,
                               controllerBrokerRequestBatch: ControllerBrokerRequestBatch)
   extends PartitionStateMachine(controllerContext) {
+
+  private val isLeaderRecoverySupported = config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)
 
   private val controllerId = config.brokerId
   this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
@@ -410,7 +414,12 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           validLeaderAndIsrs,
           allowUnclean
         )
-        leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState).partition(_.leaderAndIsr.isEmpty)
+        leaderForOffline(
+          controllerContext,
+          isLeaderRecoverySupported,
+          partitionsWithUncleanLeaderElectionState
+        ).partition(_.leaderAndIsr.isEmpty)
+
       case ReassignPartitionLeaderElectionStrategy =>
         leaderForReassign(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
       case PreferredReplicaPartitionLeaderElectionStrategy =>

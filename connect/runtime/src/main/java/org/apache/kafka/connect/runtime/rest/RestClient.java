@@ -112,14 +112,15 @@ public class RestClient {
 
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
-                if (sessionKey != null && requestSignatureAlgorithm != null) {
-                    InternalRequestSignature.addToRequest(
-                        sessionKey,
-                        serializedBody.getBytes(StandardCharsets.UTF_8),
-                        requestSignatureAlgorithm,
-                        req
-                    );
-                }
+            }
+
+            if (sessionKey != null && requestSignatureAlgorithm != null) {
+                InternalRequestSignature.addToRequest(
+                    sessionKey,
+                    serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
+                    requestSignatureAlgorithm,
+                    req
+                );
             }
 
             ContentResponse res = req.send();
@@ -188,9 +189,9 @@ public class RestClient {
     }
 
     public static class HttpResponse<T> {
-        private int status;
-        private Map<String, String> headers;
-        private T body;
+        private final int status;
+        private final Map<String, String> headers;
+        private final T body;
 
         public HttpResponse(int status, Map<String, String> headers, T body) {
             this.status = status;

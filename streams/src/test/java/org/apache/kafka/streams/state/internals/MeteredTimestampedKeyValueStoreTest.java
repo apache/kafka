@@ -99,6 +99,8 @@ public class MeteredTimestampedKeyValueStoreTest {
     @Mock(type = MockType.NICE)
     private InternalProcessorContext context;
 
+    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
+
     private MeteredTimestampedKeyValueStore<String, String> metered;
     private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(KEY_BYTES,
         VALUE_AND_TIMESTAMP_BYTES
@@ -124,6 +126,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expectSerdes();
         expect(inner.name()).andStubReturn(STORE_NAME);
+        expect(context.appConfigs()).andStubReturn(CONFIGS);
         tags = mkMap(
             mkEntry(THREAD_ID_TAG_KEY, threadId),
             mkEntry("task-id", taskId.toString()),

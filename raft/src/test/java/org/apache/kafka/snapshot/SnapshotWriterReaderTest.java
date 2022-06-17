@@ -188,7 +188,7 @@ final public class SnapshotWriterReaderTest {
         OffsetAndEpoch snapshotId,
         int maxBatchSize
     ) {
-        return SnapshotReader.of(
+        return RecordsSnapshotReader.of(
             context.log.readSnapshot(snapshotId).get(),
             context.serde,
             BufferSupplier.create(),
@@ -238,7 +238,7 @@ final public class SnapshotWriterReaderTest {
         assertTrue(batch.isControlBatch());
 
         SnapshotFooterRecord footerRecord = ControlRecordUtils.deserializedSnapshotFooterRecord(record);
-        assertEquals(footerRecord.version(), ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION);
+        assertEquals(footerRecord.version(), ControlRecordUtils.SNAPSHOT_FOOTER_HIGHEST_VERSION);
 
         return countRecords;
     }
@@ -246,7 +246,7 @@ final public class SnapshotWriterReaderTest {
     public static void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         assertSnapshot(
             batches,
-            SnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE)
+            RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE)
         );
     }
 

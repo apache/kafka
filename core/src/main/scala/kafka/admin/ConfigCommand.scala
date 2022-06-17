@@ -22,11 +22,10 @@ import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 
 import joptsimple._
-import kafka.common.Config
 import kafka.log.LogConfig
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
@@ -74,7 +73,7 @@ import scala.collection._
  * For example, this allows password configs to be stored encrypted in ZK before brokers are started,
  * avoiding cleartext passwords in `server.properties`.
  */
-object ConfigCommand extends Config {
+object ConfigCommand extends Logging {
 
   val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"

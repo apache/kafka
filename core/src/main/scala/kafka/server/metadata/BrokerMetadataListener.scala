@@ -39,9 +39,10 @@ class BrokerMetadataListener(
   time: Time,
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
-  val snapshotter: Option[MetadataSnapshotter]
+  val snapshotter: Option[MetadataSnapshotter],
+  brokerMetrics: BrokerServerMetrics
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
-  private val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
+  private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
   logIdent = logContext.logPrefix()
 
@@ -110,7 +111,7 @@ class BrokerMetadataListener(
       val results = try {
         val loadResults = loadBatches(_delta, reader, None, None, None)
         if (isDebugEnabled) {
-          debug(s"Loaded new commits: ${loadResults}")
+          debug(s"Loaded new commits: $loadResults")
         }
         loadResults
       } finally {
@@ -118,9 +119,14 @@ class BrokerMetadataListener(
       }
       _publisher.foreach(publish)
 
+      // If we detected a change in metadata.version, generate a local snapshot
+      val metadataVersionChanged = Option(_delta.featuresDelta()).exists { featuresDelta =>
+        featuresDelta.metadataVersionChange().isPresent
+      }
+
       snapshotter.foreach { snapshotter =>
         _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
-        if (shouldSnapshot()) {
+        if (shouldSnapshot() || metadataVersionChanged) {
           if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
             _bytesSinceLastSnapshot = 0L
           }
@@ -154,7 +160,7 @@ class BrokerMetadataListener(
         )
         _delta.finishSnapshot()
         info(s"Loaded snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}: " +
-          s"${loadResults}")
+          s"$loadResults")
       } finally {
         reader.close()
       }
@@ -163,9 +169,9 @@ class BrokerMetadataListener(
   }
 
   case class BatchLoadResults(numBatches: Int, numRecords: Int, elapsedUs: Long, numBytes: Long) {
-    override def toString(): String = {
-      s"${numBatches} batch(es) with ${numRecords} record(s) in ${numBytes} bytes " +
-        s"ending at offset ${highestMetadataOffset} in ${elapsedUs} microseconds"
+    override def toString: String = {
+      s"$numBatches batch(es) with $numRecords record(s) in $numBytes bytes " +
+        s"ending at offset $highestMetadataOffset in $elapsedUs microseconds"
     }
   }
 
@@ -194,7 +200,7 @@ class BrokerMetadataListener(
     var numRecords = 0
     var numBytes = 0L
 
-    while (iterator.hasNext()) {
+    while (iterator.hasNext) {
       val batch = iterator.next()
 
       val epoch = lastCommittedEpoch.getOrElse(batch.epoch())
@@ -203,8 +209,8 @@ class BrokerMetadataListener(
       var index = 0
       batch.records().forEach { messageAndVersion =>
         if (isTraceEnabled) {
-          trace("Metadata batch %d: processing [%d/%d]: %s.".format(batch.lastOffset, index + 1,
-            batch.records().size(), messageAndVersion.message().toString()))
+          trace(s"Metadata batch ${batch.lastOffset}: processing [${index + 1}/${batch.records.size}]:" +
+            s" ${messageAndVersion.message}")
         }
 
         _highestOffset  = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
@@ -236,7 +242,7 @@ class BrokerMetadataListener(
 
     override def run(): Unit = {
       _publisher = Some(publisher)
-      log.info(s"Starting to publish metadata events at offset ${highestMetadataOffset}.")
+      log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
         publish(publisher)
         future.complete(null)
@@ -248,11 +254,36 @@ class BrokerMetadataListener(
     }
   }
 
+  // This is used in tests to alter the publisher that is in use by the broker.
+  def alterPublisher(publisher: MetadataPublisher): CompletableFuture[Void] = {
+    val event = new AlterPublisherEvent(publisher)
+    eventQueue.append(event)
+    event.future
+  }
+
+  class AlterPublisherEvent(publisher: MetadataPublisher)
+    extends EventQueue.FailureLoggingEvent(log) {
+    val future = new CompletableFuture[Void]()
+
+    override def run(): Unit = {
+      _publisher = Some(publisher)
+      log.info(s"Set publisher to ${publisher}")
+      future.complete(null)
+    }
+  }
+
   private def publish(publisher: MetadataPublisher): Unit = {
     val delta = _delta
     _image = _delta.apply()
     _delta = new MetadataDelta(_image)
+    if (isDebugEnabled) {
+      debug(s"Publishing new metadata delta $delta at offset ${_image.highestOffsetAndEpoch().offset}.")
+    }
     publisher.publish(delta, _image)
+
+    // Update the metrics since the publisher handled the lastest image
+    brokerMetrics.lastAppliedRecordOffset.set(_highestOffset)
+    brokerMetrics.lastAppliedRecordTimestamp.set(_highestTimestamp)
   }
 
   override def handleLeaderChange(leaderAndEpoch: LeaderAndEpoch): Unit = {
@@ -263,8 +294,9 @@ class BrokerMetadataListener(
     eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
   }
 
-  class ShutdownEvent() extends EventQueue.FailureLoggingEvent(log) {
+  class ShutdownEvent extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
+      brokerMetrics.close()
       removeMetric(BrokerMetadataListener.MetadataBatchProcessingTimeUs)
       removeMetric(BrokerMetadataListener.MetadataBatchSizes)
     }

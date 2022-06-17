@@ -17,46 +17,65 @@
 
 package kafka.api
 
+import org.apache.kafka.metadata.LeaderRecoveryState
+
 object LeaderAndIsr {
-  val initialLeaderEpoch: Int = 0
-  val initialZKVersion: Int = 0
+  val InitialLeaderEpoch: Int = 0
+  val InitialPartitionEpoch: Int = 0
   val NoLeader: Int = -1
   val NoEpoch: Int = -1
   val LeaderDuringDelete: Int = -2
   val EpochDuringDelete: Int = -2
 
-  def apply(leader: Int, isr: List[Int]): LeaderAndIsr = LeaderAndIsr(leader, initialLeaderEpoch, isr, initialZKVersion)
+  def apply(leader: Int, isr: List[Int]): LeaderAndIsr = {
+    LeaderAndIsr(leader, InitialLeaderEpoch, isr, LeaderRecoveryState.RECOVERED, InitialPartitionEpoch)
+  }
 
   def duringDelete(isr: List[Int]): LeaderAndIsr = LeaderAndIsr(LeaderDuringDelete, isr)
 }
 
-case class LeaderAndIsr(leader: Int,
-                        leaderEpoch: Int,
-                        isr: List[Int],
-                        zkVersion: Int) {
-  def withZkVersion(zkVersion: Int) = copy(zkVersion = zkVersion)
+case class LeaderAndIsr(
+  leader: Int,
+  leaderEpoch: Int,
+  isr: List[Int],
+  leaderRecoveryState: LeaderRecoveryState,
+  // The current epoch for the partition for KRaft controllers. The current ZK version for the
+  // legacy controllers. The epoch is a monotonically increasing value which is incremented
+  // after every partition change.
+  partitionEpoch: Int
+) {
+  def withPartitionEpoch(partitionEpoch: Int): LeaderAndIsr = copy(partitionEpoch = partitionEpoch)
 
-  def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
+  def newLeader(leader: Int): LeaderAndIsr = newLeaderAndIsr(leader, isr)
 
-  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion)
+  def newLeaderAndIsr(leader: Int, isr: List[Int]): LeaderAndIsr = {
+    LeaderAndIsr(leader, leaderEpoch + 1, isr, leaderRecoveryState, partitionEpoch)
+  }
 
-  def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
+  def newRecoveringLeaderAndIsr(leader: Int, isr: List[Int]): LeaderAndIsr = {
+    LeaderAndIsr(leader, leaderEpoch + 1, isr, LeaderRecoveryState.RECOVERING, partitionEpoch)
+  }
+
+  def newEpoch: LeaderAndIsr = newLeaderAndIsr(leader, isr)
 
   def leaderOpt: Option[Int] = {
     if (leader == LeaderAndIsr.NoLeader) None else Some(leader)
   }
 
-  def equalsIgnoreZk(other: LeaderAndIsr): Boolean = {
+  def equalsIgnorePartitionEpoch(other: LeaderAndIsr): Boolean = {
     if (this == other) {
       true
     } else if (other == null) {
       false
     } else {
-      leader == other.leader && leaderEpoch == other.leaderEpoch && isr.equals(other.isr)
+      leader == other.leader &&
+        leaderEpoch == other.leaderEpoch &&
+        isr.equals(other.isr) &&
+        leaderRecoveryState == other.leaderRecoveryState
     }
   }
 
   override def toString: String = {
-    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"
+    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, leaderRecoveryState=$leaderRecoveryState, partitionEpoch=$partitionEpoch)"
   }
 }

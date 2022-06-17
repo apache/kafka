@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
@@ -28,7 +30,7 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.NotFoundException;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -39,9 +41,15 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -101,7 +109,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
 
-    private ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -344,9 +352,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
-    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
-                                                                    ConfigDef configDef,
-                                                                    Map<String, String> config) {
+    protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
+        return configDef.validateAll(config);
+    }
+
+    protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
         return configDef.validateAll(config);
     }
 
@@ -412,7 +422,23 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))
         );
         return Optional.of(new RestartPlan(request, stateInfo));
+    }
 
+    protected boolean connectorUsesConsumer(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        return connectorType == org.apache.kafka.connect.health.ConnectorType.SINK;
+    }
+
+    protected boolean connectorUsesAdmin(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        if (connectorType == org.apache.kafka.connect.health.ConnectorType.SOURCE) {
+            return SourceConnectorConfig.usesTopicCreation(connProps);
+        } else {
+            return SinkConnectorConfig.hasDlqTopicConfig(connProps);
+        }
+    }
+
+    protected boolean connectorUsesProducer(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
+        return connectorType == org.apache.kafka.connect.health.ConnectorType.SOURCE
+            || SinkConnectorConfig.hasDlqTopicConfig(connProps);
     }
 
     ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
@@ -426,22 +452,28 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Connector connector = getConnector(connType);
         org.apache.kafka.connect.health.ConnectorType connectorType;
         ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
+        ConfigDef enrichedConfigDef;
+        Map<String, ConfigValue> validatedConnectorConfig;
         try {
-            ConfigDef baseConfigDef;
             if (connector instanceof SourceConnector) {
-                baseConfigDef = SourceConnectorConfig.configDef();
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
+                enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
+                validatedConnectorConfig = validateSourceConnectorConfig((SourceConnector) connector, enrichedConfigDef, connectorProps);
             } else {
-                baseConfigDef = SinkConnectorConfig.configDef();
                 SinkConnectorConfig.validate(connectorProps);
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
+                enrichedConfigDef = ConnectorConfig.enrich(plugins(), SinkConnectorConfig.configDef(), connectorProps, false);
+                validatedConnectorConfig = validateSinkConnectorConfig((SinkConnector) connector, enrichedConfigDef, connectorProps);
             }
-            ConfigDef enrichedConfigDef = ConnectorConfig.enrich(plugins(), baseConfigDef, connectorProps, false);
-            Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
-                    connector,
-                    enrichedConfigDef,
-                    connectorProps
+
+            connectorProps.entrySet().stream()
+                .filter(e -> e.getValue() == null)
+                .map(Map.Entry::getKey)
+                .forEach(prop ->
+                    validatedConnectorConfig.computeIfAbsent(prop, ConfigValue::new)
+                        .addErrorMessage("Null value can not be supplied as the configuration value.")
             );
+
             List<ConfigValue> configValues = new ArrayList<>(validatedConnectorConfig.values());
             Map<String, ConfigKey> configKeys = new LinkedHashMap<>(enrichedConfigDef.configKeys());
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
@@ -475,38 +507,39 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigInfos producerConfigInfos = null;
             ConfigInfos consumerConfigInfos = null;
             ConfigInfos adminConfigInfos = null;
-            if (connectorType.equals(org.apache.kafka.connect.health.ConnectorType.SOURCE)) {
-                producerConfigInfos = validateClientOverrides(connName,
-                                                              ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
-                                                              connectorConfig,
-                                                              ProducerConfig.configDef(),
-                                                              connector.getClass(),
-                                                              connectorType,
-                                                              ConnectorClientConfigRequest.ClientType.PRODUCER,
-                                                              connectorClientConfigOverridePolicy);
-                return mergeConfigInfos(connType, configInfos, producerConfigInfos);
-            } else {
-                consumerConfigInfos = validateClientOverrides(connName,
-                                                              ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
-                                                              connectorConfig,
-                                                              ProducerConfig.configDef(),
-                                                              connector.getClass(),
-                                                              connectorType,
-                                                              ConnectorClientConfigRequest.ClientType.CONSUMER,
-                                                              connectorClientConfigOverridePolicy);
-                // check if topic for dead letter queue exists
-                String topic = connectorProps.get(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG);
-                if (topic != null && !topic.isEmpty()) {
-                    adminConfigInfos = validateClientOverrides(connName,
-                                                               ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
-                                                               connectorConfig,
-                                                               ProducerConfig.configDef(),
-                                                               connector.getClass(),
-                                                               connectorType,
-                                                               ConnectorClientConfigRequest.ClientType.ADMIN,
-                                                               connectorClientConfigOverridePolicy);
-                }
 
+            if (connectorUsesProducer(connectorType, connectorProps)) {
+                producerConfigInfos = validateClientOverrides(
+                    connName,
+                    ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+                    connectorConfig,
+                    ProducerConfig.configDef(),
+                    connector.getClass(),
+                    connectorType,
+                    ConnectorClientConfigRequest.ClientType.PRODUCER,
+                    connectorClientConfigOverridePolicy);
+            }
+            if (connectorUsesAdmin(connectorType, connectorProps)) {
+                adminConfigInfos = validateClientOverrides(
+                    connName,
+                    ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+                    connectorConfig,
+                    AdminClientConfig.configDef(),
+                    connector.getClass(),
+                    connectorType,
+                    ConnectorClientConfigRequest.ClientType.ADMIN,
+                    connectorClientConfigOverridePolicy);
+            }
+            if (connectorUsesConsumer(connectorType, connectorProps)) {
+                consumerConfigInfos = validateClientOverrides(
+                    connName,
+                    ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+                    connectorConfig,
+                    ConsumerConfig.configDef(),
+                    connector.getClass(),
+                    connectorType,
+                    ConnectorClientConfigRequest.ClientType.CONSUMER,
+                    connectorClientConfigOverridePolicy);
             }
             return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
         } finally {
@@ -606,7 +639,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
-    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+    public static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
         return convertConfigKey(configKey, "");
     }
 
@@ -653,12 +686,21 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return tempConnectors.computeIfAbsent(connType, k -> plugins().newConnector(k));
     }
 
-    /*
+    /**
      * Retrieves ConnectorType for the corresponding connector class
      * @param connClass class of the connector
      */
     public ConnectorType connectorTypeForClass(String connClass) {
         return ConnectorType.from(getConnector(connClass).getClass());
+    }
+
+    /**
+     * Retrieves ConnectorType for the class specified in the connector config
+     * @param connConfig the connector config; may not be null
+     * @return the {@link ConnectorType} of the connector
+     */
+    public ConnectorType connectorTypeForConfig(Map<String, String> connConfig) {
+        return connectorTypeForClass(connConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
     }
 
     /**
@@ -741,6 +783,43 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
         }
         return keys;
+    }
+
+    @Override
+    public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
+        List<ConfigKeyInfo> results = new ArrayList<>();
+        ConfigDef configDefs;
+        try {
+            Plugins p = plugins();
+            Object plugin = p.newPlugin(pluginName);
+            PluginType pluginType = PluginType.from(plugin.getClass());
+            switch (pluginType) {
+                case SINK:
+                case SOURCE:
+                    configDefs = ((Connector) plugin).config();
+                    break;
+                case CONVERTER:
+                    configDefs = ((Converter) plugin).config();
+                    break;
+                case HEADER_CONVERTER:
+                    configDefs = ((HeaderConverter) plugin).config();
+                    break;
+                case TRANSFORMATION:
+                    configDefs = ((Transformation<?>) plugin).config();
+                    break;
+                case PREDICATE:
+                    configDefs = ((Predicate<?>) plugin).config();
+                    break;
+                default:
+                    throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
+            }
+        } catch (ClassNotFoundException cnfe) {
+            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+        }
+        for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
+            results.add(AbstractHerder.convertConfigKey(configKey));
+        }
+        return results;
     }
 
 }

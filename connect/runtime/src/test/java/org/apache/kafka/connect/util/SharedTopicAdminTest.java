@@ -52,7 +52,7 @@ public class SharedTopicAdminTest {
     @Before
     public void beforeEach() {
         when(factory.apply(anyMap())).thenReturn(mockTopicAdmin);
-        sharedAdmin = new SharedTopicAdmin(EMPTY_CONFIG, factory::apply);
+        sharedAdmin = new SharedTopicAdmin(EMPTY_CONFIG, factory);
     }
 
     @Test

@@ -226,6 +226,14 @@ public class ProduceResponse extends AbstractResponse {
         public int hashCode() {
             return Objects.hash(batchIndex, message);
         }
+
+        @Override
+        public String toString() {
+            return "RecordError("
+                    + "batchIndex=" + batchIndex
+                    + ", message=" + ((message == null) ? "null" : "'" + message + "'")
+                    + ")";
+        }
     }
 
     public static ProduceResponse parse(ByteBuffer buffer, short version) {
