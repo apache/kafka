@@ -52,8 +52,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.{ElectionType, Uuid}
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
-import org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions._
@@ -298,7 +298,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
         handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-          new AlterPartitionRequestData()).build(0))))
+          new AlterPartitionRequestData(), false).build(0))))
   }
 
   @Test

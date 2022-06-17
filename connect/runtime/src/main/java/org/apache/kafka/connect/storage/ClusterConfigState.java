@@ -42,6 +42,9 @@ public class ClusterConfigState {
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptySet(),
             Collections.emptySet());
 
     private final long offset;
@@ -51,6 +54,9 @@ public class ClusterConfigState {
     final Map<String, Map<String, String>> connectorConfigs;
     final Map<String, TargetState> connectorTargetStates;
     final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
+    final Map<String, Integer> connectorTaskCountRecords;
+    final Map<String, Integer> connectorTaskConfigGenerations;
+    final Set<String> connectorsPendingFencing;
     final Set<String> inconsistentConnectors;
 
     public ClusterConfigState(long offset,
@@ -59,6 +65,9 @@ public class ClusterConfigState {
                               Map<String, Map<String, String>> connectorConfigs,
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+                              Map<String, Integer> connectorTaskCountRecords,
+                              Map<String, Integer> connectorTaskConfigGenerations,
+                              Set<String> connectorsPendingFencing,
                               Set<String> inconsistentConnectors) {
         this(offset,
                 sessionKey,
@@ -66,6 +75,9 @@ public class ClusterConfigState {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
+                connectorTaskCountRecords,
+                connectorTaskConfigGenerations,
+                connectorsPendingFencing,
                 inconsistentConnectors,
                 null);
     }
@@ -76,6 +88,9 @@ public class ClusterConfigState {
                               Map<String, Map<String, String>> connectorConfigs,
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+                              Map<String, Integer> connectorTaskCountRecords,
+                              Map<String, Integer> connectorTaskConfigGenerations,
+                              Set<String> connectorsPendingFencing,
                               Set<String> inconsistentConnectors,
                               WorkerConfigTransformer configTransformer) {
         this.offset = offset;
@@ -84,6 +99,9 @@ public class ClusterConfigState {
         this.connectorConfigs = connectorConfigs;
         this.connectorTargetStates = connectorTargetStates;
         this.taskConfigs = taskConfigs;
+        this.connectorTaskCountRecords = connectorTaskCountRecords;
+        this.connectorTaskConfigGenerations = connectorTaskConfigGenerations;
+        this.connectorsPendingFencing = connectorsPendingFencing;
         this.inconsistentConnectors = inconsistentConnectors;
         this.configTransformer = configTransformer;
     }
@@ -203,6 +221,15 @@ public class ClusterConfigState {
     }
 
     /**
+     * Get whether the connector requires a round of zombie fencing before
+     * a new generation of tasks can be brought up for it.
+     * @param connectorName name of the connector
+     */
+    public boolean pendingFencing(String connectorName) {
+        return connectorsPendingFencing.contains(connectorName);
+    }
+
+    /**
      * Get the current set of task IDs for the specified connector.
      * @param connectorName the name of the connector to look up task configs for
      * @return the current set of connector task IDs
@@ -223,6 +250,25 @@ public class ClusterConfigState {
             taskIds.add(taskId);
         }
         return Collections.unmodifiableList(taskIds);
+    }
+
+    /**
+     * Get the task count record for the connector, if one exists
+     * @param connector name of the connector
+     * @return the latest task count record for the connector, or {@code null} if none exists
+     */
+    public Integer taskCountRecord(String connector) {
+        return connectorTaskCountRecords.get(connector);
+    }
+
+    /**
+     * Get the generation number for the connector's task configurations, if one exists.
+     * Generation numbers increase monotonically each time a new set of task configurations is detected for the connector
+     * @param connector name of the connector
+     * @return the latest task config generation number for the connector, or {@code null} if none exists
+     */
+    public Integer taskConfigGeneration(String connector) {
+        return connectorTaskConfigGenerations.get(connector);
     }
 
     /**

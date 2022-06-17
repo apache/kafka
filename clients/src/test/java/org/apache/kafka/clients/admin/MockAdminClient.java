@@ -963,6 +963,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }

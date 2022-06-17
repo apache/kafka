@@ -16,65 +16,101 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.processor.TaskId;
+
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 public interface StateUpdater {
 
     class ExceptionAndTasks {
-        public final Set<Task> tasks;
-        public final RuntimeException exception;
+        private final Set<Task> tasks;
+        private final RuntimeException exception;
 
         public ExceptionAndTasks(final Set<Task> tasks, final RuntimeException exception) {
-            this.tasks = tasks;
-            this.exception = exception;
+            this.tasks = Objects.requireNonNull(tasks);
+            this.exception = Objects.requireNonNull(exception);
+        }
+
+        public Set<Task> tasks() {
+            return Collections.unmodifiableSet(tasks);
+        }
+
+        public RuntimeException exception() {
+            return exception;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ExceptionAndTasks)) return false;
+            final ExceptionAndTasks that = (ExceptionAndTasks) o;
+            return tasks.equals(that.tasks) && exception.equals(that.exception);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(tasks, exception);
         }
     }
 
     /**
      * Adds a task (active or standby) to the state updater.
      *
+     * This method does not block until the task is added to the state updater.
+     *
      * @param task task to add
      */
     void add(final Task task);
 
     /**
-     * Removes a task (active or standby) from the state updater.
+     * Removes a task (active or standby) from the state updater and adds the removed task to the removed tasks.
      *
-     * @param task task ro remove
+     * This method does not block until the removed task is removed from the state updater.
+     *
+     * The task to be removed is not removed from the restored active tasks and the failed tasks.
+     * Stateless tasks will never be added to the removed tasks since they are immediately added to the
+     * restored active tasks.
+     *
+     * @param taskId ID of the task to remove
      */
-    void remove(final Task task);
+    void remove(final TaskId taskId);
 
     /**
-     * Gets restored active tasks from state restoration/update
+     * Drains the restored active tasks from the state updater.
+     *
+     * The returned active tasks are removed from the state updater.
      *
      * @param timeout duration how long the calling thread should wait for restored active tasks
      *
      * @return set of active tasks with up-to-date states
      */
-    Set<StreamTask> getRestoredActiveTasks(final Duration timeout);
+    Set<StreamTask> drainRestoredActiveTasks(final Duration timeout);
+
 
     /**
-     * Gets failed tasks and the corresponding exceptions
+     * Drains the removed tasks (active and standbys) from the state updater.
+     *
+     * Removed tasks returned by this method are tasks extraordinarily removed from the state updater. These do not
+     * include restored or failed tasks.
+     *
+     * The returned removed tasks are removed from the state updater
+     *
+     * @return set of tasks removed from the state updater
+     */
+    Set<Task> drainRemovedTasks();
+
+    /**
+     * Drains the failed tasks and the corresponding exceptions.
+     *
+     * The returned failed tasks are removed from the state updater
      *
      * @return list of failed tasks and the corresponding exceptions
      */
-    List<ExceptionAndTasks> getFailedTasksAndExceptions();
-
-    /**
-     * Get all tasks (active and standby) that are managed by the state updater.
-     *
-     * @return set of tasks managed by the state updater
-     */
-    Set<Task> getAllTasks();
-
-    /**
-     * Get standby tasks that are managed by the state updater.
-     *
-     * @return set of standby tasks managed by the state updater
-     */
-    Set<StandbyTask> getStandbyTasks();
+    List<ExceptionAndTasks> drainExceptionsAndFailedTasks();
 
     /**
      * Shuts down the state updater.

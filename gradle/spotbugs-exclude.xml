@@ -287,7 +287,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->
-        <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
+        <Class name="org.apache.kafka.connect.runtime.AbstractWorkerSourceTask"/>
         <Method name="execute"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
     </Match>

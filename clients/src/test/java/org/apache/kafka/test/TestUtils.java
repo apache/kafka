@@ -34,10 +34,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -142,14 +142,31 @@ public class TestUtils {
     }
 
     /**
+     * Create an empty file in the default temporary-file directory, using the given prefix and suffix
+     * to generate its name.
+     * @throws IOException
+     */
+    public static File tempFile(final String prefix, final String suffix) throws IOException {
+        final File file = Files.createTempFile(prefix, suffix).toFile();
+        file.deleteOnExit();
+
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
+            }
+        });
+
+        return file;
+    }
+
+    /**
      * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
-        final File file = File.createTempFile("kafka", ".tmp");
-        file.deleteOnExit();
-
-        return file;
+        return tempFile("kafka", ".tmp");
     }
 
     /**
@@ -158,10 +175,7 @@ public class TestUtils {
      */
     public static File tempFile(final String contents) throws IOException {
         final File file = tempFile();
-        final FileWriter writer = new FileWriter(file);
-        writer.write(contents);
-        writer.close();
-
+        Files.write(file.toPath(), contents.getBytes(StandardCharsets.UTF_8));
         return file;
     }
 

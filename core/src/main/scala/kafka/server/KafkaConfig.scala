@@ -980,8 +980,8 @@ object KafkaConfig {
   val ControllerQuotaWindowSizeSecondsDoc = "The time span of each sample for controller mutations quotas"
 
   val ClientQuotaCallbackClassDoc = "The fully qualified name of a class that implements the ClientQuotaCallback interface, " +
-    "which is used to determine quota limits applied to client requests. By default, &lt;user&gt;, &lt;client-id&gt;, &lt;user&gt; or &lt;client-id&gt; " +
-    "quotas stored in ZooKeeper are applied. For any given request, the most specific quota that matches the user principal " +
+    "which is used to determine quota limits applied to client requests. By default, the &lt;user&gt; and &lt;client-id&gt; " +
+    "quotas that are stored in ZooKeeper are applied. For any given request, the most specific quota that matches the user principal " +
     "of the session and the client-id of the request is applied."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
@@ -1790,38 +1790,25 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
-  val interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
-
-  val fetchRequestVersion: Short =
-    if (interBrokerProtocolVersion.isAtLeast(IBP_3_1_IV0)) 13
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_7_IV1)) 12
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 11
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV2)) 10
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)) 8
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_1_1_IV0)) 7
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV1)) 5
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV0)) 4
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV1)) 3
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_0_IV0)) 2
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_9_0)) 1
-    else 0
-
-  val offsetForLeaderEpochRequestVersion: Short =
-    if (interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 4
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 3
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV1)) 2
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV0)) 1
-    else 0
-
-  val listOffsetRequestVersion: Short =
-    if (interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)) 7
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 6
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV1)) 5
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV1)) 4
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)) 3
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV0)) 2
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV2)) 1
-    else 0
+  val interBrokerProtocolVersion = if (processRoles.isEmpty) {
+    MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
+  } else {
+    if (originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
+      // A user-supplied IBP was given
+      val configuredVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
+      if (!configuredVersion.isKRaftSupported) {
+        throw new ConfigException(s"A non-KRaft version ${interBrokerProtocolVersionString} given for ${KafkaConfig.InterBrokerProtocolVersionProp}. " +
+          s"The minimum version is ${MetadataVersion.MINIMUM_KRAFT_VERSION}")
+      } else {
+        warn(s"${KafkaConfig.InterBrokerProtocolVersionProp} is deprecated in KRaft mode as of 3.3 and will only " +
+          s"be read when first upgrading from a KRaft prior to 3.3. See kafka-storage.sh help for details on setting " +
+          s"the metadata version for a new KRaft cluster.")
+      }
+    }
+    // In KRaft mode, we pin this value to the minimum KRaft-supported version. This prevents inadvertent usage of
+    // the static IBP config in broker components running in KRaft mode
+    MetadataVersion.MINIMUM_KRAFT_VERSION
+  }
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)

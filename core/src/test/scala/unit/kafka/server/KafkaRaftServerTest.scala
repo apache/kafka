@@ -24,6 +24,7 @@ import kafka.log.UnifiedLog
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -71,12 +72,13 @@ class KafkaRaftServerTest {
 
   private def invokeLoadMetaProperties(
     metaProperties: MetaProperties,
-    configProperties: Properties
+    configProperties: Properties,
+    metadataVersion: Option[MetadataVersion] = Some(MetadataVersion.latest())
   ): (MetaProperties, BootstrapMetadata, collection.Seq[String]) = {
     val tempLogDir = TestUtils.tempDirectory()
     try {
       writeMetaProperties(tempLogDir, metaProperties)
-
+      metadataVersion.foreach(mv => writeBootstrapMetadata(tempLogDir, mv))
       configProperties.put(KafkaConfig.LogDirProp, tempLogDir.getAbsolutePath)
       val config = KafkaConfig.fromProps(configProperties)
       KafkaRaftServer.initializeLogDirs(config)
@@ -92,6 +94,11 @@ class KafkaRaftServerTest {
     val metaPropertiesFile = new File(logDir.getAbsolutePath, "meta.properties")
     val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesFile)
     checkpoint.write(metaProperties.toProperties)
+  }
+
+  private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
+    val bootstrapMetadata = BootstrapMetadata.create(metadataVersion)
+    BootstrapMetadata.write(bootstrapMetadata, logDir.toPath)
   }
 
   @Test
@@ -147,6 +154,7 @@ class KafkaRaftServerTest {
     // One log dir is online and has properly formatted `meta.properties`
     val validDir = TestUtils.tempDirectory()
     writeMetaProperties(validDir, MetaProperties(clusterId, nodeId))
+    writeBootstrapMetadata(validDir, MetadataVersion.latest())
 
     // Use a regular file as an invalid log dir to trigger an IO error
     val invalidDir = TestUtils.tempFile("blah")
@@ -215,4 +223,47 @@ class KafkaRaftServerTest {
       () => KafkaRaftServer.initializeLogDirs(config))
   }
 
+  @Test
+  def testKRaftUpdateWithIBP(): Unit = {
+    val clusterId = clusterIdBase64
+    val nodeId = 0
+    val metaProperties = MetaProperties(clusterId, nodeId)
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    configProperties.put(KafkaConfig.InterBrokerProtocolVersionProp, "3.2")
+
+    val (loadedMetaProperties, bootstrapMetadata, offlineDirs) =
+      invokeLoadMetaProperties(metaProperties, configProperties, None)
+
+    assertEquals(metaProperties, loadedMetaProperties)
+    assertEquals(Seq.empty, offlineDirs)
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_2_IV0)
+  }
+
+  @Test
+  def testKRaftUpdateWithoutIBP(): Unit = {
+    val clusterId = clusterIdBase64
+    val nodeId = 0
+    val metaProperties = MetaProperties(clusterId, nodeId)
+
+    val logDir = TestUtils.tempDirectory()
+    writeMetaProperties(logDir, metaProperties)
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    configProperties.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
+
+    val config = KafkaConfig.fromProps(configProperties)
+    assertEquals("Cannot upgrade from KRaft version prior to 3.3 without first setting inter.broker.protocol.version on each broker.",
+      assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config)).getMessage)
+  }
 }

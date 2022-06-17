@@ -174,7 +174,7 @@ public class ClientUtils {
 
     public static long producerRecordSizeInBytes(final ProducerRecord<byte[], byte[]> record) {
         return recordSizeInBytes(
-            record.key().length,
+            record.key() == null ? 0 : record.key().length,
             record.value() == null ? 0 : record.value().length,
             record.topic(),
             record.headers()
@@ -190,10 +190,10 @@ public class ClientUtils {
         );
     }
 
-    public static long recordSizeInBytes(final long keyBytes,
-                                         final long valueBytes,
-                                         final String topic,
-                                         final Headers headers) {
+    private static long recordSizeInBytes(final long keyBytes,
+                                          final long valueBytes,
+                                          final String topic,
+                                          final Headers headers) {
         long headerSizeInBytes = 0L;
 
         if (headers != null) {

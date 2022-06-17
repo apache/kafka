@@ -217,7 +217,10 @@
         See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default">KIP-679</a> for details.
 	In 3.0.0 and 3.1.0, a bug prevented the idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
 	<code>enable.idempotence</code> to true. Note that the bug did not affect the <code>acks=all</code> change. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details.
-        This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.
+        This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
+    <li>Java 8 and Scala 2.12 support have been deprecated since Apache Kafka 3.0 and will be removed in Apache Kafka 4.0.
+        See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a>
+        and <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details.</li>
     <li>ZooKeeper has been upgraded to version 3.6.3.</li>
     <li>A preview of KRaft mode is available, though upgrading to it from the 2.8 Early Access release is not possible. See
         the <code>config/kraft/README.md</code> file for details.</li>

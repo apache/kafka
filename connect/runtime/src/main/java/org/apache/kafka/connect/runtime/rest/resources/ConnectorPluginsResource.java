@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.PredicatedTransformation;
@@ -102,17 +104,18 @@ public class ConnectorPluginsResource {
     }
 
     @PUT
-    @Path("/{connectorType}/config/validate")
+    @Path("/{pluginName}/config/validate")
+    @Operation(summary = "Validate the provided configuration against the configuration definition for the specified pluginName")
     public ConfigInfos validateConfigs(
-        final @PathParam("connectorType") String connType,
+        final @PathParam("pluginName") String pluginName,
         final Map<String, String> connectorConfig
     ) throws Throwable {
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (includedConnType != null
-            && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(connType))) {
+            && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(pluginName))) {
             throw new BadRequestException(
                 "Included connector type " + includedConnType + " does not match request type "
-                    + connType
+                    + pluginName
             );
         }
 
@@ -133,7 +136,10 @@ public class ConnectorPluginsResource {
 
     @GET
     @Path("/")
-    public List<PluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
+    @Operation(summary = "List all connector plugins installed")
+    public List<PluginInfo> listConnectorPlugins(
+            @DefaultValue("true") @QueryParam("connectorsOnly") @Parameter(description = "Whether to list only connectors instead of all plugins") boolean connectorsOnly
+    ) {
         synchronized (this) {
             if (connectorsOnly) {
                 return Collections.unmodifiableList(connectorPlugins.stream()
@@ -146,8 +152,9 @@ public class ConnectorPluginsResource {
     }
 
     @GET
-    @Path("/{name}/config")
-    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("name") String pluginName) {
+    @Path("/{pluginName}/config")
+    @Operation(summary = "Get the configuration definition for the specified pluginName")
+    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName) {
         synchronized (this) {
             return herder.connectorPluginConfig(pluginName);
         }

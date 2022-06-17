@@ -1570,4 +1570,32 @@ class KafkaConfigTest {
       "contained in listeners or controller.listener.names",
         assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
   }
+
+  @Test
+  def testIgnoreUserInterBrokerProtocolVersionKRaft(): Unit = {
+    for (ibp <- Seq("3.0", "3.1", "3.2")) {
+      val props = new Properties()
+      props.putAll(kraftProps())
+      props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp)
+      val config = new KafkaConfig(props)
+      assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
+    }
+  }
+
+  @Test
+  def testInvalidInterBrokerProtocolVersionKRaft(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    assertEquals("A non-KRaft version 2.8 given for inter.broker.protocol.version. The minimum version is 3.0-IV1",
+      assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
+  }
+
+  @Test
+  def testDefaultInterBrokerProtocolVersionKRaft(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    val config = new KafkaConfig(props)
+    assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
+  }
 }

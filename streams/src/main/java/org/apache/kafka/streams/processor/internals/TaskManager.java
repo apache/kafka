@@ -115,7 +115,7 @@ public class TaskManager {
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
-        this.tasks = new Tasks(logContext, topologyMetadata,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
+        this.tasks = new Tasks(logContext, topologyMetadata, activeTaskCreator, standbyTaskCreator);
         this.taskExecutor = new TaskExecutor(
             tasks,
             topologyMetadata.taskExecutionMetadata(),
@@ -1016,6 +1016,11 @@ public class TaskManager {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
         return tasks.tasksPerId();
+    }
+
+    Map<TaskId, Task> notPausedTasks() {
+        return Collections.unmodifiableMap(tasks.notPausedTasks().stream()
+            .collect(Collectors.toMap(Task::id, v -> v)));
     }
 
     Map<TaskId, Task> activeTaskMap() {

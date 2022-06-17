@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 
@@ -128,7 +129,9 @@ public class BootstrapMetadata {
 
     public static BootstrapMetadata create(MetadataVersion metadataVersion, List<ApiMessageAndVersion> records) {
         if (!metadataVersion.isKRaftSupported()) {
-            throw new IllegalArgumentException("Cannot create BootstrapMetadata with a non-KRaft metadata version.");
+            throw new IllegalArgumentException(String.format(
+                "Cannot create BootstrapMetadata with a non-KRaft metadata version %s. Minimum version is %s",
+                metadataVersion, MetadataVersion.MINIMUM_KRAFT_VERSION));
         }
         records.add(new ApiMessageAndVersion(
             new FeatureLevelRecord()
@@ -142,18 +145,24 @@ public class BootstrapMetadata {
     /**
      * Load a bootstrap snapshot into a read-only bootstrap metadata object and return it.
      *
-     * @param bootstrapDir  The directory from which to read the snapshot file.
-     * @param fallbackPreviewVersion    The metadata.version to boostrap if upgrading from KRaft preview
-     * @return              The read-only bootstrap metadata
+     * @param bootstrapDir              The directory from which to read the snapshot file.
+     * @param fallbackVersionSupplier   A function that returns the metadata.version to use when upgrading from an older KRaft
+     * @return                          The read-only bootstrap metadata
      * @throws Exception
      */
-    public static BootstrapMetadata load(Path bootstrapDir, MetadataVersion fallbackPreviewVersion) throws Exception {
+    public static BootstrapMetadata load(Path bootstrapDir, Supplier<MetadataVersion> fallbackVersionSupplier) throws Exception {
         final Path bootstrapPath = bootstrapDir.resolve(BOOTSTRAP_FILE);
 
         if (!Files.exists(bootstrapPath)) {
-            log.debug("Missing bootstrap file, this appears to be a KRaft preview cluster. Setting metadata.version to {}.",
-                fallbackPreviewVersion.featureLevel());
-            return BootstrapMetadata.create(fallbackPreviewVersion);
+            // Upgrade scenario from KRaft prior to 3.3 (i.e., no bootstrap metadata present)
+            MetadataVersion fallbackVersion = fallbackVersionSupplier.get();
+            if (fallbackVersion.isKRaftSupported()) {
+                log.debug("Missing bootstrap file, this appears to be a KRaft cluster older than 3.3. Setting metadata.version to {}.",
+                    fallbackVersion.featureLevel());
+                return BootstrapMetadata.create(fallbackVersion);
+            } else {
+                throw new Exception(String.format("Could not set fallback bootstrap metadata with non-KRaft metadata version of %s", fallbackVersion));
+            }
         }
 
         BootstrapListener listener = new BootstrapListener();
@@ -182,7 +191,7 @@ public class BootstrapMetadata {
         if (metadataVersionRecord.isPresent()) {
             return new BootstrapMetadata(MetadataVersion.fromFeatureLevel(metadataVersionRecord.get().featureLevel()), listener.records);
         } else {
-            throw new RuntimeException("Expected a metadata.version to exist in the snapshot " + bootstrapPath + ", but none was found");
+            throw new Exception("Expected a metadata.version to exist in the snapshot " + bootstrapPath + ", but none was found");
         }
     }
 

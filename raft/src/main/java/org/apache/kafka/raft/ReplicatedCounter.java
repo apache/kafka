@@ -91,7 +91,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     if (nextCommitted != committed + 1) {
                         throw new AssertionError(
                             String.format(
-                                "Expected next committed value to be %s, but instead found %s on node %s",
+                                "Expected next committed value to be %d, but instead found %d on node %d",
                                 committed + 1,
                                 nextCommitted,
                                 nodeId

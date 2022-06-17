@@ -452,7 +452,9 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
-    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to save the position of the processor." +
+    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to commit processing progress." +
+        " For at-least-once processing, committing means to save the position (ie, offsets) of the processor." +
+        " For exactly-once processing, it means to commit the transaction which includes to save the position and to make the committed data in the output topic visible to consumers with isolation level read_committed." +
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 

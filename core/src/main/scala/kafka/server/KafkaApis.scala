@@ -3306,9 +3306,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseExemptThrottle(request, alterPartitionRequest.getErrorResponse(
         AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
     else
-      zkSupport.controller.alterPartitions(alterPartitionRequest.data, alterPartitionResp =>
-        requestHelper.sendResponseExemptThrottle(request, new AlterPartitionResponse(alterPartitionResp))
-      )
+      zkSupport.controller.alterPartitions(alterPartitionRequest.data, request.context.apiVersion, alterPartitionResp =>
+        requestHelper.sendResponseExemptThrottle(request, new AlterPartitionResponse(alterPartitionResp)))
   }
 
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {

@@ -65,7 +65,7 @@ class AbstractPartitionTest {
 
     val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
-    configRepository = MockConfigRepository.forTopic(topicPartition.topic(), logProps)
+    configRepository = MockConfigRepository.forTopic(topicPartition.topic, logProps)
 
     tmpDir = TestUtils.tempDir()
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)

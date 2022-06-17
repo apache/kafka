@@ -31,6 +31,7 @@ import java.util.Map;
 public class DescribeLogDirsResponse extends AbstractResponse {
 
     public static final long INVALID_OFFSET_LAG = -1L;
+    public static final long UNKNOWN_VOLUME_BYTES = -1L;
 
     private final DescribeLogDirsResponseData data;
 

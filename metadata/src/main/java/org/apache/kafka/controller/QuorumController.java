@@ -283,7 +283,7 @@ public final class QuorumController implements Controller {
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
-            } else if (bootstrapMetadata == null || bootstrapMetadata.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+            } else if (bootstrapMetadata == null) {
                 throw new IllegalStateException("You must specify an initial metadata.version using the kafka-storage tool.");
             } else if (quorumFeatures == null) {
                 throw new IllegalStateException("You must specify the quorum features");
@@ -489,7 +489,7 @@ public final class QuorumController implements Controller {
             if (!snapshotRegistry.hasSnapshot(committedOffset)) {
                 throw new RuntimeException(
                     String.format(
-                        "Cannot generate a snapshot at committed offset %s because it does not exists in the snapshot registry.",
+                        "Cannot generate a snapshot at committed offset %d because it does not exists in the snapshot registry.",
                         committedOffset
                     )
                 );
@@ -864,7 +864,7 @@ public final class QuorumController implements Controller {
                     if (isActiveController()) {
                         throw new IllegalStateException(
                             String.format(
-                                "Asked to load snapshot (%s) when it is the active controller (%s)",
+                                "Asked to load snapshot (%s) when it is the active controller (%d)",
                                 reader.snapshotId(),
                                 curClaimEpoch
                             )
@@ -938,14 +938,14 @@ public final class QuorumController implements Controller {
                     // write any other records to the log since we need the metadata.version to determine the correct
                     // record version
                     final MetadataVersion metadataVersion;
-                    if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+                    if (!featureControl.sawMetadataVersion()) {
                         final CompletableFuture<Map<String, ApiError>> future;
                         if (!bootstrapMetadata.metadataVersion().isKRaftSupported()) {
-                            metadataVersion = MetadataVersion.UNINITIALIZED;
+                            metadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION;
                             future = new CompletableFuture<>();
                             future.completeExceptionally(
-                                new IllegalStateException("Cannot become leader without an initial metadata.version of " +
-                                    "at least 1. Got " + bootstrapMetadata.metadataVersion().featureLevel()));
+                                new IllegalStateException("Cannot become leader without a KRaft supported version. " +
+                                    "Got " + bootstrapMetadata.metadataVersion()));
                         } else {
                             metadataVersion = bootstrapMetadata.metadataVersion();
 
@@ -958,7 +958,7 @@ public final class QuorumController implements Controller {
                                 if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
                                     log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
                                 } else {
-                                    log.info("Upgrading from KRaft preview. Initializing metadata.version to {}",
+                                    log.info("Upgrading KRaft cluster and initializing metadata.version to {}",
                                         metadataVersion.featureLevel());
                                 }
                                 return ControllerResult.atomicOf(bootstrapRecords, null);
@@ -1630,7 +1630,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterPartitionResponseData());
         }
         return appendWriteEvent("alterPartition", context.deadlineNs(),
-            () -> replicationControl.alterPartition(request));
+            () -> replicationControl.alterPartition(context, request));
     }
 
     @Override
@@ -1973,6 +1973,11 @@ public final class QuorumController implements Controller {
     @Override
     public int curClaimEpoch() {
         return curClaimEpoch;
+    }
+
+    // Visible for testing
+    MetadataVersion metadataVersion() {
+        return featureControl.metadataVersion();
     }
 
     @Override

@@ -297,7 +297,10 @@ public final class Sensor {
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
             if (!metrics.containsKey(metric.metricName())) {
-                registry.registerMetric(metric);
+                KafkaMetric existingMetric = registry.registerMetric(metric);
+                if (existingMetric != null) {
+                    throw new IllegalArgumentException("A metric named '" + metric.metricName() + "' already exists, can't register another one.");
+                }
                 metrics.put(metric.metricName(), metric);
             }
         }
@@ -336,7 +339,10 @@ public final class Sensor {
                 statConfig,
                 time
             );
-            registry.registerMetric(metric);
+            KafkaMetric existingMetric = registry.registerMetric(metric);
+            if (existingMetric != null) {
+                throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+            }
             metrics.put(metric.metricName(), metric);
             stats.add(new StatAndConfig(Objects.requireNonNull(stat), metric::config));
             return true;

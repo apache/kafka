@@ -49,7 +49,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv logEnv,
         Consumer<QuorumController.Builder> builderConsumer
     ) throws Exception {
-        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(), MetadataVersion.latest());
+        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(), BootstrapMetadata.create(MetadataVersion.latest()));
     }
 
     public QuorumControllerTestEnv(
