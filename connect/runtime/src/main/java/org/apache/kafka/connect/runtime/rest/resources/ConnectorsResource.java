@@ -24,6 +24,18 @@ import javax.ws.rs.core.HttpHeaders;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.models.media.MapSchema;
+import io.swagger.v3.oas.models.media.BooleanSchema;
+import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.media.IntegerSchema;
+import io.swagger.v3.oas.models.media.ByteArraySchema;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
@@ -107,7 +119,22 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/")
-    @Operation(summary = "List all active connectors")
+    @Operation(
+            summary = "List all active connectors",
+            parameters = @Parameter(
+                    in = ParameterIn.QUERY,
+                    name = "expand",
+                    schema = @Schema(implementation = StringSchema.class),
+                    description = "Retrieve additional information about the connector. Valid values are status and info. Other values would be silently ignored"
+            )
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "List of all active connectors",
+                    content = @Content(mediaType = "application/json")
+            )
+    })
     public Response listConnectors(
         final @Context UriInfo uriInfo,
         final @Context HttpHeaders headers
@@ -145,7 +172,26 @@ public class ConnectorsResource implements ConnectResource {
 
     @POST
     @Path("/")
-    @Operation(summary = "Create a new connector")
+    @Operation(
+            summary = "Create a new connector",
+            requestBody = @RequestBody(
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = CreateConnectorRequest.class)),
+                    required = true,
+                    description = "Name and configuration parameters of the new connector. All values in config should be strings."
+            ),
+            parameters = @Parameter(in = ParameterIn.QUERY, hidden = true, schema = @Schema(implementation = BooleanSchema.class))
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "New connector created successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConnectorInfo.class))
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Error while creating new connector. Either rabalance is in progress or the connector already exists"
+            )
+    })
     public Response createConnector(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                     final @Context HttpHeaders headers,
                                     final CreateConnectorRequest createRequest) throws Throwable {
@@ -168,7 +214,23 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}")
-    @Operation(summary = "Get the details for the specified connector")
+    @Operation(
+            summary = "Get the details for the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, hidden = true, schema = @Schema(implementation = BooleanSchema.class), name = "forward")
+            })
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Connector details retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConnectorInfo.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Connector not found"
+            )
+    })
     public ConnectorInfo getConnector(final @PathParam("connector") String connector,
                                       final @Context HttpHeaders headers,
                                       final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
@@ -179,7 +241,28 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/config")
-    @Operation(summary = "Get the configuration for the specified connector")
+    @Operation(
+            summary = "Get the configuration for the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, hidden = true, schema = @Schema(implementation = BooleanSchema.class), name = "forward")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Connector config details retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MapSchema.class),
+                            additionalPropertiesSchema = @Schema(implementation = StringSchema.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Connector not found"
+            )
+    })
     public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector,
                                                   final @Context HttpHeaders headers,
                                                   final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
@@ -188,9 +271,31 @@ public class ConnectorsResource implements ConnectResource {
         return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, forward);
     }
 
+
     @GET
     @Path("/{connector}/tasks-config")
-    @Operation(summary = "Get the configuration of all tasks for the specified connector")
+    @Operation(
+            summary = "Get the configuration of all tasks for the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, hidden = true, schema = @Schema(implementation = BooleanSchema.class), name = "forward")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Connector tasks config details retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MapSchema.class),
+                            additionalPropertiesSchema = @Schema(implementation = MapSchema.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Connector not found"
+            )
+    })
     public Map<ConnectorTaskId, Map<String, String>> getTasksConfig(
             final @PathParam("connector") String connector,
             final @Context HttpHeaders headers,
@@ -202,14 +307,47 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/status")
-    @Operation(summary = "Get the status for the specified connector")
+    @Operation(
+            summary = "Get the status for the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Connector status retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConnectorStateInfo.class))
+            ),
+            @ApiResponse(responseCode = "404", description = "Connector not found")
+    })
     public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) {
         return herder.connectorStatus(connector);
     }
 
     @GET
     @Path("/{connector}/topics")
-    @Operation(summary = "Get the list of topics actively used by the specified connector")
+    @Operation(
+            summary = "Get the list of topics actively used by the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Connector status retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MapSchema.class),
+                            additionalPropertiesSchema = @Schema(implementation = ActiveTopicsInfo.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Connector not found"
+            )
+    })
     public Response getConnectorActiveTopics(final @PathParam("connector") String connector) {
         if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
@@ -221,7 +359,22 @@ public class ConnectorsResource implements ConnectResource {
 
     @PUT
     @Path("/{connector}/topics/reset")
-    @Operation(summary = "Reset the list of topics actively used by the specified connector")
+    @Operation(
+            summary = "Reset the list of topics actively used by the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Connector status retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = StringSchema.class)
+                    )
+            )
+    })
     public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) {
         if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
@@ -237,7 +390,31 @@ public class ConnectorsResource implements ConnectResource {
 
     @PUT
     @Path("/{connector}/config")
-    @Operation(summary = "Create or reconfigure the specified connector")
+    @Operation(
+            summary = "Create or reconfigure the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, hidden = true, schema = @Schema(implementation = BooleanSchema.class), name = "forward")
+            },
+            requestBody = @RequestBody(
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MapSchema.class),
+                            additionalPropertiesSchema = @Schema(implementation = StringSchema.class)
+                    )
+            )
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "New connector created successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConnectorInfo.class))
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Error while creating new connector. Either rabalance is in progress or the connector already exists"
+            )
+    })
     public Response putConnectorConfig(final @PathParam("connector") String connector,
                                        final @Context HttpHeaders headers,
                                        final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
@@ -260,7 +437,45 @@ public class ConnectorsResource implements ConnectResource {
 
     @POST
     @Path("/{connector}/restart")
-    @Operation(summary = "Restart the specified connector")
+    @Operation(
+            summary = "Restart the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, hidden = true, schema = @Schema(implementation = BooleanSchema.class), name = "forward"),
+                    @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "includeTasks"),
+                    @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "onlyFailed")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Named connector exists and the server has successfully stopped and begun restarting only the Connector object"
+            ),
+            @ApiResponse(
+                    responseCode = "202",
+                    description = "Named connector exists and the server has successfully and durably recorded the request to stop and " +
+                            "begin restarting at least one failed or running Connector object and Task instances",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConnectorStateInfo.class))
+            ),
+            @ApiResponse(
+                    responseCode = "204",
+                    description = "Operation succeeded, but there is no content in the response"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Named connector does not exist"
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "A rebalance is needed, forthcoming, or underway while restarting any of the Connector and/or Task objects"
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "request timed out (takes more than 90 seconds), which means the request could not be durably recorded, " +
+                            "perhaps because the worker or cluster are shutting down or because the worker receiving the request " +
+                            "has temporarily lost contact with the Kafka cluster"
+            )
+    })
     public Response restartConnector(final @PathParam("connector") String connector,
                                  final @Context HttpHeaders headers,
                                  final @DefaultValue("false") @QueryParam("includeTasks") @Parameter(description = "Whether to also restart tasks") Boolean includeTasks,
@@ -290,7 +505,14 @@ public class ConnectorsResource implements ConnectResource {
     @PUT
     @Path("/{connector}/pause")
     @Operation(summary = "Pause the specified connector",
-               description = "This operation is idempotent and has no effects if the connector is already paused")
+            description = "This operation is idempotent and has no effects if the connector is already paused",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector")
+            })
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "202", description = "Connector pause request accepted"),
+            @ApiResponse(responseCode = "404", description = "Named connector doesn't exist")
+    })
     public Response pauseConnector(@PathParam("connector") String connector, final @Context HttpHeaders headers) {
         herder.pauseConnector(connector);
         return Response.accepted().build();
@@ -299,7 +521,14 @@ public class ConnectorsResource implements ConnectResource {
     @PUT
     @Path("/{connector}/resume")
     @Operation(summary = "Resume the specified connector",
-               description = "This operation is idempotent and has no effects if the connector is already running")
+            description = "This operation is idempotent and has no effects if the connector is already running",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), description = "Name of the connector")
+            })
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "202", description = "Connector resume request accepted"),
+            @ApiResponse(responseCode = "404", description = "Named connector doesn't exist")
+    })
     public Response resumeConnector(@PathParam("connector") String connector) {
         herder.resumeConnector(connector);
         return Response.accepted().build();
@@ -307,7 +536,21 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks")
-    @Operation(summary = "List all tasks for the specified connector")
+    @Operation(
+            summary = "List all tasks for the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, hidden = true, schema = @Schema(implementation = BooleanSchema.class), name = "forward"),
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = TaskInfo.class))),
+                    description = "Connector resume request accepted"
+            ),
+            @ApiResponse(responseCode = "404", description = "Named connector doesn't exist")
+    })
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector,
                                          final @Context HttpHeaders headers,
                                          final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
@@ -319,7 +562,15 @@ public class ConnectorsResource implements ConnectResource {
 
     @POST
     @Path("/{connector}/tasks")
-    @Operation(hidden = true, summary = "This operation is only for inter-worker communications")
+    @Operation(
+            hidden = true,
+            summary = "This operation is only for inter-worker communications",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "forward"),
+            },
+            requestBody = @RequestBody(content = @Content(schema = @Schema(implementation = ByteArraySchema.class)))
+    )
     public void putTaskConfigs(final @PathParam("connector") String connector,
                                final @Context HttpHeaders headers,
                                final @QueryParam("forward") Boolean forward,
@@ -332,7 +583,15 @@ public class ConnectorsResource implements ConnectResource {
 
     @PUT
     @Path("/{connector}/fence")
-    @Operation(hidden = true, summary = "This operation is only for inter-worker communications")
+    @Operation(
+            hidden = true,
+            summary = "This operation is used to fence zombie source tasks.",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "forward"),
+            },
+            requestBody = @RequestBody(content = @Content(schema = @Schema(implementation = ByteArraySchema.class)))
+    )
     public void fenceZombies(final @PathParam("connector") String connector,
                              final @Context HttpHeaders headers,
                              final @QueryParam("forward") Boolean forward,
@@ -344,7 +603,21 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks/{task}/status")
-    @Operation(summary = "Get the state of the specified task for the specified connector")
+    @Operation(
+            summary = "Get the state of the specified task for the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = IntegerSchema.class), name = "task"),
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ConnectorStateInfo.TaskState.class))),
+                    description = "Task status fetched successfully for specified connector"
+            ),
+            @ApiResponse(responseCode = "404", description = "Named connector or task doesn't exist")
+    })
     public ConnectorStateInfo.TaskState getTaskStatus(final @PathParam("connector") String connector,
                                                       final @Context HttpHeaders headers,
                                                       final @PathParam("task") Integer task) {
@@ -353,7 +626,15 @@ public class ConnectorsResource implements ConnectResource {
 
     @POST
     @Path("/{connector}/tasks/{task}/restart")
-    @Operation(summary = "Restart the specified task for the specified connector")
+    @Operation(
+            summary = "Restart the specified task for the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "forward", hidden = true),
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = IntegerSchema.class), name = "task"),
+            }
+    )
+    @ApiResponse(responseCode = "200", description = "Task restarted successfully")
     public void restartTask(final @PathParam("connector") String connector,
                             final @PathParam("task") Integer task,
                             final @Context HttpHeaders headers,
@@ -366,7 +647,20 @@ public class ConnectorsResource implements ConnectResource {
 
     @DELETE
     @Path("/{connector}")
-    @Operation(summary = "Delete the specified connector")
+    @Operation(
+            summary = "Delete the specified connector",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "connector", description = "Name of the connector"),
+                    @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "forward", hidden = true)
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Connector deleted successfully"),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Error while deleting new connector. Either rabalance is in progress or the connector already exists"
+            )
+    })
     public void destroyConnector(final @PathParam("connector") String connector,
                                  final @Context HttpHeaders headers,
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {

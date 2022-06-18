@@ -18,6 +18,16 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.models.media.BooleanSchema;
+import io.swagger.v3.oas.models.media.MapSchema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.PredicatedTransformation;
@@ -112,7 +122,28 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     @PUT
     @Path("/{pluginName}/config/validate")
-    @Operation(summary = "Validate the provided configuration against the configuration definition for the specified pluginName")
+    @Operation(
+            summary = "Validate the provided configuration against the configuration definition for the specified pluginName",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "pluginName"),
+            },
+            requestBody = @RequestBody(
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MapSchema.class),
+                            additionalPropertiesSchema = @Schema(implementation = StringSchema.class)
+                    )
+            )
+    )
+    @ApiResponses(
+            value = {
+                    @ApiResponse(
+                            responseCode = "201",
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConfigInfos.class))
+                    )
+            }
+    )
     public ConfigInfos validateConfigs(
         final @PathParam("pluginName") String pluginName,
         final Map<String, String> connectorConfig
@@ -143,7 +174,16 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     @GET
     @Path("/")
-    @Operation(summary = "List all connector plugins installed")
+    @Operation(
+            summary = "List all connector plugins installed",
+            parameters = {
+                @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "connectorsOnly"),
+            }
+    )
+    @ApiResponse(
+            responseCode = "200",
+            content = @Content(mediaType = "application/json", array =  @ArraySchema(schema = @Schema(implementation = PluginInfo.class)))
+    )
     public List<PluginInfo> listConnectorPlugins(
             @DefaultValue("true") @QueryParam("connectorsOnly") @Parameter(description = "Whether to list only connectors instead of all plugins") boolean connectorsOnly
     ) {
@@ -160,7 +200,15 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     @GET
     @Path("/{pluginName}/config")
-    @Operation(summary = "Get the configuration definition for the specified pluginName")
+    @Operation(
+            summary = "Get the configuration definition for the specified pluginName",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "pluginName"),
+            })
+    @ApiResponse(
+            responseCode = "200",
+            content = @Content(mediaType = "application/json", array =  @ArraySchema(schema = @Schema(implementation = ConfigKeyInfo.class)))
+    )
     public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName) {
         synchronized (this) {
             return herder.connectorPluginConfig(pluginName);

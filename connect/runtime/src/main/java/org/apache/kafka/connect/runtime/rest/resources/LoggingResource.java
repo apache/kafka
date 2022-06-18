@@ -17,6 +17,14 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.models.media.MapSchema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.log4j.Level;
@@ -66,6 +74,13 @@ public class LoggingResource implements ConnectResource {
     @GET
     @Path("/")
     @Operation(summary = "List the current loggers that have their levels explicitly set and their log levels")
+    @ApiResponse(responseCode = "200",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MapSchema.class),
+                    additionalPropertiesSchema = @Schema(implementation = MapSchema.class)
+            )
+    )
     public Response listLoggers() {
         Map<String, Map<String, String>> loggers = new TreeMap<>();
         Enumeration<Logger> enumeration = currentLoggers();
@@ -90,7 +105,18 @@ public class LoggingResource implements ConnectResource {
      */
     @GET
     @Path("/{logger}")
-    @Operation(summary = "Get the log level for the specified logger")
+    @Operation(
+            summary = "Get the log level for the specified logger",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "namedLogger"),
+            }
+    )
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = MapSchema.class),
+                    additionalPropertiesSchema = @Schema(implementation = MapSchema.class)
+            )
+    )
     public Response getLogger(final @PathParam("logger") String namedLogger) {
         Objects.requireNonNull(namedLogger, "require non-null name");
 
@@ -128,7 +154,20 @@ public class LoggingResource implements ConnectResource {
      */
     @PUT
     @Path("/{logger}")
-    @Operation(summary = "Set the level for the specified logger")
+    @Operation(
+            summary = "Set the level for the specified logger",
+            parameters = {
+                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "namedLogger"),
+            },
+            requestBody = @RequestBody(
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MapSchema.class),
+                            additionalPropertiesSchema = @Schema(implementation = MapSchema.class)
+                    )
+            )
+    )
     public Response setLevel(final @PathParam("logger") String namedLogger,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");

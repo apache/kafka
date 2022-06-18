@@ -17,6 +17,9 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 
@@ -43,6 +46,7 @@ public class RootResource implements ConnectResource {
     @GET
     @Path("/")
     @Operation(summary = "Get details about this Connect worker and the id of the Kafka cluster it is connected to")
+    @ApiResponse(responseCode = "200", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServerInfo.class)))
     public ServerInfo serverInfo() {
         return new ServerInfo(herder.kafkaClusterId());
     }
