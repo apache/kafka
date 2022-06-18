@@ -1124,7 +1124,7 @@ public class StreamThread extends Thread {
         // intentionally do not check the returned flag
         setState(State.PENDING_SHUTDOWN);
 
-        log.info("Shutting down");
+        log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
         try {
             taskManager.shutdown(cleanRun);

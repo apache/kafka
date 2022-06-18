@@ -100,6 +100,7 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.or;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.resetToStrict;
@@ -1518,8 +1519,10 @@ public class TaskManagerTest {
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive))).andReturn(singleton(task00));
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby))).andReturn(singletonList(task10));
+        topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p0)), anyString());
+        expectLastCall().anyTimes();
 
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, topologyBuilder);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -1665,14 +1668,8 @@ public class TaskManagerTest {
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
             .andStubReturn(asList(task00, task01, task02, task03));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
-        expectLastCall();
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId01));
-        expectLastCall();
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId02));
-        expectLastCall();
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId03));
-        expectLastCall();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
+        expectLastCall().times(4);
         activeTaskCreator.closeThreadProducerIfNeeded();
         expectLastCall();
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
@@ -1923,12 +1920,8 @@ public class TaskManagerTest {
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(task00, task01, task02));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
-        expectLastCall().andThrow(new RuntimeException("whatever 0"));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId01));
-        expectLastCall().andThrow(new RuntimeException("whatever 1"));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId02));
-        expectLastCall().andThrow(new RuntimeException("whatever 2"));
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
+        expectLastCall().andThrow(new RuntimeException("whatever")).times(3);
         activeTaskCreator.closeThreadProducerIfNeeded();
         expectLastCall().andThrow(new RuntimeException("whatever all"));
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
@@ -3204,6 +3197,8 @@ public class TaskManagerTest {
             .andReturn(singletonList(activeTask));
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
         expectLastCall().anyTimes();
+        activeTask.closeCleanAndRecycleState();
+        expectLastCall().once();
 
         expect(standbyTaskCreator.createStandbyTaskFromActive(anyObject(), eq(taskId00Partitions)))
             .andReturn(standbyTask);
@@ -3226,6 +3221,8 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
         standbyTask.postCommit(true);
         expectLastCall().anyTimes();
+        standbyTask.closeCleanAndRecycleState();
+        expectLastCall().once();
 
         final StreamTask activeTask = mock(StreamTask.class);
         expect(activeTask.id()).andStubReturn(taskId00);

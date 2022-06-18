@@ -1043,19 +1043,11 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
-        thread.start();
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.STARTING,
-            10 * 1000,
-            "Thread never started.");
-
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
         thread.taskManager().handleRebalanceStart(Collections.singleton(topic1));
 
+        // assign single partition
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        // assign single partition
         assignedPartitions.add(t1p1);
         assignedPartitions.add(t1p2);
         activeTasks.put(task1, Collections.singleton(t1p1));
@@ -1063,11 +1055,18 @@ public class StreamThreadTest {
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
 
+        thread.start();
+        TestUtils.waitForCondition(
+                () -> thread.state() == StreamThread.State.STARTING,
+                10 * 1000,
+                "Thread never started.");
+
         thread.shutdown();
 
         // even if thread is no longer running, it should still be polling
         // as long as the rebalance is still ongoing
         assertFalse(thread.isRunning());
+        assertTrue(thread.isAlive());
 
         Thread.sleep(1000);
         assertEquals(Utils.mkSet(task1, task2), thread.taskManager().activeTaskIds());

@@ -429,16 +429,16 @@ public class TaskManager {
         tasksToCloseClean.removeAll(tasksToCloseDirty);
         for (final Task task : tasksToCloseClean) {
             try {
-                final RuntimeException exception = closeTaskClean(task);
-                if (exception != null) {
-                    taskCloseExceptions.putIfAbsent(task.id(), exception);
+                final RuntimeException removeTaskException = completeTaskCloseClean(task);
+                if (removeTaskException != null) {
+                    taskCloseExceptions.putIfAbsent(task.id(), removeTaskException);
                 }
-            } catch (final RuntimeException e) {
+            } catch (final RuntimeException closeTaskException) {
                 final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
                         task.id());
-                log.error(uncleanMessage, e);
-                taskCloseExceptions.putIfAbsent(task.id(), e);
+                log.error(uncleanMessage, closeTaskException);
+                taskCloseExceptions.putIfAbsent(task.id(), closeTaskException);
                 tasksToCloseDirty.add(task);
             }
         }
@@ -823,7 +823,7 @@ public class TaskManager {
         try {
             task.suspend();
         } catch (final RuntimeException swallow) {
-            log.error("Error suspending dirty task {} ", task.id(), swallow);
+            log.error("Error suspending dirty task {}: {}", task.id(), swallow.getMessage());
         }
 
         task.closeDirty();
@@ -831,18 +831,19 @@ public class TaskManager {
         try {
             tasks.removeTask(task);
         } catch (final RuntimeException swallow) {
-            log.error("Error removing dirty task {} ", task.id(), swallow);
+            log.error("Error removing dirty task {}: {}", task.id(), swallow.getMessage());
         }
     }
 
-    private RuntimeException closeTaskClean(final Task task) {
-        tasks.removeTaskBeforeClosing(task.id());
+    private RuntimeException completeTaskCloseClean(final Task task) {
         task.closeClean();
-        if (task.isActive()) {
-            return tasks.cleanUpTaskProducerAfterClose(task.id());
-        } else {
-            return null;
+        try {
+            tasks.removeTask(task);
+        } catch (final RuntimeException e) {
+            log.error("Error removing active task {}: {}", task.id(), e.getMessage());
+            return e;
         }
+        return null;
     }
 
     void shutdown(final boolean clean) {
@@ -985,7 +986,7 @@ public class TaskManager {
         for (final Task task : tasksToCloseClean) {
             try {
                 task.suspend();
-                final RuntimeException exception = closeTaskClean(task);
+                final RuntimeException exception = completeTaskCloseClean(task);
                 if (exception != null) {
                     firstException.compareAndSet(null, exception);
                 }
@@ -1019,7 +1020,7 @@ public class TaskManager {
                 task.prepareCommit();
                 task.postCommit(true);
                 task.suspend();
-                final RuntimeException exception = closeTaskClean(task);
+                final RuntimeException exception = completeTaskCloseClean(task);
                 if (exception != null) {
                     maybeWrapAndSetFirstException(firstException, exception, task.id());
                 }
