@@ -129,6 +129,8 @@
               files="(AbstractHerder|DistributedHerder|Worker).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="Worker(|Test).java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="ConnectorsResource.java"/>
     <suppress checks="MethodLength"
               files="(DistributedHerder|KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
