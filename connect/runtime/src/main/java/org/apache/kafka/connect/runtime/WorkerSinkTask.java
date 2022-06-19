@@ -176,6 +176,7 @@ class WorkerSinkTask extends WorkerTask {
         Utils.closeQuietly(consumer, "consumer");
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
+        Utils.closeQuietly(headerConverter, "header converter");
     }
 
     @Override

@@ -282,7 +282,8 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     @Override
     public void close() {
-        // do nothing
+        this.serializer.close();
+        this.deserializer.close();
     }
 
     @Override
