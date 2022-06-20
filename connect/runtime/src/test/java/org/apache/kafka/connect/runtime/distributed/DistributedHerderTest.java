@@ -1901,6 +1901,71 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testConnectorConfigUpdateFailedTransformation() throws Exception {
+        // Connector config can be applied without any rebalance
+
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        EasyMock.expect(worker.connectorNames()).andStubReturn(Collections.singleton(CONN1));
+
+        WorkerConfigTransformer configTransformer = EasyMock.mock(WorkerConfigTransformer.class);
+        ClusterConfigState snapshotWithTransform = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 1),
+            Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
+            TASK_CONFIGS_MAP, Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet(), Collections.emptySet(), configTransformer);
+
+        // join
+        expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList());
+        EasyMock.expect(configTransformer.transform(EasyMock.eq(CONN1), EasyMock.anyObject()))
+            .andReturn(CONN1_CONFIG).times(2); // once for the connector, once for the single task
+        expectConfigRefreshAndSnapshot(snapshotWithTransform);
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        Capture<Callback<TargetState>> onStart = newCapture();
+        worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
+            EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onStart));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
+        });
+        member.wakeup();
+        PowerMock.expectLastCall();
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins);
+        EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // apply config
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(snapshotWithTransform); // for this test, it doesn't matter if we use the same config snapshot
+        EasyMock.expect(configTransformer.transform(EasyMock.eq(CONN1), EasyMock.anyObject()))
+            .andThrow(new AssertionError("Config transformation should not crash herder"));
+        worker.stopAndAwaitConnector(CONN1);
+        PowerMock.expectLastCall();
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // These will occur just before/during the third tick
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        EasyMock.replay(configTransformer);
+        PowerMock.replayAll();
+
+        herder.tick(); // join
+        configUpdateListener.onConnectorConfigUpdate(CONN1); // read updated config
+        herder.tick(); // apply config
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testConnectorPaused() throws Exception {
         // ensure that target state changes are propagated to the worker
 
