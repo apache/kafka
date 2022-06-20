@@ -18,7 +18,9 @@
 package org.apache.kafka.controller;
 
 
-public interface ControllerMetrics extends AutoCloseable {
+import org.apache.kafka.queue.EventQueueMetrics;
+
+public interface ControllerMetrics extends AutoCloseable, EventQueueMetrics {
     void setActive(boolean active);
 
     boolean active();
@@ -66,6 +68,10 @@ public interface ControllerMetrics extends AutoCloseable {
     void setLastAppliedRecordTimestamp(long timestamp);
 
     long lastAppliedRecordTimestamp();
+
+    void setQueueSize(int size);
+
+    int eventQueueSize();
 
     void close();
 }

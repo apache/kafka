@@ -31,6 +31,7 @@ public final class MockControllerMetrics implements ControllerMetrics {
     private volatile long lastAppliedRecordOffset = 0;
     private volatile long lastCommittedRecordOffset = 0;
     private volatile long lastAppliedRecordTimestamp = 0;
+    private volatile int eventQueueSize = 0;
 
     private volatile boolean closed = false;
 
@@ -152,6 +153,16 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public long lastAppliedRecordTimestamp() {
         return lastAppliedRecordTimestamp;
+    }
+
+    @Override
+    public void setQueueSize(int size) {
+        eventQueueSize = size;
+    }
+
+    @Override
+    public int eventQueueSize() {
+        return eventQueueSize;
     }
 
     @Override

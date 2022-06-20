@@ -55,6 +55,7 @@ public class QuorumControllerMetricsTest {
     public void testControllerEventManagerMetricNames() {
         String expectedType = "ControllerEventManager";
         Set<String> expectedMetricNames = Utils.mkSet(
+            "EventQueueSize",
             "EventQueueTimeMs",
             "EventQueueProcessingTimeMs");
         assertMetricsCreatedAndRemovedUponClose(expectedType, expectedMetricNames);

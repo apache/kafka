@@ -24,6 +24,7 @@ import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -98,12 +99,15 @@ public final class KafkaEventQueue implements EventQueue {
 
         /**
          * Remove this node from the circularly linked list.
+         * Returns true if the node was actually removed, or false if it was a no-op.
          */
-        void remove() {
+        boolean remove() {
+            boolean removed = this.next != this;
             this.prev.next = this.next;
             this.next.prev = this.prev;
             this.prev = this;
             this.next = this;
+            return removed;
         }
 
         /**
@@ -167,6 +171,8 @@ public final class KafkaEventQueue implements EventQueue {
          */
         private final Condition cond = lock.newCondition();
 
+        AtomicInteger size = new AtomicInteger(0);
+
         @Override
         public void run() {
             try {
@@ -178,14 +184,19 @@ public final class KafkaEventQueue implements EventQueue {
         }
 
         private void remove(EventContext eventContext) {
-            eventContext.remove();
+            boolean removed = eventContext.remove();
             if (eventContext.deadlineNs.isPresent()) {
-                deadlineMap.remove(eventContext.deadlineNs.getAsLong());
+                removed |= deadlineMap.remove(eventContext.deadlineNs.getAsLong()) != null;
                 eventContext.deadlineNs = OptionalLong.empty();
             }
             if (eventContext.tag != null) {
                 tagToEventContext.remove(eventContext.tag, eventContext);
                 eventContext.tag = null;
+            }
+            if (removed) {
+                if (metrics != null) {
+                    metrics.setQueueSize(size.decrementAndGet());
+                }
             }
         }
 
@@ -311,6 +322,9 @@ public final class KafkaEventQueue implements EventQueue {
                         shouldSignal = true;
                     }
                 }
+                if (metrics != null) {
+                    metrics.setQueueSize(size.incrementAndGet());
+                }
                 if (shouldSignal) {
                     cond.signal();
                 }
@@ -347,6 +361,7 @@ public final class KafkaEventQueue implements EventQueue {
     private final Logger log;
     private final EventHandler eventHandler;
     private final Thread eventHandlerThread;
+    private final EventQueueMetrics metrics;
 
     /**
      * The time in monotonic nanoseconds when the queue is closing, or Long.MAX_VALUE if
@@ -359,6 +374,13 @@ public final class KafkaEventQueue implements EventQueue {
     public KafkaEventQueue(Time time,
                            LogContext logContext,
                            String threadNamePrefix) {
+        this(time, logContext, threadNamePrefix, null);
+    }
+
+    public KafkaEventQueue(Time time,
+                           LogContext logContext,
+                           String threadNamePrefix,
+                           EventQueueMetrics metrics) {
         this.time = time;
         this.lock = new ReentrantLock();
         this.log = logContext.logger(KafkaEventQueue.class);
@@ -367,6 +389,7 @@ public final class KafkaEventQueue implements EventQueue {
             this.eventHandler, false);
         this.closingTimeNs = Long.MAX_VALUE;
         this.cleanupEvent = null;
+        this.metrics = metrics;
         this.eventHandlerThread.start();
     }
 

@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -221,9 +222,9 @@ public class KafkaEventQueueTest {
     }
 
     @Test
-    public void testRejectedExecutionExecption() throws Exception {
+    public void testRejectedExecutionException() throws Exception {
         KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
-            "testRejectedExecutionExecption");
+            "testRejectedExecutionException");
         queue.close();
         CompletableFuture<Void> future = new CompletableFuture<>();
         queue.append(new EventQueue.Event() {
@@ -239,5 +240,43 @@ public class KafkaEventQueueTest {
             });
         assertEquals(RejectedExecutionException.class, assertThrows(
             ExecutionException.class, () -> future.get()).getCause().getClass());
+    }
+
+    @Test
+    void testEventQueueSize() throws Exception {
+        EventQueueMetrics metrics = new MockEventQueueMetrics();
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testEventQueueSize", metrics);
+        assertEquals(0, metrics.eventQueueSize());
+
+        CompletableFuture<Void> eventStart = new CompletableFuture<>();
+        CompletableFuture<Void> eventEnd = new CompletableFuture<>();
+        queue.append(() -> {
+            eventStart.complete(null);
+            eventEnd.get();
+        }); // block the queue
+        eventStart.get();
+
+        // append 2 events
+        assertEquals(0, metrics.eventQueueSize());
+        CountDownLatch latch = new CountDownLatch(2);
+        queue.append(latch::countDown);
+        assertEquals(1, metrics.eventQueueSize());
+        queue.append(latch::countDown);
+        assertEquals(2, metrics.eventQueueSize());
+
+        // deferred events should also be counted
+        queue.scheduleDeferred("foo",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + TimeUnit.SECONDS.toNanos(60)),
+                eventEnd::get);
+        assertEquals(3, metrics.eventQueueSize());
+
+        // unblock the queue and wait for it to drain
+        queue.cancelDeferred("foo");
+        eventEnd.complete(null);
+        latch.await();
+        assertEquals(0, metrics.eventQueueSize());
+
+        queue.close();
     }
 }

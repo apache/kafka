@@ -36,6 +36,9 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "ControllerEventManager", "EventQueueTimeMs");
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
+
+    private final static MetricName EVENT_QUEUE_SIZE = getMetricName(
+            "ControllerEventManager", "EventQueueSize");
     private final static MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
     private final static MetricName ACTIVE_BROKER_COUNT = getMetricName(
@@ -71,6 +74,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
+    private final AtomicInteger eventQueueSize = new AtomicInteger(0);
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> fencedBrokerCountGauge;
     private final Gauge<Integer> activeBrokerCountGauge;
@@ -79,6 +83,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Gauge<Integer> offlinePartitionCountGauge;
     private final Gauge<Integer> preferredReplicaImbalanceCountGauge;
     private final Gauge<Integer> metadataErrorCountGauge;
+    private final Gauge<Integer> eventQueueSizeGauge;
     private final Gauge<Long> lastAppliedRecordOffsetGauge;
     private final Gauge<Long> lastCommittedRecordOffsetGauge;
     private final Gauge<Long> lastAppliedRecordTimestampGauge;
@@ -103,6 +108,12 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             @Override
             public Integer value() {
                 return active ? 1 : 0;
+            }
+        });
+        this.eventQueueSizeGauge = registry.newGauge(EVENT_QUEUE_SIZE, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return eventQueueSize.get();
             }
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
@@ -183,6 +194,16 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public boolean active() {
         return this.active;
+    }
+
+    @Override
+    public void setQueueSize(int size) {
+        eventQueueSize.set(size);
+    }
+
+    @Override
+    public int eventQueueSize() {
+        return eventQueueSize.get();
     }
 
     @Override
@@ -299,6 +320,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             ACTIVE_CONTROLLER_COUNT,
             FENCED_BROKER_COUNT,
             ACTIVE_BROKER_COUNT,
+            EVENT_QUEUE_SIZE,
             EVENT_QUEUE_TIME_MS,
             EVENT_QUEUE_PROCESSING_TIME_MS,
             GLOBAL_TOPIC_COUNT,
