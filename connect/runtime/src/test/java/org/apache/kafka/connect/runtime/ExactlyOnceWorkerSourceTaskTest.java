@@ -1310,6 +1310,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         expectCall(() -> admin.close(EasyMock.anyObject(Duration.class)));
         expectCall(transformationChain::close);
         expectCall(offsetReader::close);
+        expectCall(headerConverter::close);
     }
 
     private void expectTopicCreation(String topic) {

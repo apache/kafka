@@ -56,6 +56,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -551,6 +552,13 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         PowerMock.expectLastCall();
 
         consumer.close();
+        PowerMock.expectLastCall();
+
+        try {
+            headerConverter.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         PowerMock.expectLastCall();
     }
 
