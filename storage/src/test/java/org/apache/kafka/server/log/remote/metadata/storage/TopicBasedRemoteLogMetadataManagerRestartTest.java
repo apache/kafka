@@ -84,7 +84,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         assertTrue(topicBasedRlmm().isInitialized());
 
         stopTopicBasedRemoteLogMetadataManagerHarness();
-        assertThrows(KafkaException.class, () -> startTopicBasedRemoteLogMetadataManagerHarness(false, 4));
+        assertThrows(KafkaException.class, () -> startTopicBasedRemoteLogMetadataManagerHarness(false, TopicBasedRemoteLogMetadataManagerHarness.METADATA_TOPIC_PARTITIONS_COUNT + 1));
         assertFalse(topicBasedRlmm().isInitialized());
 
         stopTopicBasedRemoteLogMetadataManagerHarness();
