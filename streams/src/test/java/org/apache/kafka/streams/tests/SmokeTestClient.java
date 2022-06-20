@@ -19,7 +19,6 @@ package org.apache.kafka.streams.tests;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -38,10 +37,8 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.test.TestUtils;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
@@ -64,28 +61,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         } else {
             Runtime.getRuntime().addShutdownHook(new Thread(runnable));
         }
-    }
-
-    private static File tempDirectory() {
-        final String prefix = "kafka-";
-        final File file;
-        try {
-            file = Files.createTempDirectory(prefix).toFile();
-        } catch (final IOException ex) {
-            throw new RuntimeException("Failed to create a temp dir", ex);
-        }
-        file.deleteOnExit();
-
-        addShutdownHook("delete-temp-file-shutdown-hook", () -> {
-            try {
-                Utils.delete(file);
-            } catch (final IOException e) {
-                System.out.println("Error deleting " + file.getAbsolutePath());
-                e.printStackTrace(System.out);
-            }
-        });
-
-        return file;
     }
 
     public SmokeTestClient(final String name) {
@@ -156,7 +131,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         final Properties fullProps = new Properties(props);
         fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
-        fullProps.put(StreamsConfig.STATE_DIR_CONFIG, tempDirectory().getAbsolutePath());
+        fullProps.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         fullProps.putAll(props);
         return fullProps;
