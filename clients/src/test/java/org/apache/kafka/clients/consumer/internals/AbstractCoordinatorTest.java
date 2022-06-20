@@ -553,7 +553,7 @@ public class AbstractCoordinatorTest {
         ensureActiveGroup(generation, memberId);
         assertEquals("", coordinator.rejoinReason());
 
-        // Force a rebalance
+        // force a rebalance
         expectJoinGroup(memberId, "Manual test trigger", generation, memberId);
         expectSyncGroup(generation, memberId);
         coordinator.requestRejoin("Manual test trigger");
@@ -567,7 +567,7 @@ public class AbstractCoordinatorTest {
                 () -> coordinator.joinGroupIfNeeded(mockTime.timer(100L)));
 
         // next join group request should contain exception message
-        expectJoinGroup(memberId, String.format("rebalance failed due to '%s' (%s)", e.getMessage(), e.getClass().getSimpleName()), generation, memberId);
+        expectJoinGroup(memberId, String.format("rebalance failed due to %s", e.getClass().getSimpleName()), generation, memberId);
         expectSyncGroup(generation, memberId);
         ensureActiveGroup(generation, memberId);
         assertEquals("", coordinator.rejoinReason());
