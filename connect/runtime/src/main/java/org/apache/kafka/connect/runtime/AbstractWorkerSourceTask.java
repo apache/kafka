@@ -298,7 +298,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        if (started) {
+        if (started && task != null) {
             Utils.closeQuietly(task::stop, "source task");
         }
 
@@ -310,7 +310,9 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(offsetReader, "offset reader");
-        Utils.closeQuietly(offsetStore::stop, "offset backing store");
+        if (offsetReader != null) {
+            Utils.closeQuietly(offsetStore::stop, "offset backing store");
+        }
     }
 
     private void closeProducer(Duration duration) {
