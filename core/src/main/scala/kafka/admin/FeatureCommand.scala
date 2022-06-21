@@ -26,6 +26,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.clients.admin.{Admin, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.MetadataVersion
 
 import java.io.File
 import java.util.Properties
@@ -328,6 +329,7 @@ object FeatureCommand {
   }
 
   def featuresForRelease(release: String): Map[String, Short] = {
-    Map.empty
+    val metadataVersion = MetadataVersion.fromVersionString(release)
+    Map(MetadataVersion.FEATURE_NAME -> metadataVersion.featureLevel())
   }
 }

@@ -18,22 +18,30 @@
 package kafka.admin
 
 import kafka.server.{BaseRequestTest, KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.utils.Utils
-import java.util.Properties
+import org.apache.kafka.server.common.MetadataVersion
 
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0
+import java.util.Properties
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_3_0_IV1, IBP_3_3_IV3}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class FeatureCommandTest extends BaseRequestTest {
   override def brokerCount: Int = 3
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
+    if (isKRaftTest()) {
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_3_0_IV1.toString)
+    } else {
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
+    }
   }
+
+  override def metadataVersion = MetadataVersion.IBP_3_0_IV1
 
   private val defaultSupportedFeatures: Features[SupportedVersionRange] =
     Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
@@ -71,8 +79,9 @@ class FeatureCommandTest extends BaseRequestTest {
    * Tests if the FeatureApis#describeFeatures API works as expected when describing features before and
    * after upgrading features.
    */
-  @Test
-  def testDescribeFeaturesSuccess(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testDescribeFeaturesSuccess(quorum: String): Unit = {
     updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
 
     val initialDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
@@ -106,5 +115,18 @@ class FeatureCommandTest extends BaseRequestTest {
     expectedFinalDescribeOutput.foreach { expectedOutput =>
       assertTrue(downgradeDescribeOutput.contains(expectedOutput))
     }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testUpdateFeatureByReleaseVersion(quorum: String): Unit = {
+    val initialDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
+    assertTrue(initialDescribeOutput.contains("Feature: metadata.version\tSupportedMinVersion: 1\tSupportedMaxVersion: 7\tFinalizedVersionLevel: 1"))
+
+    FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "upgrade", "--release", IBP_3_3_IV3.version()))
+    TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer)
+
+    val upgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
+    assertTrue(upgradeDescribeOutput.contains("Feature: metadata.version\tSupportedMinVersion: 1\tSupportedMaxVersion: 7\tFinalizedVersionLevel: 7"))
   }
 }
