@@ -123,7 +123,7 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
 
     @Override
     public void close() {
-        Utils.closeQuietly(this.serializer, "number format serializer");
-        Utils.closeQuietly(this.deserializer, "number format deserializer");
+        Utils.closeQuietly(this.serializer, "number converter serializer");
+        Utils.closeQuietly(this.deserializer, "number converter deserializer");
     }
 }
