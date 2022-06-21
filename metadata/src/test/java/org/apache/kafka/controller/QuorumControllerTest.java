@@ -1189,7 +1189,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testInvalidBootstrapMetadata() throws Exception {
-        // We can't actually create a BootstrapMetadata with an invalid version, so we have to fake it
+        // We can't actually create a BootstrapMetadata with an invalid version, so we have to mock it
         BootstrapMetadata bootstrapMetadata = Mockito.mock(BootstrapMetadata.class);
         Mockito.when(bootstrapMetadata.metadataVersion()).thenReturn(MetadataVersion.IBP_2_8_IV0);
         try (
@@ -1198,9 +1198,15 @@ public class QuorumControllerTest {
                     b.setConfigSchema(SCHEMA);
                 }, OptionalLong.empty(), OptionalLong.empty(), bootstrapMetadata);
         ) {
-            QuorumController active = controlEnv.activeController();
-            TestUtils.waitForCondition(() -> !active.isActive(),
+            try {
+                QuorumController active = controlEnv.activeController();
+                TestUtils.waitForCondition(() -> !active.isActive(),
                     "Timed out waiting for controller to renounce itself after bad bootstrap metadata version.");
+            } catch (Throwable t) {
+                // It's possible that QuorumControllerTestEnv#activeController misses the window in handleLeaderChange
+                assertTrue(t.getMessage().startsWith("Expected to see"));
+                assertFalse(controlEnv.controllers().get(0).isActive());
+            }
         }
     }
 
@@ -1208,7 +1214,7 @@ public class QuorumControllerTest {
     public void testBootstrapMetadataStartupRace() throws Throwable {
         // KAFKA-13966: This tests a race condition between external RPC calls being handled before the bootstrap
         // metadata is written. We instrument this by forcing the BootstrapMetadata#records method to block until a
-        // latch has been completed. This allows an asynchronously broker registration call to be handled before the
+        // latch has been completed. This allows an asynchronous broker registration call to be handled before the
         // handleLeaderChange callback completes. In this case, the registration should fail because the bootstrap
         // metadata includes an unsupported metadata.version.
         BootstrapMetadata bootstrapMetadata = BootstrapMetadata.create(MetadataVersion.latest());
