@@ -357,10 +357,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         relinquishWritePrivileges();
         Utils.closeQuietly(ownTopicAdmin, "admin for config topic");
-
-        if (configLog != null) {
-            Utils.closeQuietly(configLog::stop, "KafkaBasedLog for config topic");
-        }
+        Utils.closeQuietly(configLog::stop, "KafkaBasedLog for config topic");
 
         log.info("Closed KafkaConfigBackingStore");
     }
