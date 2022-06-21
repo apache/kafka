@@ -112,7 +112,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
             restoreTasks();
-            maybeCommitRestoringTasks(time.milliseconds());
+            maybeCheckpointUpdatingTasks(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
         }
 
@@ -296,7 +296,7 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void maybeCommitRestoringTasks(final long now) {
+        private void maybeCheckpointUpdatingTasks(final long now) {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {

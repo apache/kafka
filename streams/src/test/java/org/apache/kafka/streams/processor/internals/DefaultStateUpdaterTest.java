@@ -47,6 +47,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.easymock.EasyMock.anyBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,7 +80,8 @@ class DefaultStateUpdaterTest {
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = topicPartitions -> { };
-    private final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, Time.SYSTEM);
+
+    private DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, Time.SYSTEM);
 
     @AfterEach
     public void tearDown() {
@@ -92,7 +94,6 @@ class DefaultStateUpdaterTest {
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
                 mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval),
-                // we need to make sure that transaction timeout is not lower than commit interval for EOS
                 mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), commitInterval)
         ));
     }
@@ -171,6 +172,7 @@ class DefaultStateUpdaterTest {
         }
 
         verifyRestoredActiveTasks(tasks);
+        verifyNeverCheckpointTasks(tasks);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
@@ -401,16 +403,11 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(controlTask);
         verifyRestoredActiveTasks(task);
 
-        // for stateless task, we should complete it without trying to commit
-        if (!completedChangelogs.isEmpty())
-            verifyCheckpointTasks(true, task);
-
         stateUpdater.remove(task.id());
         stateUpdater.remove(controlTask.id());
 
         verifyRemovedTasks(controlTask);
         verifyRestoredActiveTasks(task);
-        verifyCheckpointTasks(true, controlTask);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
     }
@@ -447,7 +444,6 @@ class DefaultStateUpdaterTest {
         stateUpdater.remove(controlTask.id());
 
         verifyRemovedTasks(controlTask);
-        verifyCheckpointTasks(true, controlTask);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
         verifyUpdatingTasks();
         verifyRestoredActiveTasks();
@@ -500,7 +496,6 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks();
         verifyUpdatingTasks();
         verifyRestoredActiveTasks();
-        verifyNeverCheckpointTasks(task1, task2);
     }
 
     @Test
@@ -537,7 +532,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(task2);
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
-        verifyNeverCheckpointTasks(task1, task3);
     }
 
     @Test
@@ -563,7 +557,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(task3);
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
-        verifyNeverCheckpointTasks(task1, task2);
     }
 
     @Test
@@ -585,7 +578,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
-        verifyNeverCheckpointTasks(task1, task2);
     }
 
     @Test
@@ -638,7 +630,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldAutoCommitTasksOnInterval() throws Exception {
+    public void shouldAutoCheckpointTasksOnInterval() throws Exception {
         final StreamTask task1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
         final StreamTask task2 = createActiveStatefulTaskInStateRestoring(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_B_0));
         final StandbyTask task3 = createStandbyTaskInStateRunning(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_C_0));
@@ -660,9 +652,10 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldNotAutoCommitTasksIfIntervalNotElapsed() throws Exception {
+    public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
+        stateUpdater.shutdown(Duration.ofMinutes(1));
         final StreamsConfig config = new StreamsConfig(configProps(Integer.MAX_VALUE));
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, Time.SYSTEM);
+        stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, Time.SYSTEM);
 
         try {
             final StreamTask task1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
@@ -685,16 +678,15 @@ class DefaultStateUpdaterTest {
         }
     }
 
-    private void verifyCheckpointTasks(final boolean enforceCheckpoint, final Task... tasks) throws Exception {
+    private void verifyCheckpointTasks(final boolean enforceCheckpoint, final Task... tasks) {
         for (final Task task : tasks) {
             verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).maybeCheckpoint(enforceCheckpoint);
         }
     }
 
-    private void verifyNeverCheckpointTasks(final Task... tasks) throws Exception {
+    private void verifyNeverCheckpointTasks(final Task... tasks) {
         for (final Task task : tasks) {
-            verify(task, never()).maybeCheckpoint(true);
-            verify(task, never()).maybeCheckpoint(false);
+            verify(task, never()).maybeCheckpoint(anyBoolean());
         }
     }
 
