@@ -1430,7 +1430,7 @@ public class Fetcher<K, V> implements Closeable {
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
-            throw new RecordDeserializationException(partition, record.offset(),
+            throw new RecordDeserializationException(partition, record, record.offset(),
                 "Error deserializing key/value for partition " + partition +
                     " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
         }

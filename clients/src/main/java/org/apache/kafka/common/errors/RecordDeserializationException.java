@@ -17,6 +17,7 @@
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.Record;
 
 /**
  *  This exception is raised for any error that occurs while deserializing records received by the consumer using 
@@ -26,18 +27,22 @@ public class RecordDeserializationException extends SerializationException {
 
     private static final long serialVersionUID = 1L;
     private final TopicPartition partition;
+    private final Record record;
     private final long offset;
 
-    public RecordDeserializationException(TopicPartition partition, long offset, String message, Throwable cause) {
+    public RecordDeserializationException(TopicPartition partition, Record record, long offset, String message, Throwable cause) {
         super(message, cause);
         this.partition = partition;
+        this.record = record;
         this.offset = offset;
     }
 
     public TopicPartition topicPartition() {
         return partition;
     }
-
+    public Record record() {
+        return record;
+    }
     public long offset() {
         return offset;
     }
