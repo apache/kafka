@@ -212,7 +212,7 @@ public class StreamsMetadataState {
         }
         return getKeyQueryMetadataForKey(storeName,
                                          key,
-                                         new DefaultStreamPartitioner<>(keySerializer, clusterMetadata));
+                                         new DefaultStreamPartitioner<>(keySerializer));
     }
 
     /**
@@ -225,7 +225,7 @@ public class StreamsMetadataState {
         Objects.requireNonNull(keySerializer, "keySerializer can't be null");
         return getKeyQueryMetadataForKey(storeName,
                                          key,
-                                         new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
+                                         new DefaultStreamPartitioner<>(keySerializer),
                                          topologyName);
     }
 

@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -64,7 +65,6 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     private final TransactionBoundaryManager transactionBoundaryManager;
     private final TransactionMetricsGroup transactionMetrics;
 
-    private final ConnectorOffsetBackingStore offsetBackingStore;
     private final Runnable preProducerCheck;
     private final Runnable postProducerCheck;
 
@@ -81,7 +81,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Map<String, TopicCreationGroup> topicGroups,
                                        CloseableOffsetStorageReader offsetReader,
                                        OffsetStorageWriter offsetWriter,
-                                       ConnectorOffsetBackingStore offsetBackingStore,
+                                       ConnectorOffsetBackingStore offsetStore,
                                        WorkerConfig workerConfig,
                                        ClusterConfigState configState,
                                        ConnectMetrics connectMetrics,
@@ -95,12 +95,11 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Runnable postProducerCheck) {
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, buildTransactionContext(sourceConfig)),
-                producer, admin, topicGroups, offsetReader, offsetWriter, offsetBackingStore, workerConfig, connectMetrics,
+                producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics,
                 loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
 
         this.transactionOpen = false;
         this.commitableRecords = new LinkedHashMap<>();
-        this.offsetBackingStore = offsetBackingStore;
 
         this.preProducerCheck = preProducerCheck;
         this.postProducerCheck = postProducerCheck;
@@ -118,11 +117,6 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     @Override
     protected void prepareToInitializeTask() {
         preProducerCheck.run();
-
-        // Try not to start up the offset store (which has its own producer and consumer) if we've already been shut down at this point
-        if (isStopping())
-            return;
-        offsetBackingStore.start();
 
         // Try not to initialize the transactional producer (which may accidentally fence out other, later task generations) if we've already
         // been shut down at this point
@@ -161,7 +155,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             SourceRecord sourceRecord,
             ProducerRecord<byte[], byte[]> producerRecord
     ) {
-        if (offsetBackingStore.primaryOffsetsTopic().equals(producerRecord.topic())) {
+        if (offsetStore.primaryOffsetsTopic().equals(producerRecord.topic())) {
             // This is to prevent deadlock that occurs when:
             //     1. A task provides a record whose topic is the task's offsets topic
             //     2. That record is dispatched to the task's producer in a transaction that remains open
@@ -232,6 +226,11 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         // transaction and their offsets won't be committed, but (unless the user has requested connector-defined
         // transaction boundaries), it's better to commit some data than none.
         transactionBoundaryManager.maybeCommitFinalTransaction();
+    }
+
+    @Override
+    public void removeMetrics() {
+        Utils.closeQuietly(transactionMetrics, "source task transaction metrics tracker");
     }
 
     @Override
@@ -483,7 +482,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     }
 
 
-    static class TransactionMetricsGroup {
+    static class TransactionMetricsGroup implements AutoCloseable {
         private final Sensor transactionSize;
         private int size;
         private final ConnectMetrics.MetricGroup metricGroup;
@@ -498,6 +497,11 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             transactionSize.add(metricGroup.metricName(registry.transactionSizeAvg), new Avg());
             transactionSize.add(metricGroup.metricName(registry.transactionSizeMin), new Min());
             transactionSize.add(metricGroup.metricName(registry.transactionSizeMax), new Max());
+        }
+
+        @Override
+        public void close() {
+            metricGroup.close();
         }
 
         void addRecord() {

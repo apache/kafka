@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegationTokenOptions> {
     private long maxLifeTimeMs = -1;
     private List<KafkaPrincipal> renewers =  new LinkedList<>();
+    private KafkaPrincipal owner = null;
 
     public CreateDelegationTokenOptions renewers(List<KafkaPrincipal> renewers) {
         this.renewers = renewers;
@@ -40,6 +42,15 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
 
     public List<KafkaPrincipal> renewers() {
         return renewers;
+    }
+
+    public CreateDelegationTokenOptions owner(KafkaPrincipal owner) {
+        this.owner = owner;
+        return this;
+    }
+
+    public Optional<KafkaPrincipal> owner() {
+        return Optional.ofNullable(owner);
     }
 
     public CreateDelegationTokenOptions maxlifeTimeMs(long maxLifeTimeMs) {

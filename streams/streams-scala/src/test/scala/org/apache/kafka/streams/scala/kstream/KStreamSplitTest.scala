@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.Named
-import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.serialization.Serdes._
@@ -36,7 +35,7 @@ class KStreamSplitTest extends TestDriver {
     val sinkTopic = Array("default", "even", "three");
 
     val m = builder
-      .stream[Int, Int](sourceTopic)
+      .stream[Integer, Integer](sourceTopic)
       .split(Named.as("_"))
       .branch((_, v) => v % 2 == 0)
       .branch((_, v) => v % 3 == 0)
@@ -47,17 +46,14 @@ class KStreamSplitTest extends TestDriver {
     m("_2").to(sinkTopic(2))
 
     val testDriver = createTestDriver(builder)
-    val testInput = testDriver.createInput[Int, Int](sourceTopic)
-    val testOutput = sinkTopic.map(name => testDriver.createOutput[Int, Int](name))
+    val testInput = testDriver.createInput[Integer, Integer](sourceTopic)
+    val testOutput = sinkTopic.map(name => testDriver.createOutput[Integer, Integer](name))
 
-    testInput pipeKeyValueList List(
-      new KeyValue(1, 1),
-      new KeyValue(1, 2),
-      new KeyValue(1, 3),
-      new KeyValue(1, 4),
-      new KeyValue(1, 5)
-    ).asJava
-
+    testInput.pipeValueList(
+      List(1, 2, 3, 4, 5)
+        .map(Integer.valueOf)
+        .asJava
+    )
     assertEquals(List(1, 5), testOutput(0).readValuesToList().asScala)
     assertEquals(List(2, 4), testOutput(1).readValuesToList().asScala)
     assertEquals(List(3), testOutput(2).readValuesToList().asScala)
@@ -71,7 +67,7 @@ class KStreamSplitTest extends TestDriver {
     val sourceTopic = "source"
 
     val m = builder
-      .stream[Int, Int](sourceTopic)
+      .stream[Integer, Integer](sourceTopic)
       .split(Named.as("_"))
       .branch((_, v) => v % 2 == 0, Branched.withConsumer(ks => ks.to("even"), "consumedEvens"))
       .branch((_, v) => v % 3 == 0, Branched.withFunction(ks => ks.mapValues(x => x * x), "mapped"))
@@ -80,18 +76,15 @@ class KStreamSplitTest extends TestDriver {
     m("_mapped").to("mapped")
 
     val testDriver = createTestDriver(builder)
-    val testInput = testDriver.createInput[Int, Int](sourceTopic)
-    testInput pipeKeyValueList List(
-      new KeyValue(1, 1),
-      new KeyValue(1, 2),
-      new KeyValue(1, 3),
-      new KeyValue(1, 4),
-      new KeyValue(1, 5),
-      new KeyValue(1, 9)
-    ).asJava
+    val testInput = testDriver.createInput[Integer, Integer](sourceTopic)
+    testInput.pipeValueList(
+      List(1, 2, 3, 4, 5, 9)
+        .map(Integer.valueOf)
+        .asJava
+    )
 
-    val even = testDriver.createOutput[Int, Int]("even")
-    val mapped = testDriver.createOutput[Int, Int]("mapped")
+    val even = testDriver.createOutput[Integer, Integer]("even")
+    val mapped = testDriver.createOutput[Integer, Integer]("mapped")
 
     assertEquals(List(2, 4), even.readValuesToList().asScala)
     assertEquals(List(9, 81), mapped.readValuesToList().asScala)
@@ -105,7 +98,7 @@ class KStreamSplitTest extends TestDriver {
     val sourceTopic = "source"
 
     val m = builder
-      .stream[Int, Int](sourceTopic)
+      .stream[Integer, Integer](sourceTopic)
       .split(Named.as("_"))
       .branch((_, v) => v % 2 == 0, Branched.withConsumer(ks => ks.to("even")))
       .branch((_, v) => v % 3 == 0, Branched.withFunction(ks => ks.mapValues(x => x * x)))
@@ -114,23 +107,19 @@ class KStreamSplitTest extends TestDriver {
     m("_2").to("mapped")
 
     val testDriver = createTestDriver(builder)
-    val testInput = testDriver.createInput[Int, Int](sourceTopic)
-    testInput pipeKeyValueList List(
-      new KeyValue(1, 1),
-      new KeyValue(1, 2),
-      new KeyValue(1, 3),
-      new KeyValue(1, 4),
-      new KeyValue(1, 5),
-      new KeyValue(1, 9)
-    ).asJava
+    val testInput = testDriver.createInput[Integer, Integer](sourceTopic)
+    testInput.pipeValueList(
+      List(1, 2, 3, 4, 5, 9)
+        .map(Integer.valueOf)
+        .asJava
+    )
 
-    val even = testDriver.createOutput[Int, Int]("even")
-    val mapped = testDriver.createOutput[Int, Int]("mapped")
+    val even = testDriver.createOutput[Integer, Integer]("even")
+    val mapped = testDriver.createOutput[Integer, Integer]("mapped")
 
     assertEquals(List(2, 4), even.readValuesToList().asScala)
     assertEquals(List(9, 81), mapped.readValuesToList().asScala)
 
     testDriver.close()
   }
-
 }
