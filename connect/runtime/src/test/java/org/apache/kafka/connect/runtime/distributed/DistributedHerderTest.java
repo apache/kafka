@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.utils.MockTime;
@@ -1943,16 +1944,12 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         EasyMock.expect(configBackingStore.snapshot()).andReturn(snapshotWithTransform); // for this test, it doesn't matter if we use the same config snapshot
         EasyMock.expect(configTransformer.transform(EasyMock.eq(CONN1), EasyMock.anyObject()))
-            .andThrow(new AssertionError("Config transformation should not crash herder"));
+            .andThrow(new ConfigException("Simulated exception thrown during config transformation"));
         worker.stopAndAwaitConnector(CONN1);
         PowerMock.expectLastCall();
         Capture<ConnectorStatus> failedStatus = newCapture();
         statusBackingStore.putSafe(capture(failedStatus));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            assertEquals(CONN1, failedStatus.getValue().id());
-            assertEquals(FAILED, failedStatus.getValue().state());
-            return null;
-        });
+        PowerMock.expectLastCall();
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -1972,6 +1969,9 @@ public class DistributedHerderTest {
         herder.tick();
 
         PowerMock.verifyAll();
+
+        assertEquals(CONN1, failedStatus.getValue().id());
+        assertEquals(FAILED, failedStatus.getValue().state());
     }
 
     @Test
