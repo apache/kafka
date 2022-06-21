@@ -3066,10 +3066,14 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             CreateDelegationTokenRequest.Builder createRequest(int timeoutMs) {
-                return new CreateDelegationTokenRequest.Builder(
-                        new CreateDelegationTokenRequestData()
-                            .setRenewers(renewers)
-                            .setMaxLifetimeMs(options.maxlifeTimeMs()));
+                CreateDelegationTokenRequestData data = new CreateDelegationTokenRequestData()
+                    .setRenewers(renewers)
+                    .setMaxLifetimeMs(options.maxlifeTimeMs());
+                if (options.owner().isPresent()) {
+                    data.setOwnerPrincipalName(options.owner().get().getName());
+                    data.setOwnerPrincipalType(options.owner().get().getPrincipalType());
+                }
+                return new CreateDelegationTokenRequest.Builder(data);
             }
 
             @Override
@@ -3080,6 +3084,7 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     CreateDelegationTokenResponseData data = response.data();
                     TokenInformation tokenInfo =  new TokenInformation(data.tokenId(), new KafkaPrincipal(data.principalType(), data.principalName()),
+                        new KafkaPrincipal(data.tokenRequesterPrincipalType(), data.tokenRequesterPrincipalName()),
                         options.renewers(), data.issueTimestampMs(), data.maxTimestampMs(), data.expiryTimestampMs());
                     DelegationToken token = new DelegationToken(tokenInfo, data.hmac());
                     delegationTokenFuture.complete(token);
