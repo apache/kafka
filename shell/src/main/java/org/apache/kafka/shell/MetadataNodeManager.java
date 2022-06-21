@@ -333,6 +333,8 @@ public final class MetadataNodeManager implements AutoCloseable {
                 producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
                 break;
             }
+            case NO_OP_RECORD:
+                break;
             default:
                 throw new RuntimeException("Unhandled metadata record type");
         }
