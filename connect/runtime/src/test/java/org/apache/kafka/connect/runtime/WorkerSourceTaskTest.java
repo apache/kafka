@@ -269,12 +269,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     public void testPause() throws Exception {
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         AtomicInteger count = new AtomicInteger(0);
         CountDownLatch pollLatch = expectPolls(10, count);
@@ -323,12 +318,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     public void testPollsInBackground() throws Exception {
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         final CountDownLatch pollLatch = expectPolls(10);
         // In this test, we don't flush, so nothing goes any further than the offset writer
@@ -366,12 +356,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     public void testFailureInPoll() throws Exception {
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
         final RuntimeException exception = new RuntimeException();
@@ -408,12 +393,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     public void testFailureInPollAfterCancel() throws Exception {
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
         final CountDownLatch workerCancelLatch = new CountDownLatch(1);
@@ -456,12 +436,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     public void testFailureInPollAfterStop() throws Exception {
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
         final CountDownLatch workerStopLatch = new CountDownLatch(1);
@@ -502,12 +477,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Test that the task handles an empty list of records
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectEmptyPolls(1, new AtomicInteger());
@@ -543,12 +513,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Test that the task commits properly when prompted
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
@@ -589,12 +554,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Test that the task commits properly when prompted
         createWorkerTask();
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
+        expectCleanStartup();
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
@@ -763,6 +723,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         createWorkerTask();
 
+        offsetStore.start();
+        EasyMock.expectLastCall();
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
         sourceTask.start(TASK_PROPS);
@@ -1086,6 +1048,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private abstract static class TestSourceTask extends SourceTask {
+    }
+
+    private void expectCleanStartup() {
+        offsetStore.start();
+        EasyMock.expectLastCall();
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(TASK_PROPS);
+        EasyMock.expectLastCall();
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
     }
 
     private void expectClose() {

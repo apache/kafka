@@ -22,10 +22,12 @@ import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Time;
@@ -59,6 +61,7 @@ import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
@@ -76,6 +79,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -90,6 +94,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
 /**
  * <p>
@@ -305,8 +311,9 @@ public class Worker {
                     connConfig = sourceConfig;
 
                     // Set up the offset backing store for this connector instance
-                    // (This logic is implemented in a follow-up pull request: https://github.com/apache/kafka/pull/11781)
-                    offsetStore = new ConnectorOffsetBackingStore(globalOffsetBackingStore, "TODO");
+                    offsetStore = config.exactlyOnceSourceEnabled()
+                            ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector)
+                            : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector);
                     offsetStore.configure(config);
                     offsetReader = new OffsetStorageReaderImpl(offsetStore, connName, internalKeyConverter, internalValueConverter);
                 }
@@ -1327,22 +1334,21 @@ public class Worker {
                     connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
-            TopicAdmin topicAdmin;
-            Map<String, TopicCreationGroup> topicCreationGroups;
-            if (config.topicCreationEnable() && sourceConfig.usesTopicCreation()) {
-                topicCreationGroups = TopicCreationGroup.configuredGroups(sourceConfig);
-                // Create a topic admin that the task can use for topic creation
+            TopicAdmin topicAdmin = null;
+            final boolean topicCreationEnabled = sourceConnectorTopicCreationEnabled(sourceConfig);
+            if (topicCreationEnabled || regularSourceTaskUsesConnectorSpecificOffsetsStore(sourceConfig)) {
                 Map<String, Object> adminOverrides = adminConfigs(id.connector(), "connector-adminclient-" + id, config,
                         sourceConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
                 topicAdmin = new TopicAdmin(adminOverrides);
-            } else {
-                topicAdmin = null;
-                topicCreationGroups = null;
             }
 
+            Map<String, TopicCreationGroup> topicCreationGroups = topicCreationEnabled
+                    ? TopicCreationGroup.configuredGroups(sourceConfig)
+                    : null;
+
             // Set up the offset backing store for this task instance
-            // (This logic is implemented in a follow-up pull request: https://github.com/apache/kafka/pull/11781)
-            ConnectorOffsetBackingStore offsetStore = new ConnectorOffsetBackingStore(globalOffsetBackingStore, "TODO");
+            ConnectorOffsetBackingStore offsetStore = offsetStoreForRegularSourceTask(
+                    id, sourceConfig, connectorClass, producer, producerProps, topicAdmin);
             offsetStore.configure(config);
 
             CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
@@ -1402,16 +1408,13 @@ public class Worker {
                     sourceConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
             TopicAdmin topicAdmin = new TopicAdmin(adminOverrides);
 
-            Map<String, TopicCreationGroup> topicCreationGroups;
-            if (config.topicCreationEnable() && sourceConfig.usesTopicCreation()) {
-                topicCreationGroups = TopicCreationGroup.configuredGroups(sourceConfig);
-            } else {
-                topicCreationGroups = null;
-            }
+            Map<String, TopicCreationGroup> topicCreationGroups = sourceConnectorTopicCreationEnabled(sourceConfig)
+                    ? TopicCreationGroup.configuredGroups(sourceConfig)
+                    : null;
 
             // Set up the offset backing store for this task instance
-            // (This logic is implemented in a follow-up pull request: https://github.com/apache/kafka/pull/11781)
-            ConnectorOffsetBackingStore offsetStore = new ConnectorOffsetBackingStore(globalOffsetBackingStore, "TODO");
+            ConnectorOffsetBackingStore offsetStore = offsetStoreForExactlyOnceSourceTask(
+                    id, sourceConfig, connectorClass, producer, producerProps, topicAdmin);
             offsetStore.configure(config);
 
             CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
@@ -1423,6 +1426,267 @@ public class Worker {
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, classLoader, time, retryWithToleranceOperator,
                     herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck);
         }
+    }
+
+    // Visible for testing
+    ConnectorOffsetBackingStore offsetStoreForRegularSourceConnector(
+            SourceConnectorConfig sourceConfig,
+            String connName,
+            Connector connector
+    ) {
+        String connectorSpecificOffsetsTopic = sourceConfig.offsetsTopic();
+
+        Map<String, Object> producerProps = baseProducerConfigs(connName, "connector-producer-" + connName, config, sourceConfig, connector.getClass(),
+                connectorClientConfigOverridePolicy, kafkaClusterId);
+
+        // We use a connector-specific store (i.e., a dedicated KafkaOffsetBackingStore for this connector)
+        // if the worker supports per-connector offsets topics (which may be the case in distributed but not standalone mode, for example)
+        // and if the connector is explicitly configured with an offsets topic
+        final boolean usesConnectorSpecificStore = connectorSpecificOffsetsTopic != null
+                && config.connectorOffsetsTopicsPermitted();
+
+        if (usesConnectorSpecificStore) {
+            Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
+                        connName, "connector-consumer-" + connName, config, sourceConfig, connector.getClass(),
+                        connectorClientConfigOverridePolicy, kafkaClusterId);
+            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+
+            Map<String, Object> adminOverrides = adminConfigs(connName, "connector-adminclient-" + connName, config,
+                    sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
+
+            TopicAdmin admin = new TopicAdmin(adminOverrides);
+            KafkaOffsetBackingStore connectorStore =
+                    KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
+
+            // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+            // an offset store that has a primary and a secondary store which both read from that same topic.
+            // So, if the user has explicitly configured the connector with a connector-specific offsets topic
+            // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+            // offset store and build a store backed exclusively by a connector-specific offsets store.
+            // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
+            // would prevent users from being able to customize the config properties used for the Kafka clients that
+            // access the offsets topic, and we would not be able to establish reasonable defaults like setting
+            // isolation.level=read_committed for the offsets topic consumer for this connector
+            if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
+                return ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                        () -> LoggingContext.forConnector(connName),
+                        connectorStore,
+                        connectorSpecificOffsetsTopic,
+                        admin
+                );
+            } else {
+                return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                        () -> LoggingContext.forConnector(connName),
+                        globalOffsetBackingStore,
+                        connectorStore,
+                        connectorSpecificOffsetsTopic,
+                        admin
+                );
+            }
+        } else {
+            return ConnectorOffsetBackingStore.withOnlyWorkerStore(
+                    () -> LoggingContext.forConnector(connName),
+                    globalOffsetBackingStore,
+                    config.offsetsTopic()
+            );
+        }
+    }
+
+    // Visible for testing
+    ConnectorOffsetBackingStore offsetStoreForExactlyOnceSourceConnector(
+            SourceConnectorConfig sourceConfig,
+            String connName,
+            Connector connector
+    ) {
+        String connectorSpecificOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
+
+        Map<String, Object> producerProps = baseProducerConfigs(connName, "connector-producer-" + connName, config, sourceConfig, connector.getClass(),
+                connectorClientConfigOverridePolicy, kafkaClusterId);
+
+        Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
+                    connName, "connector-consumer-" + connName, config, sourceConfig, connector.getClass(),
+                    connectorClientConfigOverridePolicy, kafkaClusterId);
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+
+        Map<String, Object> adminOverrides = adminConfigs(connName, "connector-adminclient-" + connName, config,
+                sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
+
+        TopicAdmin admin = new TopicAdmin(adminOverrides);
+        KafkaOffsetBackingStore connectorStore =
+                KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
+
+        // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+        // an offset store that has a primary and a secondary store which both read from that same topic.
+        // So, even if the user has explicitly configured the connector with a connector-specific offsets topic,
+        // if we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+        // offset store and build a store backed exclusively by a connector-specific offsets store.
+        // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
+        // would prevent users from being able to customize the config properties used for the Kafka clients that
+        // access the offsets topic, and may lead to confusion for them when tasks are created for the connector
+        // since they will all have their own dedicated offsets stores anyways
+        if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
+            return ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                    () -> LoggingContext.forConnector(connName),
+                    connectorStore,
+                    connectorSpecificOffsetsTopic,
+                    admin
+            );
+        } else {
+            return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                    () -> LoggingContext.forConnector(connName),
+                    globalOffsetBackingStore,
+                    connectorStore,
+                    connectorSpecificOffsetsTopic,
+                    admin
+            );
+        }
+    }
+
+    // Visible for testing
+    ConnectorOffsetBackingStore offsetStoreForRegularSourceTask(
+            ConnectorTaskId id,
+            SourceConnectorConfig sourceConfig,
+            Class<? extends Connector> connectorClass,
+            Producer<byte[], byte[]> producer,
+            Map<String, Object> producerProps,
+            TopicAdmin topicAdmin
+    ) {
+        String connectorSpecificOffsetsTopic = sourceConfig.offsetsTopic();
+
+        if (regularSourceTaskUsesConnectorSpecificOffsetsStore(sourceConfig)) {
+            Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when configured to use their own offsets topic");
+
+            Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
+                    id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
+                    connectorClientConfigOverridePolicy, kafkaClusterId);
+            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+
+            KafkaOffsetBackingStore connectorStore =
+                    KafkaOffsetBackingStore.forTask(sourceConfig.offsetsTopic(), producer, consumer, topicAdmin);
+
+            // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+            // an offset store that has a primary and a secondary store which both read from that same topic.
+            // So, if the user has (implicitly or explicitly) configured the connector with a connector-specific offsets topic
+            // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+            // offset store and build a store backed exclusively by a connector-specific offsets store.
+            // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
+            // would prevent users from being able to customize the config properties used for the Kafka clients that
+            // access the offsets topic, and we would not be able to establish reasonable defaults like setting
+            // isolation.level=read_committed for the offsets topic consumer for this task
+            if (sameOffsetTopicAsWorker(sourceConfig.offsetsTopic(), producerProps)) {
+                return ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                        () -> LoggingContext.forTask(id),
+                        connectorStore,
+                        connectorSpecificOffsetsTopic,
+                        topicAdmin
+                );
+            } else {
+                return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                        () -> LoggingContext.forTask(id),
+                        globalOffsetBackingStore,
+                        connectorStore,
+                        connectorSpecificOffsetsTopic,
+                        topicAdmin
+                );
+            }
+        } else {
+            return ConnectorOffsetBackingStore.withOnlyWorkerStore(
+                    () -> LoggingContext.forTask(id),
+                    globalOffsetBackingStore,
+                    config.offsetsTopic()
+            );
+        }
+    }
+
+    // Visible for testing
+    ConnectorOffsetBackingStore offsetStoreForExactlyOnceSourceTask(
+            ConnectorTaskId id,
+            SourceConnectorConfig sourceConfig,
+            Class<? extends Connector> connectorClass,
+            Producer<byte[], byte[]> producer,
+            Map<String, Object> producerProps,
+            TopicAdmin topicAdmin
+    ) {
+        Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when exactly-once support is enabled");
+
+        Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
+                id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
+                connectorClientConfigOverridePolicy, kafkaClusterId);
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+
+        String connectorOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
+
+        KafkaOffsetBackingStore connectorStore =
+                KafkaOffsetBackingStore.forTask(connectorOffsetsTopic, producer, consumer, topicAdmin);
+
+        // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+        // an offset store that has a primary and a secondary store which both read from that same topic.
+        // So, if the user has (implicitly or explicitly) configured the connector with a connector-specific offsets topic
+        // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+        // offset store and build a store backed exclusively by a connector-specific offsets store.
+        // We cannot under any circumstances build an offset store backed exclusively by the worker-global offset store
+        // as that would prevent us from being able to write source records and source offset information for the task
+        // with the same producer, and therefore, in the same transaction.
+        if (sameOffsetTopicAsWorker(connectorOffsetsTopic, producerProps)) {
+            return ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                    () -> LoggingContext.forTask(id),
+                    connectorStore,
+                    connectorOffsetsTopic,
+                    topicAdmin
+            );
+        } else {
+            return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                    () -> LoggingContext.forTask(id),
+                    globalOffsetBackingStore,
+                    connectorStore,
+                    connectorOffsetsTopic,
+                    topicAdmin
+            );
+        }
+    }
+
+    /**
+     * Gives a best-effort guess for whether the given offsets topic is the same topic as the worker-global offsets topic.
+     * Even if the name of the topic is the same as the name of the worker's offsets topic, the two may still be different topics
+     * if the connector is configured to produce to a different Kafka cluster than the one that hosts the worker's offsets topic.
+     * @param offsetsTopic the name of the offsets topic for the connector
+     * @param producerProps the producer configuration for the connector
+     * @return whether it appears that the connector's offsets topic is the same topic as the worker-global offsets topic.
+     * If {@code true}, it is guaranteed that the two are the same;
+     * if {@code false}, it is likely but not guaranteed that the two are not the same
+     */
+    private boolean sameOffsetTopicAsWorker(String offsetsTopic, Map<String, Object> producerProps) {
+        // We can check the offset topic name and the Kafka cluster's bootstrap servers,
+        // although this isn't exact and can lead to some false negatives if the user
+        // provides an overridden bootstrap servers value for their producer that is different than
+        // the worker's but still resolves to the same Kafka cluster used by the worker.
+        // At the moment this is probably adequate, especially since we don't want to put
+        // a network ping to a remote Kafka cluster inside the herder's tick thread (which is where this
+        // logic takes place right now) in case that takes a while.
+        Set<String> workerBootstrapServers = new HashSet<>(config.getList(BOOTSTRAP_SERVERS_CONFIG));
+        Set<String> producerBootstrapServers = new HashSet<>();
+        try {
+            String rawBootstrapServers = producerProps.getOrDefault(BOOTSTRAP_SERVERS_CONFIG, "").toString();
+            @SuppressWarnings("unchecked")
+            List<String> parsedBootstrapServers = (List<String>) ConfigDef.parseType(BOOTSTRAP_SERVERS_CONFIG, rawBootstrapServers, ConfigDef.Type.LIST);
+            producerBootstrapServers.addAll(parsedBootstrapServers);
+        } catch (Exception e) {
+            // Should never happen by this point, but if it does, make sure to present a readable error message to the user
+            throw new ConnectException("Failed to parse bootstrap servers property in producer config", e);
+        }
+        return offsetsTopic.equals(config.offsetsTopic())
+                && workerBootstrapServers.equals(producerBootstrapServers);
+    }
+
+    private boolean regularSourceTaskUsesConnectorSpecificOffsetsStore(SourceConnectorConfig sourceConfig) {
+        // We use a connector-specific store (i.e., a dedicated KafkaOffsetBackingStore for this task)
+        // if the worker supports per-connector offsets topics (which may be the case in distributed mode but not standalone, for example)
+        // and the user has explicitly specified an offsets topic for the connector
+        return sourceConfig.offsetsTopic() != null && config.connectorOffsetsTopicsPermitted();
+    }
+
+    private boolean sourceConnectorTopicCreationEnabled(SourceConnectorConfig sourceConfig) {
+        return config.topicCreationEnable() && sourceConfig.usesTopicCreation();
     }
 
     static class ConnectorStatusMetricsGroup {
