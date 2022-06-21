@@ -23,7 +23,9 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.Map;
 import java.util.TreeMap;
@@ -32,6 +34,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class RelationalSmokeTestTest extends SmokeTestUtil {
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     @Test
     public void verifySmokeTestLogic() {
