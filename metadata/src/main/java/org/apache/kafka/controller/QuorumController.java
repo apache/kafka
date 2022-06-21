@@ -427,7 +427,7 @@ public final class QuorumController implements Controller {
             return exception;
         }
         log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
-                "Reverting to last committed offset {}.",
+                "Renouncing leadership and reverting to the last committed offset {}.",
             name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
         raftClient.resign(curClaimEpoch);
