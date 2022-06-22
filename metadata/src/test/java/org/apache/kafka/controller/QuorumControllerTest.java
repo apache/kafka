@@ -32,6 +32,7 @@ import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -1191,22 +1192,26 @@ public class QuorumControllerTest {
     public void testInvalidBootstrapMetadata() throws Exception {
         // We can't actually create a BootstrapMetadata with an invalid version, so we have to mock it
         BootstrapMetadata bootstrapMetadata = Mockito.mock(BootstrapMetadata.class);
-        Mockito.when(bootstrapMetadata.metadataVersion()).thenReturn(MetadataVersion.IBP_2_8_IV0);
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        Mockito.when(bootstrapMetadata.metadataVersion()).thenAnswer(__ -> {
+            // This barrier allows us to catch the controller after it becomes leader, but before the bootstrapping fails
+            barrier.await(10, TimeUnit.SECONDS);
+            return MetadataVersion.IBP_2_8_IV0;
+        });
         try (
                 LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
                 QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                     b.setConfigSchema(SCHEMA);
                 }, OptionalLong.empty(), OptionalLong.empty(), bootstrapMetadata);
         ) {
-            try {
-                QuorumController active = controlEnv.activeController();
-                TestUtils.waitForCondition(() -> !active.isActive(),
-                    "Timed out waiting for controller to renounce itself after bad bootstrap metadata version.");
-            } catch (Throwable t) {
-                // It's possible that QuorumControllerTestEnv#activeController misses the window in handleLeaderChange
-                assertTrue(t.getMessage().startsWith("Expected to see"));
-                assertFalse(controlEnv.controllers().get(0).isActive());
-            }
+            QuorumController controller = controlEnv.activeController();
+            assertTrue(controller.isActive());
+            // Unblock the first call to BootstrapMetadata#metadataVersion
+            barrier.await(10, TimeUnit.SECONDS);
+            // Unblock the second call to BootstrapMetadata#metadataVersion
+            barrier.await(10, TimeUnit.SECONDS);
+            TestUtils.waitForCondition(() -> !controller.isActive(),
+                "Timed out waiting for controller to renounce itself after bad bootstrap metadata version.");
         }
     }
 
