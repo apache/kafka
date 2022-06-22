@@ -27,6 +27,7 @@ import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.AlterPartitionRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -162,7 +163,7 @@ class DefaultAlterPartitionManager(
     if (enqueued) {
       maybePropagateIsrChanges()
     } else {
-      future.completeExceptionally(new IllegalStateException(
+      future.completeExceptionally(new OperationNotAttemptedException(
         s"Failed to enqueue ISR change state $leaderAndIsr for partition $topicIdPartition"))
     }
     future
@@ -358,7 +359,8 @@ class DefaultAlterPartitionManager(
         inflightAlterPartitionItems.foreach { inflightAlterPartition =>
           partitionResponses.get(inflightAlterPartition.topicIdPartition) match {
             case Some(leaderAndIsrOrError) =>
-              // we need to clear from the unsent updates map to unblock further updates or retries
+              // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further
+              // updates. We clear it now to allow the callback to submit a new update if needed.
               unsentIsrUpdates.remove(inflightAlterPartition.topicIdPartition.topicPartition)
               leaderAndIsrOrError match {
                 case Left(error) => inflightAlterPartition.future.completeExceptionally(error.exception)
