@@ -204,6 +204,11 @@
     <subpackage name="quotas">
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
+
+    <subpackage name="errors">
+      <allow pkg="org.apache.kafka.common.record" />
+    </subpackage>
+    
   </subpackage>
 
   <subpackage name="controller">
