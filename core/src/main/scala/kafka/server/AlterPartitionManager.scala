@@ -27,7 +27,6 @@ import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.AlterPartitionRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -163,7 +162,7 @@ class DefaultAlterPartitionManager(
     if (enqueued) {
       maybePropagateIsrChanges()
     } else {
-      future.completeExceptionally(new OperationNotAttemptedException(
+      future.completeExceptionally(new IllegalStateException(
         s"Failed to enqueue ISR change state $leaderAndIsr for partition $topicIdPartition"))
     }
     future
@@ -359,14 +358,11 @@ class DefaultAlterPartitionManager(
         inflightAlterPartitionItems.foreach { inflightAlterPartition =>
           partitionResponses.get(inflightAlterPartition.topicIdPartition) match {
             case Some(leaderAndIsrOrError) =>
-              try {
-                leaderAndIsrOrError match {
-                  case Left(error) => inflightAlterPartition.future.completeExceptionally(error.exception)
-                  case Right(leaderAndIsr) => inflightAlterPartition.future.complete(leaderAndIsr)
-                }
-              } finally {
-                // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-                unsentIsrUpdates.remove(inflightAlterPartition.topicIdPartition.topicPartition)
+              // we need to clear from the unsent updates map to unblock further updates or retries
+              unsentIsrUpdates.remove(inflightAlterPartition.topicIdPartition.topicPartition)
+              leaderAndIsrOrError match {
+                case Left(error) => inflightAlterPartition.future.completeExceptionally(error.exception)
+                case Right(leaderAndIsr) => inflightAlterPartition.future.complete(leaderAndIsr)
               }
             case None =>
               // Don't remove this partition from the update map so it will get re-sent
