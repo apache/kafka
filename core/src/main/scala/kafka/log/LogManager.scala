@@ -17,13 +17,12 @@
 
 package kafka.log
 
-import kafka.api.ApiVersion
 import kafka.log.LogConfig.MessageFormatVersion
-
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
+
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
@@ -38,8 +37,10 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 import kafka.utils.Implicits._
-
 import java.util.Properties
+
+import org.apache.kafka.server.common.MetadataVersion
+
 import scala.annotation.nowarn
 
 /**
@@ -65,7 +66,7 @@ class LogManager(logDirs: Seq[File],
                  val retentionCheckMs: Long,
                  val maxTransactionTimeoutMs: Int,
                  val maxPidExpirationMs: Int,
-                 interBrokerProtocolVersion: ApiVersion,
+                 interBrokerProtocolVersion: MetadataVersion,
                  scheduler: Scheduler,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
@@ -317,6 +318,11 @@ class LogManager(logDirs: Seq[File],
     val jobs = ArrayBuffer.empty[Seq[Future[_]]]
     var numTotalLogs = 0
 
+    def handleIOException(logDirAbsolutePath: String, e: IOException): Unit = {
+      offlineDirs.add((logDirAbsolutePath, e))
+      error(s"Error while loading log dir $logDirAbsolutePath", e)
+    }
+
     for (dir <- liveLogDirs) {
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
@@ -375,8 +381,10 @@ class LogManager(logDirs: Seq[File],
                 s"($currentNumLoaded/${logsToLoad.length} loaded in $logDirAbsolutePath)")
             } catch {
               case e: IOException =>
-                offlineDirs.add((logDirAbsolutePath, e))
-                error(s"Error while loading log dir $logDirAbsolutePath", e)
+                handleIOException(logDirAbsolutePath, e)
+              case e: KafkaStorageException if e.getCause.isInstanceOf[IOException] =>
+                // KafkaStorageException might be thrown, ex: during writing LeaderEpochFileCache
+                // And while converting IOException to KafkaStorageException, we've already handled the exception. So we can ignore it here.
             }
           }
           runnable
@@ -385,8 +393,7 @@ class LogManager(logDirs: Seq[File],
         jobs += jobsForDir.map(pool.submit)
       } catch {
         case e: IOException =>
-          offlineDirs.add((logDirAbsolutePath, e))
-          error(s"Error while loading log dir $logDirAbsolutePath", e)
+          handleIOException(logDirAbsolutePath, e)
       }
     }
 
@@ -1008,7 +1015,7 @@ class LogManager(logDirs: Seq[File],
       if (destLog == null)
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
-      destLog.renameDir(UnifiedLog.logDirName(topicPartition))
+      destLog.renameDir(UnifiedLog.logDirName(topicPartition), true)
       destLog.updateHighWatermark(sourceLog.highWatermark)
 
       // Now that future replica has been successfully renamed to be the current replica
@@ -1021,7 +1028,7 @@ class LogManager(logDirs: Seq[File],
       }
 
       try {
-        sourceLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition))
+        sourceLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), true)
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
@@ -1068,7 +1075,7 @@ class LogManager(logDirs: Seq[File],
             cleaner.updateCheckpoints(removedLog.parentDirFile, partitionToRemove = Option(topicPartition))
           }
         }
-        removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition))
+        removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
         if (checkpoint) {
           val logDir = removedLog.parentDirFile
           val logsToCheckpoint = logsInDir(logDir)

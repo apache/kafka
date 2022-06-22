@@ -58,6 +58,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTEARRAY_VALUE_SERIALIZER;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
 import static org.easymock.EasyMock.anyLong;
@@ -69,6 +71,7 @@ import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -394,15 +397,17 @@ public class ProcessorContextImplTest {
     @Test
     public void shouldNotSendRecordHeadersToChangelogTopic() {
         recordCollector.send(
-                CHANGELOG_PARTITION.topic(),
-                KEY_BYTES,
-                VALUE_BYTES,
-                null,
-                CHANGELOG_PARTITION.partition(),
-                TIMESTAMP,
-                BYTES_KEY_SERIALIZER,
-                BYTEARRAY_VALUE_SERIALIZER
-        );
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            null,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
+
         final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
 
         replay(recordCollector, task);
@@ -420,15 +425,16 @@ public class ProcessorContextImplTest {
         headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
                 PositionSerde.serialize(position).array()));
         recordCollector.send(
-                CHANGELOG_PARTITION.topic(),
-                KEY_BYTES,
-                VALUE_BYTES,
-                headers,
-                CHANGELOG_PARTITION.partition(),
-                TIMESTAMP,
-                BYTES_KEY_SERIALIZER,
-                BYTEARRAY_VALUE_SERIALIZER
-        );
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            headers,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
 
         final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
 
@@ -566,6 +572,36 @@ public class ProcessorContextImplTest {
     @Test
     public void shouldMatchStreamTime() {
         assertEquals(STREAM_TIME, context.currentStreamTimeMs());
+    }
+
+    @Test
+    public void shouldAddAndGetProcessorKeyValue() {
+        context.addProcessorMetadataKeyValue("key1", 100L);
+        final Long value = context.processorMetadataForKey("key1");
+        assertEquals(100L, value.longValue());
+
+        final Long noValue = context.processorMetadataForKey("nokey");
+        assertNull(noValue);
+    }
+
+    @Test
+    public void shouldSetAndGetProcessorMetaData() {
+        final ProcessorMetadata emptyMetadata = new ProcessorMetadata();
+        context.setProcessorMetadata(emptyMetadata);
+        assertEquals(emptyMetadata, context.getProcessorMetadata());
+
+        final ProcessorMetadata metadata = new ProcessorMetadata(
+            mkMap(
+                mkEntry("key1", 10L),
+                mkEntry("key2", 100L)
+            )
+        );
+
+        context.setProcessorMetadata(metadata);
+        assertEquals(10L, context.processorMetadataForKey("key1").longValue());
+        assertEquals(100L, context.processorMetadataForKey("key2").longValue());
+
+        assertThrows(NullPointerException.class, () -> context.setProcessorMetadata(null));
     }
 
     @SuppressWarnings("unchecked")

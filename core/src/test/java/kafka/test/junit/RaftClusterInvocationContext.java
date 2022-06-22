@@ -18,6 +18,7 @@
 package kafka.test.junit;
 
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.test.ClusterConfig;
@@ -38,6 +39,7 @@ import scala.compat.java8.OptionConverters;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -83,6 +85,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
+                        setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
@@ -169,6 +172,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public Map<Integer, BrokerFeatures> brokerFeatures() {
+            return brokers().collect(Collectors.toMap(
+                brokerServer -> brokerServer.config().nodeId(),
+                BrokerServer::brokerFeatures
+            ));
+        }
+
+        @Override
         public ClusterType clusterType() {
             return ClusterType.RAFT;
         }
@@ -185,7 +196,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterReference.get().clientProperties());
+            Admin admin = Admin.create(clusterReference.get().clientProperties(configOverrides));
             admins.add(admin);
             return admin;
         }

@@ -392,7 +392,7 @@ class LogLoader(
           Some(logEndOffset)
         else {
           warn(s"Deleting all segments because logEndOffset ($logEndOffset) " +
-            s"is smaller than logStartOffset ${logStartOffsetCheckpoint}. " +
+            s"is smaller than logStartOffset $logStartOffsetCheckpoint. " +
             "This could happen if segment files were deleted from the file system.")
           removeAndDeleteSegmentsAsync(segments.values)
           leaderEpochCache.foreach(_.clearAndFlush())

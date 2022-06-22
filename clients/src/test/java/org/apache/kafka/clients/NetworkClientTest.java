@@ -82,6 +82,8 @@ public class NetworkClientTest {
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
     protected final long connectionSetupTimeoutMsTest = 5 * 1000;
     protected final long connectionSetupTimeoutMaxMsTest = 127 * 1000;
+    private final int reconnectBackoffExpBase = ClusterConnectionStates.RECONNECT_BACKOFF_EXP_BASE;
+    private final double reconnectBackoffJitter = ClusterConnectionStates.RECONNECT_BACKOFF_JITTER;
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
@@ -831,13 +833,28 @@ public class NetworkClientTest {
 
     @Test
     public void testServerDisconnectAfterInternalApiVersionRequest() throws Exception {
-        awaitInFlightApiVersionRequest();
-        selector.serverDisconnect(node.idString());
+        final long numIterations = 5;
+        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMaxMsTest / (double) Math.max(reconnectBackoffMsTest, 1))
+            / Math.log(reconnectBackoffExpBase);
+        for (int i = 0; i < numIterations; i++) {
+            selector.clear();
+            awaitInFlightApiVersionRequest();
+            selector.serverDisconnect(node.idString());
 
-        // The failed ApiVersion request should not be forwarded to upper layers
-        List<ClientResponse> responses = client.poll(0, time.milliseconds());
-        assertFalse(client.hasInFlightRequests(node.idString()));
-        assertTrue(responses.isEmpty());
+            // The failed ApiVersion request should not be forwarded to upper layers
+            List<ClientResponse> responses = client.poll(0, time.milliseconds());
+            assertFalse(client.hasInFlightRequests(node.idString()));
+            assertTrue(responses.isEmpty());
+
+            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
+                * reconnectBackoffMsTest);
+            long delay = client.connectionDelay(node, time.milliseconds());
+            assertEquals(expectedBackoff, delay, reconnectBackoffJitter * expectedBackoff);
+            if (i == numIterations - 1) {
+                break;
+            }
+            time.sleep(delay + 1);
+        }
     }
 
     @Test

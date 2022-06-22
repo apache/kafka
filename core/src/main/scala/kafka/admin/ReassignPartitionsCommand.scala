@@ -331,7 +331,7 @@ object ReassignPartitionsCommand extends Logging {
       val state = states(topicPartition)
       if (state.done) {
         if (state.currentReplicas.equals(state.targetReplicas)) {
-          bld.append("Reassignment of partition %s is complete.".
+          bld.append("Reassignment of partition %s is completed.".
             format(topicPartition.toString))
         } else {
           bld.append(s"There is no active reassignment of partition ${topicPartition}, " +

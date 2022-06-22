@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.admin.AdminUtils
-import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
+import kafka.api.ElectLeadersRequestOps
 import kafka.common.OffsetAndMetadata
 import kafka.controller.ReplicaAssignment
 import kafka.coordinator.group._
@@ -78,6 +78,9 @@ import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
+
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq, Set, immutable, mutable}
@@ -221,11 +224,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForwardToController(request, handleAlterClientQuotasRequest)
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForwardToController(request, handleAlterUserScramCredentialsRequest)
-        case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
+        case ApiKeys.ALTER_PARTITION => handleAlterPartitionRequest(request)
         case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
         case ApiKeys.ENVELOPE => handleEnvelope(request, requestLocal)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
+        case ApiKeys.UNREGISTER_BROKER => forwardToControllerOrFail(request)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
@@ -432,7 +436,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setTopics(responseTopicList)
             .setThrottleTimeMs(requestThrottleMs)
       ))
-    } else if (offsetCommitRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+    } else if (offsetCommitRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
@@ -694,18 +698,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       forgottenTopics,
       topicNames)
 
-    val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
-      // Fetch API version 11 added preferred replica logic
-      Some(new DefaultClientMetadata(
-        fetchRequest.rackId,
-        clientId,
-        request.context.clientAddress,
-        request.context.principal,
-        request.context.listenerName.value))
-    } else {
-      None
-    }
-
     val erroneous = mutable.ArrayBuffer[(TopicIdPartition, FetchResponseData.PartitionData)]()
     val interesting = mutable.ArrayBuffer[(TopicIdPartition, FetchRequest.PartitionData)]()
     if (fetchRequest.isFromFollower) {
@@ -942,31 +934,49 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    // for fetch from consumer, cap fetchMaxBytes to the maximum bytes that could be fetched without being throttled given
-    // no bytes were recorded in the recent quota window
-    // trying to fetch more bytes would result in a guaranteed throttling potentially blocking consumer progress
-    val maxQuotaWindowBytes = if (fetchRequest.isFromFollower)
-      Int.MaxValue
-    else
-      quotas.fetch.getMaxValueInQuotaWindow(request.session, clientId).toInt
-
-    val fetchMaxBytes = Math.min(Math.min(fetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
-    val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
-    if (interesting.isEmpty)
+    if (interesting.isEmpty) {
       processResponseCallback(Seq.empty)
-    else {
+    } else {
+      // for fetch from consumer, cap fetchMaxBytes to the maximum bytes that could be fetched without being throttled given
+      // no bytes were recorded in the recent quota window
+      // trying to fetch more bytes would result in a guaranteed throttling potentially blocking consumer progress
+      val maxQuotaWindowBytes = if (fetchRequest.isFromFollower)
+        Int.MaxValue
+      else
+        quotas.fetch.getMaxValueInQuotaWindow(request.session, clientId).toInt
+
+      val fetchMaxBytes = Math.min(Math.min(fetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
+      val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
+
+      val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
+        // Fetch API version 11 added preferred replica logic
+        Some(new DefaultClientMetadata(
+          fetchRequest.rackId,
+          clientId,
+          request.context.clientAddress,
+          request.context.principal,
+          request.context.listenerName.value))
+      } else {
+        None
+      }
+
+      val params = FetchParams(
+        requestVersion = versionId,
+        replicaId = fetchRequest.replicaId,
+        maxWaitMs = fetchRequest.maxWait,
+        minBytes = fetchMinBytes,
+        maxBytes = fetchMaxBytes,
+        isolation = FetchIsolation(fetchRequest),
+        clientMetadata = clientMetadata
+      )
+
       // call the replica manager to fetch messages from the local replica
       replicaManager.fetchMessages(
-        fetchRequest.maxWait.toLong,
-        fetchRequest.replicaId,
-        fetchMinBytes,
-        fetchMaxBytes,
-        versionId <= 2,
-        interesting,
-        replicationQuota(fetchRequest),
-        processResponseCallback,
-        fetchRequest.isolationLevel,
-        clientMetadata)
+        params = params,
+        fetchInfos = interesting,
+        quota = replicationQuota(fetchRequest),
+        responseCallback = processResponseCallback,
+      )
     }
   }
 
@@ -1228,7 +1238,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     var unauthorizedForCreateTopics = Set[String]()
 
     if (authorizedTopics.nonEmpty) {
-      val nonExistingTopics = authorizedTopics.filterNot(metadataCache.contains(_))
+      val nonExistingTopics = authorizedTopics.filterNot(metadataCache.contains)
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
           val authorizedForCreateTopics = authHelper.filterByAuthorized(request.context, CREATE, TOPIC,
@@ -1352,7 +1362,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val payloadOpt = zkSupport.zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
                 payloadOpt match {
                   case Some(payload) =>
-                    (topicPartition, new OffsetFetchResponse.PartitionData(payload.toLong,
+                    (topicPartition, new OffsetFetchResponse.PartitionData(payload,
                       Optional.empty(), OffsetFetchResponse.NO_METADATA, Errors.NONE))
                   case None =>
                     (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
@@ -1617,7 +1627,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val listedGroup = new ListGroupsResponseData.ListedGroup()
                   .setGroupId(group.groupId)
                   .setProtocolType(group.protocolType)
-                  .setGroupState(group.state.toString)
+                  .setGroupState(group.state)
                 listedGroup
             }.asJava)
             .setThrottleTimeMs(throttleMs)
@@ -1666,7 +1676,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+    if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
@@ -1720,7 +1730,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         ))
     }
 
-    if (syncGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+    if (syncGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
@@ -1793,7 +1803,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (heartbeatRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+    if (heartbeatRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
@@ -2158,16 +2168,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DeleteRecordsResponse(new DeleteRecordsResponseData()
           .setThrottleTimeMs(requestThrottleMs)
-          .setTopics(new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(mergedResponseStatus.groupBy(_._1.topic).map { case (topic, partitionMap) => {
+          .setTopics(new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(mergedResponseStatus.groupBy(_._1.topic).map { case (topic, partitionMap) =>
             new DeleteRecordsTopicResult()
               .setName(topic)
-              .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(partitionMap.map { case (topicPartition, partitionResult) => {
+              .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(partitionMap.map { case (topicPartition, partitionResult) =>
                 new DeleteRecordsPartitionResult().setPartitionIndex(topicPartition.partition)
                   .setLowWatermark(partitionResult.lowWatermark)
                   .setErrorCode(partitionResult.errorCode)
-              }
               }.toList.asJava.iterator()))
-          }
           }.toList.asJava.iterator()))))
     }
 
@@ -2233,7 +2241,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
+    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val endTxnRequest = request.body[EndTxnRequest]
     val transactionalId = endTxnRequest.data.transactionalId
 
@@ -2274,7 +2282,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
+    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
     val errors = new ConcurrentHashMap[java.lang.Long, util.Map[TopicPartition, Errors]]()
@@ -2379,13 +2387,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
   }
 
-  def ensureInterBrokerVersion(version: ApiVersion): Unit = {
-    if (config.interBrokerProtocolVersion < version)
+  def ensureInterBrokerVersion(version: MetadataVersion): Unit = {
+    if (config.interBrokerProtocolVersion.isLessThan(version))
       throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
   }
 
   def handleAddPartitionToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
+    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
     val transactionalId = addPartitionsToTxnRequest.data.transactionalId
     val partitionsToAdd = addPartitionsToTxnRequest.partitions.asScala
@@ -2448,7 +2456,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
+    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
     val transactionalId = addOffsetsToTxnRequest.data.transactionalId
     val groupId = addOffsetsToTxnRequest.data.groupId
@@ -2498,7 +2506,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
+    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val header = request.header
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
 
@@ -3297,18 +3305,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
+  def handleAlterPartitionRequest(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    val alterIsrRequest = request.body[AlterIsrRequest]
+    val alterPartitionRequest = request.body[AlterPartitionRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     if (!zkSupport.controller.isActive)
-      requestHelper.sendResponseExemptThrottle(request, alterIsrRequest.getErrorResponse(
+      requestHelper.sendResponseExemptThrottle(request, alterPartitionRequest.getErrorResponse(
         AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
     else
-      zkSupport.controller.alterIsrs(alterIsrRequest.data, alterIsrResp =>
-        requestHelper.sendResponseExemptThrottle(request, new AlterIsrResponse(alterIsrResp))
-      )
+      zkSupport.controller.alterPartitions(alterPartitionRequest.data, request.context.apiVersion, alterPartitionResp =>
+        requestHelper.sendResponseExemptThrottle(request, new AlterPartitionResponse(alterPartitionResp)))
   }
 
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
@@ -3364,7 +3371,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setThrottleTimeMs(requestThrottleMs)
         .setClusterId(clusterId)
         .setControllerId(controllerId)
-        .setClusterAuthorizedOperations(clusterAuthorizedOperations);
+        .setClusterAuthorizedOperations(clusterAuthorizedOperations)
 
 
       brokers.foreach { broker =>

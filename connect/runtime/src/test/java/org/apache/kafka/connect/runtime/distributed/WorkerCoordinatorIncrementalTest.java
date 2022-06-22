@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
@@ -215,7 +216,7 @@ public class WorkerCoordinatorIncrementalTest {
                 CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
-        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
+        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
@@ -246,7 +247,7 @@ public class WorkerCoordinatorIncrementalTest {
                 CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
-        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
+        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0

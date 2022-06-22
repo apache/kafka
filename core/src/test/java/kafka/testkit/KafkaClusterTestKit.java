@@ -24,7 +24,6 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
-import kafka.server.Server;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -35,10 +34,12 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.controller.BootstrapMetadata;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,6 +175,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     String threadNamePrefix = String.format("controller%d_", node.id());
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
+                    BootstrapMetadata bootstrapMetadata = BootstrapMetadata.create(nodes.bootstrapMetadataVersion());
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
                         Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
@@ -185,7 +187,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         new Metrics(),
                         Option.apply(threadNamePrefix),
                         connectFutureManager.future,
-                        KafkaRaftServer.configSchema()
+                        KafkaRaftServer.configSchema(),
+                        raftManager.apiVersions(),
+                        bootstrapMetadata
                     );
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
@@ -238,8 +242,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         new Metrics(),
                         Option.apply(threadNamePrefix),
                         JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq(),
-                        connectFutureManager.future,
-                        Server.SUPPORTED_FEATURES()
+                        connectFutureManager.future
                     );
                     brokers.put(node.id(), broker);
                     raftManagers.put(node.id(), raftManager);
@@ -337,6 +340,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     StorageTool.formatCommand(out,
                             JavaConverters.asScalaBuffer(Collections.singletonList(metadataLogDir)).toSeq(),
                             properties,
+                            MetadataVersion.MINIMUM_KRAFT_VERSION,
                             false);
                 } finally {
                     for (String line : stream.toString().split(String.format("%n"))) {
@@ -374,6 +378,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     /**
      * Wait for a controller to mark all the brokers as ready (registered and unfenced).
+     * And also wait for the metadata cache up-to-date in each broker server.
      */
     public void waitForReadyBrokers() throws ExecutionException, InterruptedException {
         // We can choose any controller, not just the active controller.
@@ -381,6 +386,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
         ControllerServer controllerServer = controllers.values().iterator().next();
         Controller controller = controllerServer.controller();
         controller.waitForReadyBrokers(brokers.size()).get();
+
+        // make sure metadata cache in each broker server is up-to-date
+        TestUtils.waitForCondition(() ->
+                brokers().values().stream().allMatch(brokerServer -> brokerServer.metadataCache().getAliveBrokers().size() == brokers.size()),
+            "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
     public Properties controllerClientProperties() throws ExecutionException, InterruptedException {
@@ -405,7 +415,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public Properties clientProperties() {
-        Properties properties = new Properties();
+        return clientProperties(new Properties());
+    }
+
+    public Properties clientProperties(Properties configOverrides) {
         if (!brokers.isEmpty()) {
             StringBuilder bld = new StringBuilder();
             String prefix = "";
@@ -422,9 +435,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 bld.append(prefix).append("localhost:").append(port);
                 prefix = ",";
             }
-            properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
+            configOverrides.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
         }
-        return properties;
+        return configOverrides;
     }
 
     public Map<Integer, ControllerServer> controllers() {

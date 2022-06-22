@@ -29,8 +29,12 @@ import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.junit.Rule;
+import org.junit.rules.Timeout;
 
 public class SmokeTestUtil {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     final static int END = Integer.MAX_VALUE;
 

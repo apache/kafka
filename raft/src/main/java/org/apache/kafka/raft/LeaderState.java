@@ -353,7 +353,7 @@ public class LeaderState<T> implements EpochState {
         @Override
         public String toString() {
             return String.format(
-                "ReplicaState(nodeId=%s, endOffset=%s, lastFetchTimestamp=%s, hasAcknowledgedLeader=%s)",
+                "ReplicaState(nodeId=%d, endOffset=%s, lastFetchTimestamp=%s, hasAcknowledgedLeader=%s)",
                 nodeId,
                 endOffset,
                 lastFetchTimestamp,
@@ -372,7 +372,7 @@ public class LeaderState<T> implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Leader(localId=%s, epoch=%s, epochStartOffset=%s, highWatermark=%s, voterStates=%s)",
+            "Leader(localId=%d, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
             localId,
             epoch,
             epochStartOffset,

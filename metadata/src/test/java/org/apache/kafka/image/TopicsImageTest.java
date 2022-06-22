@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
@@ -96,14 +97,14 @@ public class TopicsImageTest {
         TOPIC_IMAGES1 = Arrays.asList(
             newTopicImage("foo", FOO_UUID,
                 new PartitionRegistration(new int[] {2, 3, 4},
-                    new int[] {2, 3}, Replicas.NONE, Replicas.NONE, 2, 1, 345),
+                    new int[] {2, 3}, Replicas.NONE, Replicas.NONE, 2, LeaderRecoveryState.RECOVERED, 1, 345),
                 new PartitionRegistration(new int[] {3, 4, 5},
-                    new int[] {3, 4, 5}, Replicas.NONE, Replicas.NONE, 3, 4, 684),
+                    new int[] {3, 4, 5}, Replicas.NONE, Replicas.NONE, 3, LeaderRecoveryState.RECOVERED, 4, 684),
                 new PartitionRegistration(new int[] {2, 4, 5},
-                    new int[] {2, 4, 5}, Replicas.NONE, Replicas.NONE, 2, 10, 84)),
+                    new int[] {2, 4, 5}, Replicas.NONE, Replicas.NONE, 2, LeaderRecoveryState.RECOVERED, 10, 84)),
             newTopicImage("bar", BAR_UUID,
                 new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
-                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 0, 1, 345)));
+                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 0, LeaderRecoveryState.RECOVERED, 1, 345)));
 
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
 
@@ -135,10 +136,10 @@ public class TopicsImageTest {
         List<TopicImage> topics2 = Arrays.asList(
             newTopicImage("bar", BAR_UUID,
                 new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
-                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 1, 2, 346)),
+                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 1, LeaderRecoveryState.RECOVERED, 2, 346)),
             newTopicImage("baz", BAZ_UUID,
                 new PartitionRegistration(new int[] {1, 2, 3, 4},
-                    new int[] {3, 4}, new int[] {2}, new int[] {1}, 3, 2, 1)));
+                    new int[] {3, 4}, new int[] {2}, new int[] {1}, 3, LeaderRecoveryState.RECOVERED, 2, 1)));
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
 
@@ -157,7 +158,7 @@ public class TopicsImageTest {
     }
 
     private PartitionRegistration newPartition(int[] replicas) {
-        return new PartitionRegistration(replicas, replicas, Replicas.NONE, Replicas.NONE, replicas[0], 1, 1);
+        return new PartitionRegistration(replicas, replicas, Replicas.NONE, Replicas.NONE, replicas[0], LeaderRecoveryState.RECOVERED, 1, 1);
     }
 
     @Test

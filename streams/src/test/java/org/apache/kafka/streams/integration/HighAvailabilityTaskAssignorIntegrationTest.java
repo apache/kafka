@@ -49,6 +49,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -74,6 +75,9 @@ import static org.hamcrest.Matchers.is;
 
 @Category(IntegrationTest.class)
 public class HighAvailabilityTaskAssignorIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @BeforeClass

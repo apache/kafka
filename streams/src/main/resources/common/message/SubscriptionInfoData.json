@@ -15,7 +15,7 @@
 
 {
   "name": "SubscriptionInfoData",
-  "validVersions": "1-10",
+  "validVersions": "1-11",
   "flexibleVersions": "none",
   "fields": [
     {
@@ -65,6 +65,11 @@
       "name": "errorCode",
       "versions": "9+",
       "type": "int32"
+    },
+    {
+      "name": "clientTags",
+      "versions": "11+",
+      "type": "[]ClientTag"
     }
   ],
   "commonStructs": [
@@ -134,6 +139,22 @@
           "name": "offsetSum",
           "versions": "7-9",
           "type": "int64"
+        }
+      ]
+    },
+    {
+      "name": "ClientTag",
+      "versions": "11+",
+      "fields": [
+        {
+          "name": "key",
+          "versions": "11+",
+          "type": "bytes"
+        },
+        {
+          "name": "value",
+          "versions": "11+",
+          "type": "bytes"
         }
       ]
     }

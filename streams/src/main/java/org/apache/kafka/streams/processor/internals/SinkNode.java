@@ -82,7 +82,17 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
         final String topic = topicExtractor.extract(key, value, contextForExtraction);
 
-        collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
+        collector.send(
+            topic,
+            key,
+            value,
+            record.headers(),
+            timestamp,
+            keySerializer,
+            valSerializer,
+            name(),
+            context,
+            partitioner);
     }
 
     /**

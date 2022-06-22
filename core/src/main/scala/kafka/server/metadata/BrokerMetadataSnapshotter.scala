@@ -17,14 +17,12 @@
 package kafka.server.metadata
 
 import java.util.concurrent.RejectedExecutionException
-
 import kafka.utils.Logging
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
-
 
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
@@ -38,7 +36,7 @@ class BrokerMetadataSnapshotter(
   threadNamePrefix: Option[String],
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
-  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=${brokerId}] ")
+  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=$brokerId] ")
   logIdent = logContext.logPrefix()
 
   /**

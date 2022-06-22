@@ -89,7 +89,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
-      val responseErrors = writeTxnMarkerResponse.errorsByProducerId;
+      val responseErrors = writeTxnMarkerResponse.errorsByProducerId
       for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry

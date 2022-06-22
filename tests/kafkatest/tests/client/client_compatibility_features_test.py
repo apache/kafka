@@ -26,7 +26,9 @@ from ducktape.tests.test import TestContext
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum
 from ducktape.tests.test import Test
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, V_0_11_0_0, V_0_10_1_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, \
+    LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, \
+    LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, V_0_11_0_0, V_0_10_1_0, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
@@ -43,9 +45,11 @@ def get_broker_features(broker_version):
     if broker_version < V_0_11_0_0:
         features["describe-acls-supported"] = False
         features["describe-configs-supported"] = False
+        features["idempotent-producer-supported"] = False
     else:
         features["describe-acls-supported"] = True
         features["describe-configs-supported"] = True
+        features["idempotent-producer-supported"] = True
     return features
 
 def run_command(node, cmd, ssh_log_file):
@@ -130,6 +134,7 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_2_8))
     @parametrize(broker_version=str(LATEST_3_0))
     @parametrize(broker_version=str(LATEST_3_1))
+    @parametrize(broker_version=str(LATEST_3_2))
     def run_compatibility_test(self, broker_version, metadata_quorum=quorum.zk):
         if self.zk:
             self.zk.start()

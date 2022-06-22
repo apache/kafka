@@ -250,6 +250,12 @@ final class SchemaGenerator {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");
             }
             return "Type.UINT16";
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.UNSIGNED_INT32";
         } else if (type instanceof FieldType.Int32FieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (nullable) {

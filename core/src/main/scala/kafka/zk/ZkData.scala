@@ -19,9 +19,10 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
+
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
@@ -30,23 +31,25 @@ import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
-import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
-import org.apache.kafka.server.common.ProducerIdsBlock
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
 import scala.beans.BeanProperty
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, immutable, mutable}
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -83,9 +86,9 @@ object BrokerIdsZNode {
 object BrokerInfo {
 
   /**
-   * - Create a broker info with v5 json format if the apiVersion is 2.7.x or above.
+   * - Create a broker info with v5 json format if the metadataVersion is 2.7.x or above.
    * - Create a broker info with v4 json format (which includes multiple endpoints and rack) if
-   *   the apiVersion is 0.10.0.X or above but lesser than 2.7.x.
+   *   the metadataVersion is 0.10.0.X or above but lesser than 2.7.x.
    * - Register the broker with v2 json format otherwise.
    *
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
@@ -94,11 +97,11 @@ object BrokerInfo {
    * without having to upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in
    * any case).
    */
-  def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
+  def apply(broker: Broker, metadataVersion: MetadataVersion, jmxPort: Int): BrokerInfo = {
     val version = {
-      if (apiVersion >= KAFKA_2_7_IV0)
+      if (metadataVersion.isAtLeast(IBP_2_7_IV0))
         5
-      else if (apiVersion >= KAFKA_0_10_0_IV1)
+      else if (metadataVersion.isAtLeast(IBP_0_10_0_IV1))
         4
       else
         2
@@ -349,21 +352,39 @@ object TopicPartitionZNode {
 
 object TopicPartitionStateZNode {
   def path(partition: TopicPartition) = s"${TopicPartitionZNode.path(partition)}/state"
+
   def encode(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch): Array[Byte] = {
     val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
     val controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
-    Json.encodeAsBytes(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
-      "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr.asJava).asJava)
+    var partitionState = Map(
+      "version" -> 1,
+      "leader" -> leaderAndIsr.leader,
+      "leader_epoch" -> leaderAndIsr.leaderEpoch,
+      "controller_epoch" -> controllerEpoch,
+      "isr" -> leaderAndIsr.isr.asJava
+    )
+
+    if (leaderAndIsr.leaderRecoveryState != LeaderRecoveryState.RECOVERED) {
+      partitionState = partitionState ++ Seq("leader_recovery_state" -> leaderAndIsr.leaderRecoveryState.value.toInt)
+    }
+
+    Json.encodeAsBytes(partitionState.asJava)
   }
+
   def decode(bytes: Array[Byte], stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
     Json.parseBytes(bytes).map { js =>
       val leaderIsrAndEpochInfo = js.asJsonObject
       val leader = leaderIsrAndEpochInfo("leader").to[Int]
       val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
       val isr = leaderIsrAndEpochInfo("isr").to[List[Int]]
+      val recovery = leaderIsrAndEpochInfo
+        .get("leader_recovery_state")
+        .map(jsonValue => LeaderRecoveryState.of(jsonValue.to[Int].toByte))
+        .getOrElse(LeaderRecoveryState.RECOVERED)
       val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
+
       val zkPathVersion = stat.getVersion
-      LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch)
+      LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, recovery, zkPathVersion), controllerEpoch)
     }
   }
 }
@@ -827,12 +848,12 @@ object DelegationTokenInfoZNode {
  * Enabled  -> This status means the feature versioning system (KIP-584) is enabled, and, the
  *             finalized features stored in the FeatureZNode are active. This status is written by
  *             the controller to the FeatureZNode only when the broker IBP config is greater than
- *             or equal to KAFKA_2_7_IV0.
+ *             or equal to IBP_2_7_IV0.
  *
  * Disabled -> This status means the feature versioning system (KIP-584) is disabled, and, the
  *             the finalized features stored in the FeatureZNode is not relevant. This status is
  *             written by the controller to the FeatureZNode only when the broker IBP config
- *             is less than KAFKA_2_7_IV0.
+ *             is less than IBP_2_7_IV0.
  */
 sealed trait FeatureZNodeStatus {
   def id: Int
@@ -859,20 +880,37 @@ object FeatureZNodeStatus {
 /**
  * Represents the contents of the ZK node containing finalized feature information.
  *
+ * @param version    the version of ZK node, we removed min_version_level in version 2
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(version: Int, status: FeatureZNodeStatus, features: Map[String, Short]) {
 }
 
 object FeatureZNode {
   private val VersionKey = "version"
   private val StatusKey = "status"
   private val FeaturesKey = "features"
+  private val V1MinVersionKey = "min_version_level"
+  private val V1MaxVersionKey = "max_version_level"
 
   // V1 contains 'version', 'status' and 'features' keys.
   val V1 = 1
-  val CurrentVersion = V1
+  // V2 removes min_version_level
+  val V2 = 2
+
+  /**
+   * - Create a feature info with v1 json format if if the metadataVersion is before 3.2.0
+   * - Create a feature znode with v2 json format if the metadataVersion is 3.2.1 or above.
+   */
+  def apply(metadataVersion: MetadataVersion, status: FeatureZNodeStatus, features: Map[String, Short]): FeatureZNode = {
+    val version = if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
+      V2
+    } else {
+      V1
+    }
+    FeatureZNode(version, status, features)
+  }
 
   def path = "/feature"
 
@@ -893,10 +931,19 @@ object FeatureZNode {
    * @return               JSON representation of the FeatureZNode, as an Array[Byte]
    */
   def encode(featureZNode: FeatureZNode): Array[Byte] = {
+    val features = if (featureZNode.version == V1) {
+      asJavaMap(featureZNode.features.map{
+        case (feature, version) => feature -> Map(V1MaxVersionKey -> version, V1MinVersionKey -> version)
+      })
+    } else {
+      asJavaMap(featureZNode.features.map{
+        case (feature, version) => feature -> Map(V1MaxVersionKey -> version)
+      })
+    }
     val jsonMap = collection.mutable.Map(
-      VersionKey -> CurrentVersion,
+      VersionKey -> featureZNode.version,
       StatusKey -> featureZNode.status.id,
-      FeaturesKey -> featureZNode.features.toMap)
+      FeaturesKey -> features)
     Json.encodeAsBytes(jsonMap.asJava)
   }
 
@@ -914,26 +961,10 @@ object FeatureZNode {
       case Right(js) =>
         val featureInfo = js.asJsonObject
         val version = featureInfo(VersionKey).to[Int]
-        if (version < V1) {
+        if (version < V1 || version > V2) {
           throw new IllegalArgumentException(s"Unsupported version: $version of feature information: " +
             s"${new String(jsonBytes, UTF_8)}")
         }
-
-        val featuresMap = featureInfo
-          .get(FeaturesKey)
-          .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
-
-        if (featuresMap.isEmpty) {
-          throw new IllegalArgumentException("Features map can not be absent in: " +
-            s"${new String(jsonBytes, UTF_8)}")
-        }
-        val features = asJavaMap(
-          featuresMap
-            .map(theMap => theMap.map {
-              case (featureName, versionInfo) => featureName -> versionInfo.map {
-                case (label, version) => label -> version.asInstanceOf[Short]
-              }
-            }).getOrElse(Map[String, Map[String, Short]]()))
 
         val statusInt = featureInfo
           .get(StatusKey)
@@ -948,17 +979,42 @@ object FeatureZNode {
             s"Malformed status: $statusInt found in feature information: ${new String(jsonBytes, UTF_8)}")
         }
 
-        var finalizedFeatures: Features[FinalizedVersionRange] = null
-        try {
-          finalizedFeatures = fromFinalizedFeaturesMap(features)
-        } catch {
-          case e: Exception => throw new IllegalArgumentException(
-            "Unable to convert to finalized features from map: " + features, e)
-        }
-        FeatureZNode(status.get, finalizedFeatures)
+        val finalizedFeatures = decodeFeature(version, featureInfo, jsonBytes)
+        FeatureZNode(version, status.get, finalizedFeatures)
       case Left(e) =>
         throw new IllegalArgumentException(s"Failed to parse feature information: " +
           s"${new String(jsonBytes, UTF_8)}", e)
+    }
+  }
+
+  private def decodeFeature(version: Int, featureInfo: JsonObject, jsonBytes: Array[Byte]): Map[String, Short] = {
+    val featuresMap = featureInfo
+      .get(FeaturesKey)
+      .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
+
+    if (featuresMap.isEmpty) {
+      throw new IllegalArgumentException("Features map can not be absent in: " +
+        s"${new String(jsonBytes, UTF_8)}")
+    }
+    featuresMap.get.map {
+      case (featureName, versionInfo) =>
+        if (version == V1 && !versionInfo.contains(V1MinVersionKey)) {
+          throw new IllegalArgumentException(s"$V1MinVersionKey absent in [$versionInfo]")
+        }
+        if (!versionInfo.contains(V1MaxVersionKey)) {
+          throw new IllegalArgumentException(s"$V1MaxVersionKey absent in [$versionInfo]")
+        }
+
+        val minValueOpt = versionInfo.get(V1MinVersionKey)
+        val maxValue = versionInfo(V1MaxVersionKey)
+
+        if (version == V1 && (minValueOpt.get < 1 || maxValue < minValueOpt.get)) {
+          throw new IllegalArgumentException(s"Expected minValue >= 1, maxValue >= 1 and maxValue >= minValue, but received minValue: ${minValueOpt.get}, maxValue: $maxValue")
+        }
+        if (maxValue < 1) {
+          throw new IllegalArgumentException(s"Expected maxValue >= 1, but received maxValue: $maxValue")
+        }
+        featureName -> maxValue.toShort
     }
   }
 }

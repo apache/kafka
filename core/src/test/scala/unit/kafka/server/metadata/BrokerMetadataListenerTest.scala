@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Optional}
 
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
@@ -34,6 +35,7 @@ import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
   private def newBrokerMetadataListener(
+    metrics: BrokerServerMetrics = BrokerServerMetrics(new Metrics()),
     snapshotter: Option[MetadataSnapshotter] = None,
     maxBytesBetweenSnapshots: Long = 1000000L,
   ): BrokerMetadataListener = {
@@ -42,7 +44,9 @@ class BrokerMetadataListenerTest {
       time = Time.SYSTEM,
       threadNamePrefix = None,
       maxBytesBetweenSnapshots = maxBytesBetweenSnapshots,
-      snapshotter = snapshotter)
+      snapshotter = snapshotter,
+      brokerMetrics = metrics
+    )
   }
 
   @Test
@@ -53,38 +57,60 @@ class BrokerMetadataListenerTest {
 
   @Test
   def testPublish(): Unit = {
-    val listener = newBrokerMetadataListener()
+    val metrics = BrokerServerMetrics(new Metrics())
+    val listener = newBrokerMetadataListener(metrics = metrics)
     try {
-      listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
-        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-          setBrokerId(0).
-          setBrokerEpoch(100L).
-          setFenced(false).
-          setRack(null).
-          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg")), 0.toShort))))
+      val unfencedTimestamp = 300L
+      listener.handleCommit(
+        RecordTestUtils.mockBatchReader(
+          100,
+          unfencedTimestamp,
+          util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100L).
+            setFenced(false).
+            setRack(null).
+            setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg")), 0.toShort))
+        )
+      )
       val imageRecords = listener.getImageRecords().get()
-      assertEquals(0, imageRecords.size())
+      assertEquals(1, imageRecords.size())
       assertEquals(100L, listener.highestMetadataOffset)
-      listener.handleCommit(RecordTestUtils.mockBatchReader(200L,
-        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-          setBrokerId(1).
-          setBrokerEpoch(200L).
-          setFenced(true).
-          setRack(null).
-          setIncarnationId(Uuid.fromString("QkOQtNKVTYatADcaJ28xDg")), 0.toShort))))
+      assertEquals(0L, metrics.lastAppliedRecordOffset.get)
+      assertEquals(0L, metrics.lastAppliedRecordTimestamp.get)
+
+      val fencedTimestamp = 500L
+      val fencedLastOffset = 200L
+      listener.handleCommit(
+        RecordTestUtils.mockBatchReader(
+          fencedLastOffset,
+          fencedTimestamp,
+          util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+            setBrokerId(1).
+            setBrokerEpoch(200L).
+            setFenced(true).
+            setRack(null).
+            setIncarnationId(Uuid.fromString("QkOQtNKVTYatADcaJ28xDg")), 0.toShort))
+        )
+      )
       listener.startPublishing(new MetadataPublisher {
         override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
           assertEquals(200L, newImage.highestOffsetAndEpoch().offset)
           assertEquals(new BrokerRegistration(0, 100L,
             Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg"), Collections.emptyList[Endpoint](),
-            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), false),
+            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), false, false),
             delta.clusterDelta().broker(0))
           assertEquals(new BrokerRegistration(1, 200L,
             Uuid.fromString("QkOQtNKVTYatADcaJ28xDg"), Collections.emptyList[Endpoint](),
-            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true),
+            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true, false),
             delta.clusterDelta().broker(1))
         }
+
+        override def publishedOffset: Long = -1
       }).get()
+
+      assertEquals(fencedLastOffset, metrics.lastAppliedRecordOffset.get)
+      assertEquals(fencedTimestamp, metrics.lastAppliedRecordTimestamp.get)
     } finally {
       listener.close()
     }
@@ -125,6 +151,8 @@ class BrokerMetadataListenerTest {
     override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
       image = newImage
     }
+
+    override def publishedOffset: Long = -1
   }
 
   private val FOO_ID = Uuid.fromString("jj1G9utnTuCegi_gpnRgYw")
@@ -132,15 +160,22 @@ class BrokerMetadataListenerTest {
   private def generateManyRecords(listener: BrokerMetadataListener,
                                   endOffset: Long): Unit = {
     (0 to 10000).foreach { _ =>
-      listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
-        util.Arrays.asList(new ApiMessageAndVersion(new PartitionChangeRecord().
-          setPartitionId(0).
-          setTopicId(FOO_ID).
-          setRemovingReplicas(Collections.singletonList(1)), 0.toShort),
-          new ApiMessageAndVersion(new PartitionChangeRecord().
-            setPartitionId(0).
-            setTopicId(FOO_ID).
-            setRemovingReplicas(Collections.emptyList()), 0.toShort))))
+      listener.handleCommit(
+        RecordTestUtils.mockBatchReader(
+          endOffset,
+          0,
+          util.Arrays.asList(
+            new ApiMessageAndVersion(new PartitionChangeRecord().
+              setPartitionId(0).
+              setTopicId(FOO_ID).
+              setRemovingReplicas(Collections.singletonList(1)), 0.toShort),
+            new ApiMessageAndVersion(new PartitionChangeRecord().
+              setPartitionId(0).
+              setTopicId(FOO_ID).
+              setRemovingReplicas(Collections.emptyList()), 0.toShort)
+          )
+        )
+      )
     }
     listener.getImageRecords().get()
   }
@@ -211,13 +246,18 @@ class BrokerMetadataListenerTest {
     endOffset: Long
   ): Unit = {
     brokerIds.foreach { brokerId =>
-      listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
-        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-          setBrokerId(brokerId).
-          setBrokerEpoch(100L).
-          setFenced(false).
-          setRack(null).
-          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CS" + brokerId)), 0.toShort))))
+      listener.handleCommit(
+        RecordTestUtils.mockBatchReader(
+          endOffset,
+          0,
+          util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+            setBrokerId(brokerId).
+            setBrokerEpoch(100L).
+            setFenced(false).
+            setRack(null).
+            setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CS" + brokerId)), 0.toShort))
+        )
+      )
     }
   }
 
@@ -226,17 +266,22 @@ class BrokerMetadataListenerTest {
     replicas: Seq[Int],
     endOffset: Long
   ): Unit = {
-    listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
-      util.Arrays.asList(
-        new ApiMessageAndVersion(new TopicRecord().
-          setName("foo").
-          setTopicId(FOO_ID), 0.toShort),
-        new ApiMessageAndVersion(new PartitionRecord().
-          setPartitionId(0).
-          setTopicId(FOO_ID).
-          setIsr(replicas.map(Int.box).asJava).
-          setLeader(0).
-          setReplicas(replicas.map(Int.box).asJava), 0.toShort)))
+    listener.handleCommit(
+      RecordTestUtils.mockBatchReader(
+        endOffset,
+        0,
+        util.Arrays.asList(
+          new ApiMessageAndVersion(new TopicRecord().
+            setName("foo").
+            setTopicId(FOO_ID), 0.toShort),
+          new ApiMessageAndVersion(new PartitionRecord().
+            setPartitionId(0).
+            setTopicId(FOO_ID).
+            setIsr(replicas.map(Int.box).asJava).
+            setLeader(0).
+            setReplicas(replicas.map(Int.box).asJava), 0.toShort)
+        )
+      )
     )
   }
 

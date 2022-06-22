@@ -29,9 +29,10 @@ import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidReq
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 
 class ControllerConfigurationValidatorTest {
+  val validator = new ControllerConfigurationValidator()
+
   @Test
   def testDefaultTopicResourceIsRejected(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     assertEquals("Default topic resources are not allowed.",
         assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(TOPIC, ""), emptyMap())). getMessage())
@@ -39,7 +40,6 @@ class ControllerConfigurationValidatorTest {
 
   @Test
   def testInvalidTopicNameRejected(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     assertEquals("Topic name \"(<-invalid->)\" is illegal, it contains a character " +
       "other than ASCII alphanumerics, '.', '_' and '-'",
         assertThrows(classOf[InvalidTopicException], () => validator.validate(
@@ -48,7 +48,6 @@ class ControllerConfigurationValidatorTest {
 
   @Test
   def testUnknownResourceType(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     assertEquals("Unknown resource type BROKER_LOGGER",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(BROKER_LOGGER, "foo"), emptyMap())). getMessage())
@@ -56,19 +55,17 @@ class ControllerConfigurationValidatorTest {
 
   @Test
   def testNullTopicConfigValue(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     val config = new TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "10")
     config.put(SEGMENT_BYTES_CONFIG, null)
     config.put(SEGMENT_MS_CONFIG, null)
-    assertEquals("Null value not supported for topic configs : segment.bytes,segment.ms",
-      assertThrows(classOf[InvalidRequestException], () => validator.validate(
+    assertEquals("Null value not supported for topic configs: segment.bytes,segment.ms",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(TOPIC, "foo"), config)). getMessage())
   }
 
   @Test
   def testValidTopicConfig(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     val config = new TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
     config.put(SEGMENT_BYTES_CONFIG, "67108864")
@@ -77,7 +74,6 @@ class ControllerConfigurationValidatorTest {
 
   @Test
   def testInvalidTopicConfig(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     val config = new TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
     config.put(SEGMENT_BYTES_CONFIG, "67108864")
@@ -89,7 +85,6 @@ class ControllerConfigurationValidatorTest {
 
   @Test
   def testInvalidBrokerEntity(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     val config = new TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
     assertEquals("Unable to parse broker name as a base 10 number.",
@@ -99,7 +94,6 @@ class ControllerConfigurationValidatorTest {
 
   @Test
   def testInvalidNegativeBrokerId(): Unit = {
-    val validator = new ControllerConfigurationValidator()
     val config = new TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
     assertEquals("Invalid negative broker ID.",

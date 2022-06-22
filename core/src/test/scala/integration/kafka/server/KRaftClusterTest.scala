@@ -30,18 +30,20 @@ import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, Descr
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
-import java.util
-import java.util.concurrent.ExecutionException
-import java.util.{Arrays, Collections, Optional}
 
+import java.util
+import java.util.{Arrays, Collections, Optional}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.image.ClusterImage
+import org.apache.kafka.server.common.MetadataVersion
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
 import scala.collection.mutable
+import scala.concurrent.ExecutionException
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
@@ -69,8 +71,8 @@ class KRaftClusterTest {
   def testCreateClusterAndWaitForBrokerInRunningState(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumBrokerNodes(3).
-        setNumControllerNodes(3).build()).build()
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
     try {
       cluster.format()
       cluster.startup()
@@ -290,6 +292,17 @@ class KRaftClusterTest {
           assertEquals(broker.id + 100, broker.port, "Did not advertise configured advertised port")
         }
     }
+  }
+
+  @Test
+  def testCreateClusterInvalidMetadataVersion(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => {
+      new KafkaClusterTestKit.Builder(
+        new TestKitNodes.Builder().
+          setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
+          setNumBrokerNodes(1).
+          setNumControllerNodes(1).build()).build()
+    })
   }
 
   private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,
@@ -709,6 +722,58 @@ class KRaftClusterTest {
       } finally {
         admin.close()
       }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  private def clusterImage(
+    cluster: KafkaClusterTestKit,
+    brokerId: Int
+  ): ClusterImage = {
+    cluster.brokers().get(brokerId).metadataCache.currentImage().cluster()
+  }
+
+  private def brokerIsUnfenced(
+    image: ClusterImage,
+    brokerId: Int
+  ): Boolean = {
+    Option(image.brokers().get(brokerId)) match {
+      case None => false
+      case Some(registration) => !registration.fenced()
+    }
+  }
+
+  private def brokerIsAbsent(
+    image: ClusterImage,
+    brokerId: Int
+  ): Boolean = {
+    Option(image.brokers().get(brokerId)).isEmpty
+  }
+
+  @Test
+  def testUnregisterBroker(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      TestUtils.waitUntilTrue(() => brokerIsUnfenced(clusterImage(cluster, 1), 0),
+        "Timed out waiting for broker 0 to be unfenced.")
+      cluster.brokers().get(0).shutdown()
+      TestUtils.waitUntilTrue(() => !brokerIsUnfenced(clusterImage(cluster, 1), 0),
+        "Timed out waiting for broker 0 to be fenced.")
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.unregisterBroker(0)
+      } finally {
+        admin.close()
+      }
+      TestUtils.waitUntilTrue(() => brokerIsAbsent(clusterImage(cluster, 1), 0),
+        "Timed out waiting for broker 0 to be fenced.")
     } finally {
       cluster.close()
     }

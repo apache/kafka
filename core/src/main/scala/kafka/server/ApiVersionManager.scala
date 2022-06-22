@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import kafka.api.ApiVersion
 import kafka.network
 import kafka.network.RequestChannel
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -38,15 +37,14 @@ object ApiVersionManager {
     listenerType: ListenerType,
     config: KafkaConfig,
     forwardingManager: Option[ForwardingManager],
-    features: BrokerFeatures,
-    featureCache: FinalizedFeatureCache
+    supportedFeatures: BrokerFeatures,
+    metadataCache: MetadataCache
   ): ApiVersionManager = {
     new DefaultApiVersionManager(
       listenerType,
-      config.interBrokerProtocolVersion,
       forwardingManager,
-      features,
-      featureCache
+      supportedFeatures,
+      metadataCache
     )
   }
 }
@@ -69,33 +67,24 @@ class SimpleApiVersionManager(
 
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
-  interBrokerProtocolVersion: ApiVersion,
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
-  featureCache: FinalizedFeatureCache
+  metadataCache: MetadataCache
 ) extends ApiVersionManager {
 
   override def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse = {
     val supportedFeatures = features.supportedFeatures
-    val finalizedFeaturesOpt = featureCache.get
+    val finalizedFeatures = metadataCache.features()
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
-    finalizedFeaturesOpt match {
-      case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
+    ApiVersionsResponse.createApiVersionsResponse(
         throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
+        metadataCache.metadataVersion().highestSupportedRecordVersion,
         supportedFeatures,
-        finalizedFeatures.features,
+        finalizedFeatures.features.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
         finalizedFeatures.epoch,
-        controllerApiVersions,
+        controllerApiVersions.orNull,
         listenerType)
-      case None => ApiVersion.apiVersionsResponse(
-        throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
-        supportedFeatures,
-        controllerApiVersions,
-        listenerType)
-    }
   }
 
   override def enabledApis: collection.Set[ApiKeys] = {

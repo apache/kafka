@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package integration.kafka.admin
+package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig

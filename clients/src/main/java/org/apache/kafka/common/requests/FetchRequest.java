@@ -351,8 +351,10 @@ public class FetchRequest extends AbstractRequest {
         if (fetchData == null) {
             synchronized (this) {
                 if (fetchData == null) {
-                    fetchData = new LinkedHashMap<>();
-                    short version = version();
+                    // Assigning the lazy-initialized `fetchData` in the last step
+                    // to avoid other threads accessing a half-initialized object.
+                    final LinkedHashMap<TopicIdPartition, PartitionData> fetchDataTmp = new LinkedHashMap<>();
+                    final short version = version();
                     data.topics().forEach(fetchTopic -> {
                         String name;
                         if (version < 13) {
@@ -362,7 +364,7 @@ public class FetchRequest extends AbstractRequest {
                         }
                         fetchTopic.partitions().forEach(fetchPartition ->
                                 // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
-                                fetchData.put(new TopicIdPartition(fetchTopic.topicId(), new TopicPartition(name, fetchPartition.partition())),
+                                fetchDataTmp.put(new TopicIdPartition(fetchTopic.topicId(), new TopicPartition(name, fetchPartition.partition())),
                                         new PartitionData(
                                                 fetchTopic.topicId(),
                                                 fetchPartition.fetchOffset(),
@@ -374,6 +376,7 @@ public class FetchRequest extends AbstractRequest {
                                 )
                         );
                     });
+                    fetchData = fetchDataTmp;
                 }
             }
         }
@@ -386,7 +389,9 @@ public class FetchRequest extends AbstractRequest {
         if (toForget == null) {
             synchronized (this) {
                 if (toForget == null) {
-                    toForget = new ArrayList<>();
+                    // Assigning the lazy-initialized `toForget` in the last step
+                    // to avoid other threads accessing a half-initialized object.
+                    final List<TopicIdPartition> toForgetTmp = new ArrayList<>();
                     data.forgottenTopicsData().forEach(forgottenTopic -> {
                         String name;
                         if (version() < 13) {
@@ -395,8 +400,9 @@ public class FetchRequest extends AbstractRequest {
                             name = topicNames.get(forgottenTopic.topicId());
                         }
                         // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
-                        forgottenTopic.partitions().forEach(partitionId -> toForget.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
+                        forgottenTopic.partitions().forEach(partitionId -> toForgetTmp.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
                     });
+                    toForget = toForgetTmp;
                 }
             }
         }

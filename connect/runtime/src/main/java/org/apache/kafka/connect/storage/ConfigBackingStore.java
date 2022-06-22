@@ -19,7 +19,6 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
@@ -90,6 +89,10 @@ public interface ConfigBackingStore {
      */
     void putTargetState(String connector, TargetState state);
 
+    /**
+     * Store a new {@link SessionKey} that can be used to validate internal (i.e., non-user-triggered) inter-worker communication.
+     * @param sessionKey the session key to store
+     */
     void putSessionKey(SessionKey sessionKey);
 
     /**
@@ -97,6 +100,22 @@ public interface ConfigBackingStore {
      * @param restartRequest the restart request details
      */
     void putRestartRequest(RestartRequest restartRequest);
+
+    /**
+     * Record the number of tasks for the connector after a successful round of zombie fencing.
+     * @param connector name of the connector
+     * @param taskCount number of tasks used by the connector
+     */
+    void putTaskCountRecord(String connector, int taskCount);
+
+    /**
+     * Prepare to write to the backing config store. May be required by some implementations (such as those that only permit a single
+     * writer at a time across a cluster of workers) before performing mutating operations like writing configurations, target states, etc.
+     * The default implementation is a no-op; it is the responsibility of the implementing class to override this and document any expectations for
+     * when it must be invoked.
+     */
+    default void claimWritePrivileges() {
+    }
 
     /**
      * Set an update listener to get notifications when there are config/target state

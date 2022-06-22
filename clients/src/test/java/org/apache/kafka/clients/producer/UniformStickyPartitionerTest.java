@@ -39,6 +39,7 @@ public class UniformStickyPartitionerTest {
     private final static String TOPIC_A = "TOPIC_A";
     private final static String TOPIC_B = "TOPIC_B";
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRoundRobinWithUnavailablePartitions() {
         // Intentionally make the partition list not in partition order to test the edge
@@ -77,6 +78,7 @@ public class UniformStickyPartitionerTest {
         assertEquals(countForPart0, countForPart2, "The distribution between two available partitions should be even");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRoundRobinWithKeyBytes() throws InterruptedException {
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(TOPIC_A, 0, NODES[0], NODES, NODES),
@@ -140,7 +142,8 @@ public class UniformStickyPartitionerTest {
         assertEquals(30, partitionCount.get(oldPart).intValue());
         assertEquals(60, partitionCount.get(newPart).intValue());
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testRoundRobinWithNullKeyBytes() throws InterruptedException {
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(TOPIC_A, 0, NODES[0], NODES, NODES),

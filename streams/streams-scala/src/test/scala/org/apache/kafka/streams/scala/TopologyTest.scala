@@ -46,14 +46,15 @@ import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, S
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
  */
 //noinspection ScalaDeprecation
+@Timeout(600)
 class TopologyTest {
-
   private val inputTopic = "input-topic"
   private val userClicksTopic = "user-clicks-topic"
   private val userRegionsTopic = "user-regions-topic"
@@ -275,6 +276,7 @@ class TopologyTest {
     assertEquals(getTopologyScala, getTopologyJava)
   }
 
+  @nowarn
   @Test
   def shouldBuildIdenticalTopologyInJavaNScalaTransform(): Unit = {
 
@@ -301,6 +303,7 @@ class TopologyTest {
       streamBuilder.build().describe()
     }
 
+    @nowarn
     // build the Java topology
     def getTopologyJava: TopologyDescription = {
 

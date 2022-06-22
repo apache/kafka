@@ -54,6 +54,7 @@ import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.common.errors.InconsistentVoterSetException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
+import org.apache.kafka.common.errors.IneligibleReplicaException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSessionEpochException;
@@ -79,6 +80,7 @@ import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.NewLeaderElectedException;
 import org.apache.kafka.common.errors.NoReassignmentInProgressException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
@@ -368,9 +370,11 @@ public enum Errors {
     INCONSISTENT_CLUSTER_ID(104, "The clusterId in the request does not match that found on the server", InconsistentClusterIdException::new),
     TRANSACTIONAL_ID_NOT_FOUND(105, "The transactionalId could not be found", TransactionalIdNotFoundException::new),
     FETCH_SESSION_TOPIC_ID_ERROR(106, "The fetch session encountered inconsistent topic ID usage", FetchSessionTopicIdException::new),
-    CLIENT_METRICS_RATE_LIMITED(107, "Client pushed the metrics before the next push interval", ClientMetricsRateLimitedException::new),
-    CLIENT_METRICS_PLUGIN_NOT_FOUND(108, "Broker does not have any client metrics plugin configured", ClientMetricsReceiverPluginNotFoundException::new),
-    UNKNOWN_CLIENT_METRICS_SUBSCRIPTION_ID(109, "Client metric subscription id does not match with broker's cached value", UnknownClientMetricsSubscriptionIdException::new);
+    INELIGIBLE_REPLICA(107, "The new ISR contains at least one ineligible replica.", IneligibleReplicaException::new),
+    NEW_LEADER_ELECTED(108, "The AlterPartition request successfully updated the partition state but the leader has changed.", NewLeaderElectedException::new),
+    CLIENT_METRICS_RATE_LIMITED(109, "Client pushed the metrics before the next push interval", ClientMetricsRateLimitedException::new),
+    CLIENT_METRICS_PLUGIN_NOT_FOUND(110, "Broker does not have any client metrics plugin configured", ClientMetricsReceiverPluginNotFoundException::new),
+    UNKNOWN_CLIENT_METRICS_SUBSCRIPTION_ID(111, "Client metric subscription id does not match with broker's cached value", UnknownClientMetricsSubscriptionIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -506,7 +510,7 @@ public enum Errors {
             b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>\n");
+        b.append("</tbody></table>\n");
         return b.toString();
     }
 

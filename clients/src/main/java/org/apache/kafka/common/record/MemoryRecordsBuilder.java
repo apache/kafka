@@ -548,7 +548,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @param key The record key
      * @param value The record value
      * @param headers The record headers if there are any
-     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
     public void append(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         appendWithOffset(nextSequentialOffset(), timestamp, key, value, headers);
@@ -559,7 +558,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
-     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
     public void append(long timestamp, byte[] key, byte[] value) {
         append(timestamp, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);

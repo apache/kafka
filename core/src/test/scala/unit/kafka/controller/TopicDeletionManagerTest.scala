@@ -43,7 +43,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
@@ -66,7 +70,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
@@ -126,7 +134,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
@@ -194,7 +206,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,

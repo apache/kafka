@@ -17,11 +17,13 @@
 
 package kafka.server.metadata
 
+import java.util.Properties
+import java.util.concurrent.atomic.AtomicLong
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.ConfigAdminManager.toLoggableProps
-import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
@@ -99,7 +101,6 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               groupCoordinator: GroupCoordinator,
                               txnCoordinator: TransactionCoordinator,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
-                              featureCache: FinalizedFeatureCache,
                               dynamicConfigHandlers: Map[String, ConfigHandler],
                               private val _authorizer: Option[Authorizer]) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
@@ -109,12 +110,17 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
   /**
    * The broker ID.
    */
-  val brokerId = conf.nodeId
+  val brokerId: Int = conf.nodeId
 
   /**
    * True if this is the first time we have published metadata.
    */
   var _firstPublish = true
+
+  /**
+   * This is updated after all components (e.g. LogManager) has finished publishing the new metadata delta
+   */
+  val publishedOffsetAtomic = new AtomicLong(-1)
 
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
@@ -125,19 +131,22 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
+      val metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
+
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
       }
 
-      // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
+        featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
+          info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
+        }
       }
 
       // Apply topic deltas.
@@ -187,7 +196,6 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.Topic).
                 processConfigChanges(resource.name(), props)
-              conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
 
             case CLIENT_METRICS =>
               // Apply changes to client metrics subscription
@@ -196,20 +204,27 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
               dynamicConfigHandlers(ConfigType.ClientMetrics).processConfigChanges(resource.name(), props)
               conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
 
-            case BROKER => if (resource.name().isEmpty) {
-              // Apply changes to "cluster configs" (also known as default BROKER configs).
-              // These are stored in KRaft with an empty name field.
-              info(s"Updating cluster configuration : " +
-                toLoggableProps(resource, props).mkString(","))
-              dynamicConfigHandlers(ConfigType.Broker).
-                processConfigChanges(ConfigEntityName.Default, props)
-            } else if (resource.name().equals(brokerId.toString)) {
-              // Apply changes to this broker's dynamic configuration.
-              info(s"Updating broker ${brokerId} with new configuration : " +
-                toLoggableProps(resource, props).mkString(","))
-              dynamicConfigHandlers(ConfigType.Broker).
-                processConfigChanges(resource.name(), props)
-            }
+            case BROKER =>
+              if (resource.name().isEmpty) {
+                // Apply changes to "cluster configs" (also known as default BROKER configs).
+                // These are stored in KRaft with an empty name field.
+                info("Updating cluster configuration : " +
+                  toLoggableProps(resource, props).mkString(","))
+                dynamicConfigHandlers(ConfigType.Broker).
+                  processConfigChanges(ConfigEntityName.Default, props)
+              } else if (resource.name() == brokerId.toString) {
+                // Apply changes to this broker's dynamic configuration.
+                info(s"Updating broker $brokerId with new configuration : " +
+                  toLoggableProps(resource, props).mkString(","))
+                dynamicConfigHandlers(ConfigType.Broker).
+                  processConfigChanges(resource.name(), props)
+                // When applying a per broker config (not a cluster config), we also
+                // reload any associated file. For example, if the ssl.keystore is still
+                // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
+                // have changed. This doesn't apply to topic configs or cluster configs.
+                reloadUpdatedFilesWithoutConfigChange(props)
+              }
+
             case _ => // nothing to do
           }
         }
@@ -228,7 +243,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // there could be a window during which incorrect authorization results are returned.
       Option(delta.aclsDelta()).foreach( aclsDelta =>
         _authorizer match {
-          case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta()) {
+          case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta) {
             // If the delta resulted from a snapshot load, we want to apply the new changes
             // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
             // first snapshot load, it will also complete the futures returned by
@@ -238,10 +253,10 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
             // Because the changes map is a LinkedHashMap, the deltas will be returned in
             // the order they were performed.
             aclsDelta.changes().entrySet().forEach(e =>
-              if (e.getValue().isPresent()) {
-                authorizer.addAcl(e.getKey(), e.getValue().get())
+              if (e.getValue.isPresent) {
+                authorizer.addAcl(e.getKey, e.getValue.get())
               } else {
-                authorizer.removeAcl(e.getKey())
+                authorizer.removeAcl(e.getKey)
               })
           }
           case _ => // No ClusterMetadataAuthorizer is configured. There is nothing to do.
@@ -250,12 +265,19 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
       }
+      publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
       case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
         throw t
     } finally {
       _firstPublish = false
     }
+  }
+
+  override def publishedOffset: Long = publishedOffsetAtomic.get()
+
+  def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
+    conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
   }
 
   /**
