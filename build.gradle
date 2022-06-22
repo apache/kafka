@@ -321,6 +321,7 @@ subprojects {
             apply plugin: 'com.github.johnrengelman.shadow'
             project.shadow.component(mavenJava)
 
+            def shadowProjects = new HashMap()
             // work around issue with 'shadow' using the project name instead of the resolved artifactId
             // this requires any project relying on 'shadow' dependencies to define those as part of the
             // shadowProjects extension as well. This must be executed within 'afterEvaluate' to allow

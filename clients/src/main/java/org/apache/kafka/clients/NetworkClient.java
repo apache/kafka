@@ -927,9 +927,9 @@ public class NetworkClient implements KafkaClient {
                 ClientTelemetryUpdater ctu = clientTelemetryUpdater.get();
 
                 if (response instanceof GetTelemetrySubscriptionResponse)
-                    ctu.handleSuccessfulResponse((GetTelemetrySubscriptionResponse) response);
+                    ctu.handleResponse((GetTelemetrySubscriptionResponse) response);
                 else if (response instanceof PushTelemetryResponse)
-                    ctu.handleSuccessfulResponse((PushTelemetryResponse) response);
+                    ctu.handleResponse((PushTelemetryResponse) response);
             } else
                 responses.add(req.completed(response, now));
         }
@@ -1352,12 +1352,12 @@ public class NetworkClient implements KafkaClient {
             clientTelemetry.handleFailedRequest(apiKey, maybeFatalException);
         }
 
-        public void handleSuccessfulResponse(GetTelemetrySubscriptionResponse response) {
-            clientTelemetry.handleSuccessfulResponse(response.data());
+        public void handleResponse(GetTelemetrySubscriptionResponse response) {
+            clientTelemetry.handleResponse(response.data());
         }
 
-        public void handleSuccessfulResponse(PushTelemetryResponse response) {
-            clientTelemetry.handleSuccessfulResponse(response.data());
+        public void handleResponse(PushTelemetryResponse response) {
+            clientTelemetry.handleResponse(response.data());
         }
 
     }

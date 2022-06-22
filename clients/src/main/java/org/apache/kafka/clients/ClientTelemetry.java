@@ -16,34 +16,42 @@
  */
 package org.apache.kafka.clients;
 
-import static org.apache.kafka.clients.ClientTelemetryUtils.createGetTelemetrySubscriptionRequest;
-import static org.apache.kafka.clients.ClientTelemetryUtils.createPushTelemetryRequest;
+import static org.apache.kafka.clients.ClientTelemetryUtils.preferredCompressionType;
+import static org.apache.kafka.clients.ClientTelemetryUtils.serialize;
 import static org.apache.kafka.clients.ClientTelemetryUtils.validateAcceptedCompressionTypes;
 import static org.apache.kafka.clients.ClientTelemetryUtils.validateClientInstanceId;
 import static org.apache.kafka.clients.ClientTelemetryUtils.validateMetricNames;
 import static org.apache.kafka.clients.ClientTelemetryUtils.validatePushIntervalMs;
+import static org.apache.kafka.common.Uuid.ZERO_UUID;
 
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionRequest;
+import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.telemetry.emitter.Context;
 import org.apache.kafka.common.telemetry.collector.KafkaMetricsCollector;
 import org.apache.kafka.common.telemetry.collector.MetricsCollector;
+import org.apache.kafka.common.telemetry.metrics.Metric;
 import org.apache.kafka.common.telemetry.metrics.MetricKeyable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
@@ -58,9 +66,11 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.telemetry.metrics.MetricKey;
 import org.apache.kafka.common.telemetry.metrics.MetricNamingStrategy;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The implementation of the client telemetry manager.
@@ -120,11 +130,17 @@ public class ClientTelemetry implements Closeable {
 
     public final static long MAX_TERMINAL_PUSH_WAIT_MS = 100;
 
-    private final static Logger log = LoggerFactory.getLogger(ClientTelemetry.class);
+    // These are the lower and upper bounds of the jitter that we apply to the initial push
+    // telemetry API call. This helps to avoid a flood of requests all coming at the same time.
+    private final static double INITIAL_PUSH_JITTER_LOWER = 0.5;
+
+    private final static double INITIAL_PUSH_JITTER_UPPER = 1.5;
 
     private final static String CONTEXT = "kafka.telemetry";
 
     private final static String CLIENT_ID_METRIC_TAG = "client-id";
+
+    private final Logger log;
 
     private final Context context;
 
@@ -134,27 +150,31 @@ public class ClientTelemetry implements Closeable {
 
     private final List<MetricsCollector> metricsCollectors;
 
-    private final ReadWriteLock stateLock = new ReentrantReadWriteLock();
+    private final ReadWriteLock instanceStateLock = new ReentrantReadWriteLock();
 
-    private final Condition subscriptionLoaded = stateLock.writeLock().newCondition();
+    private final Condition subscriptionLoaded = instanceStateLock.writeLock().newCondition();
 
-    private final Condition terminalPushInProgress = stateLock.writeLock().newCondition();
+    private final Condition terminalPushInProgress = instanceStateLock.writeLock().newCondition();
 
     private ClientTelemetryState state = ClientTelemetryState.subscription_needed;
 
     private ClientTelemetrySubscription subscription;
 
-    private long lastFetchMs;
+    private long lastSubscriptionFetchMs;
 
     private long pushIntervalMs;
 
-    public ClientTelemetry(Time time, String clientId) {
+    private final Set<ClientTelemetryListener> listeners;
+
+    public ClientTelemetry(LogContext logContext, Time time, String clientId) {
+        this.log = logContext.logger(ClientTelemetry.class);
         this.time = Objects.requireNonNull(time, "time cannot be null");
         clientId = Objects.requireNonNull(clientId, "clientId cannot be null");
 
         KafkaMetricsCollector kafkaMetricsCollector = new KafkaMetricsCollector(time, NAMING_STRATEGY, KAFKA_METRIC_PREDICATE);
 
         this.context = new Context();
+        this.listeners = new HashSet<>();
         this.metricsCollectors = new ArrayList<>();
         metricsCollectors.add(new HostProcessInfoMetricsCollector(time));
         metricsCollectors.add(kafkaMetricsCollector);
@@ -181,6 +201,45 @@ public class ClientTelemetry implements Closeable {
         return context;
     }
 
+    public void addListener(ClientTelemetryListener listener) {
+        try {
+            instanceStateLock.writeLock().lock();
+            this.listeners.add(listener);
+        } finally {
+            instanceStateLock.writeLock().unlock();
+        }
+    }
+
+    public void removeListener(ClientTelemetryListener listener) {
+        try {
+            instanceStateLock.writeLock().lock();
+            this.listeners.remove(listener);
+        } finally {
+            instanceStateLock.writeLock().unlock();
+        }
+    }
+
+    private void invokeListeners(Consumer<ClientTelemetryListener> c) {
+        List<ClientTelemetryListener> l;
+
+        try {
+            instanceStateLock.readLock().lock();
+            l = new ArrayList<>(listeners);
+        } finally {
+            instanceStateLock.readLock().unlock();
+        }
+
+        if (!l.isEmpty()) {
+            for (ClientTelemetryListener listener : l) {
+                try {
+                    c.accept(listener);
+                } catch (Throwable t) {
+                    log.warn(t.getMessage(), t);
+                }
+            }
+        }
+    }
+
     public void initiateClose(Duration timeout) {
         log.trace("initiateClose");
 
@@ -190,20 +249,18 @@ public class ClientTelemetry implements Closeable {
             throw new IllegalArgumentException("The timeout cannot be negative.");
 
         try {
-            stateLock.writeLock().lock();
+            instanceStateLock.writeLock().lock();
 
             // If we never fetched a subscription, we can't really push anything.
-            if (subscription == null) {
+            if (lastSubscriptionFetchMs == 0) {
                 log.debug("Telemetry subscription not loaded, not attempting terminating push");
                 return;
             }
 
-            try {
-                setState(ClientTelemetryState.terminating_push_needed);
-            } catch (IllegalClientTelemetryStateException e) {
-                log.warn("Error initiating client telemetry close", e);
+            if (isTerminatingState() || !maybeSetState(ClientTelemetryState.terminating_push_needed)) {
+                log.debug("Ignoring subsequent initiateClose");
+                return;
             }
-
 
             try {
                 log.debug("About to wait {} ms. for terminal telemetry push to be submitted", timeout);
@@ -211,10 +268,10 @@ public class ClientTelemetry implements Closeable {
                 if (!terminalPushInProgress.await(timeoutMs, TimeUnit.MILLISECONDS))
                     log.debug("Wait for terminal telemetry push to be submitted has elapsed; may not have actually sent request");
             } catch (InterruptedException e) {
-                throw new InterruptException(e);
+                log.warn("Error during client telemetry close", e);
             }
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
     }
 
@@ -225,18 +282,16 @@ public class ClientTelemetry implements Closeable {
         boolean shouldClose = false;
 
         try {
-            stateLock.writeLock().lock();
+            instanceStateLock.writeLock().lock();
 
             if (this.state != ClientTelemetryState.terminated) {
-                // This *shouldn't* throw an exception, but let's wrap it anyway so that we're
-                // sure to close the metrics object.
-                setState(ClientTelemetryState.terminated);
-                shouldClose = true;
+                if (maybeSetState(ClientTelemetryState.terminated))
+                    shouldClose = true;
             } else {
-                log.debug("Ignoring subsequent {} close", ClientTelemetry.class.getSimpleName());
+                log.debug("Ignoring subsequent close");
             }
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
 
         if (shouldClose) {
@@ -249,11 +304,11 @@ public class ClientTelemetry implements Closeable {
 
     /**
      * Updates the {@link ClientTelemetrySubscription}, {@link #pushIntervalMs}, and
-     * {@link #lastFetchMs}.
+     * {@link #lastSubscriptionFetchMs}.
      *
      * <p/>
      *
-     * The entire contents of the method are guarded by the {@link #stateLock}.
+     * The entire contents of the method are guarded by the {@link #instanceStateLock}.
      *
      * <p/>
      *
@@ -264,28 +319,28 @@ public class ClientTelemetry implements Closeable {
      */
     void setSubscription(ClientTelemetrySubscription subscription) {
         try {
-            stateLock.writeLock().lock();
+            instanceStateLock.writeLock().lock();
 
             this.subscription = subscription;
-            this.pushIntervalMs = this.subscription.pushIntervalMs();
-            this.lastFetchMs = time.milliseconds();
+            this.pushIntervalMs = subscription.pushIntervalMs();
+            this.lastSubscriptionFetchMs = time.milliseconds();
 
-            log.trace("Updating subscription - subscription: {}; pushIntervalMs: {}, lastFetchMs: {}", this.subscription, pushIntervalMs, lastFetchMs);
+            log.trace("Updating subscription - subscription: {}; pushIntervalMs: {}, lastFetchMs: {}", subscription, pushIntervalMs, lastSubscriptionFetchMs);
 
             // In some cases we have to wait for this signal in the clientInstanceId method so that
             // we know that we have a subscription to pull from.
             subscriptionLoaded.signalAll();
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
     }
 
     /**
-     * Updates <em>only</em> the {@link #pushIntervalMs} and {@link #lastFetchMs}.
+     * Updates <em>only</em> the {@link #pushIntervalMs} and {@link #lastSubscriptionFetchMs}.
      *
      * <p/>
      *
-     * The entire contents of the method are guarded by the {@link #stateLock}.
+     * The entire contents of the method are guarded by the {@link #instanceStateLock}.
      *
      * <p/>
      *
@@ -293,14 +348,14 @@ public class ClientTelemetry implements Closeable {
      */
     private void setFetchAndPushInterval(long pushIntervalMs) {
         try {
-            stateLock.writeLock().lock();
+            instanceStateLock.writeLock().lock();
 
             this.pushIntervalMs = pushIntervalMs;
-            this.lastFetchMs = time.milliseconds();
+            this.lastSubscriptionFetchMs = time.milliseconds();
 
-            log.trace("Updating pushIntervalMs: {}, lastFetchMs: {}", pushIntervalMs, lastFetchMs);
+            log.trace("Updating pushIntervalMs: {}, lastFetchMs: {}", pushIntervalMs, lastSubscriptionFetchMs);
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
     }
 
@@ -334,9 +389,8 @@ public class ClientTelemetry implements Closeable {
             throw new IllegalArgumentException("The timeout cannot be negative.");
 
         try {
-            stateLock.writeLock().lock();
+            instanceStateLock.writeLock().lock();
 
-            // We can use the instance variable directly here because we're handling the locking...
             if (subscription == null) {
                 // If we have a non-negative timeout and no-subscription, let's wait for one to
                 // be retrieved.
@@ -364,55 +418,75 @@ public class ClientTelemetry implements Closeable {
 
             return Optional.of(clientInstanceId.toString());
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
     }
 
-    void setState(ClientTelemetryState newState) {
+    private boolean isTerminatingState() {
+        return state == ClientTelemetryState.terminated || state == ClientTelemetryState.terminating_push_needed || state == ClientTelemetryState.terminating_push_in_progress;
+    }
+
+    boolean maybeSetState(ClientTelemetryState newState) {
         try {
-            stateLock.writeLock().lock();
-            log.trace("Setting telemetry state from {} to {}", this.state, newState);
-            this.state = this.state.validateTransition(newState);
+            instanceStateLock.writeLock().lock();
+
+            ClientTelemetryState oldState = state;
+            state = oldState.validateTransition(newState);
+            log.trace("Setting telemetry state from {} to {}", oldState, newState);
 
             if (newState == ClientTelemetryState.terminating_push_in_progress)
                 terminalPushInProgress.signalAll();
+
+            return true;
+        } catch (IllegalClientTelemetryStateException e) {
+            log.warn("Error updating client telemetry state", e);
+            return false;
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
     }
 
     // Visible for testing
     ClientTelemetryState state() {
         try {
-            stateLock.readLock().lock();
+            instanceStateLock.readLock().lock();
             return state;
         } finally {
-            stateLock.readLock().unlock();
+            instanceStateLock.readLock().unlock();
         }
     }
 
     public void handleFailedRequest(ApiKeys apiKey, Optional<KafkaException> maybeFatalException) {
         KafkaException fatalError = maybeFatalException.orElse(null);
-        log.warn("The broker generated an error for the {} API request", apiKey.messageType.name, fatalError);
+        log.warn("The broker generated an error for the {} network API request", apiKey.name, fatalError);
 
         try {
-            stateLock.writeLock().lock();
+            instanceStateLock.writeLock().lock();
 
-            boolean shouldWait = false;
+            if (isTerminatingState())
+                return;
+
+            boolean shouldWait;
+            ClientTelemetryState newState;
 
             if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS) {
                 shouldWait = fatalError != null;
-                setState(ClientTelemetryState.subscription_needed);
+                newState = ClientTelemetryState.subscription_needed;
             } else if (apiKey == ApiKeys.PUSH_TELEMETRY) {
                 if (state == ClientTelemetryState.push_in_progress) {
                     shouldWait = fatalError != null;
-                    setState(ClientTelemetryState.subscription_needed);
-                } else if (state == ClientTelemetryState.terminating_push_in_progress) {
-                    setState(ClientTelemetryState.terminated);
+                    newState = ClientTelemetryState.subscription_needed;
                 } else {
-                    throw new IllegalClientTelemetryStateException(String.format("Could not transition state after failed push telemetry from state %s", state));
+                    log.warn("Could not transition state after failed push telemetry from state {}", state);
+                    return;
                 }
+            } else {
+                log.warn("Could not transition state after failed request from state {}", state);
+                return;
             }
+
+            if (!maybeSetState(newState))
+                return;
 
             // The broker does not support telemetry. Let's sleep for a while before
             // trying things again. We may disconnect from the broker and connect to
@@ -420,18 +494,20 @@ public class ClientTelemetry implements Closeable {
             if (shouldWait)
                 setFetchAndPushInterval(DEFAULT_PUSH_INTERVAL_MS);
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
     }
 
-    public void handleSuccessfulResponse(GetTelemetrySubscriptionsResponseData data) {
+    public void handleResponse(GetTelemetrySubscriptionsResponseData data) {
         Optional<Long> pushIntervalMsOpt = ClientTelemetryUtils.errorPushIntervalMs(data.errorCode());
 
+        // This is the error case...
         if (pushIntervalMsOpt.isPresent()) {
             setFetchAndPushInterval(pushIntervalMsOpt.get());
             return;
         }
 
+        // This is the success case...
         log.debug("Successfully retrieved telemetry subscription; response: {}", data);
         List<String> requestedMetrics = data.requestedMetrics();
         Predicate<? super MetricKeyable> selector = validateMetricNames(requestedMetrics);
@@ -448,119 +524,278 @@ public class ClientTelemetry implements Closeable {
             selector);
 
         log.debug("Successfully retrieved telemetry subscription: {}", clientTelemetrySubscription);
-        setSubscription(clientTelemetrySubscription);
-
-        if (selector == ClientTelemetryUtils.SELECTOR_NO_METRICS) {
-            // This is the case where no metrics are requested and/or match the filters. We need
-            // to wait pushIntervalMs then retry.
-            setState(ClientTelemetryState.subscription_needed);
-        } else {
-            setState(ClientTelemetryState.push_needed);
-        }
-    }
-
-    public void handleSuccessfulResponse(PushTelemetryResponseData data) {
-        Optional<Long> pushIntervalMsOpt = ClientTelemetryUtils.errorPushIntervalMs(data.errorCode());
-
-        if (!pushIntervalMsOpt.isPresent())
-            log.debug("Successfully pushed telemetry; response: {}", data);
 
         try {
-            stateLock.writeLock().lock();
+            instanceStateLock.writeLock().lock();
 
-            if (state == ClientTelemetryState.push_in_progress)
-                setState(ClientTelemetryState.subscription_needed);
-            else if (state == ClientTelemetryState.terminating_push_in_progress)
-                setState(ClientTelemetryState.terminated);
-            else
-                throw new IllegalClientTelemetryStateException(String.format("Could not transition state after successful push telemetry from state %s", state));
+            // This is the case if we began termination sometime after the subscription request
+            // was issued. We're just now getting our callback, but we need to ignore it.
+            if (isTerminatingState())
+                return;
+
+            ClientTelemetryState newState;
+
+            if (selector == ClientTelemetryUtils.SELECTOR_NO_METRICS) {
+                // This is the case where no metrics are requested and/or match the filters. We need
+                // to wait pushIntervalMs then retry.
+                newState = ClientTelemetryState.subscription_needed;
+            } else {
+                newState = ClientTelemetryState.push_needed;
+            }
+
+            // If we're terminating, don't update state or set the subscription or update
+            // any of the listeners.
+            if (!maybeSetState(newState))
+                return;
+
+            setSubscription(clientTelemetrySubscription);
+        } finally {
+            instanceStateLock.writeLock().unlock();
+        }
+
+        invokeListeners(l -> l.getSubscriptionCompleted(clientTelemetrySubscription));
+    }
+
+    public void handleResponse(PushTelemetryResponseData data) {
+        Optional<Long> pushIntervalMsOpt = ClientTelemetryUtils.errorPushIntervalMs(data.errorCode());
+
+        // This is the success case...
+        if (!pushIntervalMsOpt.isPresent()) {
+            log.debug("Successfully pushed telemetry; response: {}", data);
+
+            ClientTelemetrySubscription localSubscription;
+
+            try {
+                instanceStateLock.readLock().lock();
+                localSubscription = subscription;
+            } finally {
+                instanceStateLock.readLock().unlock();
+            }
+
+            invokeListeners(l -> l.pushRequestCompleted(localSubscription.clientInstanceId()));
+        }
+
+        // This is the error case...
+        try {
+            instanceStateLock.writeLock().lock();
+
+            // This is the case if we began termination sometime after the last push request
+            // was issued. We're just now getting our callback, but we need to ignore it as all
+            // of our state has already been updated.
+            if (isTerminatingState())
+                return;
+
+            ClientTelemetryState newState;
+
+            if (state == ClientTelemetryState.push_in_progress) {
+                newState = ClientTelemetryState.subscription_needed;
+            } else {
+                log.warn("Could not transition state after failed push telemetry from state {}", state);
+                return;
+            }
+
+            if (!maybeSetState(newState))
+                return;
 
             pushIntervalMsOpt.ifPresent(this::setFetchAndPushInterval);
         } finally {
-            stateLock.writeLock().unlock();
+            instanceStateLock.writeLock().unlock();
         }
     }
 
     private int getPushIntervalMs(GetTelemetrySubscriptionsResponseData data) {
-        int pushIntervalMs = validatePushIntervalMs(data.pushIntervalMs() > 0 ? data.pushIntervalMs() : DEFAULT_PUSH_INTERVAL_MS);
+        final int pushIntervalMs = validatePushIntervalMs(data.pushIntervalMs() > 0 ? data.pushIntervalMs() : DEFAULT_PUSH_INTERVAL_MS);
         boolean isFirstRequest;
 
         try {
-            stateLock.readLock().lock();
-            isFirstRequest = lastFetchMs == 0;
+            instanceStateLock.readLock().lock();
+            isFirstRequest = lastSubscriptionFetchMs == 0;
         } finally {
-            stateLock.readLock().unlock();
+            instanceStateLock.readLock().unlock();
         }
 
-        if (isFirstRequest) {
-            // if this is the first request, subscription() returns null, and we want to
-            // equally spread all the request between 0.5 pushInterval and 1.5 pushInterval.
-            double rand = ThreadLocalRandom.current().nextDouble(0.5, 1.5);
-            return (int) Math.round(rand * pushIntervalMs);
+        if (!isFirstRequest)
+            return pushIntervalMs;
+
+        // If this is the first request from this client, we want to attempt to spread out
+        // the push requests between 50% and 150% of the push interval value from the broker.
+        // This helps us to avoid the case where multiple clients are started at the same time
+        // and end up sending all their data at the same time.
+        ThreadLocalRandom r = ThreadLocalRandom.current();
+        double rand = r.nextDouble(INITIAL_PUSH_JITTER_LOWER, INITIAL_PUSH_JITTER_UPPER);
+        int firstPushIntervalMs = (int) Math.round(rand * pushIntervalMs);
+
+        if (log.isDebugEnabled()) {
+            String randFmt = String.format("%.0f", ((double) firstPushIntervalMs * (double) 100) / (double) pushIntervalMs);
+            log.debug("Telemetry subscription push interval value from broker was {}; to stagger requests the first push interval is being adjusted to {} ({}% of {})",
+                pushIntervalMs, firstPushIntervalMs, randFmt, pushIntervalMs);
         }
 
-        return pushIntervalMs;
+        return firstPushIntervalMs;
     }
 
     public long timeToNextUpdate(long requestTimeoutMs) {
-        ClientTelemetryState state = state();
-        long t = ClientTelemetryUtils.timeToNextUpdate(state, lastFetchMs, requestTimeoutMs, time);
-        log.trace("For telemetry state {}, returning {} for time to next telemetry update", state, t);
+        ClientTelemetryState localState;
+        long localLastSubscriptionFetchMs;
+        long localPushIntervalMs;
+
+        try {
+            instanceStateLock.readLock().lock();
+            localState = state;
+            localLastSubscriptionFetchMs = lastSubscriptionFetchMs;
+            localPushIntervalMs = pushIntervalMs;
+        } finally {
+            instanceStateLock.readLock().unlock();
+        }
+
+        final long t;
+        final String msg;
+
+        switch (localState) {
+            case subscription_in_progress:
+            case push_in_progress:
+            case terminating_push_in_progress: {
+                // We have a network request in progress. We record the time of the request
+                // submission, so wait that amount of the time PLUS the requestTimeout that
+                // is provided.
+                String apiName = localState == ClientTelemetryState.subscription_in_progress ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
+                t = requestTimeoutMs;
+                msg = String.format("this is the remaining wait time for the %s network API request, as specified by %s", apiName, CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
+                break;
+            }
+
+            case terminating_push_needed: {
+                t = 0;
+                msg = String.format("this is to give the client a chance to submit the final %s network API request ASAP before closing", ApiKeys.PUSH_TELEMETRY.name);
+                break;
+            }
+
+            case subscription_needed:
+            case push_needed:
+                long timeRemainingBeforeRequest = localLastSubscriptionFetchMs + localPushIntervalMs - time.milliseconds();
+                String apiName = localState == ClientTelemetryState.subscription_needed ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
+
+                if (timeRemainingBeforeRequest < 0) {
+                    t = 0;
+                    msg = String.format("the wait time before submitting the next %s network API request has elapsed", apiName);
+                } else {
+                    t = timeRemainingBeforeRequest;
+                    msg = String.format("this is the time the client will wait before submitting the next %s network API request", apiName);
+                }
+
+                break;
+
+            default:
+                // Should never get to here
+                t = Long.MAX_VALUE;
+                msg = "this should not happen and likely signals an error";
+        }
+
+        log.trace("For telemetry state {}, returning the value {} ms; {}", localState, t, msg);
+
         return t;
     }
 
     public Optional<AbstractRequest.Builder<?>> createRequest() {
-        ClientTelemetryState state;
-        ClientTelemetrySubscription subscription;
+        ClientTelemetryState localState;
+        ClientTelemetrySubscription localSubscription;
 
         try {
-            stateLock.readLock().lock();
-            state = this.state;
-            subscription = this.subscription;
+            instanceStateLock.readLock().lock();
+            localState = state;
+            localSubscription = subscription;
         } finally {
-            stateLock.readLock().unlock();
+            instanceStateLock.readLock().unlock();
         }
 
-        AbstractRequest.Builder<?> requestBuilder;
-        ClientTelemetryState newState;
+        if (localState == ClientTelemetryState.subscription_needed) {
+            Uuid clientInstanceId;
 
-        log.debug("createRequest - state: {}, subscription: {}", state, subscription);
+            // If we've previously retrieved a subscription, it will contain the client instance ID
+            // that the broker assigned. Otherwise, per KIP-714, we send a special "null" UUID to
+            // signal to the broker that we need to have a client instance ID assigned.
+            if (localSubscription != null)
+                clientInstanceId = localSubscription.clientInstanceId();
+            else
+                clientInstanceId = ZERO_UUID;
 
-        if (state == ClientTelemetryState.subscription_needed) {
-            requestBuilder = createGetTelemetrySubscriptionRequest(subscription);
-            newState = ClientTelemetryState.subscription_in_progress;
-        } else if (state == ClientTelemetryState.push_needed || state == ClientTelemetryState.terminating_push_needed) {
-            if (subscription == null) {
+            try {
+                instanceStateLock.writeLock().lock();
+
+                if (isTerminatingState())
+                    return Optional.empty();
+
+                if (!maybeSetState(ClientTelemetryState.subscription_in_progress))
+                    return Optional.empty();
+            } finally {
+                instanceStateLock.writeLock().unlock();
+            }
+
+            AbstractRequest.Builder<?> requestBuilder = new GetTelemetrySubscriptionRequest.Builder(clientInstanceId);
+            log.debug("createRequest - created new {} network API request", requestBuilder.apiKey().name);
+            invokeListeners(l -> l.getSubscriptionRequestCreated(clientInstanceId));
+            return Optional.of(requestBuilder);
+        } else if (localState == ClientTelemetryState.push_needed || localState == ClientTelemetryState.terminating_push_needed) {
+            if (localSubscription == null) {
                 log.warn("Telemetry state is {} but subscription is null; not sending telemetry", state);
                 return Optional.empty();
             }
 
+            List<Metric> emitted;
             byte[] payload;
 
-            try (ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(subscription.selector())) {
+            try (ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector())) {
                 emitter.init();
 
                 for (MetricsCollector mc : metricsCollectors)
                     mc.collect(emitter);
 
                 payload = emitter.payload(context.tags());
+                emitted = emitter.emitted();
             }
 
-            boolean terminating = state == ClientTelemetryState.terminating_push_needed;
-            requestBuilder = createPushTelemetryRequest(terminating, subscription, payload);
+            CompressionType compressionType = preferredCompressionType(localSubscription.acceptedCompressionTypes());
+            ByteBuffer buf = serialize(payload, compressionType);
+            Bytes metricsData =  Bytes.wrap(Utils.readBytes(buf));
 
-            if (terminating)
-                newState = ClientTelemetryState.terminating_push_in_progress;
-            else
-                newState = ClientTelemetryState.push_in_progress;
+            boolean terminating;
+
+            try {
+                instanceStateLock.writeLock().lock();
+
+                // We've already been terminated, or we've already issued our last push, so we
+                // should just exit now.
+                if (this.state == ClientTelemetryState.terminated || this.state == ClientTelemetryState.terminating_push_in_progress)
+                    return Optional.empty();
+
+                // Check the *actual* state (while locked) to make sure we're still in the state
+                // we expect to be in.
+                terminating = state == ClientTelemetryState.terminating_push_needed;
+
+                if (!maybeSetState(terminating ? ClientTelemetryState.terminating_push_in_progress : ClientTelemetryState.push_in_progress))
+                    return Optional.empty();
+            } finally {
+                instanceStateLock.writeLock().unlock();
+            }
+
+            AbstractRequest.Builder<?> requestBuilder = new PushTelemetryRequest.Builder(localSubscription.clientInstanceId(),
+                localSubscription.subscriptionId(),
+                terminating,
+                compressionType,
+                metricsData);
+
+            log.debug("createRequest - created new {} network API request", requestBuilder.apiKey().name);
+
+            invokeListeners(l -> l.pushRequestCreated(localSubscription.clientInstanceId(),
+                localSubscription.subscriptionId(),
+                terminating,
+                compressionType,
+                emitted));
+            return Optional.of(requestBuilder);
         } else {
-            log.warn("Cannot make telemetry request as telemetry is in state: {}", state);
+            log.warn("Cannot make telemetry request as telemetry is in state: {}", localState);
             return Optional.empty();
         }
-
-        log.debug("createRequest - created new {} and preparing to set state to {}", requestBuilder.getClass().getName(), newState);
-        setState(newState);
-        return Optional.of(requestBuilder);
     }
 
 }
