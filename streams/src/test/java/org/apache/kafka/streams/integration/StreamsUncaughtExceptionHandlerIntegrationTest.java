@@ -220,6 +220,12 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
+    public void shouldReplaceThreadsWithoutJavaHandler() throws InterruptedException {
+        Thread.setDefaultUncaughtExceptionHandler((t ,e) -> fail("exception thrown"));
+        testReplaceThreads(2);
+    }
+
+    @Test
     public void shouldReplaceSingleThread() throws InterruptedException {
         testReplaceThreads(1);
     }
