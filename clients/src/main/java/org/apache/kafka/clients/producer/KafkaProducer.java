@@ -495,7 +495,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.log = logContext.logger(KafkaProducer.class);
         this.metrics = metrics;
         this.producerMetrics = new KafkaProducerMetrics(metrics);
-        this.clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
+        this.clientTelemetry = ClientTelemetryUtils.create(config, logContext, time, clientId);
         this.partitioner = partitioner;
         this.keySerializer = keySerializer;
         this.valueSerializer = valueSerializer;
