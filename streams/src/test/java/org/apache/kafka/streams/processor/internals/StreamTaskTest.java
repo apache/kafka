@@ -1951,10 +1951,7 @@ public class StreamTaskTest {
         EasyMock.expectLastCall().once();
         stateManager.checkpoint();
         EasyMock.expectLastCall().once();
-        //EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
-        //EasyMock.expect(stateManager.changelogOffsets()).andReturn(emptyMap()).anyTimes();
-        //EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
-        EasyMock.replay(stateManager);//, recordCollector);
+        EasyMock.replay(stateManager);
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
