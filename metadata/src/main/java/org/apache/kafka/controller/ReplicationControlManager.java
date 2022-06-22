@@ -956,7 +956,6 @@ public class ReplicationControlManager {
                     topic,
                     partitionId,
                     partition,
-                    clusterControl::active,
                     context.requestHeader().requestApiVersion(),
                     partitionData);
 
@@ -1048,7 +1047,6 @@ public class ReplicationControlManager {
      * @param topic current topic information store by the replication manager
      * @param partitionId partition id being altered
      * @param partition current partition registration for the partition being altered
-     * @param isEligibleReplica function telling if the replica is acceptable to join the ISR
      * @param partitionData partition data from the alter partition request
      *
      * @return Errors.NONE for valid alter partition data; otherwise the validation error
@@ -1058,7 +1056,6 @@ public class ReplicationControlManager {
         TopicControlInfo topic,
         int partitionId,
         PartitionRegistration partition,
-        Function<Integer, Boolean> isEligibleReplica,
         short requestApiVersion,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
@@ -1129,7 +1126,7 @@ public class ReplicationControlManager {
         if (!ineligibleReplicas.isEmpty()) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified ineligible replicas {} in the new ISR {}.",
-                brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsr());
+                    brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsr());
 
             if (requestApiVersion > 1) {
                 return INELIGIBLE_REPLICA;
