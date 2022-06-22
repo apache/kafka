@@ -18,6 +18,7 @@ package kafka.cluster
 
 import java.net.InetAddress
 import com.yammer.metrics.core.Metric
+import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.server._
@@ -33,7 +34,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{AlterPartitionResponse, FetchRequest, ListOffsetsRequest, RequestHeader}
 import org.apache.kafka.common.utils.SystemTime
-import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
+import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -44,7 +45,7 @@ import org.mockito.invocation.InvocationOnMock
 
 import java.nio.ByteBuffer
 import java.util.Optional
-import java.util.concurrent.{CountDownLatch, Semaphore}
+import java.util.concurrent.{CountDownLatch, ExecutorService, Executors, Semaphore, TimeUnit}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.clients.ClientResponse
@@ -55,6 +56,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout
 
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -2035,6 +2037,83 @@ class PartitionTest extends AbstractPartitionTest {
     verify(mockChannelManager, times(2)).sendRequest(any(), any())
     // After retry, the AlterIsr should succeed, and no in-flight request
     assertFalse(partition.partitionState.isInflight)
+  }
+
+  @Test
+  def testPartitionShouldRetryAlterIsrRequestWhenEnqueueFailed(): Unit = {
+    val alterPartitionManager = spy(new DefaultAlterPartitionManager(
+      controllerChannelManager = mock(classOf[BrokerToControllerChannelManager]),
+      scheduler = mock(classOf[KafkaScheduler]),
+      time = time,
+      brokerId = brokerId,
+      brokerEpochSupplier = () => 0,
+      metadataVersionSupplier = () => MetadataVersion.IBP_3_0_IV0
+    ))
+
+    partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = interBrokerProtocolVersion,
+      localBrokerId = brokerId,
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager)
+
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val follower1 = brokerId + 1
+    val follower2 = brokerId + 2
+    val follower3 = brokerId + 3
+    val replicas = Seq(brokerId, follower1, follower2, follower3)
+    val isr = Seq(brokerId, follower1)
+    val partitionEpoch = 1
+    val topicIdPartition = new TopicIdPartition(Uuid.ZERO_UUID, topicPartition)
+    val leaderAndIsrAddedFollower3 = new LeaderAndIsr(brokerId, leaderEpoch, List(brokerId, follower1, follower3), LeaderRecoveryState.RECOVERED, partitionEpoch)
+
+    doNothing().when(delayedOperations).checkAndCompleteAll()
+
+    assertTrue(makeLeader(
+      topicId = None,
+      controllerEpoch,
+      leaderEpoch,
+      isr,
+      replicas,
+      partitionEpoch,
+      isNew = true
+    ))
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+
+    val executor: ExecutorService = Executors.newFixedThreadPool(2)
+    try {
+      // Expand ISR 1st time, add follower 2
+      // note: this ISR update never completed
+      executor.submit(() => fetchFollower(partition, replicaId = follower2, fetchOffset = 10L))
+
+      TestUtils.waitUntilTrue(() => partition.partitionState.isInflight, "Timeout waiting for state change to in-flight")
+
+      // we should never call `alterPartitionManager#submit` before follower 3 caught up
+      verify(alterPartitionManager, never())
+        .submit(topicIdPartition, leaderAndIsrAddedFollower3, 0)
+
+      // change the partition state to committed, so that the next follower can enter `alterPartitionManager#submit` method,
+      // to simulate race condition that there is another ISR update before `unsentIsrUpdates` got removed
+      partition.partitionState = CommittedPartitionState(isr.toSet, LeaderRecoveryState.RECOVERED)
+
+      // Expand ISR 2nd time, add follower 3
+      executor.submit(() => fetchFollower(partition, replicaId = follower3, fetchOffset = 10L))
+
+      // since `unsentIsrUpdates` is not removed, the previous ISR update enqueue will fail, and keep retrying
+      retryOnExceptionWithTimeout(() => verify(alterPartitionManager, atLeast(2))
+        .submit(topicIdPartition, leaderAndIsrAddedFollower3, 0))
+    } finally {
+      executor.shutdownNow()
+      executor.awaitTermination(5, TimeUnit.SECONDS)
+    }
   }
 
   @Test
