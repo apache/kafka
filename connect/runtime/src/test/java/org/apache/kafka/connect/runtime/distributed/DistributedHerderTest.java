@@ -3628,6 +3628,8 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expectLastCall().anyTimes();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall().anyTimes();
+        EasyMock.expect(member.eagerProtocolDowngradeRequested()).andReturn(false);
+        PowerMock.expectLastCall();
     }
 
     private SessionKey expectNewSessionKey() {
