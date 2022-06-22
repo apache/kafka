@@ -24,7 +24,6 @@ import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,7 +36,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     private static final Logger log = LoggerFactory.getLogger(SetSchemaMetadata.class);
 
     public static final String OVERVIEW_DOC =
-            "Set the name, namespace and version on the schema of the record's key " +
+            "Set the name, namespace and version of the schema on the record's key " +
                     "(<code>" + Key.class.getName() + "</code>) or value " +
                     "(<code>" + Value.class.getName() + "</code>).";
 
@@ -49,7 +48,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.SCHEMA_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema name to set.")
-            .define(ConfigName.SCHEMA_NAMESPACE, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Namespace to prepend to the schema name.")
+            .define(ConfigName.SCHEMA_NAMESPACE, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema namespace to prepend to the schema name.")
             .define(ConfigName.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.");
 
     private String schemaName;
@@ -82,7 +81,10 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
                 schema.type(),
                 schema.isOptional(),
                 schema.defaultValue(),
-                buildSchemaName(schemaNamespace, schemaName != null ? schemaName : schema.name()),
+                buildSchemaName(
+                        schemaNamespace,
+                        schemaName != null ? schemaName : schema.name()
+                ),
                 schemaVersion != null ? schemaVersion : schema.version(),
                 schema.doc(),
                 schema.parameters(),
@@ -178,13 +180,17 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         return keyOrValue;
     }
 
-    private static String buildSchemaName(String namespace, String name) {
+    protected static String buildSchemaName(final String namespace, final String name) {
         if (Utils.isBlank(namespace)) {
             return name;
-        } else if (!Utils.isBlank(name)) {
-            return namespace + "." + name;
-        } else {
-            throw new DataException("Schema name is missing for the namespace [" + namespace + "] being appended");
         }
+
+        String normalizedNamespace = namespace.trim().replaceAll("[.]+$", "");
+        if (Utils.isBlank(name)) {
+            return normalizedNamespace;
+        }
+
+        String normalizedName = name.trim().replaceAll("^[.]+", "");
+        return normalizedNamespace + "." + normalizedName;
     }
 }
