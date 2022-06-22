@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
  */
 public enum ClientTelemetryState {
 
-//    broker_unsupported,             // The broker is down-version or does not have plugin configured
     subscription_needed,            // Subscription is needed from the broker
     subscription_in_progress,       // Network I/O in progress to retrieve subscription
     push_needed,                    // Awaiting timeout for pushing telemetry to broker

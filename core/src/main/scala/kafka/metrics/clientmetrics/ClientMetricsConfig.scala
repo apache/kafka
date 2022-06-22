@@ -104,8 +104,8 @@ object ClientMetricsConfig {
 
     // Definitions
     val configDef = new ConfigDef()
-      .define(SubscriptionMetrics, LIST, MEDIUM, "List of the subscribed metrics")
-      .define(ClientMatchPattern, LIST, MEDIUM, "Pattern used to find the matching clients")
+      .define(SubscriptionMetrics, LIST, "", MEDIUM, "List of the subscribed metrics")
+      .define(ClientMatchPattern, LIST, "", MEDIUM, "Pattern used to find the matching clients")
       .define(PushIntervalMs, INT, DEFAULT_PUSH_INTERVAL, MEDIUM, "Interval that a client can push the metrics")
       .define(AllMetricsFlag, BOOLEAN, false, MEDIUM, "If set to true all the metrics are included")
       .define(DeleteSubscription, BOOLEAN, false, MEDIUM, "If set to true metric subscription would be deleted")
@@ -120,14 +120,15 @@ object ClientMetricsConfig {
     }
 
     def validateProperties(properties :Properties) = {
-      val names = configDef.names
       properties.keySet().forEach(x => require(names.contains(x), s"Unknown client metric configuration: $x"))
 
       // If the command is to delete the subscription then we do not expect any other parameters to be in the list.
       // Otherwise validate the rest of the parameters.
       if (!properties.containsKey(DeleteSubscription)) {
-        require(properties.containsKey(PushIntervalMs), s"Missing parameter ${PushIntervalMs}")
-        require(Integer.parseInt(properties.get(PushIntervalMs).toString) >= 0, s"Invalid parameter ${PushIntervalMs}")
+        if (properties.containsKey(PushIntervalMs)) {
+          val pushIntervalMs = Integer.parseInt(properties.getProperty(PushIntervalMs))
+          require(pushIntervalMs >= 0, s"Invalid parameter ${PushIntervalMs}")
+        }
 
         // If all metrics flag is specified then there is no need for having the metrics parameter
         if (!properties.containsKey(AllMetricsFlag)) {

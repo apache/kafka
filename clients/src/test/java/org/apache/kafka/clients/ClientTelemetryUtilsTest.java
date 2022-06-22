@@ -86,7 +86,7 @@ public class ClientTelemetryUtilsTest extends BaseClientTelemetryTest {
 
     @Test
     public void testMaybeCreateFailsIfClientIdIsNull() {
-        assertThrows(NullPointerException.class, () -> ClientTelemetryUtils.create(true, MOCK_TIME, null));
+        assertThrows(NullPointerException.class, () -> ClientTelemetryUtils.create(true, newLogContext(), MOCK_TIME, null));
     }
 
     @ParameterizedTest
@@ -113,7 +113,7 @@ public class ClientTelemetryUtilsTest extends BaseClientTelemetryTest {
         Class<NullPointerException> e = NullPointerException.class;
 
         assertThrows(e,
-            () -> ClientTelemetryUtils.create(true, time, clientId),
+            () -> ClientTelemetryUtils.create(true, newLogContext(), time, clientId),
             String.format("maybeCreate should have thrown a %s for time: %s and clientId: %s", e.getName(), time, clientId));
     }
 

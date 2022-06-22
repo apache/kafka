@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.telemetry.metrics.MetricKey;
 import org.apache.kafka.common.telemetry.metrics.MetricType;
 import org.apache.kafka.common.telemetry.metrics.Metric;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
@@ -34,12 +35,20 @@ public abstract class BaseClientTelemetryTest {
 
     public static final Time MOCK_TIME = new MockTime();
 
+    protected LogContext newLogContext() {
+        return new LogContext("[Test=" + getClass().getSimpleName() + "] ");
+    }
+
     protected ClientTelemetry newClientTelemetry() {
         return newClientTelemetry(MOCK_TIME);
     }
 
     protected ClientTelemetry newClientTelemetry(Time time) {
-        return new ClientTelemetry(time, CLIENT_ID);
+        return newClientTelemetry(time, CLIENT_ID);
+    }
+
+    protected ClientTelemetry newClientTelemetry(Time time, String clientId) {
+        return new ClientTelemetry(newLogContext(), time, clientId);
     }
 
     protected ClientTelemetrySubscription newTelemetrySubscription() {

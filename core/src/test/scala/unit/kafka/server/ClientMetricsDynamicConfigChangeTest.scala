@@ -163,4 +163,47 @@ class ClientMetricsDynamicConfigChangeTest extends KafkaServerTestHarness {
       .getSubscribedMetrics.mkString(",").equals(metrics))
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  // TODO: needs to figure out how to run the same test in kraft mode.
+  def testAllMetrics(quorum: String): Unit = {
+    val configEntityName: String = "subscription-4"
+    val pushInterval = 5 * 1000 // 5 seconds
+
+    val props = new Properties()
+    props.put(ClientMetricsConfig.ClientMetrics.AllMetricsFlag, "true")
+    props.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, pushInterval.toString)
+
+    // ********  Test Create the new client subscription with all metrics *********
+    updateClientSubscription(configEntityName, props,
+      () =>  ClientMetricsConfig.getClientSubscriptionInfo(configEntityName) != null)
+    val cmSubscription = ClientMetricsConfig.getClientSubscriptionInfo(configEntityName)
+    assertTrue(cmSubscription.getPushIntervalMs == pushInterval)
+    assertTrue(cmSubscription.getAllMetricsSubscribed)
+    assertTrue(cmSubscription.getSubscribedMetrics.size == 1)
+    assertTrue(cmSubscription.getSubscribedMetrics.mkString(",").equals(""))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  // TODO: needs to figure out how to run the same test in kraft mode.
+  def testClientMetricsDefaults(quorum: String): Unit = {
+    val configEntityName: String = "subscription-5"
+
+    // We create a mostly blank properties object. This should work and will assume all metrics,
+    // all clients (no filtering), and a default push interval.
+    val props = new Properties()
+    props.put(ClientMetricsConfig.ClientMetrics.AllMetricsFlag, "true")
+
+    // ********  Test Create the new client subscription with all metrics *********
+    updateClientSubscription(configEntityName, props,
+      () =>  ClientMetricsConfig.getClientSubscriptionInfo(configEntityName) != null)
+    val cmSubscription = ClientMetricsConfig.getClientSubscriptionInfo(configEntityName)
+    assertTrue(cmSubscription.getClientMatchingPatterns.isEmpty)
+    assertTrue(cmSubscription.getPushIntervalMs == ClientMetricsConfig.ClientMetrics.DEFAULT_PUSH_INTERVAL)
+    assertTrue(cmSubscription.getAllMetricsSubscribed)
+    assertTrue(cmSubscription.getSubscribedMetrics.size == 1)
+    assertTrue(cmSubscription.getSubscribedMetrics.mkString(",").equals(""))
+  }
+
 }

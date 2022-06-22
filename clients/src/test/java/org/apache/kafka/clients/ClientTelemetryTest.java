@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -135,7 +136,7 @@ public class ClientTelemetryTest extends BaseClientTelemetryTest {
         assertEquals(ClientTelemetryState.push_in_progress, clientTelemetry.state());
         PushTelemetryResponseData data = new PushTelemetryResponseData();
         data.setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
-        clientTelemetry.handleSuccessfulResponse(data);
+        clientTelemetry.handleResponse(data);
         assertEquals(ClientTelemetryState.subscription_needed, clientTelemetry.state());
 
         clientTelemetry.close();
@@ -147,7 +148,7 @@ public class ClientTelemetryTest extends BaseClientTelemetryTest {
         ClientTelemetryState nextState;
         while (currentState != toState) {
             nextState = STATE_MAP.get(currentState);
-            clientTelemetry.setState(nextState);
+            assertTrue(clientTelemetry.maybeSetState(nextState));
             currentState = nextState;
         }
     }

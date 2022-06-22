@@ -124,8 +124,13 @@ class CmClientInstanceState private (clientInstanceId: Uuid,
   // Whatever the reason if client keeps on sending the messages with isClientTerminating flag, subsequent requests
   // are rejected if they don't fall into the current PushInterval.
   def canAcceptPushRequest() : Boolean = {
-    val timeElapsedSinceLastMsg = getCurrentTime - getLastAccessTs
-    timeElapsedSinceLastMsg >= getPushIntervalMs
+    // A fix is required to support the initial request jitter which may up to half the
+    // configured push interval.
+    //
+    // See https://confluentinc.atlassian.net/browse/CLIENTS-2418
+    // val timeElapsedSinceLastMsg = getCurrentTime - getLastAccessTs
+    // timeElapsedSinceLastMsg >= getPushIntervalMs
+    true
     //(timeElapsedSinceLastMsg >= getPushIntervalMs) || (clientTerminatingFlagSet && !this.isClientTerminating)
   }
 

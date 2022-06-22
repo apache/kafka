@@ -520,7 +520,7 @@ public class KafkaAdminClient extends AdminClient {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                     metrics, time, metricGrpPrefix, channelBuilder, logContext);
-            Optional<ClientTelemetry> clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
+            Optional<ClientTelemetry> clientTelemetry = ClientTelemetryUtils.create(config, logContext, time, clientId);
             networkClient = new NetworkClient(
                 metadataManager.updater(),
                 null,
@@ -562,7 +562,7 @@ public class KafkaAdminClient extends AdminClient {
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<>(), time);
             LogContext logContext = createLogContext(clientId);
-            Optional<ClientTelemetry> clientTelemetry = ClientTelemetryUtils.create(config, time, clientId);
+            Optional<ClientTelemetry> clientTelemetry = ClientTelemetryUtils.create(config, logContext, time, clientId);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
                 client, null, logContext, clientTelemetry);
         } catch (Throwable exc) {

@@ -26,6 +26,7 @@ import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
 import io.opentelemetry.proto.resource.v1.Resource;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -56,6 +57,10 @@ public class ClientTelemetryEmitter implements Emitter {
     public boolean emitMetric(Metric metric) {
         emitted.add(metric);
         return true;
+    }
+
+    public List<Metric> emitted() {
+        return Collections.unmodifiableList(emitted);
     }
 
     public byte[] payload(Map<String, String> context) {

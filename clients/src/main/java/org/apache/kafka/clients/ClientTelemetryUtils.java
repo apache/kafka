@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import static org.apache.kafka.clients.ClientTelemetry.DEFAULT_PUSH_INTERVAL_MS;
 import static org.apache.kafka.clients.ClientTelemetry.MAX_TERMINAL_PUSH_WAIT_MS;
-import static org.apache.kafka.common.Uuid.ZERO_UUID;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -52,10 +51,8 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.GetTelemetrySubscriptionRequest;
-import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -81,26 +78,27 @@ public class ClientTelemetryUtils {
 
     public final static Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
 
-    public static Optional<ClientTelemetry> create(ConsumerConfig config, Time time, String clientId) {
-        return create(config, time, clientId, CONSUMER_CONFIG_MAPPING);
+    public static Optional<ClientTelemetry> create(ConsumerConfig config, LogContext logContext, Time time, String clientId) {
+        return create(config, logContext, time, clientId, CONSUMER_CONFIG_MAPPING);
     }
 
-    public static Optional<ClientTelemetry> create(ProducerConfig config, Time time, String clientId) {
-        return create(config, time, clientId, PRODUCER_CONFIG_MAPPING);
+    public static Optional<ClientTelemetry> create(ProducerConfig config, LogContext logContext, Time time, String clientId) {
+        return create(config, logContext, time, clientId, PRODUCER_CONFIG_MAPPING);
     }
 
-    public static Optional<ClientTelemetry> create(AdminClientConfig config, Time time, String clientId) {
-        return create(config, time, clientId, null);
+    public static Optional<ClientTelemetry> create(AdminClientConfig config, LogContext logContext, Time time, String clientId) {
+        return create(config, logContext, time, clientId, null);
     }
 
-    public static Optional<ClientTelemetry> create(boolean enableMetricsPush, Time time, String clientId) {
+    public static Optional<ClientTelemetry> create(boolean enableMetricsPush, LogContext logContext, Time time, String clientId) {
         if (enableMetricsPush)
-            return Optional.of(new ClientTelemetry(time, clientId));
+            return Optional.of(new ClientTelemetry(logContext, time, clientId));
         else
             return Optional.empty();
     }
 
     private static Optional<ClientTelemetry> create(AbstractConfig config,
+        LogContext logContext,
         Time time,
         String clientId,
         Map<String, String> configToContextNameMapping) {
@@ -116,7 +114,7 @@ public class ClientTelemetryUtils {
             return Optional.empty();
         }
 
-        ClientTelemetry clientTelemetry = new ClientTelemetry(time, clientId);
+        ClientTelemetry clientTelemetry = new ClientTelemetry(logContext, time, clientId);
 
         if (configToContextNameMapping != null) {
             Context context = clientTelemetry.context();
@@ -173,49 +171,6 @@ public class ClientTelemetryUtils {
         clientTelemetry.ifPresent(ct -> Utils.closeQuietly(ct, name));
     }
 
-    @SuppressWarnings("fallthrough")
-    public static long timeToNextUpdate(ClientTelemetryState state, long lastFetchMs, long requestTimeoutMs, Time time) {
-        final long t;
-
-        switch (state) {
-            case subscription_in_progress:
-            case push_in_progress:
-            case terminating_push_in_progress:
-                // We have network requests in progress, so wait the amount of the requestTimeout
-                // as provided.
-                t = requestTimeoutMs;
-                break;
-
-            case terminating_push_needed:
-                t = 0;
-                break;
-
-            case subscription_needed:
-            case push_needed:
-                t = timeToNextUpdate(lastFetchMs, requestTimeoutMs, time);
-                break;
-
-            default:
-                // Should never get to here
-                t = Long.MAX_VALUE;
-        }
-
-        return t;
-    }
-
-    public static long timeToNextUpdate(long lastFetchMs, long pushIntervalMs, Time time) {
-        long timeRemainingBeforePush = lastFetchMs + pushIntervalMs - time.milliseconds();
-
-        final long t;
-
-        if (timeRemainingBeforePush < 0)
-            t = 0;
-        else
-            t = timeRemainingBeforePush;
-
-        return t;
-    }
-
     /**
      * Examine the response data and handle different error code accordingly:
      *
@@ -238,6 +193,9 @@ public class ClientTelemetryUtils {
         if (isAuthorizationFailedError(errorCode)) {
             pushIntervalMs = 30 * 60 * 1000;
             reason = "The client is not authorized to send metrics";
+        } else if (errorCode == Errors.INVALID_REQUEST.code()) {
+            pushIntervalMs = 30 * 60 * 1000;
+            reason = "The broker response indicates the client sent an invalid request";
         } else if (errorCode == Errors.INVALID_RECORD.code()) {
             pushIntervalMs = 5 * 60 * 1000;
             reason = "The broker failed to decode or validate the client’s encoded metrics";
@@ -268,13 +226,13 @@ public class ClientTelemetryUtils {
 
     public static Predicate<? super MetricKeyable> validateMetricNames(List<String> requestedMetrics) {
         if (requestedMetrics == null || requestedMetrics.isEmpty()) {
-            log.trace("Telemetry subscription has specified no metric names; telemetry will record no metrics");
+            log.debug("Telemetry subscription has specified no metric names; telemetry will record no metrics");
             return SELECTOR_NO_METRICS;
         } else if (requestedMetrics.size() == 1 && requestedMetrics.get(0).isEmpty()) {
-            log.trace("Telemetry subscription has specified a single empty metric name; using all metrics");
+            log.debug("Telemetry subscription has specified a single empty metric name; using all metrics");
             return SELECTOR_ALL_METRICS;
         } else {
-            log.trace("Telemetry subscription has specified to include only metrics that are prefixed with the following strings: {}", requestedMetrics);
+            log.debug("Telemetry subscription has specified to include only metrics that are prefixed with the following strings: {}", requestedMetrics);
             return k -> requestedMetrics.stream().anyMatch(f -> k.key().name().startsWith(f));
         }
     }
@@ -305,7 +263,7 @@ public class ClientTelemetryUtils {
         return clientInstanceId;
     }
 
-    public static int validatePushIntervalMs(int pushIntervalMs) {
+    public static int validatePushIntervalMs(final int pushIntervalMs) {
         if (pushIntervalMs <= 0) {
             log.warn("Telemetry subscription push interval value from broker was invalid ({}), substituting a value of {}", pushIntervalMs, DEFAULT_PUSH_INTERVAL_MS);
             return DEFAULT_PUSH_INTERVAL_MS;
@@ -398,36 +356,6 @@ public class ClientTelemetryUtils {
                 key != null ? key.length : 0,
                 value != null ? value.length : 0);
         }
-    }
-
-    public static GetTelemetrySubscriptionRequest.Builder createGetTelemetrySubscriptionRequest(
-        ClientTelemetrySubscription subscription) {
-        Uuid clientInstanceId;
-
-        // If we've previously retrieved a subscription, it will contain the client instance ID
-        // that the broker assigned. Otherwise, per KIP-714, we send a special "null" UUID to
-        // signal to the broker that we need to have a client instance ID assigned.
-        if (subscription != null)
-            clientInstanceId = subscription.clientInstanceId();
-        else
-            clientInstanceId = ZERO_UUID;
-
-        return new GetTelemetrySubscriptionRequest.Builder(clientInstanceId);
-    }
-
-    public static PushTelemetryRequest.Builder createPushTelemetryRequest(boolean terminating,
-        ClientTelemetrySubscription subscription,
-        byte[] rawPayload) {
-        CompressionType compressionType = preferredCompressionType(subscription.acceptedCompressionTypes());
-
-        ByteBuffer buf = serialize(rawPayload, compressionType);
-        Bytes metricsData =  Bytes.wrap(Utils.readBytes(buf));
-
-        return new PushTelemetryRequest.Builder(subscription.clientInstanceId(),
-            subscription.subscriptionId(),
-            terminating,
-            compressionType,
-            metricsData);
     }
 
 }

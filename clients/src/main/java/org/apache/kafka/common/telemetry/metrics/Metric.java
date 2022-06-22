@@ -17,6 +17,7 @@
 package org.apache.kafka.common.telemetry.metrics;
 
 import java.time.Instant;
+import java.util.StringJoiner;
 
 public class Metric implements MetricKeyable {
 
@@ -75,4 +76,15 @@ public class Metric implements MetricKeyable {
         return deltaTemporality;
     }
 
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", Metric.class.getSimpleName() + "[", "]")
+            .add("metricKeyable=" + metricKeyable)
+            .add("metricType=" + metricType)
+            .add("value=" + value)
+            .add("timestamp=" + timestamp)
+            .add("startTimestamp=" + startTimestamp)
+            .add("deltaTemporality=" + deltaTemporality)
+            .toString();
+    }
 }
