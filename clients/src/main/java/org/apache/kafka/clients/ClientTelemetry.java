@@ -263,7 +263,7 @@ public class ClientTelemetry implements Closeable {
             }
 
             // If we never fetched a subscription, we can't really push anything.
-            if (subscription == null) {
+            if (lastSubscriptionFetchMs == 0) {
                 log.debug("Telemetry subscription not loaded, not attempting terminating push");
                 return;
             }
