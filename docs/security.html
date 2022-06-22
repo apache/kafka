@@ -1080,9 +1080,14 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                     <p>Tokens can be created by using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
                         Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels.
                         Tokens can not be requests if the initial authentication is done through delegation token.
+                        A token can be created by the user for that user or others as well by specifying the <tt>--owner-principal</tt> parameter.
+                        Owner/Renewers can renew or expire tokens. Owner/renewers can always describe their own tokens.
+                        To describe other tokens, a DESCRIBE_TOKEN permission needs to be added on the User resource representing the owner of the token.
                         <tt>kafka-delegation-tokens.sh</tt> script examples are given below.</p>
                     <p>Create a delegation token:
                     <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --create   --max-life-time-period -1 --command-config client.properties --renewer-principal User:user1</code></pre>
+                    <p>Create a delegation token for a different owner:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --create   --max-life-time-period -1 --command-config client.properties --renewer-principal User:user1 --owner-principal User:owner1</code></pre>
                     <p>Renew a delegation token:
                     <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --renew    --renew-time-period -1 --command-config client.properties --hmac ABCDEFGHIJK</code></pre>
                     <p>Expire a delegation token:
@@ -1125,13 +1130,6 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                         <li>Generate new tokens</li>
                     </ol>
                     <p>We intend to automate this in a future Kafka release.</p>
-                </li>
-
-                <li><h5 class="anchor-heading"><a id="security_token_notes" class="anchor-link"></a><a href="#security_token_notes">Notes on Delegation Tokens</a></h5>
-                    <ul>
-                        <li>Currently, we only allow a user to create delegation token for that user only. Owner/Renewers can renew or expire tokens.
-                            Owner/renewers can always describe their own tokens. To describe others tokens, we need to add DESCRIBE permission on Token Resource.</li>
-                    </ul>
                 </li>
             </ol>
         </li>
@@ -1263,6 +1261,13 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         <tr>
             <td>--delegation-token [delegation-token]</td>
             <td>Delegation token to which ACLs should be added or removed. A value of * indicates ACL should apply to all tokens.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
+            <td>--user-principal [user-principal]</td>
+            <td>A user resource to which ACLs should be added or removed. This is currently supported in relation with delegation tokens.
+                A value of * indicates ACL should apply to all users.</td>
             <td></td>
             <td>ResourcePattern</td>
         </tr>
