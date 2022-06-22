@@ -18,12 +18,11 @@
 package kafka.server
 
 import kafka.Kafka.{info, warn}
-import kafka.common.KafkaException
 import kafka.metrics.clientmetrics.{ClientMetricsCache, ClientMetricsConfig, ClientMetricsReceiverPlugin, CmClientInformation, CmClientInstanceState}
 import kafka.network.RequestChannel
 import kafka.server.ClientMetricsManager.{getCurrentTime, getSupportedCompressionTypes}
 import org.apache.kafka.common.errors.ClientMetricsReceiverPluginNotFoundException
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.CompressionType

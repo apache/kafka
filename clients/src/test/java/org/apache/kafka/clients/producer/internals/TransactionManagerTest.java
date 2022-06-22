@@ -687,10 +687,11 @@ public class TransactionManagerTest {
 
         RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L,
                 deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
-                new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
+                new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""),
+                Optional.empty());
 
         Sender sender = new Sender(logContext, this.client, this.metadata, accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, requestTimeout,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), Optional.empty(), this.time, requestTimeout,
                 0, transactionManager, apiVersions);
 
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());

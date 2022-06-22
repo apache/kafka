@@ -1175,7 +1175,7 @@ public class RecordAccumulatorTest {
             int batchSize = 128;
             RecordAccumulator accum = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
                 3200, config, metrics, "producer-metrics", time, new ApiVersions(), null,
-                new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
+                new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"), Optional.empty());
 
             byte[] largeValue = new byte[batchSize];
             int[] queueSizes = {1, 7, 2};

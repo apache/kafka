@@ -564,11 +564,11 @@ public class SenderTest {
             long totalSize = 1024 * 1024;
             accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null,
-                new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
+                new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"), Optional.empty());
 
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL, 1,
-                senderMetrics, time, REQUEST_TIMEOUT, 1000L, null, new ApiVersions());
+                senderMetrics, Optional.empty(), time, REQUEST_TIMEOUT, 1000L, null, new ApiVersions());
 
             // Produce and send batch.
             long time1 = time.milliseconds();
