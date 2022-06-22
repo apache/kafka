@@ -352,6 +352,37 @@ public class ConnectorPluginsResourceTest {
     }
 
     @Test
+    public void testFilterConnectorPlugins() {
+        Set<Class<?>> excludes = Stream.of(ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES, ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES)
+            .flatMap(Collection::stream)
+            .collect(Collectors.toSet());
+        Set<PluginInfo> expectedConnectorPlugins = Stream.of(SINK_CONNECTOR_PLUGINS)
+            .flatMap(Collection::stream)
+            .filter(p -> !excludes.contains(p.pluginClass()))
+            .map(ConnectorPluginsResourceTest::newInfo)
+            .collect(Collectors.toSet());
+        Set<PluginInfo> expectedConverterPlugins = Stream.of(CONVERTER_PLUGINS)
+            .flatMap(Collection::stream)
+            .map(ConnectorPluginsResourceTest::newInfo)
+            .collect(Collectors.toSet());
+
+        // Verify SINK
+        Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.filterConnectorPlugins("SINK"));
+        assertEquals(expectedConnectorPlugins, actualConnectorPlugins);
+        verify(herder, atLeastOnce()).plugins();
+
+        // Verify CONVERTER
+        HashSet<PluginInfo> actualConverterPlugins = new HashSet<>(
+            connectorPluginsResource.filterConnectorPlugins("CONVERTER"));
+        assertEquals(expectedConverterPlugins, actualConverterPlugins);
+
+        // Verify INVALID
+        BadRequestException actualException = assertThrows(BadRequestException.class,
+            () -> connectorPluginsResource.filterConnectorPlugins("UNKNOWN"));
+        assertTrue(actualException.getMessage().contains("pluginType must be set to one of: "));
+    }
+
+    @Test
     public void testConnectorPluginsIncludesClassTypeAndVersionInformation() throws Exception {
         PluginInfo sinkInfo = newInfo(SampleSinkConnector.class);
         PluginInfo sourceInfo = newInfo(SampleSourceConnector.class);

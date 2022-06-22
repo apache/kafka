@@ -16,8 +16,16 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import static org.apache.kafka.connect.runtime.isolation.PluginType.CONVERTER;
+import static org.apache.kafka.connect.runtime.isolation.PluginType.HEADER_CONVERTER;
+import static org.apache.kafka.connect.runtime.isolation.PluginType.SINK;
+import static org.apache.kafka.connect.runtime.isolation.PluginType.SOURCE;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import java.util.EnumSet;
+import java.util.Optional;
+import java.util.function.Predicate;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.PredicatedTransformation;
@@ -82,6 +90,9 @@ public class ConnectorPluginsResource {
     static final List<Class<? extends Transformation<?>>> TRANSFORM_EXCLUDES = Collections.singletonList(
             (Class) PredicatedTransformation.class
     );
+    private static final EnumSet<PluginType> PLUGIN_TYPES_SUPPORTED_BY_FILTER = EnumSet.of(CONVERTER, HEADER_CONVERTER, SOURCE, SINK);
+    private static final String SUPPORTED_FILTER_TYPE_MESSAGE = "pluginType must be set to one of: " +
+        PLUGIN_TYPES_SUPPORTED_BY_FILTER.stream().map(PluginType::name).collect(Collectors.joining(","));
 
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
@@ -149,6 +160,41 @@ public class ConnectorPluginsResource {
                 return Collections.unmodifiableList(connectorPlugins);
             }
         }
+    }
+
+
+    @GET
+    @Path("/filter")
+    @Operation(summary = "filter connector plugins installed by type")
+    public List<PluginInfo> filterConnectorPlugins(
+        @QueryParam("pluginType") @Parameter(description = "type of plugin to filter") String pluginType
+    ) {
+
+        PluginType type = validatePluginType(pluginType).orElseThrow(() -> new BadRequestException(SUPPORTED_FILTER_TYPE_MESSAGE));
+
+        synchronized (this) {
+            return connectorPlugins.stream()
+                .filter(pluginTypePredicate(type))
+                .collect(Collectors.toList());
+        }
+    }
+
+    private Predicate<PluginInfo> pluginTypePredicate(PluginType type) {
+        return p -> {
+            try {
+                return type.getKlass().isAssignableFrom(Class.forName(p.className()));
+            } catch (ClassNotFoundException ignored) {
+                // plugin scan ensures that p.className exists
+            }
+            return false;
+        };
+    }
+
+    private Optional<PluginType> validatePluginType(String pluginType) {
+        return PLUGIN_TYPES_SUPPORTED_BY_FILTER
+            .stream()
+            .filter(p -> p.name().equalsIgnoreCase(pluginType))
+            .findAny();
     }
 
     @GET
