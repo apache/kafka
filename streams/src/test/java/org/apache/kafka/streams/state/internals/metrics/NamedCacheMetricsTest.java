@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
-import org.junit.AfterClass;
 import org.junit.Test;
 import org.mockito.MockedStatic;
 
@@ -43,15 +42,9 @@ public class NamedCacheMetricsTest {
     private static final String HIT_RATIO_MIN_DESCRIPTION = "The minimum cache hit ratio";
     private static final String HIT_RATIO_MAX_DESCRIPTION = "The maximum cache hit ratio";
 
-    private static final MockedStatic<StreamsMetricsImpl> STREAMS_METRICS_STATIC_MOCK = mockStatic(StreamsMetricsImpl.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Sensor expectedSensor = mock(Sensor.class);
     private final Map<String, String> tagMap = mkMap(mkEntry("key", "value"));
-
-    @AfterClass
-    public static void cleanUp() {
-        STREAMS_METRICS_STATIC_MOCK.close();
-    }
 
     @Test
     public void shouldGetHitRatioSensorWithBuiltInMetricsVersionCurrent() {
@@ -59,19 +52,20 @@ public class NamedCacheMetricsTest {
         when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
         when(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).thenReturn(tagMap);
 
-        final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
-
-        STREAMS_METRICS_STATIC_MOCK.verify(
-            () -> StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
-                expectedSensor,
-                StreamsMetricsImpl.CACHE_LEVEL_GROUP,
-                tagMap,
-                hitRatio,
-                HIT_RATIO_AVG_DESCRIPTION,
-                HIT_RATIO_MIN_DESCRIPTION,
-                HIT_RATIO_MAX_DESCRIPTION
-            )
-        );
-        assertThat(sensor, is(expectedSensor));
+        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
+            final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
+            streamsMetricsStaticMock.verify(
+                () -> StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
+                    expectedSensor,
+                    StreamsMetricsImpl.CACHE_LEVEL_GROUP,
+                    tagMap,
+                    hitRatio,
+                    HIT_RATIO_AVG_DESCRIPTION,
+                    HIT_RATIO_MIN_DESCRIPTION,
+                    HIT_RATIO_MAX_DESCRIPTION
+                )
+            );
+            assertThat(sensor, is(expectedSensor));
+        }
     }
 }
