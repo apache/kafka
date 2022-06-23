@@ -156,17 +156,4 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
   }
 
-  private def addAndVerifyAcls(
-    acls: Set[AccessControlEntry],
-    resource: ResourcePattern
-  ): Unit = {
-    val controllers  = if (isKRaftTest()) {
-      Seq(controllerServer)
-    } else {
-      Seq()
-    }
-
-    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllers)
-  }
-
 }
