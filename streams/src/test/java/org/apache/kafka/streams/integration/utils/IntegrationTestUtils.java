@@ -236,16 +236,6 @@ public class IntegrationTestUtils {
                 .replace('=', '_');
     }
 
-    public static String safeUniqueClassTestName(final Class<?> testClass) {
-        return (testClass.getSimpleName())
-                .replace(':', '_')
-                .replace('.', '_')
-                .replace('[', '_')
-                .replace(']', '_')
-                .replace(' ', '_')
-                .replace('=', '_');
-    }
-
     /**
      * Removes local state stores. Useful to reset state in-between integration test runs.
      *
