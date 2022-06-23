@@ -341,14 +341,13 @@ class LogCleanerManagerTest extends Logging {
     */
   @Test
   def testLogsUnderCleanupIneligibleForCompaction(): Unit = {
-    var records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
+    val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: UnifiedLog = createLog(records.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     log.appendAsLeader(records, leaderEpoch = 0)
     log.roll()
-    records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("test2".getBytes, key="test2".getBytes), leaderEpoch = 0)
     log.updateHighWatermark(2L)
 
     // simulate cleanup thread working on the log partition
