@@ -179,6 +179,46 @@ class AlterPartitionManagerTest {
   }
 
   @Test
+  def testRetryOnPartitionLevelError(): Unit = {
+    // prepare a partition level retriable error response
+    val alterPartitionRespWithPartitionError = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR)
+    val errorResponse = makeClientResponse(alterPartitionRespWithPartitionError, ApiKeys.ALTER_PARTITION.latestVersion)
+
+    val leaderAndIsr = new LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10)
+    val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+
+    val scheduler = new MockScheduler(time)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
+    alterPartitionManager.start()
+    val future = alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+
+    future.whenComplete { (leaderAndIsrResp, e) =>
+      // When entering callback, the `unsentIsrUpdates` element should be removed for possible retry
+      assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
+      assertNull(leaderAndIsrResp)
+      // When receiving retriable error, re-submit the request
+      assertNotNull(e)
+      assertEquals(classOf[UnknownServerException], e.getClass)
+      alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+    }
+
+    verify(brokerToController).start()
+    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    reset(brokerToController)
+    callbackCapture.getValue.onComplete(errorResponse)
+
+    // complete the retry request
+    val retryAlterPartitionResponse = partitionResponse(tp0, Errors.NONE)
+    val retryResponse = makeClientResponse(retryAlterPartitionResponse, ApiKeys.ALTER_PARTITION.latestVersion)
+
+    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    callbackCapture.getValue.onComplete(retryResponse)
+
+    // No more items in unsentIsrUpdates
+    assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
+  }
+
+  @Test
   def testAuthorizationFailed(): Unit = {
     testRetryOnTopLevelError(Errors.CLUSTER_AUTHORIZATION_FAILED)
   }
