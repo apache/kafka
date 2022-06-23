@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -35,12 +37,17 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.sleep;
+import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.easymock.EasyMock.anyBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,6 +65,7 @@ import static org.mockito.Mockito.when;
 
 class DefaultStateUpdaterTest {
 
+    private final static int COMMIT_INTERVAL = 100;
     private final static long CALL_TIMEOUT = 1000;
     private final static long VERIFICATION_TIMEOUT = 15000;
     private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
@@ -69,13 +77,25 @@ class DefaultStateUpdaterTest {
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
     private final static TaskId TASK_1_1 = new TaskId(1, 1);
 
+    private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = topicPartitions -> { };
-    private final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(changelogReader, offsetResetter, Time.SYSTEM);
+
+    private DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, Time.SYSTEM);
 
     @AfterEach
     public void tearDown() {
         stateUpdater.shutdown(Duration.ofMinutes(1));
+    }
+
+    private Properties configProps(final int commitInterval) {
+        return mkObjectProperties(mkMap(
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+                mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
+                mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval),
+                mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), commitInterval)
+        ));
     }
 
     @Test
@@ -152,6 +172,7 @@ class DefaultStateUpdaterTest {
         }
 
         verifyRestoredActiveTasks(tasks);
+        verifyNeverCheckpointTasks(tasks);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
@@ -173,6 +194,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
 
         verifyRestoredActiveTasks(task);
+        verifyCheckpointTasks(true, task);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
@@ -203,6 +225,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task3);
 
         verifyRestoredActiveTasks(task3, task1, task2);
+        verifyCheckpointTasks(true, task3, task1, task2);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
@@ -286,6 +309,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task4);
 
         verifyRestoredActiveTasks(task2, task1);
+        verifyCheckpointTasks(true, task2, task1);
         verifyUpdatingStandbyTasks(task4, task3);
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
@@ -313,6 +337,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task2);
 
         verifyRestoredActiveTasks(task1);
+        verifyCheckpointTasks(true, task1);
         verify(task1).completeRestoration(offsetResetter);
         verifyUpdatingStandbyTasks(task2);
         final InOrder orderVerifier = inOrder(changelogReader);
@@ -346,31 +371,32 @@ class DefaultStateUpdaterTest {
             .thenReturn(false);
         stateUpdater.add(task);
 
-        stateUpdater.remove(TASK_0_0);
+        stateUpdater.remove(task.id());
 
         verifyRemovedTasks(task);
+        verifyCheckpointTasks(true, task);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(Collections.singletonList(TOPIC_PARTITION_A_0));
+        verify(changelogReader).unregister(task.changelogPartitions());
     }
 
     @Test
     public void shouldNotRemoveActiveStatefulTaskFromRestoredActiveTasks() throws Exception {
         final StreamTask task = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
-        shouldNotRemoveTaskFromRestoredActiveTasks(task);
+        shouldNotRemoveTaskFromRestoredActiveTasks(task, Collections.singleton(TOPIC_PARTITION_A_0));
     }
 
     @Test
     public void shouldNotRemoveStatelessTaskFromRestoredActiveTasks() throws Exception {
         final StreamTask task = createStatelessTaskInStateRestoring(TASK_0_0);
-        shouldNotRemoveTaskFromRestoredActiveTasks(task);
+        shouldNotRemoveTaskFromRestoredActiveTasks(task, Collections.emptySet());
     }
 
-    private void shouldNotRemoveTaskFromRestoredActiveTasks(final StreamTask task) throws Exception {
+    private void shouldNotRemoveTaskFromRestoredActiveTasks(final StreamTask task, final Set<TopicPartition> completedChangelogs) throws Exception {
         final StreamTask controlTask = createActiveStatefulTaskInStateRestoring(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_B_0));
         when(changelogReader.completedChangelogs())
-            .thenReturn(Collections.singleton(TOPIC_PARTITION_A_0));
+            .thenReturn(completedChangelogs);
         when(changelogReader.allChangelogsCompleted())
             .thenReturn(false);
         stateUpdater.add(task);
@@ -601,6 +627,67 @@ class DefaultStateUpdaterTest {
         final ExceptionAndTasks expectedExceptionAndTasks3 = new ExceptionAndTasks(mkSet(task3), streamsException3);
         final ExceptionAndTasks expectedExceptionAndTasks4 = new ExceptionAndTasks(mkSet(task4), streamsException4);
         verifyDrainingExceptionsAndFailedTasks(expectedExceptionAndTasks2, expectedExceptionAndTasks3, expectedExceptionAndTasks4);
+    }
+
+    @Test
+    public void shouldAutoCheckpointTasksOnInterval() throws Exception {
+        final StreamTask task1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        final StreamTask task2 = createActiveStatefulTaskInStateRestoring(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StandbyTask task3 = createStandbyTaskInStateRunning(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_C_0));
+        final StandbyTask task4 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
+        when(changelogReader.completedChangelogs())
+                .thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+                .thenReturn(false);
+
+        stateUpdater.add(task1);
+        stateUpdater.add(task2);
+        stateUpdater.add(task3);
+        stateUpdater.add(task4);
+
+        sleep(COMMIT_INTERVAL);
+
+        verifyExceptionsAndFailedTasks();
+        verifyCheckpointTasks(false, task1, task2, task3, task4);
+    }
+
+    @Test
+    public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+        final StreamsConfig config = new StreamsConfig(configProps(Integer.MAX_VALUE));
+        stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, Time.SYSTEM);
+
+        try {
+            final StreamTask task1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+            final StreamTask task2 = createActiveStatefulTaskInStateRestoring(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_B_0));
+            final StandbyTask task3 = createStandbyTaskInStateRunning(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_C_0));
+            final StandbyTask task4 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
+            when(changelogReader.completedChangelogs())
+                    .thenReturn(Collections.emptySet());
+            when(changelogReader.allChangelogsCompleted())
+                    .thenReturn(false);
+
+            stateUpdater.add(task1);
+            stateUpdater.add(task2);
+            stateUpdater.add(task3);
+            stateUpdater.add(task4);
+
+            verifyNeverCheckpointTasks(task1, task2, task3, task4);
+        } finally {
+            stateUpdater.shutdown(Duration.ofMinutes(1));
+        }
+    }
+
+    private void verifyCheckpointTasks(final boolean enforceCheckpoint, final Task... tasks) {
+        for (final Task task : tasks) {
+            verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).maybeCheckpoint(enforceCheckpoint);
+        }
+    }
+
+    private void verifyNeverCheckpointTasks(final Task... tasks) {
+        for (final Task task : tasks) {
+            verify(task, never()).maybeCheckpoint(anyBoolean());
+        }
     }
 
     private void verifyRestoredActiveTasks(final StreamTask... tasks) throws Exception {

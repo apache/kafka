@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -85,7 +86,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         public boolean onlyStandbyTasksLeft() {
-            return !updatingTasks.isEmpty() && updatingTasks.values().stream().allMatch(t -> !t.isActive());
+            return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
 
         @Override
@@ -111,6 +112,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
             restoreTasks();
+            maybeCheckpointUpdatingTasks(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
         }
 
@@ -252,6 +254,8 @@ public class DefaultStateUpdater implements StateUpdater {
         private void removeTask(final TaskId taskId) {
             final Task task = updatingTasks.remove(taskId);
             if (task != null) {
+                task.maybeCheckpoint(true);
+
                 final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
@@ -271,9 +275,10 @@ public class DefaultStateUpdater implements StateUpdater {
             final Collection<TopicPartition> taskChangelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(taskChangelogPartitions)) {
                 task.completeRestoration(offsetResetter);
-                log.debug("Stateful active task " + task.id() + " completed restoration");
+                task.maybeCheckpoint(true);
                 addTaskToRestoredTasks(task);
                 updatingTasks.remove(task.id());
+                log.debug("Stateful active task " + task.id() + " completed restoration");
                 if (onlyStandbyTasksLeft()) {
                     changelogReader.transitToUpdateStandby();
                 }
@@ -288,6 +293,23 @@ public class DefaultStateUpdater implements StateUpdater {
                 restoredActiveTasksCondition.signalAll();
             } finally {
                 restoredActiveTasksLock.unlock();
+            }
+        }
+
+        private void maybeCheckpointUpdatingTasks(final long now) {
+            final long elapsedMsSinceLastCommit = now - lastCommitMs;
+            if (elapsedMsSinceLastCommit > commitIntervalMs) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Committing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
+                        elapsedMsSinceLastCommit, commitIntervalMs);
+                }
+
+                for (final Task task : updatingTasks.values()) {
+                    // do not enforce checkpointing during restoration if its position has not advanced much
+                    task.maybeCheckpoint(false);
+                }
+
+                lastCommitMs = now;
             }
         }
     }
@@ -305,14 +327,22 @@ public class DefaultStateUpdater implements StateUpdater {
     private final BlockingQueue<Task> removedTasks = new LinkedBlockingQueue<>();
     private CountDownLatch shutdownGate;
 
+    private final long commitIntervalMs;
+    private long lastCommitMs;
+
     private StateUpdaterThread stateUpdaterThread = null;
 
-    public DefaultStateUpdater(final ChangelogReader changelogReader,
+    public DefaultStateUpdater(final StreamsConfig config,
+                               final ChangelogReader changelogReader,
                                final Consumer<Set<TopicPartition>> offsetResetter,
                                final Time time) {
         this.changelogReader = changelogReader;
         this.offsetResetter = offsetResetter;
         this.time = time;
+
+        this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        // initialize the last commit as of now to prevent first commit happens immediately
+        this.lastCommitMs = time.milliseconds();
     }
 
     @Override
