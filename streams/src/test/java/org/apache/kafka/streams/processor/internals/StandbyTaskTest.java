@@ -226,23 +226,25 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
-        EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         stateManager.flush();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().once();
         stateManager.checkpoint();
         EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogOffsets())
                 .andReturn(Collections.singletonMap(partition, 50L))
                 .andReturn(Collections.singletonMap(partition, 11000L))
-                .andReturn(Collections.singletonMap(partition, 11000L));
+                .andReturn(Collections.singletonMap(partition, 12000L));
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
         task.initializeIfNeeded();
 
         task.maybeCheckpoint(false);  // this should not checkpoint
+        assertTrue(task.offsetSnapshotSinceLastFlush.isEmpty());
         task.maybeCheckpoint(false);  // this should checkpoint
+        assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
         task.maybeCheckpoint(false);  // this should not checkpoint
+        assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
 
         EasyMock.verify(stateManager);
     }

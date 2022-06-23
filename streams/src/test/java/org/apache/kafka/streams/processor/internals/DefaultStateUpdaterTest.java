@@ -347,6 +347,7 @@ class DefaultStateUpdaterTest {
 
         verifyRestoredActiveTasks(task1, task3);
         verify(task3).completeRestoration(offsetResetter);
+        verifyCheckpointTasks(true, task3);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
         orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
     }
