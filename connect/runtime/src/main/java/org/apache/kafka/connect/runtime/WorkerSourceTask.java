@@ -73,7 +73,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             Map<String, TopicCreationGroup> topicGroups,
                             CloseableOffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
-                            ConnectorOffsetBackingStore offsetBackingStore,
+                            ConnectorOffsetBackingStore offsetStore,
                             WorkerConfig workerConfig,
                             ClusterConfigState configState,
                             ConnectMetrics connectMetrics,
@@ -85,7 +85,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
 
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
-                admin, topicGroups, offsetReader, offsetWriter, offsetBackingStore, workerConfig, connectMetrics, loader,
+                admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, loader,
                 time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
 
         this.committableOffsets = CommittableOffsets.EMPTY;

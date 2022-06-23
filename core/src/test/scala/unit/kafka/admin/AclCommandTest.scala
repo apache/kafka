@@ -54,13 +54,15 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   private val GroupResources = Set(new ResourcePattern(GROUP, "testGroup-1", LITERAL), new ResourcePattern(GROUP, "testGroup-2", LITERAL))
   private val TransactionalIdResources = Set(new ResourcePattern(TRANSACTIONAL_ID, "t0", LITERAL), new ResourcePattern(TRANSACTIONAL_ID, "t1", LITERAL))
   private val TokenResources = Set(new ResourcePattern(DELEGATION_TOKEN, "token1", LITERAL), new ResourcePattern(DELEGATION_TOKEN, "token2", LITERAL))
+  private val UserResources = Set(new ResourcePattern(USER, "User:test-user1", LITERAL), new ResourcePattern(USER, "User:test-user2", LITERAL))
 
   private val ResourceToCommand = Map[Set[ResourcePattern], Array[String]](
     TopicResources -> Array("--topic", "test-1", "--topic", "test-2"),
     Set(ClusterResource) -> Array("--cluster"),
     GroupResources -> Array("--group", "testGroup-1", "--group", "testGroup-2"),
     TransactionalIdResources -> Array("--transactional-id", "t0", "--transactional-id", "t1"),
-    TokenResources -> Array("--delegation-token", "token1", "--delegation-token", "token2")
+    TokenResources -> Array("--delegation-token", "token1", "--delegation-token", "token2"),
+    UserResources -> Array("--user-principal", "User:test-user1", "--user-principal", "User:test-user2")
   )
 
   private val ResourceToOperations = Map[Set[ResourcePattern], (Set[AclOperation], Array[String])](
@@ -72,7 +74,8 @@ class AclCommandTest extends QuorumTestHarness with Logging {
         "--operation", "AlterConfigs", "--operation", "IdempotentWrite", "--operation", "Alter", "--operation", "Describe")),
     GroupResources -> (Set(READ, DESCRIBE, DELETE), Array("--operation", "Read", "--operation", "Describe", "--operation", "Delete")),
     TransactionalIdResources -> (Set(DESCRIBE, WRITE), Array("--operation", "Describe", "--operation", "Write")),
-    TokenResources -> (Set(DESCRIBE), Array("--operation", "Describe"))
+    TokenResources -> (Set(DESCRIBE), Array("--operation", "Describe")),
+    UserResources -> (Set(CREATE_TOKENS, DESCRIBE_TOKENS), Array("--operation", "CreateTokens", "--operation", "DescribeTokens"))
   )
 
   private def ProducerResourceToAcls(enableIdempotence: Boolean = false) = Map[Set[ResourcePattern], Set[AccessControlEntry]](

@@ -381,9 +381,10 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
+        offsetStore.start();
+        EasyMock.expectLastCall();
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
-
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
@@ -445,9 +446,10 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
+        offsetStore.start();
+        EasyMock.expectLastCall();
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
-
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 

@@ -467,6 +467,9 @@ object AclCommand extends Logging {
     if (opts.options.has(opts.delegationTokenOpt))
       opts.options.valuesOf(opts.delegationTokenOpt).forEach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
 
+    if (opts.options.has(opts.userPrincipalOpt))
+      opts.options.valuesOf(opts.userPrincipalOpt).forEach(user => resourceFilters += new ResourcePatternFilter(JResourceType.USER, user.trim, patternType))
+
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
@@ -620,6 +623,12 @@ object AclCommand extends Logging {
         " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true. " +
         AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg().describedAs("Authorizer ZooKeeper TLS configuration").ofType(classOf[String])
+
+    val userPrincipalOpt = parser.accepts("user-principal", "Specifies a user principal as a resource in relation with the operation. For instance " +
+      "one could grant CreateTokens or DescribeTokens permission on a given user principal.")
+      .withRequiredArg()
+      .describedAs("user-principal")
+      .ofType(classOf[String])
 
     options = parser.parse(args: _*)
 

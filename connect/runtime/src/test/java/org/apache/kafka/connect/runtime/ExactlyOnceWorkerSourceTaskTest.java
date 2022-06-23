@@ -351,6 +351,9 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         createWorkerTask();
 
         expectCall(preProducerCheck::run);
+        expectCall(producer::initTransactions);
+        expectCall(postProducerCheck::run);
+
         Exception exception = new ConnectException("No soup for you!");
         expectCall(offsetStore::start).andThrow(exception);
 
@@ -374,7 +377,6 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         createWorkerTask();
 
         expectCall(preProducerCheck::run);
-        expectCall(offsetStore::start);
         expectCall(producer::initTransactions);
         Exception exception = new ConnectException("You can't do that!");
         expectCall(postProducerCheck::run).andThrow(exception);
@@ -399,7 +401,6 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         createWorkerTask();
 
         expectCall(preProducerCheck::run);
-        expectCall(offsetStore::start);
         Exception exception = new ConnectException("New task configs for the connector have already been generated");
         expectCall(producer::initTransactions).andThrow(exception);
 
@@ -1293,9 +1294,9 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
 
     private void expectPreflight() {
         expectCall(preProducerCheck::run);
-        expectCall(offsetStore::start);
         expectCall(producer::initTransactions);
         expectCall(postProducerCheck::run);
+        expectCall(offsetStore::start);
     }
 
     private void expectStartup() {

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -87,7 +86,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         public boolean onlyStandbyTasksLeft() {
-            return !updatingTasks.isEmpty() && updatingTasks.values().stream().allMatch(t -> !t.isActive());
+            return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
 
         @Override
@@ -113,7 +112,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
             restoreTasks();
-            maybeCommitRestoringTasks(time.milliseconds());
+            maybeCheckpointUpdatingTasks(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
         }
 
@@ -255,7 +254,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void removeTask(final TaskId taskId) {
             final Task task = updatingTasks.remove(taskId);
             if (task != null) {
-                commitTask(task, true);
+                task.maybeCheckpoint(true);
                 final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
@@ -275,7 +274,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final Collection<TopicPartition> taskChangelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(taskChangelogPartitions)) {
                 task.completeRestoration(offsetResetter);
-                commitTask(task, true);
+                task.maybeCheckpoint(true);
                 addTaskToRestoredTasks(task);
                 updatingTasks.remove(task.id());
                 log.debug("Stateful active task " + task.id() + " completed restoration");
@@ -296,32 +295,21 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void maybeCommitRestoringTasks(final long now) {
+        private void maybeCheckpointUpdatingTasks(final long now) {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Committing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
+                    log.debug("Checkpointing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 
                 for (final Task task : updatingTasks.values()) {
                     // do not enforce checkpointing during restoration if its position has not advanced much
-                    commitTask(task, false);
+                    task.maybeCheckpoint(false);
                 }
 
                 lastCommitMs = now;
             }
-        }
-
-        private void commitTask(final Task task, final boolean enforceCheckpoint) {
-            // prepare commit should not take any effect except a no-op verification
-            final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
-            if (!offsetAndMetadata.isEmpty()) {
-                throw new IllegalStateException("Task " + task.id() + " should not have any source offset " +
-                        "committable during restoration, but have " + offsetAndMetadata + " instead. " + BUG_ERROR_MESSAGE);
-            }
-
-            task.postCommit(enforceCheckpoint);
         }
     }
 

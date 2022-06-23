@@ -117,7 +117,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String THREAD_ID_TAG = "thread-id";
     public static final String TASK_ID_TAG = "task-id";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
-    public static final String TOPIC_NAME_TAG = "topic-name";
+    public static final String TOPIC_NAME_TAG = "topic";
     public static final String STORE_ID_TAG = "state-id";
     public static final String RECORD_CACHE_ID_TAG = "record-cache-id";
 

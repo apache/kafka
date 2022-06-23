@@ -53,10 +53,10 @@ abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
     private static final String THREAD_NAME_PREFIX = "task-thread-";
 
-    protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
-    protected final ClassLoader loader;
     private final StatusBackingStore statusBackingStore;
+    protected final ConnectorTaskId id;
+    protected final ClassLoader loader;
     protected final Time time;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final TaskMetricsGroup taskMetricsGroup;
