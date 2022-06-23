@@ -46,12 +46,17 @@ import java.util.TreeMap;
 @Path("/admin/loggers")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class LoggingResource {
+public class LoggingResource implements ConnectResource {
 
     /**
      * Log4j uses "root" (case insensitive) as name of the root logger.
      */
     private static final String ROOT_LOGGER_NAME = "root";
+
+    @Override
+    public void requestTimeout(long requestTimeoutMs) {
+        // No-op
+    }
 
     /**
      * List the current loggers that have their levels explicitly set and their log levels.
