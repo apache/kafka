@@ -76,22 +76,14 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABL
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class ConnectorsResource {
+public class ConnectorsResource implements ConnectResource {
     private static final Logger log = LoggerFactory.getLogger(ConnectorsResource.class);
     private static final TypeReference<List<Map<String, String>>> TASK_CONFIGS_TYPE =
         new TypeReference<List<Map<String, String>>>() { };
 
-    // TODO: This should not be so long. However, due to potentially long rebalances that may have to wait a full
-    // session timeout to complete, during which we cannot serve some requests. Ideally we could reduce this, but
-    // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
-    // but currently a worker simply leaving the group can take this long as well.
-    public static final long REQUEST_TIMEOUT_MS = 90 * 1000;
-    // Mutable for integration testing; otherwise, some tests would take at least REQUEST_TIMEOUT_MS
-    // to run
-    private static long requestTimeoutMs = REQUEST_TIMEOUT_MS;
-
     private final Herder herder;
     private final WorkerConfig config;
+    private long requestTimeoutMs;
     @javax.ws.rs.core.Context
     private ServletContext context;
     private final boolean isTopicTrackingDisabled;
@@ -102,15 +94,15 @@ public class ConnectorsResource {
         this.config = config;
         isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
+        this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
     }
 
-    // For testing purposes only
-    public static void setRequestTimeout(long requestTimeoutMs) {
-        ConnectorsResource.requestTimeoutMs = requestTimeoutMs;
-    }
-
-    public static void resetRequestTimeout() {
-        ConnectorsResource.requestTimeoutMs = REQUEST_TIMEOUT_MS;
+    @Override
+    public void requestTimeout(long requestTimeoutMs) {
+        if (requestTimeoutMs < 1) {
+            throw new IllegalArgumentException("REST request timeout must be positive");
+        }
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     @GET

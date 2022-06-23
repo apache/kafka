@@ -782,6 +782,13 @@ public final class QuorumController implements Controller {
         }
     }
 
+    private <T> CompletableFuture<T> prependWriteEvent(String name,
+                                                       ControllerWriteOperation<T> op) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+        queue.prepend(event);
+        return event.future();
+    }
+
     private <T> CompletableFuture<T> appendWriteEvent(String name,
                                                       OptionalLong deadlineNs,
                                                       ControllerWriteOperation<T> op) {
@@ -922,7 +929,6 @@ public final class QuorumController implements Controller {
                             curEpoch);
                     }
 
-
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
                     updateWriteOffset(lastCommittedOffset);
@@ -942,14 +948,20 @@ public final class QuorumController implements Controller {
                                     "Got " + bootstrapMetadata.metadataVersion()));
                         } else {
                             metadataVersion = bootstrapMetadata.metadataVersion();
-                            future = appendWriteEvent("bootstrapMetadata", OptionalLong.empty(), () -> {
+
+                            // This call is here instead of inside the appendWriteEvent for testing purposes.
+                            final List<ApiMessageAndVersion> bootstrapRecords = bootstrapMetadata.records();
+
+                            // We prepend the bootstrap event in order to ensure the bootstrap metadata is written before
+                            // any external controller write events are processed.
+                            future = prependWriteEvent("bootstrapMetadata", () -> {
                                 if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
                                     log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
                                 } else {
                                     log.info("Upgrading KRaft cluster and initializing metadata.version to {}",
                                         metadataVersion.featureLevel());
                                 }
-                                return ControllerResult.atomicOf(bootstrapMetadata.records(), null);
+                                return ControllerResult.atomicOf(bootstrapRecords, null);
                             });
                         }
                         future.whenComplete((result, exception) -> {
@@ -966,7 +978,6 @@ public final class QuorumController implements Controller {
                     } else {
                         metadataVersion = featureControl.metadataVersion();
                     }
-
 
                     log.info(
                         "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
