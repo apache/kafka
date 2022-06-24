@@ -2001,11 +2001,11 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Fail the first alter partition request with a retryable error to trigger a retry from the partition callback
     val alterPartitionResponseWithUnknownServerError =
-      createClientResponseWithAlterPartitionResponse(topicPartition, Errors.UNKNOWN_SERVER_ERROR.code())
+      createClientResponseWithAlterPartitionResponse(topicPartition, Errors.UNKNOWN_SERVER_ERROR.code)
 
     // Complete the ISR expansion
     val alterPartitionResponseWithoutError =
-      createClientResponseWithAlterPartitionResponse(topicPartition, Errors.NONE.code(), List(brokerId, follower1, follower2, follower3), leaderEpoch, partitionEpoch + 1)
+      createClientResponseWithAlterPartitionResponse(topicPartition, Errors.NONE.code, List(brokerId, follower1, follower2, follower3), leaderEpoch, partitionEpoch + 1)
 
     when(mockChannelManager.sendRequest(any(), any()))
       .thenAnswer { invocation =>
