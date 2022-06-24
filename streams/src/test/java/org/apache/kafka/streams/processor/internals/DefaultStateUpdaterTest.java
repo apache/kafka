@@ -248,7 +248,6 @@ class DefaultStateUpdaterTest {
         stateUpdater.start();
         stateUpdater.add(task1);
 
-        System.out.println("here1");
         verifyDrainingRestoredActiveTasks(task1);
 
         final StreamTask task2 = createStatelessTaskInStateRestoring(TASK_1_1);
@@ -258,7 +257,6 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task3);
         stateUpdater.add(task4);
 
-        System.out.println("here2");
         verifyDrainingRestoredActiveTasks(task2, task3, task4);
     }
 
