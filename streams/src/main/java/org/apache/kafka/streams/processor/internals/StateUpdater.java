@@ -35,7 +35,7 @@ public interface StateUpdater {
             this.exception = Objects.requireNonNull(exception);
         }
 
-        public Set<Task> tasks() {
+        public Set<Task> getTasks() {
             return Collections.unmodifiableSet(tasks);
         }
 
@@ -56,6 +56,21 @@ public interface StateUpdater {
             return Objects.hash(tasks, exception);
         }
     }
+
+    /**
+     * Starts the state updater.
+     */
+    void start();
+
+    /**
+     * Shuts down the state updater.
+     *
+     * @param timeout duration how long to wait until the state updater is shut down
+     *
+     * @throws
+     *     org.apache.kafka.streams.errors.StreamsException if the state updater thread cannot shutdown within the timeout
+     */
+    void shutdown(final Duration timeout);
 
     /**
      * Adds a task (active or standby) to the state updater.
@@ -113,12 +128,46 @@ public interface StateUpdater {
     List<ExceptionAndTasks> drainExceptionsAndFailedTasks();
 
     /**
-     * Shuts down the state updater.
+     * Gets all tasks that are managed by the state updater.
      *
-     * @param timeout duration how long to wait until the state updater is shut down
+     * The state updater manages all tasks that were added with the {@link StateUpdater#add(Task)} and that have
+     * not been removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
      *
-     * @throws
-     *     org.apache.kafka.streams.errors.StreamsException if the state updater thread cannot shutdown within the timeout
+     * @return set of all tasks managed by the state updater
      */
-    void shutdown(final Duration timeout);
+    Set<Task> getTasks();
+
+    /**
+     * Gets active tasks that are managed by the state updater.
+     *
+     * The state updater manages all active tasks that were added with the {@link StateUpdater#add(Task)} and that have
+     * not been removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
+     *
+     * @return set of all tasks managed by the state updater
+     */
+    Set<StreamTask> getActiveTasks();
+
+    /**
+     * Gets standby tasks that are managed by the state updater.
+     *
+     * The state updater manages all standby tasks that were added with the {@link StateUpdater#add(Task)} and that have
+     * not been removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
+     *
+     * @return set of all tasks managed by the state updater
+     */
+    Set<StandbyTask> getStandbyTasks();
 }
