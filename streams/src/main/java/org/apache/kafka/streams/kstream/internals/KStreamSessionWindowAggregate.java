@@ -180,7 +180,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     for (final KeyValue<Windowed<KIn>, VAgg> session : merged) {
                         store.remove(session.key);
 
-                        maybeForwardUpdate(session.key, session.value, null, record.timestamp());
+                        maybeForwardUpdate(session.key, session.value, null);
                         /*
                         tupleForwarder.maybeForward(
                             record.withKey(session.key)
@@ -193,7 +193,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 final Windowed<KIn> sessionKey = new Windowed<>(record.key(), mergedWindow);
                 store.put(sessionKey, agg);
 
-                maybeForwardUpdate(sessionKey, null, agg, record.timestamp());
+                maybeForwardUpdate(sessionKey, null, agg);
                 /*
                 tupleForwarder.maybeForward(
                     record.withKey(sessionKey)
@@ -206,15 +206,13 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
         private void maybeForwardUpdate(final Windowed<KIn> windowedkey,
                                         final VAgg oldAgg,
-                                        final VAgg newAgg,
-                                        final long oldTimestamp) {
+                                        final VAgg newAgg) {
             if (emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
                 return;
             }
 
             // Update the sent record timestamp to the window end time if possible
-            final long newTimestamp = windowedkey.key() != null ? windowedkey.window().end() : oldTimestamp;
-
+            final long newTimestamp = windowedkey.window().end();
             tupleForwarder.maybeForward(new Record<>(windowedkey, new Change<>(newAgg, sendOldValues ? oldAgg : null), newTimestamp));
         }
 

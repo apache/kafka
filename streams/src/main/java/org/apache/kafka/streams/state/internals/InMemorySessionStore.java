@@ -237,9 +237,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         // since subMap is exclusive on toKey, we need to plus one
         return registerNewIterator(null,
                                    null,
-                                    Long.MAX_VALUE,
-                                    endTimeMap.subMap(earliestEndTime, latestEndTime + 1).entrySet().iterator(),
-                                    true);
+                                   Long.MAX_VALUE,
+                                   endTimeMap.subMap(earliestEndTime, true, latestEndTime, true).entrySet().iterator(),
+                                   true);
     }
 
     @Override

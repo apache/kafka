@@ -73,7 +73,7 @@ public class RocksDBTimeOrderedSessionStore
         final long latestEndTime = ApiUtils.validateMillisecondInstant(latestSessionEndTime,
                 prepareMillisCheckFailMsgPrefix(latestSessionEndTime, "latestSessionEndTime"));
 
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchAll(earliestEndTime, latestEndTime);
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchSessions(earliestEndTime, latestEndTime);
         return new WrappedSessionStoreIterator(bytesIterator, TimeFirstSessionKeySchema::from);
     }
 

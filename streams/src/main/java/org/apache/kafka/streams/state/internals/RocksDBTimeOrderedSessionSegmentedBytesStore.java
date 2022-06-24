@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -69,6 +70,36 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
             earliestSessionEndTime,
             latestSessionStartTime
         ));
+    }
+
+    public KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime,
+                                                         final long latestSessionEndTime) {
+        final List<KeyValueSegment> searchSpace = segments.segments(earliestSessionEndTime, latestSessionEndTime, true);
+
+        // here we use both as lower range since we the search boundaries are both on the session time end;
+        // hence effectively our search range is [0 earliestSE] - [0, latestSE]
+        final Bytes binaryFrom = baseKeySchema.lowerRangeFixedSize(null, earliestSessionEndTime);
+        final Bytes binaryTo = baseKeySchema.lowerRangeFixedSize(null, latestSessionEndTime);
+
+        return new SegmentIterator<>(
+                searchSpace.iterator(),
+                iterator -> {
+                    while (iterator.hasNext()) {
+                        final Bytes bytes = iterator.peekNextKey();
+
+                        final Windowed<Bytes> windowedKey = TimeFirstSessionKeySchema.from(bytes);
+                        final long endTime = windowedKey.window().end();
+
+                        if (endTime <= latestSessionEndTime && endTime >= earliestSessionEndTime)
+                            return true;
+
+                        iterator.next();
+                    }
+                    return false;
+                },
+                binaryFrom,
+                binaryTo,
+                true);
     }
 
     public void remove(final Windowed<Bytes> key) {
