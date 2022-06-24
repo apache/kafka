@@ -411,7 +411,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
      * add BouncyCastleProvider
      */
     private static void addBouncyCastleProvider() {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME == null) {
+        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME == null)) {
 	    synchronized (OBJ) {
 	        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
                     Security.addProvider(new BouncyCastleProvider());
