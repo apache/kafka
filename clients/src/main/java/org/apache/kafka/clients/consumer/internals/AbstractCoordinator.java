@@ -478,8 +478,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 resetJoinGroupFuture();
                 synchronized (AbstractCoordinator.this) {
-                    rejoinReason = String.format("rebalance failed due to '%s' (%s)", exception.getMessage(), exception.getClass().getSimpleName());
-                    rejoinNeeded = true;
+                    final String shortReason = String.format("rebalance failed due to %s",
+                        exception.getClass().getSimpleName());
+                    final String fullReason = String.format("rebalance failed due to '%s' (%s)",
+                        exception.getMessage(),
+                        exception.getClass().getSimpleName());
+                    requestRejoin(shortReason, fullReason);
                 }
 
                 if (exception instanceof UnknownMemberIdException ||

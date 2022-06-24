@@ -175,6 +175,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     protected final WorkerConfig workerConfig;
     protected final WorkerSourceTaskContext sourceTaskContext;
+    protected final ConnectorOffsetBackingStore offsetStore;
     protected final OffsetStorageWriter offsetWriter;
     protected final Producer<byte[], byte[]> producer;
 
@@ -185,7 +186,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final TransformationChain<SourceRecord> transformationChain;
     private final TopicAdmin admin;
     private final CloseableOffsetStorageReader offsetReader;
-    private final ConnectorOffsetBackingStore offsetStore;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
     private final CountDownLatch stopRequestedLatch;
     private final boolean topicTrackingEnabled;
@@ -256,6 +256,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     @Override
     protected void initializeAndStart() {
         prepareToInitializeTask();
+        offsetStore.start();
         // If we try to start the task at all by invoking initialize, then count this as
         // "started" and expect a subsequent call to the task's stop() method
         // to properly clean up any resources allocated by its initialize() or
@@ -291,7 +292,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     @Override
     public void removeMetrics() {
-        Utils.closeQuietly(sourceTaskMetricsGroup::close, "source task metrics tracker");
+        Utils.closeQuietly(sourceTaskMetricsGroup, "source task metrics tracker");
         super.removeMetrics();
     }
 
@@ -583,7 +584,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         }
     }
 
-    static class SourceTaskMetricsGroup {
+    static class SourceTaskMetricsGroup implements AutoCloseable {
         private final ConnectMetrics.MetricGroup metricGroup;
         private final Sensor sourceRecordPoll;
         private final Sensor sourceRecordWrite;
@@ -617,7 +618,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountAvg), new Avg());
         }
 
-        void close() {
+        @Override
+        public void close() {
             metricGroup.close();
         }
 

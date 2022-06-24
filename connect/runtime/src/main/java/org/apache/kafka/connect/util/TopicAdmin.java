@@ -23,11 +23,13 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeConfigsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
@@ -264,37 +266,32 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     private static final Logger log = LoggerFactory.getLogger(TopicAdmin.class);
-    private final Map<String, Object> adminConfig;
+    private final String bootstrapServers;
     private final Admin admin;
     private final boolean logCreation;
 
     /**
      * Create a new topic admin component with the given configuration.
+     * <p>
+     * Note that this will create an underlying {@link Admin} instance which must be freed when this
+     * topic admin is no longer needed by calling {@link #close()} or {@link #close(Duration)}.
      *
      * @param adminConfig the configuration for the {@link Admin}
      */
     public TopicAdmin(Map<String, Object> adminConfig) {
-        this(adminConfig, Admin.create(adminConfig));
+        this(adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG), Admin.create(adminConfig));
     }
 
     // visible for testing
-    TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
-        this(adminConfig, adminClient, true);
+    TopicAdmin(Object bootstrapServers, Admin adminClient) {
+        this(bootstrapServers, adminClient, true);
     }
 
     // visible for testing
-    TopicAdmin(Map<String, Object> adminConfig, Admin adminClient, boolean logCreation) {
+    TopicAdmin(Object bootstrapServers, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
-        this.adminConfig = adminConfig != null ? adminConfig : Collections.emptyMap();
+        this.bootstrapServers = bootstrapServers != null ? bootstrapServers.toString() : "<unknown>";
         this.logCreation = logCreation;
-    }
-
-    /**
-     * Get the {@link Admin} client used by this topic admin object.
-     * @return the Kafka admin instance; never null
-     */
-    public Admin admin() {
-        return admin;
     }
 
    /**
@@ -371,7 +368,6 @@ public class TopicAdmin implements AutoCloseable {
             }
         }
         if (topicsByName.isEmpty()) return EMPTY_CREATION;
-        String bootstrapServers = bootstrapServers();
         String topicNameList = Utils.join(topicsByName.keySet(), "', '");
 
         // Attempt to create any missing topics
@@ -448,7 +444,6 @@ public class TopicAdmin implements AutoCloseable {
         if (topics == null) {
             return Collections.emptyMap();
         }
-        String bootstrapServers = bootstrapServers();
         String topicNameList = String.join(", ", topics);
 
         Map<String, KafkaFuture<TopicDescription>> newResults =
@@ -604,7 +599,6 @@ public class TopicAdmin implements AutoCloseable {
         if (topics.isEmpty()) {
             return Collections.emptyMap();
         }
-        String bootstrapServers = bootstrapServers();
         String topicNameList = String.join(", ", topics);
         Collection<ConfigResource> resources = topics.stream()
                                                      .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
@@ -664,7 +658,7 @@ public class TopicAdmin implements AutoCloseable {
             return Collections.emptyMap();
         }
         Map<TopicPartition, OffsetSpec> offsetSpecMap = partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
-        ListOffsetsResult resultFuture = admin.listOffsets(offsetSpecMap);
+        ListOffsetsResult resultFuture = admin.listOffsets(offsetSpecMap, new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED));
         // Get the individual result for each topic partition so we have better error messages
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition partition : partitions) {
@@ -675,28 +669,28 @@ public class TopicAdmin implements AutoCloseable {
                 Throwable cause = e.getCause();
                 String topic = partition.topic();
                 if (cause instanceof AuthorizationException) {
-                    String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
                     throw new ConnectException(msg, e);
                 } else if (cause instanceof UnsupportedVersionException) {
                     // Should theoretically never happen, because this method is the same as what the consumer uses and therefore
                     // should exist in the broker since before the admin client was added
-                    String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers());
+                    String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers);
                     throw new UnsupportedVersionException(msg, e);
                 } else if (cause instanceof TimeoutException) {
-                    String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
                     throw new TimeoutException(msg, e);
                 } else if (cause instanceof LeaderNotAvailableException) {
-                    String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers);
                     throw new LeaderNotAvailableException(msg, e);
                 } else if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
                     throw (org.apache.kafka.common.errors.RetriableException) cause;
                 } else {
-                    String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
                     throw new ConnectException(msg, e);
                 }
             } catch (InterruptedException e) {
                 Thread.interrupted();
-                String msg = String.format("Interrupted while attempting to read end offsets for topic '%s' on brokers at %s", partition.topic(), bootstrapServers());
+                String msg = String.format("Interrupted while attempting to read end offsets for topic '%s' on brokers at %s", partition.topic(), bootstrapServers);
                 throw new RetriableException(msg, e);
             }
         }
@@ -741,10 +735,5 @@ public class TopicAdmin implements AutoCloseable {
 
     public void close(Duration timeout) {
         admin.close(timeout);
-    }
-
-    private String bootstrapServers() {
-        Object servers = adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
-        return servers != null ? servers.toString() : "<unknown>";
     }
 }

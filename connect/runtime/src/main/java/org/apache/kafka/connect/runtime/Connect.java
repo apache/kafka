@@ -21,7 +21,6 @@ import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -89,12 +88,8 @@ public class Connect {
     }
 
     // Visible for testing
-    public URI restUrl() {
-        return rest.serverUrl();
-    }
-
-    public URI adminUrl() {
-        return rest.adminUrl();
+    public RestServer rest() {
+        return rest;
     }
 
     private class ShutdownHook extends Thread {

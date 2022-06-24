@@ -318,7 +318,7 @@ class DefaultAlterPartitionManager(
 
       case Errors.NONE =>
         // Collect partition-level responses to pass to the callbacks
-        val partitionResponses = new mutable.HashMap[TopicIdPartition, Either[Errors, LeaderAndIsr]]()
+        val partitionResponses = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
         data.topics.forEach { topic =>
           // Topic IDs are used since version 2 of the AlterPartition API.
           val topicName = if (requestHeader.apiVersion > 1) topicNamesByIds.get(topic.topicId).orNull else topic.topicName
@@ -326,7 +326,7 @@ class DefaultAlterPartitionManager(
             error(s"Received an unexpected topic $topic in the alter partition response, ignoring it.")
           } else {
             topic.partitions.forEach { partition =>
-              val tp = new TopicIdPartition(topic.topicId, partition.partitionIndex, topicName)
+              val tp = new TopicPartition(topicName, partition.partitionIndex)
               val apiError = Errors.forCode(partition.errorCode)
               debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
               if (apiError == Errors.NONE) {
@@ -357,7 +357,7 @@ class DefaultAlterPartitionManager(
         // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
         // the leaderIsrUpdateLock write lock in Partition#sendAlterPartitionRequest
         inflightAlterPartitionItems.foreach { inflightAlterPartition =>
-          partitionResponses.get(inflightAlterPartition.topicIdPartition) match {
+          partitionResponses.get(inflightAlterPartition.topicIdPartition.topicPartition) match {
             case Some(leaderAndIsrOrError) =>
               try {
                 leaderAndIsrOrError match {

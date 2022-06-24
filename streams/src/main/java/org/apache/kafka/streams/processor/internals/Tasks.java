@@ -310,6 +310,20 @@ class Tasks {
         return union(HashSet::new, activeTasksPerId.values(), standbyTasksPerId.values());
     }
 
+    Collection<Task> notPausedActiveTasks() {
+        return activeTasks()
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
+            .collect(Collectors.toList());
+    }
+
+    Collection<Task> notPausedTasks() {
+        return allTasks()
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
+            .collect(Collectors.toList());
+    }
+
     Collection<TaskId> allTaskIds() {
         return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }

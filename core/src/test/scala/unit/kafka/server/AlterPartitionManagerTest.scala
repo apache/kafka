@@ -28,8 +28,8 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidUpdateVersionException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterPartitionResponseData
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.MessageUtil
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.AbstractResponse
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.LeaderRecoveryState
@@ -491,12 +491,22 @@ class AlterPartitionManagerTest {
   }
 
   private def makeClientResponse(
-    response: AbstractResponse,
+    response: AlterPartitionResponse,
     version: Short
   ): ClientResponse = {
-    val requestHeader = new RequestHeader(response.apiKey, version, "", 0)
-    new ClientResponse(requestHeader, null, "", 0L, 0L,
-      false, null, null, response)
+    new ClientResponse(
+      new RequestHeader(response.apiKey, version, "", 0),
+      null,
+      "",
+      0L,
+      0L,
+      false,
+      null,
+      null,
+      // Response is serialized and deserialized to ensure that its does
+      // not contain ignorable fields used by other versions.
+      AlterPartitionResponse.parse(MessageUtil.toByteBuffer(response.data, version), version)
+    )
   }
 
   private def makeAlterPartition(

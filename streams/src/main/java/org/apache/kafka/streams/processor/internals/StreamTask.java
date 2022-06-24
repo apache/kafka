@@ -483,14 +483,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case RESTORING:
             case SUSPENDED:
-                maybeWriteCheckpoint(enforceCheckpoint);
+                maybeCheckpoint(enforceCheckpoint);
                 log.debug("Finalized commit for {} task with enforce checkpoint {}", state(), enforceCheckpoint);
 
                 break;
 
             case RUNNING:
                 if (enforceCheckpoint || !eosEnabled) {
-                    maybeWriteCheckpoint(enforceCheckpoint);
+                    maybeCheckpoint(enforceCheckpoint);
                 }
                 log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
 
@@ -582,14 +582,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
+    public void maybeCheckpoint(final boolean enforceCheckpoint) {
         // commitNeeded indicates we may have processed some records since last commit
         // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
         if (commitNeeded || enforceCheckpoint) {
             stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
 
-        super.maybeWriteCheckpoint(enforceCheckpoint);
+        super.maybeCheckpoint(enforceCheckpoint);
     }
 
     private void validateClean() {

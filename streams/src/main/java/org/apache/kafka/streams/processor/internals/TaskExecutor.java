@@ -275,7 +275,7 @@ public class TaskExecutor {
     int punctuate() {
         int punctuated = 0;
 
-        for (final Task task : tasks.activeTasks()) {
+        for (final Task task : tasks.notPausedActiveTasks()) {
             try {
                 if (task.maybePunctuateStreamTime()) {
                     punctuated++;

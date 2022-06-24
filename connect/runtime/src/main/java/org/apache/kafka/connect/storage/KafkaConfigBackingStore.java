@@ -355,9 +355,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public void stop() {
         log.info("Closing KafkaConfigBackingStore");
 
-        if (fencableProducer != null) {
-            Utils.closeQuietly(() -> fencableProducer.close(Duration.ZERO), "fencable producer for config topic");
-        }
+        relinquishWritePrivileges();
         Utils.closeQuietly(ownTopicAdmin, "admin for config topic");
         Utils.closeQuietly(configLog::stop, "KafkaBasedLog for config topic");
 
