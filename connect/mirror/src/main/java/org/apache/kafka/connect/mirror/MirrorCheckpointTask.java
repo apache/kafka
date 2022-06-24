@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
@@ -99,7 +100,7 @@ public class MirrorCheckpointTask extends SourceTask {
         targetAdminClient = AdminClient.create(config.targetAdminConfig());
         metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
-        checkpointsPerConsumerGroup = new HashMap<>();
+        checkpointsPerConsumerGroup = new ConcurrentHashMap<>();
         scheduler = new Scheduler(MirrorCheckpointTask.class, config.adminTimeout());
         scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                                     "refreshing idle consumers group offsets at target cluster");
