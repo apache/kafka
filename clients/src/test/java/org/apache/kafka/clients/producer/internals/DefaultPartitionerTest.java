@@ -42,7 +42,6 @@ public class DefaultPartitionerTest {
 
     @Test
     public void testKeyPartitionIsStable() {
-        @SuppressWarnings("deprecation")
         final Partitioner partitioner = new DefaultPartitioner();
         final Cluster cluster = new Cluster("clusterId", asList(NODES), PARTITIONS,
             Collections.<String>emptySet(), Collections.<String>emptySet());
