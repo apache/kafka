@@ -694,11 +694,9 @@ class DefaultStateUpdaterTest {
         final StreamTask task2 = createActiveStatefulTaskInStateRestoring(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_B_0));
         final StandbyTask task3 = createStandbyTaskInStateRunning(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_C_0));
         final StandbyTask task4 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
-        when(changelogReader.completedChangelogs())
-                .thenReturn(Collections.emptySet());
-        when(changelogReader.allChangelogsCompleted())
-                .thenReturn(false);
-
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        stateUpdater.start();
         stateUpdater.add(task1);
         stateUpdater.add(task2);
         stateUpdater.add(task3);
@@ -721,11 +719,9 @@ class DefaultStateUpdaterTest {
             final StreamTask task2 = createActiveStatefulTaskInStateRestoring(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_B_0));
             final StandbyTask task3 = createStandbyTaskInStateRunning(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_C_0));
             final StandbyTask task4 = createStandbyTaskInStateRunning(TASK_1_1, Collections.singletonList(TOPIC_PARTITION_D_0));
-            when(changelogReader.completedChangelogs())
-                    .thenReturn(Collections.emptySet());
-            when(changelogReader.allChangelogsCompleted())
-                    .thenReturn(false);
-
+            when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+            when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+            stateUpdater.start();
             stateUpdater.add(task1);
             stateUpdater.add(task2);
             stateUpdater.add(task3);
