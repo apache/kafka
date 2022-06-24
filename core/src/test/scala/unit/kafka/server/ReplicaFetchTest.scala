@@ -17,18 +17,17 @@
 
 package kafka.server
 
-import scala.collection.Seq
 import org.junit.jupiter.api.AfterEach
 import kafka.utils.{TestInfoUtils, TestUtils}
 import TestUtils._
-import kafka.integration.KafkaServerTestHarness
+import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-class ReplicaFetchTest extends KafkaServerTestHarness  {
+class ReplicaFetchTest extends IntegrationTestHarness {
   val topic1 = "foo"
   val topic2 = "bar"
 
@@ -38,10 +37,7 @@ class ReplicaFetchTest extends KafkaServerTestHarness  {
     super.tearDown()
   }
 
-  override def generateConfigs: Seq[KafkaConfig] = {
-    val props = createBrokerConfigs(2, zkConnectOrNull)
-    props.map(KafkaConfig.fromProps)
-  }
+  override def brokerCount: Int = 2
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
