@@ -1336,10 +1336,6 @@ public final class Utils {
         return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
     }
 
-    public static <K, V> Map<K, V> unionMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
-        return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-    }
-
     /**
      * Convert a properties to map. All keys in properties must be string type. Otherwise, a ConfigException is thrown.
      * @param properties to be converted
