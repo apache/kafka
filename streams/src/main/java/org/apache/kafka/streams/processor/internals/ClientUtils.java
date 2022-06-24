@@ -128,6 +128,7 @@ public class ClientUtils {
             // those which do not have a committed offset would default to 0
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions();
             options.topicPartitions(new ArrayList<>(partitions));
+            options.requireStable(true);
             committedOffsets = adminClient.listConsumerGroupOffsets(groupId, options)
                     .partitionsToOffsetAndMetadata().get().entrySet()
                     .stream()

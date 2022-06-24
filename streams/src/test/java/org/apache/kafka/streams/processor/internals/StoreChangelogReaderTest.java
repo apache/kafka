@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
@@ -30,7 +31,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
@@ -653,11 +653,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
                     return super.listConsumerGroupOffsets(groupId, options);
                 } else {
                     functionCalled.set(true);
-
-                    final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
-                    future.completeExceptionally(new TimeoutException("KABOOM!"));
-
-                    return new ListConsumerGroupOffsetsResult(future);
+                    return AdminClientTestUtils.listConsumerGroupOffsetsResult(new TimeoutException("KABOOM!"));
                 }
             }
         };
@@ -713,10 +709,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
             public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
-                final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(kaboom);
-
-                return new ListConsumerGroupOffsetsResult(future);
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(kaboom);
             }
         };
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));

@@ -31,6 +31,7 @@ import java.util.List;
 public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsumerGroupOffsetsOptions> {
 
     private List<TopicPartition> topicPartitions = null;
+    private boolean requireStable = false;
 
     /**
      * Set the topic partitions to list as part of the result.
@@ -45,9 +46,20 @@ public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsume
     }
 
     /**
+     * Sets an optional requireStable flag.
+     */
+    public void requireStable(final boolean requireStable) {
+        this.requireStable = requireStable;
+    }
+
+    /**
      * Returns a list of topic partitions to add as part of the result.
      */
     public List<TopicPartition> topicPartitions() {
         return topicPartitions;
+    }
+
+    public boolean shouldRequireStable() {
+        return requireStable;
     }
 }
