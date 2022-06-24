@@ -218,6 +218,7 @@ import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -3742,7 +3743,8 @@ public class KafkaAdminClient extends AdminClient {
             MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
 
             if (member.groupInstanceId().isPresent()) {
-                memberIdentity.setGroupInstanceId(member.groupInstanceId().get());
+                memberIdentity.setGroupInstanceId(member.groupInstanceId().get())
+                        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID);
             } else {
                 memberIdentity.setMemberId(member.consumerId());
             }
