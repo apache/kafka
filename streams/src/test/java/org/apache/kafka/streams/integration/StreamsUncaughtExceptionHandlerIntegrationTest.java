@@ -221,7 +221,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @Test
     public void shouldReplaceThreadsWithoutJavaHandler() throws InterruptedException {
-        Thread.setDefaultUncaughtExceptionHandler((t ,e) -> fail("exception thrown"));
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> fail("exception thrown"));
         testReplaceThreads(2);
     }
 
