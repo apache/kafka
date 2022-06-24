@@ -936,8 +936,8 @@ class LogLoaderTest {
 
     // The files remain absent until we first access it because we are doing lazy loading for time index and offset index
     // files but in this test case we need to create these files in order to test we will remove them.
-    bogusIndex2.createNewFile()
-    bogusTimeIndex2.createNewFile()
+    Files.createFile(bogusIndex2.toPath)
+    Files.createFile(bogusTimeIndex2.toPath)
 
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 1)

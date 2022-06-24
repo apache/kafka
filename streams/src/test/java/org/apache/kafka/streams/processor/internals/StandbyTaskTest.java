@@ -206,6 +206,47 @@ public class StandbyTaskTest {
         assertThrows(IllegalStateException.class, task::prepareCommit);
     }
 
+
+    @Test
+    public void shouldAlwaysCheckpointStateIfEnforced() {
+        stateManager.flush();
+        EasyMock.expectLastCall().once();
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()).anyTimes();
+        EasyMock.replay(stateManager);
+
+        task = createStandbyTask();
+
+        task.initializeIfNeeded();
+        task.maybeCheckpoint(true);
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
+    public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
+        EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(stateManager.changelogOffsets())
+                .andReturn(Collections.singletonMap(partition, 50L))
+                .andReturn(Collections.singletonMap(partition, 11000L))
+                .andReturn(Collections.singletonMap(partition, 11000L));
+        EasyMock.replay(stateManager);
+
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+
+        task.maybeCheckpoint(false);  // this should not checkpoint
+        task.maybeCheckpoint(false);  // this should checkpoint
+        task.maybeCheckpoint(false);  // this should not checkpoint
+
+        EasyMock.verify(stateManager);
+    }
+
     @Test
     public void shouldFlushAndCheckpointStateManagerOnCommit() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());

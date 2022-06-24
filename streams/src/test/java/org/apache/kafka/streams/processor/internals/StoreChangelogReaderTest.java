@@ -1092,7 +1092,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         final TaskId taskId = new TaskId(0, 0);
 
         EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(activeStateManager.taskId()).andReturn(taskId);
+        EasyMock.expect(activeStateManager.taskId()).andReturn(taskId).anyTimes();
         EasyMock.replay(activeStateManager, storeMetadata, store);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));

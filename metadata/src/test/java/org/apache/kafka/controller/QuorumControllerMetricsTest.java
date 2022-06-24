@@ -40,9 +40,11 @@ public class QuorumControllerMetricsTest {
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount",
+            "LastAppliedRecordLagMs",
             "LastAppliedRecordOffset",
             "LastAppliedRecordTimestamp",
-            "LastAppliedRecordLagMs");
+            "LastCommittedRecordOffset"
+        );
         assertMetricsCreatedAndRemovedUponClose(expectedType, expectedMetricNames);
     }
 
@@ -92,6 +94,7 @@ public class QuorumControllerMetricsTest {
             try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
                 quorumControllerMetrics.setLastAppliedRecordOffset(100);
                 quorumControllerMetrics.setLastAppliedRecordTimestamp(500);
+                quorumControllerMetrics.setLastCommittedRecordOffset(50);
 
                 @SuppressWarnings("unchecked")
                 Gauge<Long> lastAppliedRecordOffset = (Gauge<Long>) registry
@@ -110,6 +113,12 @@ public class QuorumControllerMetricsTest {
                     .allMetrics()
                     .get(metricName("KafkaController", "LastAppliedRecordLagMs"));
                 assertEquals(time.milliseconds() - 500, lastAppliedRecordLagMs.value());
+
+                @SuppressWarnings("unchecked")
+                Gauge<Long> lastCommittedRecordOffset = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "LastCommittedRecordOffset"));
+                assertEquals(50, lastCommittedRecordOffset.value());
             }
         } finally {
             registry.shutdown();

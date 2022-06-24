@@ -74,7 +74,7 @@ class BrokerMetadataListenerTest {
         )
       )
       val imageRecords = listener.getImageRecords().get()
-      assertEquals(0, imageRecords.size())
+      assertEquals(1, imageRecords.size())
       assertEquals(100L, listener.highestMetadataOffset)
       assertEquals(0L, metrics.lastAppliedRecordOffset.get)
       assertEquals(0L, metrics.lastAppliedRecordTimestamp.get)
@@ -98,11 +98,11 @@ class BrokerMetadataListenerTest {
           assertEquals(200L, newImage.highestOffsetAndEpoch().offset)
           assertEquals(new BrokerRegistration(0, 100L,
             Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg"), Collections.emptyList[Endpoint](),
-            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), false),
+            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), false, false),
             delta.clusterDelta().broker(0))
           assertEquals(new BrokerRegistration(1, 200L,
             Uuid.fromString("QkOQtNKVTYatADcaJ28xDg"), Collections.emptyList[Endpoint](),
-            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true),
+            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true, false),
             delta.clusterDelta().broker(1))
         }
 

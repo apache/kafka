@@ -35,21 +35,27 @@ public class TaskExecutionMetadata {
     private static final long CONSTANT_BACKOFF_MS = 5_000L;
 
     private final boolean hasNamedTopologies;
+    private final Set<String> pausedTopologies;
     // map of topologies experiencing errors/currently under backoff
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
 
-    public TaskExecutionMetadata(final Set<String> allTopologyNames) {
+    public TaskExecutionMetadata(final Set<String> allTopologyNames, final Set<String> pausedTopologies) {
         this.hasNamedTopologies = !(allTopologyNames.size() == 1 && allTopologyNames.contains(UNNAMED_TOPOLOGY));
+        this.pausedTopologies = pausedTopologies;
     }
 
     public boolean canProcessTask(final Task task, final long now) {
         final String topologyName = task.id().topologyName();
         if (!hasNamedTopologies) {
             // TODO implement error handling/backoff for non-named topologies (needs KIP)
-            return true;
+            return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
         } else {
-            final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
-            return metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
+            if (pausedTopologies.contains(topologyName)) {
+                return false;
+            } else {
+                final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
+                return metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
+            }
         }
     }
 

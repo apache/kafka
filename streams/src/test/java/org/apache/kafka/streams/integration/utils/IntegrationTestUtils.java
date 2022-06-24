@@ -1387,6 +1387,41 @@ public class IntegrationTestUtils {
         }
     }
 
+    public static long getTopicSize(final Properties consumerConfig, final String topicName) {
+        long sum = 0;
+        try (final Consumer<Object, Object> consumer = createConsumer(consumerConfig)) {
+            final Collection<TopicPartition> partitions = consumer.partitionsFor(topicName)
+                .stream()
+                .map(info -> new TopicPartition(topicName, info.partition()))
+                .collect(Collectors.toList());
+            final Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(partitions);
+            final Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+
+            for (final TopicPartition partition : beginningOffsets.keySet()) {
+                sum += endOffsets.get(partition) - beginningOffsets.get(partition);
+            }
+        }
+        return sum;
+    }
+
+    private static Double getStreamsPollNumber(final KafkaStreams kafkaStreams) {
+        return (Double) kafkaStreams.metrics()
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getKey().name().equals("poll-total"))
+            .findFirst().get()
+            .getValue()
+            .metricValue();
+    }
+
+    public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
+        throws InterruptedException {
+        final Double initialCount = getStreamsPollNumber(kafkaStreams);
+        retryOnExceptionWithTimeout(1000, () -> {
+            assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
+        });
+    }
+
     public static class StableAssignmentListener implements AssignmentListener {
         final AtomicInteger numStableAssignments = new AtomicInteger(0);
         int nextExpectedNumStableAssignments;

@@ -478,8 +478,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 resetJoinGroupFuture();
                 synchronized (AbstractCoordinator.this) {
-                    rejoinReason = String.format("rebalance failed due to '%s' (%s)", exception.getMessage(), exception.getClass().getSimpleName());
-                    rejoinNeeded = true;
+                    final String shortReason = String.format("rebalance failed due to %s",
+                        exception.getClass().getSimpleName());
+                    final String fullReason = String.format("rebalance failed due to '%s' (%s)",
+                        exception.getMessage(),
+                        exception.getClass().getSimpleName());
+                    requestRejoin(shortReason, fullReason);
                 }
 
                 if (exception instanceof UnknownMemberIdException ||
@@ -807,6 +811,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
+                    // consumer didn't get assignment in this generation, so we need to reset generation
+                    // to avoid joinGroup with out-of-data ownedPartitions in cooperative rebalance
+                    resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, false);
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
@@ -939,7 +946,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
         if (this.coordinator != null) {
-            log.info("Group coordinator {} is unavailable or invalid due to cause: {}."
+            log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
                     + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
                     cause, isDisconnected);
             Node oldCoordinator = this.coordinator;
@@ -1438,12 +1445,11 @@ public abstract class AbstractCoordinator implements Closeable {
                                 // clear the future so that after the backoff, if the hb still sees coordinator unknown in
                                 // the next iteration it will try to re-discover the coordinator in case the main thread cannot
                                 clearFindCoordinatorFuture();
-
-                                // backoff properly
-                                AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                             } else {
                                 lookupCoordinator();
                             }
+                            // backoff properly
+                            AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.

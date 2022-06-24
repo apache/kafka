@@ -56,6 +56,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -70,6 +71,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 
@@ -103,6 +105,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
+@Category(IntegrationTest.class)
 public class NamedTopologyIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);

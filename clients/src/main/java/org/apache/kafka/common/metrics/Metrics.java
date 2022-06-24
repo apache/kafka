@@ -509,7 +509,10 @@ public class Metrics implements Closeable {
                                         Objects.requireNonNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
-        registerMetric(m);
+        KafkaMetric existingMetric = registerMetric(m);
+        if (existingMetric != null) {
+            throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+        }
     }
 
     /**
@@ -522,6 +525,26 @@ public class Metrics implements Closeable {
      */
     public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
         addMetric(metricName, null, metricValueProvider);
+    }
+
+    /**
+     * Create or get an existing metric to monitor an object that implements MetricValueProvider.
+     * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
+     * This method takes care of synchronisation while updating/accessing metrics by concurrent threads.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     * @return Existing KafkaMetric if already registered or else a newly created one
+     */
+    public KafkaMetric addMetricIfAbsent(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
+        KafkaMetric metric = new KafkaMetric(new Object(),
+                Objects.requireNonNull(metricName),
+                Objects.requireNonNull(metricValueProvider),
+                config == null ? this.config : config,
+                time);
+
+        KafkaMetric existingMetric = registerMetric(metric);
+        return existingMetric == null ? metric : existingMetric;
     }
 
     /**
@@ -563,10 +586,18 @@ public class Metrics implements Closeable {
         }
     }
 
-    synchronized void registerMetric(KafkaMetric metric) {
+    /**
+     * Register a metric if not present or return an already existing metric otherwise.
+     * When a metric is newly registered, this method returns null
+     *
+     * @param metric The KafkaMetric to register
+     * @return KafkaMetric if the metric already exists, null otherwise
+     */
+    synchronized KafkaMetric registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
-        if (this.metrics.containsKey(metricName))
-            throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+        if (this.metrics.containsKey(metricName)) {
+            return this.metrics.get(metricName);
+        }
         this.metrics.put(metricName, metric);
         for (MetricsReporter reporter : reporters) {
             try {
@@ -576,6 +607,7 @@ public class Metrics implements Closeable {
             }
         }
         log.trace("Registered metric named {}", metricName);
+        return null;
     }
 
     /**

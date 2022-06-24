@@ -22,13 +22,14 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
 import java.util.Properties
-
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
+
+import scala.collection.mutable
 
 
 @Timeout(value = 40)
@@ -162,7 +163,7 @@ Found problem:
       val stream = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false))
-      assertEquals("Formatting %s%n".format(tempDir), stream.toString())
+      assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
         formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false)) catch {
@@ -189,16 +190,27 @@ Found problem:
 
   @Test
   def testDefaultMetadataVersion(): Unit = {
-    var namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-    var mv = StorageTool.getMetadataVersion(namespace)
+    val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
+    val mv = StorageTool.getMetadataVersion(namespace)
     assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
       "Expected the default metadata.version to be the latest version")
+  }
 
-    namespace = StorageTool.parseArguments(Array("format", "-c", "config.props",
-      "--metadata-version", MetadataVersion.latest().featureLevel().toString, "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-    mv = StorageTool.getMetadataVersion(namespace)
-    assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
-      "Expected the default metadata.version to be the latest version")
+  @Test
+  def testMetadataVersionFlags(): Unit = {
+    def parseMetadataVersion(strings: String*): MetadataVersion = {
+      var args = mutable.Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ")
+      args ++= strings
+      val namespace = StorageTool.parseArguments(args.toArray)
+      StorageTool.getMetadataVersion(namespace)
+    }
 
+    var mv = parseMetadataVersion("--release-version", "3.0")
+    assertEquals("3.0", mv.shortVersion())
+
+    mv = parseMetadataVersion("--release-version", "3.0-IV1")
+    assertEquals(MetadataVersion.IBP_3_0_IV1, mv)
+
+    assertThrows(classOf[IllegalArgumentException], () => parseMetadataVersion("--release-version", "0.0"))
   }
 }

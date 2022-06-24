@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.PredicatedTransformation;
@@ -59,11 +61,12 @@ import java.util.stream.Collectors;
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class ConnectorPluginsResource {
+public class ConnectorPluginsResource implements ConnectResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
     private final List<PluginInfo> connectorPlugins;
+    private long requestTimeoutMs;
 
     static final List<Class<? extends SinkConnector>> SINK_CONNECTOR_EXCLUDES = Arrays.asList(
             VerifiableSinkConnector.class,
@@ -84,6 +87,7 @@ public class ConnectorPluginsResource {
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
         this.connectorPlugins = new ArrayList<>();
+        this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
         addConnectorPlugins(herder.plugins().sinkConnectors(), SINK_CONNECTOR_EXCLUDES);
@@ -101,18 +105,24 @@ public class ConnectorPluginsResource {
                 .forEach(connectorPlugins::add);
     }
 
+    @Override
+    public void requestTimeout(long requestTimeoutMs) {
+        this.requestTimeoutMs = requestTimeoutMs;
+    }
+
     @PUT
-    @Path("/{connectorType}/config/validate")
+    @Path("/{pluginName}/config/validate")
+    @Operation(summary = "Validate the provided configuration against the configuration definition for the specified pluginName")
     public ConfigInfos validateConfigs(
-        final @PathParam("connectorType") String connType,
+        final @PathParam("pluginName") String pluginName,
         final Map<String, String> connectorConfig
     ) throws Throwable {
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (includedConnType != null
-            && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(connType))) {
+            && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(pluginName))) {
             throw new BadRequestException(
                 "Included connector type " + includedConnType + " does not match request type "
-                    + connType
+                    + pluginName
             );
         }
 
@@ -121,7 +131,7 @@ public class ConnectorPluginsResource {
         herder.validateConnectorConfig(connectorConfig, validationCallback, false);
 
         try {
-            return validationCallback.get(ConnectorsResource.REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            return validationCallback.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
@@ -133,7 +143,10 @@ public class ConnectorPluginsResource {
 
     @GET
     @Path("/")
-    public List<PluginInfo> listConnectorPlugins(@DefaultValue("true") @QueryParam("connectorsOnly") boolean connectorsOnly) {
+    @Operation(summary = "List all connector plugins installed")
+    public List<PluginInfo> listConnectorPlugins(
+            @DefaultValue("true") @QueryParam("connectorsOnly") @Parameter(description = "Whether to list only connectors instead of all plugins") boolean connectorsOnly
+    ) {
         synchronized (this) {
             if (connectorsOnly) {
                 return Collections.unmodifiableList(connectorPlugins.stream()
@@ -146,8 +159,9 @@ public class ConnectorPluginsResource {
     }
 
     @GET
-    @Path("/{name}/config")
-    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("name") String pluginName) {
+    @Path("/{pluginName}/config")
+    @Operation(summary = "Get the configuration definition for the specified pluginName")
+    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName) {
         synchronized (this) {
             return herder.connectorPluginConfig(pluginName);
         }

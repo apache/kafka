@@ -283,7 +283,7 @@ public final class QuorumController implements Controller {
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
-            } else if (bootstrapMetadata == null || bootstrapMetadata.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+            } else if (bootstrapMetadata == null) {
                 throw new IllegalStateException("You must specify an initial metadata.version using the kafka-storage tool.");
             } else if (quorumFeatures == null) {
                 throw new IllegalStateException("You must specify the quorum features");
@@ -427,7 +427,7 @@ public final class QuorumController implements Controller {
             return exception;
         }
         log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
-                "Reverting to last committed offset {}.",
+                "Renouncing leadership and reverting to the last committed offset {}.",
             name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
         raftClient.resign(curClaimEpoch);
@@ -489,7 +489,7 @@ public final class QuorumController implements Controller {
             if (!snapshotRegistry.hasSnapshot(committedOffset)) {
                 throw new RuntimeException(
                     String.format(
-                        "Cannot generate a snapshot at committed offset %s because it does not exists in the snapshot registry.",
+                        "Cannot generate a snapshot at committed offset %d because it does not exists in the snapshot registry.",
                         committedOffset
                     )
                 );
@@ -622,9 +622,14 @@ public final class QuorumController implements Controller {
         }
     }
 
-    // VisibleForTesting
+    // Visible for testing
     ReplicationControlManager replicationControl() {
         return replicationControl;
+    }
+
+    // Visible for testing
+    ClusterControlManager clusterControl() {
+        return clusterControl;
     }
 
     <T> CompletableFuture<T> appendReadEvent(
@@ -777,6 +782,13 @@ public final class QuorumController implements Controller {
         }
     }
 
+    private <T> CompletableFuture<T> prependWriteEvent(String name,
+                                                       ControllerWriteOperation<T> op) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+        queue.prepend(event);
+        return event.future();
+    }
+
     private <T> CompletableFuture<T> appendWriteEvent(String name,
                                                       OptionalLong deadlineNs,
                                                       ControllerWriteOperation<T> op) {
@@ -852,7 +864,7 @@ public final class QuorumController implements Controller {
                     if (isActiveController()) {
                         throw new IllegalStateException(
                             String.format(
-                                "Asked to load snapshot (%s) when it is the active controller (%s)",
+                                "Asked to load snapshot (%s) when it is the active controller (%d)",
                                 reader.snapshotId(),
                                 curClaimEpoch
                             )
@@ -917,7 +929,6 @@ public final class QuorumController implements Controller {
                             curEpoch);
                     }
 
-
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
                     updateWriteOffset(lastCommittedOffset);
@@ -927,24 +938,30 @@ public final class QuorumController implements Controller {
                     // write any other records to the log since we need the metadata.version to determine the correct
                     // record version
                     final MetadataVersion metadataVersion;
-                    if (featureControl.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
+                    if (!featureControl.sawMetadataVersion()) {
                         final CompletableFuture<Map<String, ApiError>> future;
                         if (!bootstrapMetadata.metadataVersion().isKRaftSupported()) {
-                            metadataVersion = MetadataVersion.UNINITIALIZED;
+                            metadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION;
                             future = new CompletableFuture<>();
                             future.completeExceptionally(
-                                new IllegalStateException("Cannot become leader without an initial metadata.version of " +
-                                    "at least 1. Got " + bootstrapMetadata.metadataVersion().featureLevel()));
+                                new IllegalStateException("Cannot become leader without a KRaft supported version. " +
+                                    "Got " + bootstrapMetadata.metadataVersion()));
                         } else {
                             metadataVersion = bootstrapMetadata.metadataVersion();
-                            future = appendWriteEvent("bootstrapMetadata", OptionalLong.empty(), () -> {
+
+                            // This call is here instead of inside the appendWriteEvent for testing purposes.
+                            final List<ApiMessageAndVersion> bootstrapRecords = bootstrapMetadata.records();
+
+                            // We prepend the bootstrap event in order to ensure the bootstrap metadata is written before
+                            // any external controller write events are processed.
+                            future = prependWriteEvent("bootstrapMetadata", () -> {
                                 if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
                                     log.info("Initializing metadata.version to {}", metadataVersion.featureLevel());
                                 } else {
-                                    log.info("Upgrading from KRaft preview. Initializing metadata.version to {}",
+                                    log.info("Upgrading KRaft cluster and initializing metadata.version to {}",
                                         metadataVersion.featureLevel());
                                 }
-                                return ControllerResult.atomicOf(bootstrapMetadata.records(), null);
+                                return ControllerResult.atomicOf(bootstrapRecords, null);
                             });
                         }
                         future.whenComplete((result, exception) -> {
@@ -961,7 +978,6 @@ public final class QuorumController implements Controller {
                     } else {
                         metadataVersion = featureControl.metadataVersion();
                     }
-
 
                     log.info(
                         "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
@@ -1557,6 +1573,11 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             build();
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
+        this.featureControl = new FeatureControlManager.Builder().
+            setLogContext(logContext).
+            setQuorumFeatures(quorumFeatures).
+            setSnapshotRegistry(snapshotRegistry).
+            build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
             setClusterId(clusterId).
@@ -1565,12 +1586,8 @@ public final class QuorumController implements Controller {
             setSessionTimeoutNs(sessionTimeoutNs).
             setReplicaPlacer(replicaPlacer).
             setControllerMetrics(controllerMetrics).
+            setFeatureControlManager(featureControl).
             build();
-        this.featureControl = new FeatureControlManager.Builder().
-                setLogContext(logContext).
-                setQuorumFeatures(quorumFeatures).
-                setSnapshotRegistry(snapshotRegistry).
-                build();
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
@@ -1613,7 +1630,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterPartitionResponseData());
         }
         return appendWriteEvent("alterPartition", context.deadlineNs(),
-            () -> replicationControl.alterPartition(request));
+            () -> replicationControl.alterPartition(context, request));
     }
 
     @Override
@@ -1956,6 +1973,11 @@ public final class QuorumController implements Controller {
     @Override
     public int curClaimEpoch() {
         return curClaimEpoch;
+    }
+
+    // Visible for testing
+    MetadataVersion metadataVersion() {
+        return featureControl.metadataVersion();
     }
 
     @Override

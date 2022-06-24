@@ -65,10 +65,9 @@ public class Tls13SelectorTest extends SslSelectorTest {
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelReady(selector, node);
+
         // send echo requests and receive responses
-        while (!selector.isChannelReady(node)) {
-            selector.poll(1000L);
-        }
         selector.send(createSend(node, node + "-" + 0));
         selector.poll(0L);
         server.renegotiate();

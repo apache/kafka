@@ -49,7 +49,7 @@ object StorageTool extends Logging {
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = getMetadataVersion(namespace)
           if (!metadataVersion.isKRaftSupported) {
-            throw new TerseFailure(s"Must specify a metadata version of at least 1.")
+            throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
           val metaProperties = buildMetadataProperties(clusterId, config.get)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
@@ -97,9 +97,9 @@ object StorageTool extends Logging {
       help("The cluster ID to use.")
     formatParser.addArgument("--ignore-formatted", "-g").
       action(storeTrue())
-    formatParser.addArgument("--metadata-version", "-v").
+    formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"The initial metadata.version to use. Default is (${MetadataVersion.latest().featureLevel()}).")
+      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.latest().version()}")
 
     parser.parseArgsOrFail(args)
   }
@@ -114,9 +114,9 @@ object StorageTool extends Logging {
   def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
 
   def getMetadataVersion(namespace: Namespace): MetadataVersion = {
-    Option(namespace.getString("metadata_version")).
-      map(mv => MetadataVersion.fromFeatureLevel(mv.toShort)).
-      getOrElse(MetadataVersion.latest())
+    Option(namespace.getString("release_version"))
+      .map(ver => MetadataVersion.fromVersionString(ver))
+      .getOrElse(MetadataVersion.latest())
   }
 
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
@@ -256,7 +256,7 @@ object StorageTool extends Logging {
       val bootstrapMetadata = BootstrapMetadata.create(metadataVersion)
       BootstrapMetadata.write(bootstrapMetadata, Paths.get(directory))
 
-      stream.println(s"Formatting ${directory}")
+      stream.println(s"Formatting ${directory} with metadata.version ${metadataVersion}.")
     })
     0
   }

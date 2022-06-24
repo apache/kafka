@@ -430,7 +430,9 @@ public class StreamThreadStateStoreProviderTest {
                 Time.SYSTEM
             ),
             streamsConfig.defaultProductionExceptionHandler(),
-            new MockStreamsMetrics(metrics));
+            new MockStreamsMetrics(metrics),
+            topology
+        );
         final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,

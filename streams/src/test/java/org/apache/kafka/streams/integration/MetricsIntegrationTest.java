@@ -93,6 +93,7 @@ public class MetricsIntegrationTest {
     private static final String STREAM_THREAD_NODE_METRICS = "stream-thread-metrics";
     private static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
     private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
+    private static final String STREAM_TOPIC_METRICS = "stream-topic-metrics";
     private static final String STREAM_CACHE_NODE_METRICS = "stream-record-cache-metrics";
 
     private static final String IN_MEMORY_KVSTORE_TAG_KEY = "in-memory-state-id";
@@ -217,6 +218,10 @@ public class MetricsIntegrationTest {
     private static final String RECORD_E2E_LATENCY_AVG = "record-e2e-latency-avg";
     private static final String RECORD_E2E_LATENCY_MIN = "record-e2e-latency-min";
     private static final String RECORD_E2E_LATENCY_MAX = "record-e2e-latency-max";
+    private static final String BYTES_CONSUMED_TOTAL = "bytes-consumed-total";
+    private static final String RECORDS_CONSUMED_TOTAL = "records-consumed-total";
+    private static final String BYTES_PRODUCED_TOTAL = "bytes-produced-total";
+    private static final String RECORDS_PRODUCED_TOTAL = "records-produced-total";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
@@ -360,6 +365,7 @@ public class MetricsIntegrationTest {
         checkThreadLevelMetrics();
         checkTaskLevelMetrics();
         checkProcessorNodeLevelMetrics();
+        checkTopicLevelMetrics();
         checkKeyValueStoreMetrics(IN_MEMORY_KVSTORE_TAG_KEY);
         checkKeyValueStoreMetrics(ROCKSDB_KVSTORE_TAG_KEY);
         checkKeyValueStoreMetrics(IN_MEMORY_LRUCACHE_TAG_KEY);
@@ -546,6 +552,18 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_AVG, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
+    }
+
+    private void checkTopicLevelMetrics() {
+        final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().group().equals(STREAM_TOPIC_METRICS))
+            .collect(Collectors.toList());
+        final int numberOfSourceTopics = 4;
+        final int numberOfSinkTopics = 4;
+        checkMetricByName(listMetricProcessor, BYTES_CONSUMED_TOTAL, numberOfSourceTopics);
+        checkMetricByName(listMetricProcessor, RECORDS_CONSUMED_TOTAL, numberOfSourceTopics);
+        checkMetricByName(listMetricProcessor, BYTES_PRODUCED_TOTAL, numberOfSinkTopics);
+        checkMetricByName(listMetricProcessor, RECORDS_PRODUCED_TOTAL, numberOfSinkTopics);
     }
 
     private void checkKeyValueStoreMetrics(final String tagKey) {

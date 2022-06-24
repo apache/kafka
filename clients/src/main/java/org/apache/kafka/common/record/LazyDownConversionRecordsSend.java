@@ -87,7 +87,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 // Since we have already sent at least one batch and we have committed to the fetch size, we
                 // send an overflow batch. The consumer will read the first few records and then fetch from the
                 // offset of the batch which has the unsupported compression type. At that time, we will
-                // send back the UNSUPPORTED_COMPRESSION_TYPE erro which will allow the consumer to fail gracefully.
+                // send back the UNSUPPORTED_COMPRESSION_TYPE error which will allow the consumer to fail gracefully.
                 convertedRecords = buildOverflowBatch(remaining);
             }
 

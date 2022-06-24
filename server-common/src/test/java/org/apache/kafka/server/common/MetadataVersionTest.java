@@ -18,9 +18,11 @@
 package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.record.RecordVersion;
-import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV1;
@@ -62,6 +64,7 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -73,7 +76,7 @@ class MetadataVersionTest {
     @Test
     public void testFeatureLevel() {
         MetadataVersion[] metadataVersions = MetadataVersion.VERSIONS;
-        int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(IBP_3_0_IV0);
+        int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(MetadataVersion.MINIMUM_KRAFT_VERSION);
         for (int i = 0; i < firstFeatureLevelIndex; i++) {
             assertTrue(metadataVersions[i].featureLevel() < 0);
         }
@@ -190,10 +193,11 @@ class MetadataVersionTest {
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2"));
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2-IV0"));
 
-        assertEquals(IBP_3_3_IV2, MetadataVersion.fromVersionString("3.3"));
+        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3"));
         assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
         assertEquals(IBP_3_3_IV1, MetadataVersion.fromVersionString("3.3-IV1"));
         assertEquals(IBP_3_3_IV2, MetadataVersion.fromVersionString("3.3-IV2"));
+        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3-IV3"));
     }
 
     @Test
@@ -240,6 +244,7 @@ class MetadataVersionTest {
         assertEquals("3.3", IBP_3_3_IV0.shortVersion());
         assertEquals("3.3", IBP_3_3_IV1.shortVersion());
         assertEquals("3.3", IBP_3_3_IV2.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV3.shortVersion());
     }
 
     @Test
@@ -275,13 +280,14 @@ class MetadataVersionTest {
         assertEquals("3.3-IV0", IBP_3_3_IV0.version());
         assertEquals("3.3-IV1", IBP_3_3_IV1.version());
         assertEquals("3.3-IV2", IBP_3_3_IV2.version());
+        assertEquals("3.3-IV3", IBP_3_3_IV3.version());
     }
 
     @Test
     public void testPrevious() {
         for (int i = 1; i < MetadataVersion.VERSIONS.length - 2; i++) {
             MetadataVersion version = MetadataVersion.VERSIONS[i];
-            assertTrue(version.previous().isPresent());
+            assertTrue(version.previous().isPresent(), version.toString());
             assertEquals(MetadataVersion.VERSIONS[i - 1], version.previous().get());
         }
     }
@@ -311,11 +317,26 @@ class MetadataVersionTest {
         }
 
         for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
-            if (metadataVersion.isAtLeast(IBP_3_0_IV0)) {
-                assertTrue(metadataVersion.isKRaftSupported());
+            if (metadataVersion.isAtLeast(IBP_3_0_IV1)) {
+                assertTrue(metadataVersion.isKRaftSupported(), metadataVersion.toString());
             } else {
                 assertFalse(metadataVersion.isKRaftSupported());
             }
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testIsInControlledShutdownStateSupported(MetadataVersion metadataVersion) {
+        assertEquals(metadataVersion.isAtLeast(IBP_3_3_IV3),
+            metadataVersion.isInControlledShutdownStateSupported());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testRegisterBrokerRecordVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_3_3_IV3) ?
+            (short) 1 : (short) 0;
+        assertEquals(expectedVersion, metadataVersion.registerBrokerRecordVersion());
     }
 }

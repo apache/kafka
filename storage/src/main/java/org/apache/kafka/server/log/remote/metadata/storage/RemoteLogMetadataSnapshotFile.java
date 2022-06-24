@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -70,8 +71,11 @@ public class RemoteLogMetadataSnapshotFile {
 
         // Create an empty file if it does not exist.
         try {
-            boolean newFileCreated = metadataStoreFile.createNewFile();
-            log.info("Remote log metadata snapshot file: [{}], newFileCreated: [{}]", metadataStoreFile, newFileCreated);
+            final boolean fileExists = Files.exists(metadataStoreFile.toPath());
+            if (!fileExists) {
+                Files.createFile(metadataStoreFile.toPath());
+            }
+            log.info("Remote log metadata snapshot file: [{}], newFileCreated: [{}]", metadataStoreFile, !fileExists);
         } catch (IOException e) {
             throw new KafkaException(e);
         }
