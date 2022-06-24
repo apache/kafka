@@ -3204,7 +3204,7 @@ public class StreamThreadTest {
     }
 
     StreamTask activeTask(final TaskManager taskManager, final TopicPartition partition) {
-        final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> t.isActive());
+        final Stream<Task> standbys = taskManager.allTasks().values().stream().filter(Task::isActive);
         for (final Task task : (Iterable<Task>) standbys::iterator) {
             if (task.inputPartitions().contains(partition)) {
                 return (StreamTask) task;

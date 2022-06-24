@@ -129,7 +129,7 @@ class Tasks {
     }
 
     private void createActiveTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate) {
-        for (Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : activeTasksToCreate.entrySet()) {
+        for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : activeTasksToCreate.entrySet()) {
             final TaskId taskId = taskToBeCreated.getKey();
 
             if (activeTasksPerId.containsKey(taskId)) {
@@ -153,7 +153,7 @@ class Tasks {
     }
 
     private void createStandbyTasks(final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        for (Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : standbyTasksToCreate.entrySet()) {
+        for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : standbyTasksToCreate.entrySet()) {
             final TaskId taskId = taskToBeCreated.getKey();
 
             if (standbyTasksPerId.containsKey(taskId)) {
@@ -181,7 +181,11 @@ class Tasks {
             throw new IllegalStateException("Attempted to convert unknown active task to standby task: " + taskId);
         }
         removePartitionsForActiveTask(taskId);
-        cleanUpTaskProducerAndRemoveTask(activeTask.id(), taskCloseExceptions);
+
+        final RuntimeException exception = cleanUpTaskProducerAfterClose(activeTask.id());
+        if (exception != null) {
+            taskCloseExceptions.putIfAbsent(taskId, exception);
+        }
 
         final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
         standbyTasksPerId.put(standbyTask.id(), standbyTask);
@@ -218,16 +222,14 @@ class Tasks {
         task.resume();
     }
 
-    void cleanUpTaskProducerAndRemoveTask(final TaskId taskId,
-                                          final Map<TaskId, RuntimeException> taskCloseExceptions) {
+    RuntimeException cleanUpTaskProducerAfterClose(final TaskId taskId) {
+        RuntimeException exception = null;
         try {
             activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
         } catch (final RuntimeException e) {
-            final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", taskId);
-            log.error(uncleanMessage, e);
-            taskCloseExceptions.putIfAbsent(taskId, e);
+            exception = e;
         }
-        removeTaskBeforeClosing(taskId);
+        return exception;
     }
 
     void reInitializeThreadProducer() {
@@ -246,7 +248,7 @@ class Tasks {
     void removeTaskBeforeClosing(final TaskId taskId) {
         if (activeTasksPerId.remove(taskId) != null) {
             removePartitionsForActiveTask(taskId);
-        } else if(standbyTasksPerId.remove(taskId) == null) {
+        } else if (standbyTasksPerId.remove(taskId) == null) {
             throw new IllegalArgumentException("Attempted to remove a task that is not owned: " + taskId);
         }
     }
@@ -329,7 +331,7 @@ class Tasks {
     }
 
     Map<TaskId, Task> allTasksPerId() {
-        Map<TaskId, Task> ret = new HashMap<>();
+        final Map<TaskId, Task> ret = new HashMap<>();
         ret.putAll(activeTasksPerId);
         ret.putAll(standbyTasksPerId);
         return ret;

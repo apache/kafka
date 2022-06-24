@@ -362,12 +362,15 @@ public class TaskManager {
         tasks.createTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
-    private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(Map<TaskId, Set<TopicPartition>> tasksToCreate) {
+    private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(final Map<TaskId, Set<TopicPartition>> tasksToCreate) {
         final Map<TaskId, Set<TopicPartition>> pendingTasks = new HashMap<>();
-        for (final TaskId taskId: tasksToCreate.keySet()) {
+        final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> iter = tasksToCreate.entrySet().iterator();
+        while (iter.hasNext()) {
+            final Map.Entry<TaskId, Set<TopicPartition>> entry = iter.next();
+            final TaskId taskId = entry.getKey();
             if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
-                pendingTasks.put(taskId, tasksToCreate.get(taskId));
-                tasksToCreate.remove(taskId);
+                pendingTasks.put(taskId, entry.getValue());
+                iter.remove();
             }
         }
         return pendingTasks;
@@ -421,9 +424,9 @@ public class TaskManager {
         tasksToCloseClean.removeAll(tasksToCloseDirty);
         for (final Task task : tasksToCloseClean) {
             try {
-                completeTaskCloseClean(task);
-                if (task.isActive()) {
-                    tasks.cleanUpTaskProducerAndRemoveTask(task.id(), taskCloseExceptions);
+                final RuntimeException exception = closeTaskClean(task);
+                if (exception != null) {
+                    taskCloseExceptions.putIfAbsent(task.id(), exception);
                 }
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
@@ -455,7 +458,6 @@ public class TaskManager {
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
-            tasks.cleanUpTaskProducerAndRemoveTask(task.id(), taskCloseExceptions);
         }
     }
 
@@ -673,8 +675,6 @@ public class TaskManager {
             // standby tasks while we rejoin.
             if (task.isActive()) {
                 closeTaskDirty(task);
-
-                tasks.cleanUpTaskProducerAndRemoveTask(task.id(), new HashMap<>());
             }
         }
 
@@ -821,11 +821,23 @@ public class TaskManager {
         }
         tasks.removeTaskBeforeClosing(task.id());
         task.closeDirty();
+
+        // since we are closing dirty, we can swallow the exception from closing producer ids
+        final RuntimeException swallow = tasks.cleanUpTaskProducerAfterClose(task.id());
+        if (swallow != null) {
+            final String uncleanMessage = String.format("Failed to close task producer %s cleanly. ", task.id());
+            log.error(uncleanMessage, swallow);
+        }
     }
 
-    private void completeTaskCloseClean(final Task task) {
+    private RuntimeException closeTaskClean(final Task task) {
         tasks.removeTaskBeforeClosing(task.id());
         task.closeClean();
+        if (task.isActive()) {
+            return tasks.cleanUpTaskProducerAfterClose(task.id());
+        } else {
+            return null;
+        }
     }
 
     void shutdown(final boolean clean) {
@@ -878,16 +890,6 @@ public class TaskManager {
 
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
-        }
-
-        // TODO: change type to `StreamTask`
-        for (final Task activeTask : activeTasks) {
-            executeAndMaybeSwallow(
-                clean,
-                () -> tasks.closeAndRemoveTaskProducerIfNeeded(activeTask),
-                e -> firstException.compareAndSet(null, e),
-                e -> log.warn("Ignoring an exception while closing task " + activeTask.id() + " producer.", e)
-            );
         }
 
         final RuntimeException exception = firstException.get();
@@ -978,7 +980,10 @@ public class TaskManager {
         for (final Task task : tasksToCloseClean) {
             try {
                 task.suspend();
-                completeTaskCloseClean(task);
+                final RuntimeException exception = closeTaskClean(task);
+                if (exception != null) {
+                    firstException.compareAndSet(null, exception);
+                }
             } catch (final StreamsException e) {
                 log.error("Exception caught while clean-closing task " + task.id(), e);
                 e.setTaskId(task.id());
@@ -1009,7 +1014,10 @@ public class TaskManager {
                 task.prepareCommit();
                 task.postCommit(true);
                 task.suspend();
-                completeTaskCloseClean(task);
+                final RuntimeException exception = closeTaskClean(task);
+                if (exception != null) {
+                    maybeWrapAndSetFirstException(firstException, exception, task.id());
+                }
             } catch (final TaskMigratedException e) {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
