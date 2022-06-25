@@ -1239,8 +1239,8 @@ project(':clients') {
     implementation libs.lz4
     implementation libs.snappy
     implementation libs.slf4jApi
-    implementation libs.bouncycastle
 
+    compileOnly libs.bcpkix
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
@@ -2537,7 +2537,7 @@ project(':connect:runtime') {
     implementation libs.mavenArtifact
     implementation libs.swaggerJaxrs2
     implementation libs.swaggerAnnotations
-    implementation libs.bouncycastle
+    implementation libs.bcpkix
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
