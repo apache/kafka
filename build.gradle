@@ -1239,7 +1239,7 @@ project(':clients') {
     implementation libs.lz4
     implementation libs.snappy
     implementation libs.slf4jApi
-    implementation libs.bouncyCastle
+    implementation libs.bouncycastle
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
@@ -2537,7 +2537,7 @@ project(':connect:runtime') {
     implementation libs.mavenArtifact
     implementation libs.swaggerJaxrs2
     implementation libs.swaggerAnnotations
-    implementation libs.bouncyCastle
+    implementation libs.bouncycastle
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
