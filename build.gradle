@@ -851,7 +851,6 @@ project(':core') {
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.bouncyCastle
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
@@ -1240,6 +1239,7 @@ project(':clients') {
     implementation libs.lz4
     implementation libs.snappy
     implementation libs.slf4jApi
+    implementation libs.bouncyCastle
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
