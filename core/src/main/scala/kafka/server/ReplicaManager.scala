@@ -1847,7 +1847,7 @@ class ReplicaManager(val config: KafkaConfig,
   def handleLogDirFailure(dir: String, sendZkNotification: Boolean = true): Unit = {
     if (!logManager.isLogDirOnline(dir))
       return
-    fatal(s"!!! Stopping serving replicas in dir $dir")
+    warn(s"Stopping serving replicas in dir $dir")
     replicaStateChangeLock synchronized {
       val newOfflinePartitions = onlinePartitionsIterator.filter { partition =>
         partition.log.exists { _.parentDir == dir }

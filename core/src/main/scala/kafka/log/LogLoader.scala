@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
+
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.log.UnifiedLog.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
 import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
@@ -415,7 +416,7 @@ class LogLoader(
 
       while (unflushedIter.hasNext && !truncated) {
         val segment = unflushedIter.next()
-        debug(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
+        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
 
         val truncatedBytes =
           try {

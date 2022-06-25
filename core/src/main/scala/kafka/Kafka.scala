@@ -97,7 +97,6 @@ object Kafka extends Logging {
 
       // attach shutdown handler to catch terminating signals as well as normal termination
       Exit.addShutdownHook("kafka-shutdown-hook", {
-        fatal("!!! shutdown hook")
         try server.shutdown()
         catch {
           case _: Throwable =>

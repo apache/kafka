@@ -138,25 +138,6 @@ class LogManager(logDirs: Seq[File],
       Map("logDirectory" -> dir.getAbsolutePath))
   }
 
-//  newGauge("remainingLogsToRecovery", () => numRemainingLogs.get())
-
-//  for (dir <- logDirs) {
-//    Map("dir" -> dir, "remainingSegments" -> numRemainingLogs.get())
-//  }
-//  for (dir <- logDirs) {
-//    for (i <- 0 until numRecoveryThreadsPerDataDir) {
-//      val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
-////      println("!!! threadName is " + threadName)
-////      println("!!! numRemainingSegments is " + numRemainingSegments)
-//      newGauge("remainingSegmentsToRecovery", () => {
-//        println("!!! threadName is " + threadName)
-//        println("!!! numRemainingSegments is " + numRemainingSegments)
-//        numRemainingSegments.get(threadName).get
-//      },
-//        Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
-//    }
-//  }
-
   /**
    * Create and check validity of the given directories that are not in the given offline directories, specifically:
    * <ol>
@@ -216,7 +197,7 @@ class LogManager(logDirs: Seq[File],
    * @param dir        the absolute path of the log directory
    */
   def handleLogDirFailure(dir: String): Unit = {
-    fatal(s"Stopping serving logs in dir $dir")
+    warn(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
       if (_liveLogDirs.isEmpty) {
@@ -332,6 +313,7 @@ class LogManager(logDirs: Seq[File],
 
   import java.util.concurrent.ThreadFactory
 
+  // factory class for naming the log recovery threads used in metrics
   class LogRecoveryThreadFactory(val baseName: String) extends ThreadFactory {
     val threadsNum = new AtomicInteger(0)
 
@@ -397,6 +379,7 @@ class LogManager(logDirs: Seq[File],
         val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
           logDir.isDirectory && UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         val numLogsLoaded = new AtomicInteger(0)
+        numTotalLogs += logsToLoad.length
         numRemainingLogs.putIfAbsent(dir.getAbsolutePath, logsToLoad.length)
 
         val jobsForDir = logsToLoad.map { logDir =>
@@ -419,7 +402,7 @@ class LogManager(logDirs: Seq[File],
                 // KafkaStorageException might be thrown, ex: during writing LeaderEpochFileCache
                 // And while converting IOException to KafkaStorageException, we've already handled the exception. So we can ignore it here.
             } finally {
-              numRemainingLogs.compute(logDir.getAbsolutePath, (_, remainingLogs) => remainingLogs - 1)
+              numRemainingLogs.compute(dir.getAbsolutePath, (_, remainingLogs) => remainingLogs - 1)
             }
           }
           runnable
@@ -455,7 +438,7 @@ class LogManager(logDirs: Seq[File],
 
   private def addLogRecoveryMetrics(): Unit = {
     for (dir <- logDirs) {
-      newGauge("remainingLogsToRecovery", () => numRemainingLogs.get(dir),
+      newGauge("remainingLogsToRecovery", () => numRemainingLogs.get(dir.getAbsolutePath),
         Map("dir" -> dir.getAbsolutePath))
       for (i <- 0 until numRecoveryThreadsPerDataDir) {
         val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
@@ -465,7 +448,7 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  def removeLogRecoveryMetrics(): Unit = {
+  private def removeLogRecoveryMetrics(): Unit = {
     for (dir <- logDirs) {
       removeMetric("remainingLogsToRecovery", Map("dir" -> dir.getAbsolutePath))
       for (i <- 0 until numRecoveryThreadsPerDataDir) {
