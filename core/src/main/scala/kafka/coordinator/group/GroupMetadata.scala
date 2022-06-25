@@ -197,6 +197,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private[group] val lock = new ReentrantLock
 
   private var state: GroupState = initialState
+  private var previousState: Option[GroupState] = None
   var currentStateTimestamp: Option[Long] = Some(time.milliseconds())
   var protocolType: Option[String] = None
   var protocolName: Option[String] = None
@@ -225,6 +226,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def inLock[T](fun: => T): T = CoreUtils.inLock(lock)(fun)
 
   def is(groupState: GroupState): Boolean = state == groupState
+  def isPrevious(groupState: GroupState): Boolean = previousState.orNull == groupState
   def has(memberId: String): Boolean = members.contains(memberId)
   def get(memberId: String): MemberMetadata = members(memberId)
   def size: Int = members.size
@@ -436,6 +438,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def transitionTo(groupState: GroupState): Unit = {
     assertValidTransition(groupState)
+    previousState = Some(state)
     state = groupState
     currentStateTimestamp = Some(time.milliseconds())
   }

@@ -763,7 +763,11 @@ public abstract class AbstractCoordinator implements Closeable {
         public void handle(SyncGroupResponse syncResponse,
                            RequestFuture<ByteBuffer> future) {
             Errors error = syncResponse.error();
-            if (error == Errors.NONE) {
+            if (error == Errors.NONE ||
+                    // if REBALANCE_IN_PROGRESS and have assignment data, need to apply it first
+                    (error == Errors.REBALANCE_IN_PROGRESS &&
+                            syncResponse.data().protocolName() != null &&
+                            syncResponse.data().protocolType() != null )) {
                 if (isProtocolTypeInconsistent(syncResponse.data().protocolType())) {
                     log.error("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
                         syncResponse.data().protocolType(), protocolType());
@@ -788,11 +792,18 @@ public abstract class AbstractCoordinator implements Closeable {
                                 log.info("Successfully synced group in generation {}", generation);
                                 state = MemberState.STABLE;
                                 rejoinReason = "";
-                                rejoinNeeded = false;
                                 // record rebalance latency
                                 lastRebalanceEndMs = time.milliseconds();
                                 sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
                                 lastRebalanceStartMs = -1L;
+
+                                rejoinNeeded = false;
+                                if (error == Errors.REBALANCE_IN_PROGRESS) {
+                                    log.info("SyncGroup failed: The group began another rebalance. " +
+                                            "Need to re-join the group after apply the assignment. " +
+                                            "Sent generation was {}", sentGeneration);
+                                    rejoinNeeded = true;
+                                }
 
                                 future.complete(ByteBuffer.wrap(syncResponse.data().assignment()));
                             }
@@ -810,7 +821,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
-                                 "Sent generation was {}", sentGeneration);
+                            "Sent generation was {}", sentGeneration);
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id

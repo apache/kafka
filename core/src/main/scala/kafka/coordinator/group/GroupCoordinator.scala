@@ -587,7 +587,15 @@ class GroupCoordinator(val brokerId: Int,
             responseCallback(SyncGroupResult(Errors.UNKNOWN_MEMBER_ID))
 
           case PreparingRebalance =>
-            responseCallback(SyncGroupResult(Errors.REBALANCE_IN_PROGRESS))
+            // if group is PreparingRebalance, another consumer joins before this syncGroup
+            // if it join after leader syncGroup (from Stable), return previous assignment
+            // if it join before leader syncGroup (from CompletingRebalance), return empty
+            if (group.isPrevious(Stable)) {
+              val memberMetadata = group.get(memberId)
+              responseCallback(SyncGroupResult(group.protocolType, group.protocolName, memberMetadata.assignment, Errors.REASSIGNMENT_IN_PROGRESS))
+            } else {
+              responseCallback(SyncGroupResult(Errors.REASSIGNMENT_IN_PROGRESS))
+            }
 
           case CompletingRebalance =>
             group.get(memberId).awaitingSyncCallback = responseCallback
