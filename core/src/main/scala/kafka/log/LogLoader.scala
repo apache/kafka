@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
-
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.log.UnifiedLog.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
 import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
@@ -29,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.utils.Time
 
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import scala.collection.{Set, mutable}
 
 case class LoadedLogOffsets(logStartOffset: Long,
@@ -78,7 +78,7 @@ class LogLoader(
   recoveryPointCheckpoint: Long,
   leaderEpochCache: Option[LeaderEpochFileCache],
   producerStateManager: ProducerStateManager,
-  numRemainingSegments: collection.mutable.Map[String, Int] = mutable.Map.empty
+  numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
 ) extends Logging {
   logIdent = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
 
@@ -411,12 +411,11 @@ class LogLoader(
       var truncated = false
       var numFlushed = 0
       val threadName = Thread.currentThread().getName
-
+      numRemainingSegments.put(threadName, unflushedSize)
 
       while (unflushedIter.hasNext && !truncated) {
-        Thread.sleep(500)
         val segment = unflushedIter.next()
-        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
+        debug(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
 
         val truncatedBytes =
           try {
@@ -436,7 +435,7 @@ class LogLoader(
           truncated = true
         }
         numFlushed += 1
-        numRemainingSegments += (threadName -> (unflushedSize - numFlushed))
+        numRemainingSegments.compute(threadName, (_, _) => unflushedSize - numFlushed)
       }
     }
 
