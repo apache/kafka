@@ -62,6 +62,8 @@ trait KafkaMetricsGroup extends Logging {
     val tagsName = toMBeanName(tags)
     tagsName.foreach(nameBuilder.append(",").append(_))
 
+    error("!!! nameBuilder:" + nameBuilder.toString)
+
     new MetricName(group, typeName, name, scope, nameBuilder.toString)
   }
 
