@@ -94,8 +94,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
     private static final AtomicBoolean THROW_ERROR = new AtomicBoolean(true);
-    private static final AtomicBoolean THROW_ILLEGAL_STATE_EXCEPTION = new AtomicBoolean(false);
-    private static final AtomicBoolean THROW_ILLEGAL_ARGUMENT_EXCEPTION = new AtomicBoolean(false);
 
     @Rule
     public final TestName testName = new TestName();
@@ -150,7 +148,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             TestUtils.waitForCondition(() -> counter.get() == 1, "Handler was called 1st time");
             // should call the UncaughtExceptionHandler after rebalancing to another thread
             TestUtils.waitForCondition(() -> counter.get() == 2, DEFAULT_DURATION.toMillis(), "Handler was called 2nd time");
-            // there is no threads running but the client is still in running
+            // there are no threads running but the client is still in the running state
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(2));
@@ -171,47 +169,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
-    }
-
-
-    @Test
-    public void shouldShutdownClientWhenIllegalStateException() throws InterruptedException {
-        THROW_ILLEGAL_STATE_EXCEPTION.compareAndSet(false, true);
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-
-            kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD); // if the user defined uncaught exception handler would be hit we would be replacing the thread
-
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
-
-            produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
-
-            assertThat(processorValueCollector.size(), equalTo(1));
-        } finally {
-            THROW_ILLEGAL_STATE_EXCEPTION.compareAndSet(true, false);
-        }
-
-    }
-
-    @Test
-    public void shouldShutdownClientWhenIllegalArgumentException() throws InterruptedException {
-        THROW_ILLEGAL_ARGUMENT_EXCEPTION.compareAndSet(false, true);
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-
-            kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD); // if the user defined uncaught exception handler would be hit we would be replacing the thread
-
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
-
-            produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
-
-            assertThat(processorValueCollector.size(), equalTo(1));
-        } finally {
-            THROW_ILLEGAL_ARGUMENT_EXCEPTION.compareAndSet(true, false);
-        }
-
     }
 
     @Test
@@ -365,15 +322,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         @Override
         public void process(final String key, final String value) {
             valueList.add(value + " " + context.taskId());
-            if (THROW_ERROR.get()) {
-                if (THROW_ILLEGAL_STATE_EXCEPTION.get()) {
-                    throw new IllegalStateException("Something unexpected happened in " + Thread.currentThread().getName());
-                } else if (THROW_ILLEGAL_ARGUMENT_EXCEPTION.get()) {
-                    throw new IllegalArgumentException("Something unexpected happened in " + Thread.currentThread().getName());
-                } else {
-                    throw new StreamsException(Thread.currentThread().getName());
-                }
-            }
+            if (THROW_ERROR.get())
+                throw new StreamsException(Thread.currentThread().getName());
             THROW_ERROR.set(true);
         }
     }
@@ -420,7 +370,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             kafkaStreams.close();
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
 
-            assertThat("All initial threads have failed and the replacement thread had processed on record",
+            assertThat("All initial threads have failed and the replacement thread has processed one record",
                 processorValueCollector.size(), equalTo(numThreads + 1));
         }
     }
