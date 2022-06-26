@@ -225,8 +225,8 @@ public class StoreQueryIntegrationTest {
                         assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams1, storeQueryParam2).get(key));
 
                 assertThat(
-                        exception.getMessage(),
-                        containsString("The specified partition 1 for store source-table does not exist.")
+                    exception.getMessage(),
+                    containsString("The specified partition 1 for store source-table does not exist.")
                 );
             } else {
                 assertThat(store2.get(key), is(notNullValue()));
