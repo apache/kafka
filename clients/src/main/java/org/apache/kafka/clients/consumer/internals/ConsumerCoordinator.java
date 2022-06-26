@@ -745,6 +745,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         boolean onJoinPrepareAsyncCommitCompleted = false;
         // async commit offsets prior to rebalance if auto-commit enabled
         RequestFuture<Void> future = maybeAutoCommitOffsetsAsync();
+        // wait for commit offset response if future exist
+        if (future != null) {
+            client.poll(future, time.timer(rebalanceConfig.rebalanceTimeoutMs));
+        }
         // return true when
         // 1. future is null, which means no commit request sent, so it is still considered completed
         // 2. offset commit completed
