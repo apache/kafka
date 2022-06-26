@@ -532,14 +532,14 @@ public class StoreQueryIntegrationTest {
         });
     }
 
-    private Matcher<String> retrievableException() {
+    private Matcher<String> retriableException() {
         return is(
-                anyOf(
-                        containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                        containsString("The state store, source-table, may have migrated to another instance"),
-                        containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING"),
-                        containsString("The specified partition 1 for store source-table does not exist.")
-                )
+            anyOf(
+                containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                containsString("The state store, source-table, may have migrated to another instance"),
+                containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING"),
+                containsString("The specified partition 1 for store source-table does not exist.")
+            )
         );
     }
 
