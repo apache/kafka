@@ -44,6 +44,7 @@ public class RequestContextTest {
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
         assertEquals(0, context.apiVersion());
+        assertEquals(ClientInformation.EMPTY, context.clientInformation());
 
         // Write some garbage to the request buffer. This should be ignored since we will treat
         // the unknown version type as v0 which has an empty request body.

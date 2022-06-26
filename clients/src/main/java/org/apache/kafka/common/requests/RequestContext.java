@@ -136,6 +136,10 @@ public class RequestContext implements AuthorizableRequestContext {
         return header.apiVersion();
     }
 
+    public ClientInformation clientInformation() {
+        return clientInformation;
+    }
+
     @Override
     public String listenerName() {
         return listenerName.value();
