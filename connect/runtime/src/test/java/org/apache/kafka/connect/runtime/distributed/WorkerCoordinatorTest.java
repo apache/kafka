@@ -352,6 +352,99 @@ public class WorkerCoordinatorTest {
     }
 
     @Test
+    public void testProtocolDowngradeRemainsEffectiveAfterLeaderAssignmentFails() {
+
+        if (compatibility.protocol().equals(EAGER.protocol())) {
+            return;
+        }
+
+        // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
+        // output. So we test it directly here.
+        EasyMock.expect(configStorage.snapshot()).andReturn(configState1);
+        // first time, return a lower offset, leading to a CONFIG_MISMATCH
+        EasyMock.expect(coordinator.configSnapshot()).andReturn(configState1).once();
+        // second time, return the proper offset
+        EasyMock.expect(coordinator.configSnapshot()).andReturn(configState2).once();
+
+        PowerMock.replayAll();
+
+        // Prime the current configuration state
+        coordinator.metadata();
+
+        // Mark everyone as in sync with configState1
+        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
+
+        ExtendedAssignment leaderAssignment = new ExtendedAssignment(
+                compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 2L,
+                configState1.connectors(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+                0
+        );
+
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("leader")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 2L, leaderAssignment), false).array())
+        );
+        ExtendedAssignment memberAssignment = new ExtendedAssignment(
+                compatibility.protocolVersion(), ConnectProtocol.Assignment.NO_ERROR, "member", MEMBER_URL, 1L,
+                Collections.emptySet(), configState1.tasks(connectorId1), Collections.emptySet(), Collections.emptySet(),
+                0
+        );
+
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("member")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, memberAssignment), false).array()));
+
+
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
+
+        // configState1 has 1 connector, 1 task
+        ExtendedAssignment leaderAssignmentRcvd = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
+        assertTrue(leaderAssignmentRcvd.failed());
+        assertEquals("leader", leaderAssignmentRcvd.leader());
+        assertEquals(2, leaderAssignmentRcvd.offset());
+        assertEquals(Collections.emptyList(), leaderAssignmentRcvd.connectors());
+        assertEquals(Collections.emptyList(), leaderAssignmentRcvd.tasks());
+        assertEquals(Collections.emptyList(), leaderAssignmentRcvd.revokedConnectors());
+        assertEquals(Collections.emptyList(), leaderAssignmentRcvd.revokedTasks());
+
+        ExtendedAssignment memberAssignmentRcvd = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("member"));
+        assertTrue(memberAssignmentRcvd.failed());
+        assertEquals("leader", memberAssignmentRcvd.leader());
+        assertEquals(2, memberAssignmentRcvd.offset());
+        assertEquals(Collections.emptyList(), memberAssignmentRcvd.connectors());
+        assertEquals(Collections.emptyList(), memberAssignmentRcvd.tasks());
+        assertEquals(Collections.emptyList(), memberAssignmentRcvd.revokedConnectors());
+        assertEquals(Collections.emptyList(), memberAssignmentRcvd.revokedTasks());
+
+        assertTrue(coordinator.eagerProtocolDowngradeRequested());
+
+        // Leader re-joins this time but with Incremental Protocol.
+        result =  coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
+
+        // Yet, the revoking should happen
+        leaderAssignmentRcvd = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
+        assertFalse(leaderAssignmentRcvd.failed());
+        assertEquals("leader", leaderAssignmentRcvd.leader());
+        assertEquals(2, leaderAssignmentRcvd.offset());
+        assertEquals(Collections.emptyList(), leaderAssignmentRcvd.connectors());
+        assertEquals(Collections.emptyList(), leaderAssignmentRcvd.tasks());
+        assertEquals(Collections.singletonList(connectorId1), leaderAssignmentRcvd.revokedConnectors());
+        assertEquals(Collections.emptyList(), leaderAssignmentRcvd.revokedTasks());
+
+        memberAssignmentRcvd = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("member"));
+        assertFalse(memberAssignmentRcvd.failed());
+        assertEquals("leader", memberAssignmentRcvd.leader());
+        assertEquals(2, memberAssignmentRcvd.offset());
+        assertEquals(Collections.emptyList(), memberAssignmentRcvd.connectors());
+        assertEquals(Collections.emptyList(), memberAssignmentRcvd.tasks());
+        assertEquals(Collections.emptyList(), memberAssignmentRcvd.revokedConnectors());
+        assertEquals(Collections.singletonList(taskId1x0), memberAssignmentRcvd.revokedTasks());
+
+        PowerMock.verifyAll();
+
+    }
+
+    @Test
     public void testRejoinGroup() {
         EasyMock.expect(configStorage.snapshot()).andReturn(configState1);
         EasyMock.expect(configStorage.snapshot()).andReturn(configState1);
