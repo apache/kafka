@@ -767,7 +767,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     // if REBALANCE_IN_PROGRESS and have assignment data, need to apply it first
                     (error == Errors.REBALANCE_IN_PROGRESS &&
                             syncResponse.data().protocolName() != null &&
-                            syncResponse.data().protocolType() != null )) {
+                            syncResponse.data().protocolType() != null)) {
                 if (isProtocolTypeInconsistent(syncResponse.data().protocolType())) {
                     log.error("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
                         syncResponse.data().protocolType(), protocolType());
