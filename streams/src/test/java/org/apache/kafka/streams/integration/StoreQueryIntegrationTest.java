@@ -157,7 +157,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                verifyRetrievableException(exception);
+                verifyRetriableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -238,7 +238,7 @@ public class StoreQueryIntegrationTest {
                 );
             }
             return true;
-        }, this::retryableException);
+        }, this::retriableException);
     }
 
     @Test
@@ -503,7 +503,7 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                verifyRetrievableException(exception);
+                verifyRetriableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -524,7 +524,7 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                verifyRetrievableException(exception);
+                verifyRetriableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -542,15 +542,15 @@ public class StoreQueryIntegrationTest {
         );
     }
 
-    private boolean retryableException(final Exception exception) {
-        return retrievableException().matches(exception.getMessage());
+    private boolean retriableException(final Exception exception) {
+        return retriableException().matches(exception.getMessage());
     }
 
-    private void verifyRetrievableException(final Exception exception) {
+    private void verifyRetriableException(final Exception exception) {
         assertThat(
             "Unexpected exception thrown while getting the value from store.",
             exception.getMessage(),
-            retrievableException()
+            retriableException()
         );
     }
 
