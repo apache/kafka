@@ -1300,7 +1300,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testRejoinGroupWithCooperativeRebalance() throws InterruptedException {
+    public void testOnJoinPrepareWithOffsetCommit() throws InterruptedException {
         rebalanceConfig = buildRebalanceConfig(Optional.of("group-id"));
         ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
                 new Metrics(),
