@@ -1300,6 +1300,48 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testRejoinGroupWithCooperativeRebalance() throws InterruptedException {
+        rebalanceConfig = buildRebalanceConfig(Optional.of("group-id"));
+        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
+                new Metrics(),
+                assignors,
+                true,
+                subscriptions);
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+        coordinator.ensureActiveGroup();
+
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        try {
+            executor.submit(() -> {
+                try {
+                    // sleep 200ms to delay response
+                    Thread.sleep(200);
+                } catch (Exception e) { }
+                prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+            });
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+
+            assertTrue(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }  finally {
+            executor.shutdownNow();
+            executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    @Test
     public void testJoinPrepareWithDisableAutoCommit() {
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
             coordinator.ensureActiveGroup();
