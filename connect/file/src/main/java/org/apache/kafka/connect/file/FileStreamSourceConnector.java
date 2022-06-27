@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 
 import java.util.ArrayList;
@@ -95,4 +96,18 @@ public class FileStreamSourceConnector extends SourceConnector {
     public ConfigDef config() {
         return CONFIG_DEF;
     }
+
+    @Override
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+        AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
+        filename = parsedConfig.getString(FILE_CONFIG);
+        // We can provide exactly-once guarantees if reading from a "real" file
+        // (as long as the file is only appended to over the lifetime of the connector)
+        // If we're reading from stdin, we can't provide exactly-once guarantees
+        // since we don't even track offsets
+        return filename != null && !filename.isEmpty()
+                ? ExactlyOnceSupport.SUPPORTED
+                : ExactlyOnceSupport.UNSUPPORTED;
+    }
+
 }
