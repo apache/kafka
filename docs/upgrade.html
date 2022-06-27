@@ -19,20 +19,14 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
-<h4><a id="upgrade_3_3_0" href="#upgrade_3_3_0">Upgrading to 3.3.0 from any version 0.8.x through 3.2.x</a></h4>
-
-<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
-    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
-
-<p><b>For a rolling upgrade:</b></p>
-
 <h5><a id="upgrade_330_notable" href="#upgrade_330_notable">Notable changes in 3.3.0</a></h5>
-<ul>
-    <li>Introduced a new API <code>addMetricIfAbsent</code> to <code>Metrics</code> which would create a new Metric if not existing or return the same metric
-        if already registered. Note that this behaviour is different from <code>addMetric</code> API which throws an <code>IllegalArgumentException</code> when
-        trying to create an already existing metric. (See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-843%3A+Adding+addMetricIfAbsent+method+to+Metrics">KIP-843</a>
-        for more details).</li>
-</ul>
+    <ul>
+        <li>Introduced a new API <code>addMetricIfAbsent</code> to <code>Metrics</code> which would create a new Metric if not existing or return the same metric
+            if already registered. Note that this behaviour is different from <code>addMetric</code> API which throws an <code>IllegalArgumentException</code> when
+            trying to create an already existing metric. (See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-843%3A+Adding+addMetricIfAbsent+method+to+Metrics">KIP-843</a>
+            for more details).
+        </li>
+    </ul>
 
 <h4><a id="upgrade_3_2_0" href="#upgrade_3_2_0">Upgrading to 3.2.0 from any version 0.8.x through 3.1.x</a></h4>
 
