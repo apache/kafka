@@ -1523,12 +1523,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 log.warn("Catching up to assignment's config offset.");
                 needsReadToEnd = true;
             }
-
-            // We had a successful rebalance which should mark the toggle
-            // happening successfully. Unsetting the flag now.
-            if (member.eagerProtocolDowngradeRequested()) {
-                member.toggleEagerProtocolDowngradeRequest(false);
-            }
         }
 
         long now = time.milliseconds();
@@ -1573,6 +1567,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // guarantees we'll attempt to rejoin before executing this method again.
         herderMetrics.rebalanceSucceeded(time.milliseconds());
         rebalanceResolved = true;
+
+        // We had a successful rebalance which should mark the downgrade
+        // happening successfully. Unsetting the flag now.
+        member.toggleEagerProtocolDowngradeRequest(false);
 
         if (!assignment.revokedConnectors().isEmpty() || !assignment.revokedTasks().isEmpty()) {
             assignment.revokedConnectors().clear();

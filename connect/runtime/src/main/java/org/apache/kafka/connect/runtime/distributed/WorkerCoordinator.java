@@ -229,8 +229,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
         ConnectProtocolCompatibility newConnectProtocol = ConnectProtocolCompatibility.fromProtocol(protocol);
-        if ((currentConnectProtocol.protocolVersion() >= COMPATIBLE.protocolVersion() && newConnectProtocol == EAGER)
-                || eagerProtocolDowngradeRequested) {
+        if (connectProtocolDowngraded(newConnectProtocol) || eagerProtocolDowngradeRequested) {
             log.info("Downgraded from incremental to eager assignment or previous downgrade didn't succeed. " +
                     "Revoking all tasks and connectors from all workers in the cluster");
             eagerProtocolDowngradeRequested = true;
@@ -240,6 +239,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                     ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
                     : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
         }
+    }
+
+    private boolean connectProtocolDowngraded(ConnectProtocolCompatibility newConnectProtocol) {
+        return currentConnectProtocol.protocolVersion() >= COMPATIBLE.protocolVersion() && newConnectProtocol == EAGER;
     }
 
     @Override
