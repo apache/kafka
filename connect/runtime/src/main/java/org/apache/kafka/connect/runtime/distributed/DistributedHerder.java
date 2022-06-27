@@ -1502,7 +1502,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // 2. Assignment succeeded.
         //  2a. We are caught up on configs. Awesome! We can proceed to run our assigned work.
         //  2b. We need to try to catch up - try reading configs for reasonable amount of time.
-        //  Also, if there was a protocol downgrade to eager requested, that flag would be unset here successfully
+        //  Also, if there was a protocol downgrade to eager requested, that flag would be unset at the end successfully
         //  marking the downgrade to eager.
 
         boolean needsReadToEnd = false;
