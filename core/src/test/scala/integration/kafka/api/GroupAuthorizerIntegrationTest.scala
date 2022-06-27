@@ -67,15 +67,18 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   def brokerPrincipal: KafkaPrincipal = BrokerPrincipal
   def clientPrincipal: KafkaPrincipal = ClientPrincipal
 
-  override protected def kraftControllerConfigs(): Seq[Properties] = {
-    val properties = new Properties()
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
-    properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
-    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[GroupPrincipalBuilder].getName)
-    Seq(properties)
+  override def kraftControllerConfigs(): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs()
+    controllerConfigs.foreach(addNodeProperties)
+    controllerConfigs
   }
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    addNodeProperties(properties)
+  }
+
+  private def addNodeProperties(properties: Properties): Unit = {
     if (isKRaftTest()) {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
       properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
@@ -83,7 +86,6 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     }
 
-    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")

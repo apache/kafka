@@ -151,32 +151,32 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    addNodeProperties(properties)
+  }
+
+  override def kraftControllerConfigs(): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs()
+    controllerConfigs.foreach(addNodeProperties)
+    controllerConfigs
+  }
+
+  private def addNodeProperties(properties: Properties): Unit = {
     if (isKRaftTest()) {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
-      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString())
+      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
     } else {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     }
-    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
-    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-      classOf[PrincipalBuilder].getName)
+    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
-    val controllerConfigs = Seq(new Properties())
-    controllerConfigs.foreach { properties =>
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName())
-      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString())
-      properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-        classOf[PrincipalBuilder].getName)
-    }
-    controllerConfigs
-  }
 
   val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
