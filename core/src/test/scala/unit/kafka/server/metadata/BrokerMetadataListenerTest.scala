@@ -210,21 +210,16 @@ class BrokerMetadataListenerTest {
       listener.getImageRecords().get()
       assertEquals(200L, listener.highestMetadataOffset)
 
-      // Check that we won't generate snapshot even we see enough records since we haven't started publishing.
+      // Check that we generate at least one snapshot once we see enough records.
       assertEquals(-1L, snapshotter.prevCommittedOffset)
       generateManyRecords(listener, 1000L)
-      assertEquals(-1L, snapshotter.prevCommittedOffset)
-      assertEquals(-1L, snapshotter.activeSnapshotOffset)
+      assertEquals(1000L, snapshotter.prevCommittedOffset)
+      assertEquals(1000L, snapshotter.activeSnapshotOffset)
       snapshotter.activeSnapshotOffset = -1L
 
       // Test creating a new snapshot after publishing it.
       val publisher = new MockMetadataPublisher()
       listener.startPublishing(publisher).get()
-      // Check that we generate at least one snapshot since we see enough records.
-      assertEquals(1000L, snapshotter.prevCommittedOffset)
-      assertEquals(1000L, snapshotter.activeSnapshotOffset)
-
-      snapshotter.activeSnapshotOffset = -1L
       generateManyRecords(listener, 2000L)
       listener.getImageRecords().get()
       assertEquals(2000L, snapshotter.activeSnapshotOffset)
@@ -245,7 +240,7 @@ class BrokerMetadataListenerTest {
   }
 
   @Test
-  def testNotSnapshotBeforePublishing(): Unit = {
+  def testNotSnapshotAfterMetadataVersionChangeBeforePublishing(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
     val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
       maxBytesBetweenSnapshots = 1000L)
@@ -256,7 +251,7 @@ class BrokerMetadataListenerTest {
   }
 
   @Test
-  def testSnapshotWhenStarting(): Unit = {
+  def testSnapshotAfterMetadataVersionChangeWhenStarting(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
     val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
       maxBytesBetweenSnapshots = 1000L)
