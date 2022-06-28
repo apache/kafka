@@ -39,12 +39,15 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
     private String queryableName;
     private boolean sendOldValues;
 
+    private boolean sourceTopicOptimized;
+
     public KTableSource(final String storeName, final String queryableName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
 
         this.storeName = storeName;
         this.queryableName = queryableName;
         this.sendOldValues = false;
+        this.sourceTopicOptimized = false;
     }
 
     public String queryableName() {
@@ -54,6 +57,10 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
     @Override
     public Processor<KIn, VIn, KIn, Change<VIn>> get() {
         return new KTableSourceProcessor();
+    }
+
+    public void enableSourceTopicOptimization() {
+        this.sourceTopicOptimized = true;
     }
 
     // when source ktable requires sending old values, we just
@@ -123,6 +130,11 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 if (oldValueAndTimestamp != null) {
                     oldValue = oldValueAndTimestamp.value();
                     if (record.timestamp() < oldValueAndTimestamp.timestamp()) {
+                        if (!sourceTopicOptimized) {
+                            // discard out-of-order records unless source-topic optimized
+                            return;
+                        }
+
                         if (context.recordMetadata().isPresent()) {
                             final RecordMetadata recordMetadata = context.recordMetadata().get();
                             LOG.warn(

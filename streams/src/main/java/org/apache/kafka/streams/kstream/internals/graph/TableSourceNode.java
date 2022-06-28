@@ -126,6 +126,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                 topologyBuilder.addStateStore(storeBuilder, nodeName());
 
                 if (shouldReuseSourceTopicForChangelog) {
+                    ktableSource.enableSourceTopicOptimization();
                     storeBuilder.withLoggingDisabled();
                     topologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topicName);
                 }
