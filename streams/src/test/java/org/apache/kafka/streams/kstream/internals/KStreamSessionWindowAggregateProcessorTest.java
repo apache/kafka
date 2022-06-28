@@ -60,6 +60,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
@@ -89,22 +90,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
     private final List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
-    private final InternalMockProcessorContext<Windowed<String>, Change<Long>> context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.String(),
-            streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
-            time
-    ) {
-        @Override
-        public <K extends Windowed<String>, V extends Change<Long>> void forward(final Record<K, V> record) {
-            results.add(new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()));
-        }
-    };
 
+    private InternalMockProcessorContext<Windowed<String>, Change<Long>> context;
     private KStreamSessionWindowAggregate<String, String, Long> sessionAggregator;
     private Processor<String, String, Windowed<String>, Change<Long>> processor;
     private SessionStore<String, Long> sessionStore;
@@ -129,6 +116,28 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void setup(final boolean enableCache) {
+        // Always process
+        final Properties prop = StreamsTestUtils.getStreamsConfig();
+        prop.put(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
+        final StreamsConfig config = new StreamsConfig(prop);
+
+        context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            streamsMetrics,
+            config,
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
+            time
+        ) {
+            @Override
+            public <K extends Windowed<String>, V extends Change<Long>> void forward(final Record<K, V> record) {
+                results.add(new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()));
+            }
+        };
+
+
         emitFinal = type.equals(EmitStrategy.StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = EmitStrategy.StrategyType.forType(type);
 
@@ -162,7 +171,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(supplier, Serdes.String(), Serdes.Long())
             .withLoggingDisabled();
 
-        if (enableCaching) {
+        if (enableCaching && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
             storeBuilder.withCachingEnabled();
         }
 
@@ -231,11 +240,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
         long now = 0;
         processor.process(new Record<>(sessionId, "first", now));
         now += GAP_MS + 1;
-        time.sleep(GAP_MS + 1);
         processor.process(new Record<>(sessionId, "second", now));
         processor.process(new Record<>(sessionId, "second", now));
         now += GAP_MS + 1;
-        time.sleep(GAP_MS + 1);
         processor.process(new Record<>(sessionId, "third", now));
         processor.process(new Record<>(sessionId, "third", now));
         processor.process(new Record<>(sessionId, "third", now));
@@ -300,23 +307,14 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldHandleMultipleSessionsAndMerging() {
-        time.sleep(1001L);
         processor.process(new Record<>("a", "1", 0L));
-        time.sleep(1001L);
         processor.process(new Record<>("b", "1", 0L));
-        time.sleep(1001L);
         processor.process(new Record<>("c", "1", 0L));
-        time.sleep(1001L);
         processor.process(new Record<>("d", "1", 0L));
-        time.sleep(1001L);
         processor.process(new Record<>("d", "2", GAP_MS / 2));
-        time.sleep(1001L);
         processor.process(new Record<>("a", "2", GAP_MS + 1));
-        time.sleep(1001L);
         processor.process(new Record<>("b", "2", GAP_MS + 1));
-        time.sleep(1001L);
         processor.process(new Record<>("a", "3", GAP_MS + 1 + GAP_MS / 2));
-        time.sleep(1001L);
         processor.process(new Record<>("c", "3", GAP_MS + 1 + GAP_MS / 2));
 
         sessionStore.flush();
