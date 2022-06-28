@@ -119,7 +119,7 @@ class BrokerMetadataListener(
       }
 
       _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
-      if (_publisher.nonEmpty && shouldSnapshot()) {
+      if (shouldSnapshot()) {
         maybeStartSnapshot()
       }
 
@@ -128,11 +128,13 @@ class BrokerMetadataListener(
   }
 
   private def shouldSnapshot(): Boolean = {
-    _bytesSinceLastSnapshot >= maxBytesBetweenSnapshots || metadataVersionChanged()
+    (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) || metadataVersionChanged()
   }
 
-  private def metadataVersionChanged(): Boolean = Option(_delta.featuresDelta()).exists { featuresDelta =>
-    featuresDelta.metadataVersionChange().isPresent
+  private def metadataVersionChanged(): Boolean = {
+    _publisher.nonEmpty && Option(_delta.featuresDelta()).exists { featuresDelta =>
+      featuresDelta.metadataVersionChange().isPresent
+    }
   }
 
   private def maybeStartSnapshot(): Unit = {
@@ -248,7 +250,7 @@ class BrokerMetadataListener(
       _publisher = Some(publisher)
       log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
-        if (shouldSnapshot()) {
+        if (metadataVersionChanged()) {
           maybeStartSnapshot()
         }
         publish(publisher)
